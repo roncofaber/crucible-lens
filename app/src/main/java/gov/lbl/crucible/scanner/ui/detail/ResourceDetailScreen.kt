@@ -451,15 +451,9 @@ private fun SampleDetailsCard(sample: Sample) {
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            sample.sampleType?.let {
-                InfoRow(icon = Icons.Default.Category, label = "Type", value = it)
-            }
-            sample.projectId?.let {
-                InfoRow(icon = Icons.Default.Folder, label = "Project", value = it)
-            }
-            sample.createdAt?.let {
-                InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = it)
-            }
+            InfoRow(icon = Icons.Default.Category, label = "Type", value = sample.sampleType ?: "None")
+            InfoRow(icon = Icons.Default.Folder, label = "Project", value = sample.projectId ?: "None")
+            InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = sample.createdAt ?: "None")
         }
     }
 }
@@ -467,41 +461,90 @@ private fun SampleDetailsCard(sample: Sample) {
 @Composable
 private fun DatasetDetailsCard(dataset: Dataset) {
     val context = LocalContext.current
+    var advanced by remember { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Dataset Information",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Dataset Information",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(
+                    onClick = { advanced = !advanced },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Icon(
+                        if (advanced) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(if (advanced) "Basic" else "Advanced")
+                }
+            }
             Spacer(modifier = Modifier.height(12.dp))
 
-            dataset.measurement?.let {
-                InfoRow(icon = Icons.Default.Science, label = "Measurement", value = it)
-            }
-            dataset.instrumentName?.let {
-                InfoRow(icon = Icons.Default.Build, label = "Instrument", value = it)
-            }
-            dataset.ownerOrcid?.let { orcid ->
-                ClickableInfoRow(
-                    icon = Icons.Default.Person,
-                    label = "Owner ORCID",
-                    value = orcid,
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://orcid.org/$orcid"))
-                        context.startActivity(intent)
-                    }
-                )
-            }
-            dataset.dataFormat?.let {
-                InfoRow(icon = Icons.Default.Description, label = "Format", value = it)
-            }
-            dataset.projectId?.let {
-                InfoRow(icon = Icons.Default.Folder, label = "Project", value = it)
-            }
-            dataset.createdAt?.let {
-                InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = it)
+            // Basic fields
+            InfoRow(icon = Icons.Default.Science, label = "Measurement", value = dataset.measurement ?: "None")
+            InfoRow(icon = Icons.Default.Build, label = "Instrument", value = dataset.instrumentName ?: "None")
+            InfoRow(icon = Icons.Default.Folder, label = "Project", value = dataset.projectId ?: "None")
+            InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = dataset.createdAt ?: "None")
+            InfoRow(
+                icon = when (dataset.isPublic) {
+                    true  -> Icons.Default.Public
+                    false -> Icons.Default.Lock
+                    null  -> Icons.Default.HelpOutline
+                },
+                label = "Visibility",
+                value = when (dataset.isPublic) {
+                    true  -> "Public"
+                    false -> "Private"
+                    null  -> "None"
+                }
+            )
+
+            // Advanced fields
+            if (advanced) {
+                InfoRow(icon = Icons.Default.Description, label = "Format", value = dataset.dataFormat ?: "None")
+                InfoRow(icon = Icons.Default.Tag, label = "Instrument ID", value = dataset.instrumentId?.toString() ?: "None")
+                InfoRow(icon = Icons.Default.PlayCircle, label = "Session", value = dataset.sessionName ?: "None")
+                InfoRow(icon = Icons.Default.FolderOpen, label = "Source Folder", value = dataset.sourceFolder?.takeIf { it.isNotBlank() } ?: "None")
+                InfoRow(icon = Icons.Default.AttachFile, label = "File", value = dataset.fileToUpload ?: "None")
+                InfoRow(icon = Icons.Default.Storage, label = "Size", value = dataset.size?.let { formatFileSize(it) } ?: "None")
+                if (dataset.jsonLink != null) {
+                    ClickableInfoRow(
+                        icon = Icons.Default.Link,
+                        label = "JSON Link",
+                        value = dataset.jsonLink,
+                        onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(dataset.jsonLink)))
+                        }
+                    )
+                } else {
+                    InfoRow(icon = Icons.Default.Link, label = "JSON Link", value = "None")
+                }
+                if (dataset.ownerOrcid != null) {
+                    ClickableInfoRow(
+                        icon = Icons.Default.Person,
+                        label = "Owner ORCID",
+                        value = dataset.ownerOrcid,
+                        onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://orcid.org/${dataset.ownerOrcid}")))
+                        }
+                    )
+                } else {
+                    InfoRow(icon = Icons.Default.Person, label = "Owner ORCID", value = "None")
+                }
+                InfoRow(icon = Icons.Default.AccountCircle, label = "Owner User ID", value = dataset.ownerUserId?.toString() ?: "None")
+                InfoRow(icon = Icons.Default.Security, label = "SHA-256", value = dataset.sha256Hash ?: "None")
+                InfoRow(icon = Icons.Default.Fingerprint, label = "Unique ID", value = dataset.uniqueId)
+                InfoRow(icon = Icons.Default.Numbers, label = "Internal ID", value = dataset.internalId?.toString() ?: "None")
             }
         }
     }
@@ -1073,6 +1116,13 @@ private fun MfidCard(mfid: String) {
             )
         }
     }
+}
+
+private fun formatFileSize(bytes: Long): String = when {
+    bytes >= 1_073_741_824 -> "%.2f GB".format(bytes / 1_073_741_824.0)
+    bytes >= 1_048_576     -> "%.2f MB".format(bytes / 1_048_576.0)
+    bytes >= 1_024         -> "%.1f KB".format(bytes / 1_024.0)
+    else                   -> "$bytes B"
 }
 
 @Composable

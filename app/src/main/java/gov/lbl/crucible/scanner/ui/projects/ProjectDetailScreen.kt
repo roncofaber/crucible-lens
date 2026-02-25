@@ -401,6 +401,7 @@ private fun SamplesList(
         }
     } else {
         val groupedSamples = samples.groupBy { it.sampleType ?: "Unspecified Type" }
+            .entries.sortedBy { it.key.lowercase() }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
@@ -414,7 +415,7 @@ private fun SamplesList(
                         icon = Icons.Default.Science
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            samplesInGroup.sortedBy { it.uniqueId }.forEach { sample ->
+                            samplesInGroup.sortedBy { it.internalId ?: Int.MAX_VALUE }.forEach { sample ->
                                 ResourceCard(
                                     title = sample.name,
                                     subtitle = null,
@@ -473,6 +474,7 @@ private fun DatasetsList(
         }
     } else {
         val groupedDatasets = datasets.groupBy { it.measurement ?: "Unspecified Measurement" }
+            .entries.sortedBy { it.key.lowercase() }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
@@ -486,7 +488,7 @@ private fun DatasetsList(
                         icon = Icons.Default.Dataset
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            datasetsInGroup.sortedBy { it.uniqueId }.forEach { dataset ->
+                            datasetsInGroup.sortedBy { it.internalId ?: Int.MAX_VALUE }.forEach { dataset ->
                                 ResourceCard(
                                     title = dataset.name,
                                     subtitle = null,
