@@ -1,55 +1,52 @@
-*.iml
-.gradle
-/local.properties
-/.idea/
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
-*.apk
+# Claude Code
+claude_resume.sh
+.claude/
+
+# Gradle
+.gradle/
+build/
 *.ap_
+
+# Local configuration (machine-specific, never commit)
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.kotlin_module
+.navigation/
+captures/
+vcs.xml
+
+# macOS
+.DS_Store
+
+# Kotlin build metadata
+.kotlin/
+
+# Native builds
+.externalNativeBuild/
+.cxx/
+
+# Compiled outputs
+*.apk
 *.aab
 *.dex
 *.class
+out/
 bin/
 gen/
-out/
 release/
 
-# Gradle files
-.gradle/
-build/
-
-# Local configuration file (sdk path, etc)
-local.properties
-
-# Log Files
-*.log
-
-# Android Studio Navigation editor temp files
-.navigation/
-
-# Android Studio captures folder
-captures/
-
-# IntelliJ
-*.iml
-.idea/
-
-# Keystore files
+# Keystore files (sensitive – keep out of VCS)
 *.jks
 *.keystore
 
-# External native build folder generated in Android Studio 2.2 and later
-.externalNativeBuild
-.cxx/
+# Logs and profiling
+*.log
+*.hprof
 
-# Version control
-vcs.xml
-
-# lint
+# Lint
 lint/intermediates/
 lint/generated/
 lint/outputs/
@@ -58,5 +55,5 @@ lint-report.html
 lint-report_files/
 lint-results.xml
 
-# Android Profiling
-*.hprof
+# Merge artifacts
+*.orig

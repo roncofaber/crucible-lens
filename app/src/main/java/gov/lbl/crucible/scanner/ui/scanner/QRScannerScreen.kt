@@ -1,6 +1,7 @@
 package gov.lbl.crucible.scanner.ui.scanner
 
 import android.Manifest
+import android.util.Log
 import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,13 +22,15 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
 
+private const val TAG = "QRScannerScreen"
+
 @Composable
 fun QRScannerScreen(
     onQRCodeScanned: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var hasPermission by remember { 
+    var hasPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED)
     }
     val launcher = rememberLauncherForActivityResult(
@@ -76,6 +79,11 @@ private fun CameraPreview(
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     var lastScannedCode by remember { mutableStateOf<String?>(null) }
 
+    val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
+    DisposableEffect(Unit) {
+        onDispose { analysisExecutor.shutdown() }
+    }
+
     AndroidView(
         factory = { ctx ->
             val previewView = PreviewView(ctx)
@@ -93,7 +101,7 @@ private fun CameraPreview(
                     .build()
                     .also {
                         it.setAnalyzer(
-                            Executors.newSingleThreadExecutor(),
+                            analysisExecutor,
                             BarcodeAnalyzer { barcodes ->
                                 barcodes.firstOrNull()?.rawValue?.let { code ->
                                     if (code != lastScannedCode) {
@@ -116,7 +124,7 @@ private fun CameraPreview(
                         imageAnalysis
                     )
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.e(TAG, "Failed to bind camera use cases", e)
                 }
             }, executor)
 

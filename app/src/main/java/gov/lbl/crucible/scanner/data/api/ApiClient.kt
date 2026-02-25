@@ -1,6 +1,8 @@
 package gov.lbl.crucible.scanner.data.api
 
 import com.squareup.moshi.Moshi
+import gov.lbl.crucible.scanner.BuildConfig
+import gov.lbl.crucible.scanner.data.preferences.PreferencesManager
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -9,10 +11,8 @@ import retrofit2.converter.moshi.MoshiConverterFactory
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    private const val DEFAULT_BASE_URL = "https://crucible.lbl.gov/api/v1/"
-
     private var apiKey: String? = null
-    private var baseUrl: String = DEFAULT_BASE_URL
+    private var baseUrl: String = PreferencesManager.DEFAULT_API_BASE_URL
     private var _service: CrucibleApiService? = null
 
     fun setApiKey(key: String) {
@@ -41,28 +41,31 @@ object ApiClient {
         chain.proceed(newRequest)
     }
 
-    private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
-    }
-
     val service: CrucibleApiService
         get() {
             if (_service == null) {
-                val okHttpClient = OkHttpClient.Builder()
+                val clientBuilder = OkHttpClient.Builder()
                     .addInterceptor(authInterceptor)
-                    .addInterceptor(loggingInterceptor)
                     .connectTimeout(30, TimeUnit.SECONDS)
                     .readTimeout(30, TimeUnit.SECONDS)
-                    .build()
+                    .writeTimeout(30, TimeUnit.SECONDS)
+
+                if (BuildConfig.DEBUG) {
+                    clientBuilder.addInterceptor(
+                        HttpLoggingInterceptor().apply {
+                            level = HttpLoggingInterceptor.Level.HEADERS
+                        }
+                    )
+                }
 
                 val retrofit = Retrofit.Builder()
                     .baseUrl(baseUrl)
-                    .client(okHttpClient)
+                    .client(clientBuilder.build())
                     .addConverterFactory(MoshiConverterFactory.create(moshi))
                     .build()
 
                 _service = retrofit.create(CrucibleApiService::class.java)
             }
-            return _service!!
+            return requireNotNull(_service)
         }
 }

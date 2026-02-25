@@ -46,6 +46,9 @@ class MainActivity : ComponentActivity() {
             val smoothAnimations by preferencesManager.smoothAnimations.collectAsState(
                 initial = true
             )
+            val floatingScanButton by preferencesManager.floatingScanButton.collectAsState(
+                initial = true
+            )
             val scope = rememberCoroutineScope()
 
             // Set API key and base URL in client when they change
@@ -79,6 +82,7 @@ class MainActivity : ComponentActivity() {
                     lastVisitedResource = lastVisitedResource,
                     lastVisitedResourceName = lastVisitedResourceName,
                     smoothAnimations = smoothAnimations,
+                    floatingScanButton = floatingScanButton,
                     onApiKeySave = { key ->
                         scope.launch {
                             preferencesManager.saveApiKey(key)
@@ -114,6 +118,11 @@ class MainActivity : ComponentActivity() {
                     onSmoothAnimationsSave = { enabled ->
                         scope.launch {
                             preferencesManager.saveSmoothAnimations(enabled)
+                        }
+                    },
+                    onFloatingScanButtonSave = { enabled ->
+                        scope.launch {
+                            preferencesManager.saveFloatingScanButton(enabled)
                         }
                     }
                 )

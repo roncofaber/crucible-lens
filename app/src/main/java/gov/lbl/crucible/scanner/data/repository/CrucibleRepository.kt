@@ -1,5 +1,6 @@
 package gov.lbl.crucible.scanner.data.repository
 
+import android.util.Log
 import gov.lbl.crucible.scanner.data.api.ApiClient
 import gov.lbl.crucible.scanner.data.model.CrucibleResource
 import gov.lbl.crucible.scanner.data.model.Dataset
@@ -8,6 +9,9 @@ import gov.lbl.crucible.scanner.data.model.Sample
 import gov.lbl.crucible.scanner.data.model.SampleReference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.IOException
+
+private const val TAG = "CrucibleRepository"
 
 sealed class ResourceResult {
     data class Success(val resource: CrucibleResource) : ResourceResult()
@@ -22,26 +26,29 @@ class CrucibleRepository {
         try {
             // First, determine the resource type using the new /idtype endpoint
             val typeResponse = api.getResourceType(uuid)
+            val typeBody = typeResponse.body()
 
-            if (!typeResponse.isSuccessful || typeResponse.body() == null) {
+            if (!typeResponse.isSuccessful || typeBody == null) {
                 // Fallback to old method if idtype endpoint doesn't work
                 return@withContext fetchResourceByUuidFallback(uuid)
             }
 
-            val resourceType = typeResponse.body()!!.objectType
+            val resourceType = typeBody.objectType
 
             // Fetch the appropriate resource based on type
             when (resourceType.lowercase()) {
                 "sample" -> {
                     val sampleResponse = api.getSample(uuid)
-                    if (sampleResponse.isSuccessful && sampleResponse.body() != null) {
-                        var sample = sampleResponse.body()!!
+                    val sampleBody = sampleResponse.body()
+                    if (sampleResponse.isSuccessful && sampleBody != null) {
+                        var sample = sampleBody
 
                         // Fetch parent samples
                         val parentsResponse = api.getParentSamples(uuid)
-                        if (parentsResponse.isSuccessful && parentsResponse.body() != null) {
+                        val parentsBody = parentsResponse.body()
+                        if (parentsResponse.isSuccessful && parentsBody != null) {
                             sample = sample.copy(
-                                parentSamples = parentsResponse.body()!!
+                                parentSamples = parentsBody
                                     .map { SampleReference(it.uniqueId, it.name) }
                                     .distinctBy { it.uniqueId }
                                     .sortedBy { it.uniqueId }
@@ -50,8 +57,9 @@ class CrucibleRepository {
 
                         // Fetch child samples
                         val childrenResponse = api.getChildSamples(uuid)
-                        if (childrenResponse.isSuccessful && childrenResponse.body() != null) {
-                            sample.childSamples = childrenResponse.body()!!
+                        val childrenBody = childrenResponse.body()
+                        if (childrenResponse.isSuccessful && childrenBody != null) {
+                            sample.childSamples = childrenBody
                                 .map { SampleReference(it.uniqueId, it.name) }
                                 .distinctBy { it.uniqueId }
                                 .sortedBy { it.uniqueId }
@@ -62,8 +70,9 @@ class CrucibleRepository {
                 }
                 "dataset" -> {
                     val datasetResponse = api.getDataset(uuid)
-                    if (datasetResponse.isSuccessful && datasetResponse.body() != null) {
-                        var dataset = datasetResponse.body()!!
+                    val datasetBody = datasetResponse.body()
+                    if (datasetResponse.isSuccessful && datasetBody != null) {
+                        var dataset = datasetBody
 
                         // Fetch scientific metadata
                         val metadataResponse = api.getScientificMetadata(uuid)
@@ -73,34 +82,31 @@ class CrucibleRepository {
 
                         // Fetch parent datasets
                         val parentsResponse = api.getParentDatasets(uuid)
-                        if (parentsResponse.isSuccessful && parentsResponse.body() != null) {
-                            dataset.parentDatasets = parentsResponse.body()!!
-                                .map {
-                                    DatasetReference(it.uniqueId, it.name, it.measurement)
-                                }
+                        val parentsBody = parentsResponse.body()
+                        if (parentsResponse.isSuccessful && parentsBody != null) {
+                            dataset.parentDatasets = parentsBody
+                                .map { DatasetReference(it.uniqueId, it.name, it.measurement) }
                                 .distinctBy { it.uniqueId }
                                 .sortedBy { it.uniqueId }
                         }
 
                         // Fetch child datasets
                         val childrenResponse = api.getChildDatasets(uuid)
-                        if (childrenResponse.isSuccessful && childrenResponse.body() != null) {
-                            dataset.childDatasets = childrenResponse.body()!!
-                                .map {
-                                    DatasetReference(it.uniqueId, it.name, it.measurement)
-                                }
+                        val childrenBody = childrenResponse.body()
+                        if (childrenResponse.isSuccessful && childrenBody != null) {
+                            dataset.childDatasets = childrenBody
+                                .map { DatasetReference(it.uniqueId, it.name, it.measurement) }
                                 .distinctBy { it.uniqueId }
                                 .sortedBy { it.uniqueId }
                         }
 
                         // Fetch samples associated with this dataset
                         val samplesResponse = api.getDatasetSamples(uuid)
-                        if (samplesResponse.isSuccessful && samplesResponse.body() != null) {
+                        val samplesBody = samplesResponse.body()
+                        if (samplesResponse.isSuccessful && samplesBody != null) {
                             dataset = dataset.copy(
-                                samples = samplesResponse.body()!!
-                                    .map {
-                                        SampleReference(it.uniqueId, it.name)
-                                    }
+                                samples = samplesBody
+                                    .map { SampleReference(it.uniqueId, it.name) }
                                     .distinctBy { it.uniqueId }
                                     .sortedBy { it.uniqueId }
                             )
@@ -112,7 +118,11 @@ class CrucibleRepository {
             }
 
             ResourceResult.Error("Resource not found: $uuid")
+        } catch (e: IOException) {
+            Log.e(TAG, "Network error fetching resource $uuid", e)
+            ResourceResult.Error("Network error: check your connection")
         } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error fetching resource $uuid", e)
             ResourceResult.Error(e.message ?: "Unknown error occurred")
         }
     }
@@ -122,21 +132,21 @@ class CrucibleRepository {
         try {
             // Try sample first
             val sampleResponse = api.getSample(uuid)
-            if (sampleResponse.isSuccessful && sampleResponse.body() != null) {
-                return ResourceResult.Success(sampleResponse.body()!!)
+            val sampleBody = sampleResponse.body()
+            if (sampleResponse.isSuccessful && sampleBody != null) {
+                return ResourceResult.Success(sampleBody)
             }
 
             // If not a sample, try dataset
             val datasetResponse = api.getDataset(uuid)
-            if (datasetResponse.isSuccessful && datasetResponse.body() != null) {
-                val dataset = datasetResponse.body()!!
-
+            val datasetBody = datasetResponse.body()
+            if (datasetResponse.isSuccessful && datasetBody != null) {
                 // Try to fetch scientific metadata
                 val metadataResponse = api.getScientificMetadata(uuid)
                 val enrichedDataset = if (metadataResponse.isSuccessful) {
-                    dataset.copy(scientificMetadata = metadataResponse.body())
+                    datasetBody.copy(scientificMetadata = metadataResponse.body())
                 } else {
-                    dataset
+                    datasetBody
                 }
 
                 return ResourceResult.Success(enrichedDataset)
@@ -144,7 +154,11 @@ class CrucibleRepository {
 
             // Neither worked
             return ResourceResult.Error("Resource not found: $uuid")
+        } catch (e: IOException) {
+            Log.e(TAG, "Network error in fallback fetch for $uuid", e)
+            return ResourceResult.Error("Network error: check your connection")
         } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error in fallback fetch for $uuid", e)
             return ResourceResult.Error(e.message ?: "Unknown error occurred")
         }
     }
@@ -152,21 +166,17 @@ class CrucibleRepository {
     suspend fun fetchThumbnails(datasetUuid: String): List<String> = withContext(Dispatchers.IO) {
         try {
             val response = api.getThumbnails(datasetUuid)
-            if (response.isSuccessful && response.body() != null) {
-                val thumbnails = response.body()!!
-                println("DEBUG: Fetched ${thumbnails.size} thumbnails for dataset $datasetUuid")
-                thumbnails.mapIndexed { index, thumb ->
-                    val dataUri = "data:image/png;base64,${thumb.thumbnailB64}"
-                    println("DEBUG: Thumbnail $index length: ${thumb.thumbnailB64.length} chars, URI preview: ${dataUri.take(100)}")
-                    dataUri
-                }
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                body.map { thumb -> "data:image/png;base64,${thumb.thumbnailB64}" }
             } else {
-                println("DEBUG: Thumbnail fetch failed for $datasetUuid - Code: ${response.code()}, Message: ${response.message()}")
                 emptyList()
             }
+        } catch (e: IOException) {
+            Log.e(TAG, "Network error fetching thumbnails for $datasetUuid", e)
+            emptyList()
         } catch (e: Exception) {
-            println("DEBUG: Exception fetching thumbnails for $datasetUuid: ${e.message}")
-            e.printStackTrace()
+            Log.e(TAG, "Unexpected error fetching thumbnails for $datasetUuid", e)
             emptyList()
         }
     }

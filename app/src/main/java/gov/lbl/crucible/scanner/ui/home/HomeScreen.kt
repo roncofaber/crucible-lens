@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import gov.lbl.crucible.scanner.BuildConfig
 import gov.lbl.crucible.scanner.R
 import gov.lbl.crucible.scanner.data.api.ApiClient
 import gov.lbl.crucible.scanner.data.cache.CacheManager
@@ -97,10 +98,8 @@ fun HomeScreen(
                 .padding(padding)
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Spacer(modifier = Modifier.weight(0.05f))
-
             // Crucible Logo Text
             Image(
                 painter = painterResource(
@@ -291,7 +290,7 @@ fun HomeScreen(
 
             // Footer with version and credits
             Text(
-                text = "Crucible Lens v1.0.0 • by @roncofaber • Molecular Foundry",
+                text = "Crucible Lens v${BuildConfig.VERSION_NAME} • by @roncofaber • Molecular Foundry",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier.padding(top = 16.dp),

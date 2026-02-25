@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import gov.lbl.crucible.scanner.data.api.ApiClient
 import gov.lbl.crucible.scanner.data.cache.CacheManager
 import gov.lbl.crucible.scanner.data.model.Dataset
+import gov.lbl.crucible.scanner.data.model.Project
 import gov.lbl.crucible.scanner.data.model.Sample
 import gov.lbl.crucible.scanner.ui.common.LoadingMessage
 import kotlinx.coroutines.launch
@@ -40,6 +41,10 @@ fun ProjectDetailScreen(
     onResourceClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val project = remember(projectId) {
+        CacheManager.getProjects()?.find { it.projectId == projectId }
+    }
+
     var samples by remember { mutableStateOf<List<Sample>?>(null) }
     var datasets by remember { mutableStateOf<List<Dataset>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -54,7 +59,6 @@ fun ProjectDetailScreen(
                 isLoading = true
                 error = null
 
-                // Check cache first (unless force refresh)
                 if (!forceRefresh) {
                     val cachedSamples = CacheManager.getProjectSamples(projectId)
                     val cachedDatasets = CacheManager.getProjectDatasets(projectId)
@@ -67,7 +71,6 @@ fun ProjectDetailScreen(
                     }
                 }
 
-                // Load samples and datasets in parallel
                 val samplesResponse = ApiClient.service.getSamplesByProject(projectId)
                 val datasetsResponse = ApiClient.service.getDatasetsByProject(projectId)
 
@@ -76,10 +79,8 @@ fun ProjectDetailScreen(
                     val loadedDatasets = datasetsResponse.body()
 
                     if (loadedSamples != null && loadedDatasets != null) {
-                        // Cache the results
                         CacheManager.cacheProjectSamples(projectId, loadedSamples)
                         CacheManager.cacheProjectDatasets(projectId, loadedDatasets)
-
                         samples = loadedSamples
                         datasets = loadedDatasets
                     } else {
@@ -103,36 +104,31 @@ fun ProjectDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Project: $projectId") },
+                title = { Text(project?.projectName ?: projectId) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, "Back")
                     }
                 },
                 actions = {
-                    // Refresh button
                     IconButton(onClick = {
                         CacheManager.clearProjectDetail(projectId)
                         loadProjectData(forceRefresh = true)
                     }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
-
-                    // Share button
                     IconButton(onClick = {
                         val url = "$graphExplorerUrl/$projectId"
                         val shareIntent = Intent().apply {
                             action = Intent.ACTION_SEND
                             putExtra(Intent.EXTRA_TEXT, "Check out this project in Crucible: $url")
-                            putExtra(Intent.EXTRA_SUBJECT, "Crucible Project: $projectId")
+                            putExtra(Intent.EXTRA_SUBJECT, "Crucible Project: ${project?.projectName ?: projectId}")
                             type = "text/plain"
                         }
                         context.startActivity(Intent.createChooser(shareIntent, "Share via"))
                     }) {
                         Icon(Icons.Default.Share, contentDescription = "Share")
                     }
-
-                    // Home button
                     IconButton(onClick = onHome) {
                         Icon(Icons.Default.Home, contentDescription = "Home")
                     }
@@ -145,6 +141,12 @@ fun ProjectDetailScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // Project header
+            ProjectHeader(
+                project = project,
+                projectId = projectId
+            )
+
             // Tabs
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
@@ -164,7 +166,6 @@ fun ProjectDetailScreen(
             when {
                 isLoading -> {
                     val loadingMessage = LoadingMessage()
-
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -268,6 +269,97 @@ fun ProjectDetailScreen(
 }
 
 @Composable
+private fun ProjectHeader(
+    project: Project?,
+    projectId: String
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Name + icon row
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    Icons.Default.Folder,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = project?.projectName ?: projectId,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "ID: $projectId",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // Description
+            val description = project?.description
+            if (!description.isNullOrBlank()) {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Creation date chip
+            project?.createdAt?.let { date ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatChip(
+                        icon = Icons.Default.CalendarToday,
+                        label = date.take(10) // "YYYY-MM-DD"
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+        shape = MaterialTheme.shapes.small
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
 private fun SamplesList(
     samples: List<Sample>,
     onSampleClick: (String) -> Unit
@@ -321,9 +413,7 @@ private fun SamplesList(
                         count = samplesInGroup.size,
                         icon = Icons.Default.Science
                     ) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             samplesInGroup.sortedBy { it.uniqueId }.forEach { sample ->
                                 ResourceCard(
                                     title = sample.name,
@@ -395,9 +485,7 @@ private fun DatasetsList(
                         count = datasetsInGroup.size,
                         icon = Icons.Default.Dataset
                     ) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             datasetsInGroup.sortedBy { it.uniqueId }.forEach { dataset ->
                                 ResourceCard(
                                     title = dataset.name,
@@ -431,7 +519,6 @@ private fun CollapsibleGroup(
         )
     ) {
         Column {
-            // Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -451,9 +538,7 @@ private fun CollapsibleGroup(
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(22.dp)
                     )
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             text = title,
                             style = MaterialTheme.typography.titleSmall,
@@ -474,7 +559,6 @@ private fun CollapsibleGroup(
                 )
             }
 
-            // Content
             AnimatedVisibility(
                 visible = expanded,
                 enter = expandVertically(animationSpec = tween(150)) + fadeIn(animationSpec = tween(150)),

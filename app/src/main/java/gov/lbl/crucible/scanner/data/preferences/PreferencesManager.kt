@@ -22,6 +22,7 @@ class PreferencesManager(private val context: Context) {
         private val LAST_VISITED_RESOURCE = stringPreferencesKey("last_visited_resource")
         private val LAST_VISITED_RESOURCE_NAME = stringPreferencesKey("last_visited_resource_name")
         private val SMOOTH_ANIMATIONS = stringPreferencesKey("smooth_animations")
+        private val FLOATING_SCAN_BUTTON = stringPreferencesKey("floating_scan_button")
 
         const val DEFAULT_API_BASE_URL = "https://crucible.lbl.gov/api/v1/"
         const val DEFAULT_GRAPH_EXPLORER_URL = "https://crucible-graph-explorer-776258882599.us-central1.run.app"
@@ -61,6 +62,10 @@ class PreferencesManager(private val context: Context) {
 
     val smoothAnimations: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[SMOOTH_ANIMATIONS]?.toBoolean() ?: true // Default to true
+    }
+
+    val floatingScanButton: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[FLOATING_SCAN_BUTTON]?.toBoolean() ?: true // Default to enabled
     }
 
     suspend fun saveApiKey(key: String) {
@@ -103,6 +108,12 @@ class PreferencesManager(private val context: Context) {
     suspend fun saveSmoothAnimations(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[SMOOTH_ANIMATIONS] = enabled.toString()
+        }
+    }
+
+    suspend fun saveFloatingScanButton(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[FLOATING_SCAN_BUTTON] = enabled.toString()
         }
     }
 

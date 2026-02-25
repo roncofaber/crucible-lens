@@ -31,12 +31,14 @@ fun SettingsScreen(
     currentThemeMode: String,
     currentAccentColor: String,
     currentSmoothAnimations: Boolean,
+    currentFloatingScanButton: Boolean,
     onApiKeySave: (String) -> Unit,
     onApiBaseUrlSave: (String) -> Unit,
     onGraphExplorerUrlSave: (String) -> Unit,
     onThemeModeSave: (String) -> Unit,
     onAccentColorSave: (String) -> Unit,
     onSmoothAnimationsSave: (Boolean) -> Unit,
+    onFloatingScanButtonSave: (Boolean) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -46,6 +48,7 @@ fun SettingsScreen(
     var themeModeInput by remember { mutableStateOf(currentThemeMode) }
     var accentColorInput by remember { mutableStateOf(currentAccentColor) }
     var smoothAnimationsInput by remember { mutableStateOf(currentSmoothAnimations) }
+    var floatingScanButtonInput by remember { mutableStateOf(currentFloatingScanButton) }
     var isApiKeyVisible by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -73,6 +76,7 @@ fun SettingsScreen(
                     onThemeModeSave(themeModeInput)
                     onAccentColorSave(accentColorInput)
                     onSmoothAnimationsSave(smoothAnimationsInput)
+                    onFloatingScanButtonSave(floatingScanButtonInput)
                     scope.launch {
                         snackbarHostState.showSnackbar(
                             message = "Settings saved successfully",
@@ -335,6 +339,43 @@ fun SettingsScreen(
                     Switch(
                         checked = smoothAnimationsInput,
                         onCheckedChange = { smoothAnimationsInput = it }
+                    )
+                }
+            }
+
+            Card {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            Icons.Default.QrCodeScanner,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column {
+                            Text(
+                                text = "Floating Scan Button",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Show a quick-scan FAB while browsing",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = floatingScanButtonInput,
+                        onCheckedChange = { floatingScanButtonInput = it }
                     )
                 }
             }

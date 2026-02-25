@@ -26,6 +26,7 @@ import gov.lbl.crucible.scanner.ui.detail.ResourceDetailScreen
 import gov.lbl.crucible.scanner.ui.projects.ProjectsListScreen
 import gov.lbl.crucible.scanner.ui.projects.ProjectDetailScreen
 import gov.lbl.crucible.scanner.ui.common.LoadingMessage
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -34,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.navigation.compose.currentBackStackEntryAsState
 
 sealed class Screen(val route: String) {
     object Home : Screen("home")
@@ -62,6 +64,7 @@ fun NavGraph(
     lastVisitedResource: String?,
     lastVisitedResourceName: String?,
     smoothAnimations: Boolean,
+    floatingScanButton: Boolean,
     onApiKeySave: (String) -> Unit,
     onApiBaseUrlSave: (String) -> Unit,
     onGraphExplorerUrlSave: (String) -> Unit,
@@ -69,11 +72,22 @@ fun NavGraph(
     onAccentColorSave: (String) -> Unit,
     onLastVisitedResourceSave: (String, String) -> Unit,
     onSmoothAnimationsSave: (Boolean) -> Unit,
+    onFloatingScanButtonSave: (Boolean) -> Unit,
     viewModel: ScannerViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     viewModel.setSmoothAnimations(smoothAnimations)
 
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+
+    val showFab = floatingScanButton &&
+        currentRoute != null &&
+        currentRoute != Screen.Home.route &&
+        currentRoute != Screen.Settings.route &&
+        currentRoute != Screen.Scanner.route
+
+    Box(modifier = Modifier.fillMaxSize()) {
     NavHost(
         navController = navController,
         startDestination = Screen.Home.route,
@@ -157,12 +171,14 @@ fun NavGraph(
                 currentThemeMode = themeMode,
                 currentAccentColor = accentColor,
                 currentSmoothAnimations = smoothAnimations,
+                currentFloatingScanButton = floatingScanButton,
                 onApiKeySave = onApiKeySave,
                 onApiBaseUrlSave = onApiBaseUrlSave,
                 onGraphExplorerUrlSave = onGraphExplorerUrlSave,
                 onThemeModeSave = onThemeModeSave,
                 onAccentColorSave = onAccentColorSave,
                 onSmoothAnimationsSave = onSmoothAnimationsSave,
+                onFloatingScanButtonSave = onFloatingScanButtonSave,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -187,7 +203,9 @@ fun NavGraph(
                     val loadingMessage = LoadingMessage()
 
                     Box(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background),
                         contentAlignment = Alignment.Center
                     ) {
                         Card(
@@ -267,7 +285,9 @@ fun NavGraph(
                 }
                 is UiState.Error -> {
                     Box(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background),
                         contentAlignment = Alignment.Center
                     ) {
                         Card(
@@ -348,7 +368,9 @@ fun NavGraph(
                 }
                 is UiState.Idle -> {
                     Box(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator()
@@ -449,7 +471,31 @@ fun NavGraph(
                 }
             )
         }
+    } // end NavHost
+
+    if (showFab) {
+        FloatingActionButton(
+            onClick = {
+                if (!apiKey.isNullOrBlank()) {
+                    viewModel.reset()
+                    navController.navigate(Screen.Scanner.route)
+                } else {
+                    navController.navigate(Screen.Settings.route)
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            containerColor = MaterialTheme.colorScheme.primary
+        ) {
+            Icon(
+                Icons.Default.QrCodeScanner,
+                contentDescription = "Scan QR Code",
+                tint = MaterialTheme.colorScheme.onPrimary
+            )
+        }
     }
+    } // end Box
 }
 
 @Composable

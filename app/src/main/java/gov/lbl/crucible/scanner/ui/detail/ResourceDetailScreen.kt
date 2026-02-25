@@ -24,10 +24,12 @@ import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import android.util.Base64
+import android.util.Log
 import gov.lbl.crucible.scanner.data.model.CrucibleResource
 import gov.lbl.crucible.scanner.data.model.Dataset
 import gov.lbl.crucible.scanner.data.model.DatasetReference
@@ -51,7 +53,7 @@ fun ResourceDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Details") },
+                title = { Text(if (resource is Sample) "Sample" else "Dataset") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, "Back")
@@ -163,11 +165,6 @@ fun ResourceDetailScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Resource Type Badge
-            item {
-                ResourceTypeBadge(resource)
-            }
-
             // Basic Info Card
             item {
                 BasicInfoCard(resource)
@@ -220,7 +217,7 @@ fun ResourceDetailScreen(
                     if (!resource.samples.isNullOrEmpty()) {
                         item {
                             LinkedSamplesCard(
-                                samples = resource.samples!!
+                                samples = resource.samples.orEmpty()
                                     .distinctBy { it.uniqueId }
                                     .sortedBy { it.uniqueId },
                                 onNavigateToResource = onNavigateToResource
@@ -231,7 +228,7 @@ fun ResourceDetailScreen(
                     if (!resource.parentDatasets.isNullOrEmpty()) {
                         item {
                             ParentDatasetsCard(
-                                parents = resource.parentDatasets!!
+                                parents = resource.parentDatasets.orEmpty()
                                     .distinctBy { it.uniqueId }
                                     .sortedBy { it.uniqueId },
                                 onNavigateToResource = onNavigateToResource
@@ -242,7 +239,7 @@ fun ResourceDetailScreen(
                     if (!resource.childDatasets.isNullOrEmpty()) {
                         item {
                             ChildDatasetsCard(
-                                children = resource.childDatasets!!
+                                children = resource.childDatasets.orEmpty()
                                     .distinctBy { it.uniqueId }
                                     .sortedBy { it.uniqueId },
                                 onNavigateToResource = onNavigateToResource
@@ -266,7 +263,7 @@ fun ResourceDetailScreen(
                     if (!resource.parentSamples.isNullOrEmpty()) {
                         item {
                             ParentSamplesCard(
-                                parents = resource.parentSamples!!
+                                parents = resource.parentSamples.orEmpty()
                                     .distinctBy { it.uniqueId }
                                     .sortedBy { it.uniqueId },
                                 onNavigateToResource = onNavigateToResource
@@ -276,7 +273,7 @@ fun ResourceDetailScreen(
                     if (!resource.childSamples.isNullOrEmpty()) {
                         item {
                             ChildSamplesCard(
-                                children = resource.childSamples!!
+                                children = resource.childSamples.orEmpty()
                                     .distinctBy { it.uniqueId }
                                     .sortedBy { it.uniqueId },
                                 onNavigateToResource = onNavigateToResource
@@ -286,7 +283,7 @@ fun ResourceDetailScreen(
                     if (!resource.datasets.isNullOrEmpty()) {
                         item {
                             LinkedDatasetsCard(
-                                datasets = resource.datasets!!
+                                datasets = resource.datasets.orEmpty()
                                     .distinctBy { it.uniqueId }
                                     .sortedBy { it.uniqueId },
                                 onNavigateToResource = onNavigateToResource
@@ -375,15 +372,12 @@ private fun ThumbnailsSection(thumbnails: List<String>) {
                 try {
                     if (thumbnail.startsWith("data:image/")) {
                         val base64String = thumbnail.substringAfter("base64,")
-                        println("DEBUG UI: Decoding thumbnail ${index + 1}, base64 length: ${base64String.length}")
                         Base64.decode(base64String, Base64.DEFAULT)
                     } else {
-                        println("DEBUG UI: Thumbnail ${index + 1} is not a data URI: ${thumbnail.take(50)}...")
                         null
                     }
                 } catch (e: Exception) {
-                    println("DEBUG UI: Failed to decode thumbnail ${index + 1}: ${e.message}")
-                    e.printStackTrace()
+                    Log.e("ResourceDetailScreen", "Failed to decode thumbnail ${index + 1}", e)
                     null
                 }
             }
@@ -405,15 +399,12 @@ private fun ThumbnailsSection(thumbnails: List<String>) {
                         contentScale = ContentScale.Fit,
                         onLoading = {
                             imageState = "loading"
-                            println("DEBUG UI: Loading thumbnail ${index + 1}")
                         },
                         onSuccess = {
                             imageState = "success"
-                            println("DEBUG UI: Successfully loaded thumbnail ${index + 1}")
                         },
                         onError = {
                             imageState = "error: ${it.result.throwable?.message}"
-                            println("DEBUG UI: Error loading thumbnail ${index + 1}: ${it.result.throwable?.message}")
                         }
                     )
                 } else {
@@ -554,65 +545,45 @@ private fun ScientificMetadataCard(metadata: Map<String, Any?>) {
 
 @Composable
 private fun MetadataTree(data: Map<String, Any?>, indentLevel: Int) {
-    data.entries.forEachIndexed { index, (key, value) ->
-        when (value) {
-            is Map<*, *> -> {
-                // Nested map - show as expandable section
-                var expanded by remember { mutableStateOf(false) }
+    val entries = data.entries.toList()
+    for ((index, entry) in entries.withIndex()) {
+        val (entryKey, entryValue) = entry
+        key(entryKey) {
+            when (entryValue) {
+                is Map<*, *> -> {
+                    var expanded by remember { mutableStateOf(false) }
 
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { expanded = !expanded }
-                            .padding(horizontal = 0.dp, vertical = 4.dp)
-                            .absolutePadding(left = (indentLevel * 16).dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = formatKey(key),
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { expanded = !expanded }
+                                .padding(horizontal = 0.dp, vertical = 4.dp)
+                                .absolutePadding(left = (indentLevel * 16).dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = formatKey(entryKey),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
 
-                    if (expanded) {
-                        @Suppress("UNCHECKED_CAST")
-                        MetadataTree(value as Map<String, Any?>, indentLevel + 1)
+                        if (expanded) {
+                            @Suppress("UNCHECKED_CAST")
+                            MetadataTree(entryValue as Map<String, Any?>, indentLevel + 1)
+                        }
                     }
                 }
-            }
-            else -> {
-                // Simple value - show in row or column depending on key
-                if (key == "scientific_metadata") {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 0.dp, vertical = 2.dp)
-                            .absolutePadding(left = (indentLevel * 16).dp)
-                    ) {
-                        Text(
-                            text = formatKey(key),
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = formatValue(value),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                } else {
+                else -> {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -621,7 +592,7 @@ private fun MetadataTree(data: Map<String, Any?>, indentLevel: Int) {
                         verticalAlignment = Alignment.Top
                     ) {
                         Text(
-                            text = formatKey(key),
+                            text = formatKey(entryKey),
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary,
@@ -629,7 +600,7 @@ private fun MetadataTree(data: Map<String, Any?>, indentLevel: Int) {
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = formatValue(value),
+                            text = formatValue(entryValue),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(0.65f)
@@ -637,15 +608,15 @@ private fun MetadataTree(data: Map<String, Any?>, indentLevel: Int) {
                     }
                 }
             }
-        }
 
-        if (index < data.size - 1) {
-            HorizontalDivider(
-                modifier = Modifier
-                    .padding(vertical = 4.dp)
-                    .absolutePadding(left = (indentLevel * 16).dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            if (index < entries.size - 1) {
+                HorizontalDivider(
+                    modifier = Modifier
+                        .padding(vertical = 4.dp)
+                        .absolutePadding(left = (indentLevel * 16).dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+            }
         }
     }
 }
