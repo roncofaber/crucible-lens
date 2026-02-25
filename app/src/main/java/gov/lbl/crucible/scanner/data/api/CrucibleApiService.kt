@@ -1,12 +1,14 @@
 package gov.lbl.crucible.scanner.data.api
 
 import gov.lbl.crucible.scanner.data.model.Dataset
+import gov.lbl.crucible.scanner.data.model.Project
 import gov.lbl.crucible.scanner.data.model.ResourceType
 import gov.lbl.crucible.scanner.data.model.Sample
 import gov.lbl.crucible.scanner.data.model.Thumbnail
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface CrucibleApiService {
 
@@ -39,4 +41,13 @@ interface CrucibleApiService {
 
     @GET("samples/{uuid}/children")
     suspend fun getChildSamples(@Path("uuid") uuid: String): Response<List<Sample>>
+
+    @GET("projects")
+    suspend fun getProjects(): Response<List<Project>>
+
+    @GET("samples")
+    suspend fun getSamplesByProject(@Query("project_id") projectId: String): Response<List<Sample>>
+
+    @GET("datasets")
+    suspend fun getDatasetsByProject(@Query("project_id") projectId: String): Response<List<Dataset>>
 }

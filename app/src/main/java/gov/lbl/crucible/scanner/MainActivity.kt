@@ -66,6 +66,7 @@ class MainActivity : ComponentActivity() {
                     graphExplorerUrl = graphExplorerUrl,
                     themeMode = themeMode,
                     accentColor = accentColor,
+                    darkTheme = darkTheme,
                     onApiKeySave = { key ->
                         scope.launch {
                             preferencesManager.saveApiKey(key)

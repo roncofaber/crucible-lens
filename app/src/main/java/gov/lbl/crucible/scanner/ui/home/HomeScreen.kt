@@ -20,8 +20,10 @@ import gov.lbl.crucible.scanner.R
 @Composable
 fun HomeScreen(
     graphExplorerUrl: String,
+    isDarkTheme: Boolean,
     onScanClick: () -> Unit,
     onManualEntry: (String) -> Unit,
+    onBrowseProjects: () -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -56,7 +58,9 @@ fun HomeScreen(
 
             // Crucible Logo Text
             Image(
-                painter = painterResource(id = R.drawable.crucible_text_logo),
+                painter = painterResource(
+                    id = if (isDarkTheme) R.drawable.crucible_text_dark else R.drawable.crucible_text_logo
+                ),
                 contentDescription = "Crucible",
                 modifier = Modifier.height(60.dp)
             )
@@ -73,24 +77,35 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.weight(0.2f))
 
-            // Web Explorer Button
-            OutlinedButton(
-                onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(graphExplorerUrl))
-                    context.startActivity(intent)
-                },
-                modifier = Modifier.fillMaxWidth()
+            // Browse Projects Button
+            Button(
+                onClick = onBrowseProjects,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
             ) {
-                Icon(Icons.Default.Language, contentDescription = null)
+                Icon(Icons.Default.Folder, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Crucible Web Explorer")
+                Text("Browse Projects", style = MaterialTheme.typography.titleMedium)
             }
 
-            // Divider
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant
-            )
+            // Divider with "OR"
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Divider(modifier = Modifier.weight(1f))
+                Text(
+                    text = "OR",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Divider(modifier = Modifier.weight(1f))
+            }
 
             // Scan Button
             Button(
@@ -123,54 +138,87 @@ fun HomeScreen(
             }
 
             // Manual UUID Entry
-            Column(
+            OutlinedTextField(
+                value = uuidInput,
+                onValueChange = { uuidInput = it },
+                label = { Text("Enter MFID") },
+                placeholder = {
+                    Text(
+                        "e.g., 0tc3s8wqb1zbx000sm7drrpsc8",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                },
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedTextField(
-                    value = uuidInput,
-                    onValueChange = { uuidInput = it },
-                    label = { Text("Enter MFID") },
-                    placeholder = {
-                        Text(
-                            "e.g., 0tc3s8wqb1zbx000sm7drrpsc8",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    leadingIcon = {
-                        Icon(Icons.Default.Fingerprint, contentDescription = null)
-                    },
-                    trailingIcon = {
-                        if (uuidInput.isNotEmpty()) {
+                singleLine = true,
+                shape = MaterialTheme.shapes.large,
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Fingerprint,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                trailingIcon = {
+                    if (uuidInput.isNotEmpty()) {
+                        Row {
                             IconButton(onClick = { uuidInput = "" }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Clear")
+                                Icon(
+                                    Icons.Default.Clear,
+                                    contentDescription = "Clear",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (uuidInput.isNotBlank()) {
+                                        onManualEntry(uuidInput)
+                                        uuidInput = ""
+                                    }
+                                },
+                                enabled = uuidInput.isNotBlank()
+                            ) {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = "Look Up",
+                                    tint = if (uuidInput.isNotBlank())
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                                )
                             }
                         }
                     }
+                },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                    cursorColor = MaterialTheme.colorScheme.primary
                 )
+            )
 
-                Button(
-                    onClick = {
-                        if (uuidInput.isNotBlank()) {
-                            onManualEntry(uuidInput)
-                            uuidInput = ""
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = uuidInput.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondary
-                    )
-                ) {
-                    Icon(Icons.Default.Search, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Look Up")
-                }
+            Spacer(modifier = Modifier.weight(0.3f))
+
+            // Web Explorer Button (smaller)
+            OutlinedButton(
+                onClick = {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(graphExplorerUrl))
+                    context.startActivity(intent)
+                },
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Icon(
+                    Icons.Default.Language,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    "Open Web Explorer",
+                    style = MaterialTheme.typography.labelLarge
+                )
             }
 
-            Spacer(modifier = Modifier.weight(0.5f))
+            Spacer(modifier = Modifier.weight(0.2f))
 
             // Footer with version and credits
             Text(

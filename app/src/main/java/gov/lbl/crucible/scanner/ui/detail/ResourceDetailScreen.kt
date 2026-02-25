@@ -77,7 +77,7 @@ fun ResourceDetailScreen(
                                 val shareIntent = Intent().apply {
                                     action = Intent.ACTION_SEND
                                     putExtra(Intent.EXTRA_TEXT, "Check out this ${if (resource is Sample) "sample" else "dataset"} in Crucible: $url")
-                                    putExtra(Intent.EXTRA_TITLE, resource.name)
+                                    putExtra(Intent.EXTRA_SUBJECT, resource.name)
                                     type = "text/plain"
                                 }
                                 context.startActivity(Intent.createChooser(shareIntent, "Share via"))
@@ -482,7 +482,7 @@ private fun DatasetDetailsCard(dataset: Dataset) {
 
 @Composable
 private fun ScientificMetadataCard(metadata: Map<String, Any?>) {
-    var expanded by remember { mutableStateOf(true) }
+    var expanded by remember { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -522,7 +522,7 @@ private fun MetadataTree(data: Map<String, Any?>, indentLevel: Int) {
         when (value) {
             is Map<*, *> -> {
                 // Nested map - show as expandable section
-                var expanded by remember { mutableStateOf(true) }
+                var expanded by remember { mutableStateOf(false) }
 
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
@@ -686,7 +686,7 @@ private fun ParentDatasetsCard(
     parents: List<DatasetReference>,
     onNavigateToResource: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(true) }
+    var expanded by remember { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -744,7 +744,7 @@ private fun ChildDatasetsCard(
     children: List<DatasetReference>,
     onNavigateToResource: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(true) }
+    var expanded by remember { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -802,7 +802,7 @@ private fun LinkedSamplesCard(
     samples: List<SampleReference>,
     onNavigateToResource: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(true) }
+    var expanded by remember { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -857,7 +857,7 @@ private fun LinkedDatasetsCard(
     datasets: List<DatasetReference>,
     onNavigateToResource: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(true) }
+    var expanded by remember { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -915,7 +915,7 @@ private fun ParentSamplesCard(
     parents: List<SampleReference>,
     onNavigateToResource: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(true) }
+    var expanded by remember { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -970,7 +970,7 @@ private fun ChildSamplesCard(
     children: List<SampleReference>,
     onNavigateToResource: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(true) }
+    var expanded by remember { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {

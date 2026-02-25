@@ -67,3 +67,11 @@ data class Thumbnail(
 data class ResourceType(
     @Json(name = "object_type") val objectType: String
 )
+
+@JsonClass(generateAdapter = true)
+data class Project(
+    @Json(name = "project_id") val projectId: String,
+    @Json(name = "project_name") val projectName: String? = null,
+    @Json(name = "description") val description: String? = null,
+    @Json(name = "created_at") val createdAt: String? = null
+)

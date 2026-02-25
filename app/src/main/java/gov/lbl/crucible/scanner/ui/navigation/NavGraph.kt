@@ -16,6 +16,8 @@ import gov.lbl.crucible.scanner.ui.settings.SettingsScreen
 import gov.lbl.crucible.scanner.ui.viewmodel.ScannerViewModel
 import gov.lbl.crucible.scanner.ui.viewmodel.UiState
 import gov.lbl.crucible.scanner.ui.detail.ResourceDetailScreen
+import gov.lbl.crucible.scanner.ui.projects.ProjectsListScreen
+import gov.lbl.crucible.scanner.ui.projects.ProjectDetailScreen
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -29,6 +31,10 @@ sealed class Screen(val route: String) {
     object Home : Screen("home")
     object Scanner : Screen("scanner")
     object Settings : Screen("settings")
+    object Projects : Screen("projects")
+    object ProjectDetail : Screen("project/{projectId}") {
+        fun createRoute(projectId: String) = "project/$projectId"
+    }
     object Detail : Screen("detail/{mfid}") {
         fun createRoute(mfid: String) = "detail/$mfid"
     }
@@ -42,6 +48,7 @@ fun NavGraph(
     graphExplorerUrl: String,
     themeMode: String,
     accentColor: String,
+    darkTheme: Boolean,
     onApiKeySave: (String) -> Unit,
     onApiBaseUrlSave: (String) -> Unit,
     onGraphExplorerUrlSave: (String) -> Unit,
@@ -55,6 +62,7 @@ fun NavGraph(
         composable(Screen.Home.route) {
             HomeScreen(
                 graphExplorerUrl = graphExplorerUrl,
+                isDarkTheme = darkTheme,
                 onScanClick = {
                     if (apiKey.isNullOrBlank()) {
                         navController.navigate(Screen.Settings.route)
@@ -68,6 +76,13 @@ fun NavGraph(
                         navController.navigate(Screen.Settings.route)
                     } else {
                         navController.navigate(Screen.Detail.createRoute(uuid))
+                    }
+                },
+                onBrowseProjects = {
+                    if (apiKey.isNullOrBlank()) {
+                        navController.navigate(Screen.Settings.route)
+                    } else {
+                        navController.navigate(Screen.Projects.route)
                     }
                 },
                 onSettingsClick = {
@@ -258,6 +273,40 @@ fun NavGraph(
                     }
                 }
             }
+        }
+
+        composable(Screen.Projects.route) {
+            ProjectsListScreen(
+                onBack = { navController.popBackStack() },
+                onHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = false }
+                    }
+                },
+                onProjectClick = { projectId ->
+                    navController.navigate(Screen.ProjectDetail.createRoute(projectId))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.ProjectDetail.route,
+            arguments = listOf(navArgument("projectId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val projectId = backStackEntry.arguments?.getString("projectId") ?: ""
+            ProjectDetailScreen(
+                projectId = projectId,
+                graphExplorerUrl = graphExplorerUrl,
+                onBack = { navController.popBackStack() },
+                onHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = false }
+                    }
+                },
+                onResourceClick = { mfid ->
+                    navController.navigate(Screen.Detail.createRoute(mfid))
+                }
+            )
         }
     }
 }
