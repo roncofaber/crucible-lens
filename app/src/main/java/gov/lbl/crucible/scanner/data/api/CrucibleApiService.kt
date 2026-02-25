@@ -46,8 +46,15 @@ interface CrucibleApiService {
     suspend fun getProjects(): Response<List<Project>>
 
     @GET("samples")
-    suspend fun getSamplesByProject(@Query("project_id") projectId: String): Response<List<Sample>>
+    suspend fun getSamplesByProject(
+        @Query("project_id") projectId: String,
+        @Query("limit") limit: Int = 999999
+    ): Response<List<Sample>>
 
     @GET("datasets")
-    suspend fun getDatasetsByProject(@Query("project_id") projectId: String): Response<List<Dataset>>
+    suspend fun getDatasetsByProject(
+        @Query("project_id") projectId: String,
+        @Query("include_metadata") includeMetadata: Boolean = true,
+        @Query("limit") limit: Int = 999999
+    ): Response<List<Dataset>>
 }

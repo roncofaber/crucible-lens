@@ -81,5 +81,6 @@ data class Project(
     @Json(name = "project_id") val projectId: String,
     @Json(name = "project_name") val projectName: String? = null,
     @Json(name = "description") val description: String? = null,
-    @Json(name = "created_at") val createdAt: String? = null
+    @Json(name = "created_at") val createdAt: String? = null,
+    @Json(name = "project_lead_email") val projectLeadEmail: String? = null
 )

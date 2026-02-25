@@ -185,7 +185,35 @@ fun NavGraph(
 
         composable(
             route = Screen.Detail.route,
-            arguments = listOf(navArgument("mfid") { type = NavType.StringType })
+            arguments = listOf(navArgument("mfid") { type = NavType.StringType }),
+            enterTransition = {
+                if (smoothAnimations) {
+                    fadeIn(animationSpec = tween(450)) + slideInHorizontally(initialOffsetX = { it / 10 })
+                } else {
+                    fadeIn(animationSpec = tween(0))
+                }
+            },
+            exitTransition = {
+                if (smoothAnimations) {
+                    fadeOut(animationSpec = tween(300))
+                } else {
+                    fadeOut(animationSpec = tween(0))
+                }
+            },
+            popEnterTransition = {
+                if (smoothAnimations) {
+                    fadeIn(animationSpec = tween(450))
+                } else {
+                    fadeIn(animationSpec = tween(0))
+                }
+            },
+            popExitTransition = {
+                if (smoothAnimations) {
+                    fadeOut(animationSpec = tween(300)) + slideOutHorizontally(targetOffsetX = { it / 10 })
+                } else {
+                    fadeOut(animationSpec = tween(0))
+                }
+            }
         ) { backStackEntry ->
             val mfid = backStackEntry.arguments?.getString("mfid") ?: ""
 

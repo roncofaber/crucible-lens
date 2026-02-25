@@ -12,6 +12,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.with
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -50,8 +51,18 @@ fun ProjectDetailScreen(
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var selectedTab by remember { mutableStateOf(0) }
+    var searchQuery by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    val filteredSamples = remember(samples, searchQuery) {
+        if (searchQuery.isBlank()) samples ?: emptyList()
+        else (samples ?: emptyList()).filter { it.matchesSearch(searchQuery) }
+    }
+    val filteredDatasets = remember(datasets, searchQuery) {
+        if (searchQuery.isBlank()) datasets ?: emptyList()
+        else (datasets ?: emptyList()).filter { it.matchesSearch(searchQuery) }
+    }
 
     fun loadProjectData(forceRefresh: Boolean = false) {
         scope.launch {
@@ -104,7 +115,7 @@ fun ProjectDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(project?.projectName ?: projectId) },
+                title = {},
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, "Back")
@@ -141,10 +152,12 @@ fun ProjectDetailScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Project header
+            // Project header with integrated search
             ProjectHeader(
                 project = project,
-                projectId = projectId
+                projectId = projectId,
+                searchQuery = searchQuery,
+                onSearchChange = { searchQuery = it }
             )
 
             // Tabs
@@ -152,13 +165,21 @@ fun ProjectDetailScreen(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text("Samples (${samples?.size ?: 0})") },
+                    text = {
+                        val count = filteredSamples.size
+                        val total = samples?.size ?: 0
+                        Text(if (searchQuery.isBlank()) "Samples ($total)" else "Samples ($count/$total)")
+                    },
                     icon = { Icon(Icons.Default.Science, contentDescription = null) }
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("Datasets (${datasets?.size ?: 0})") },
+                    text = {
+                        val count = filteredDatasets.size
+                        val total = datasets?.size ?: 0
+                        Text(if (searchQuery.isBlank()) "Datasets ($total)" else "Datasets ($count/$total)")
+                    },
                     icon = { Icon(Icons.Default.Dataset, contentDescription = null) }
                 )
             }
@@ -254,11 +275,13 @@ fun ProjectDetailScreen(
                 else -> {
                     when (selectedTab) {
                         0 -> SamplesList(
-                            samples = samples ?: emptyList(),
+                            samples = filteredSamples,
+                            isFiltered = searchQuery.isNotBlank(),
                             onSampleClick = onResourceClick
                         )
                         1 -> DatasetsList(
-                            datasets = datasets ?: emptyList(),
+                            datasets = filteredDatasets,
+                            isFiltered = searchQuery.isNotBlank(),
                             onDatasetClick = onResourceClick
                         )
                     }
@@ -271,7 +294,9 @@ fun ProjectDetailScreen(
 @Composable
 private fun ProjectHeader(
     project: Project?,
-    projectId: String
+    projectId: String,
+    searchQuery: String,
+    onSearchChange: (String) -> Unit
 ) {
     Surface(
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
@@ -295,15 +320,17 @@ private fun ProjectHeader(
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         text = project?.projectName ?: projectId,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Text(
-                        text = "ID: $projectId",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    project?.projectLeadEmail?.takeIf { it.isNotBlank() }?.let {
+                        Text(
+                            text = "Lead: $it",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
@@ -322,8 +349,56 @@ private fun ProjectHeader(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     StatChip(
                         icon = Icons.Default.CalendarToday,
-                        label = date.take(10) // "YYYY-MM-DD"
+                        label = date.take(10)
                     )
+                }
+            }
+
+            // Integrated search field
+            Surface(
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (searchQuery.isEmpty()) {
+                            Text(
+                                text = "Search samples and datasets…",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        }
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = onSearchChange,
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            singleLine = true
+                        )
+                    }
+                    if (searchQuery.isNotEmpty()) {
+                        Icon(
+                            Icons.Default.Clear,
+                            contentDescription = "Clear search",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clickable { onSearchChange("") }
+                        )
+                    }
                 }
             }
         }
@@ -362,6 +437,7 @@ private fun StatChip(
 @Composable
 private fun SamplesList(
     samples: List<Sample>,
+    isFiltered: Boolean,
     onSampleClick: (String) -> Unit
 ) {
     if (samples.isEmpty()) {
@@ -382,18 +458,18 @@ private fun SamplesList(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(
-                        Icons.Default.Science,
+                        if (isFiltered) Icons.Default.SearchOff else Icons.Default.Science,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "No Samples",
+                        text = if (isFiltered) "No Matching Samples" else "No Samples",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                 }
                 Text(
-                    text = "This project has no samples.",
+                    text = if (isFiltered) "No samples match your search." else "This project has no samples.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -435,6 +511,7 @@ private fun SamplesList(
 @Composable
 private fun DatasetsList(
     datasets: List<Dataset>,
+    isFiltered: Boolean,
     onDatasetClick: (String) -> Unit
 ) {
     if (datasets.isEmpty()) {
@@ -455,18 +532,18 @@ private fun DatasetsList(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(
-                        Icons.Default.Dataset,
+                        if (isFiltered) Icons.Default.SearchOff else Icons.Default.Dataset,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "No Datasets",
+                        text = if (isFiltered) "No Matching Datasets" else "No Datasets",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                 }
                 Text(
-                    text = "This project has no datasets.",
+                    text = if (isFiltered) "No datasets match your search." else "This project has no datasets.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -634,4 +711,47 @@ private fun ResourceCard(
             )
         }
     }
+}
+
+private fun Sample.matchesSearch(query: String): Boolean {
+    val q = query.lowercase()
+    return name.lowercase().contains(q) ||
+        (sampleType?.lowercase()?.contains(q) == true) ||
+        (projectId?.lowercase()?.contains(q) == true) ||
+        uniqueId.lowercase().contains(q) ||
+        (createdAt?.lowercase()?.contains(q) == true) ||
+        (internalId?.toString()?.contains(q) == true)
+}
+
+private fun Dataset.matchesSearch(query: String): Boolean {
+    val q = query.lowercase()
+    return name.lowercase().contains(q) ||
+        (measurement?.lowercase()?.contains(q) == true) ||
+        (instrumentName?.lowercase()?.contains(q) == true) ||
+        (instrumentId?.toString()?.contains(q) == true) ||
+        (sessionName?.lowercase()?.contains(q) == true) ||
+        (projectId?.lowercase()?.contains(q) == true) ||
+        uniqueId.lowercase().contains(q) ||
+        (createdAt?.lowercase()?.contains(q) == true) ||
+        (internalId?.toString()?.contains(q) == true) ||
+        (dataFormat?.lowercase()?.contains(q) == true) ||
+        (ownerOrcid?.lowercase()?.contains(q) == true) ||
+        (sourceFolder?.lowercase()?.contains(q) == true) ||
+        (fileToUpload?.lowercase()?.contains(q) == true) ||
+        (jsonLink?.lowercase()?.contains(q) == true) ||
+        (sha256Hash?.lowercase()?.contains(q) == true) ||
+        (scientificMetadata?.matchesSearch(q) == true)
+}
+
+private fun Map<String, Any?>.matchesSearch(query: String): Boolean =
+    entries.any { (key, value) ->
+        key.lowercase().contains(query) || value.matchesSearchValue(query)
+    }
+
+private fun Any?.matchesSearchValue(query: String): Boolean = when (this) {
+    null -> false
+    is String -> lowercase().contains(query)
+    is Map<*, *> -> @Suppress("UNCHECKED_CAST") (this as Map<String, Any?>).matchesSearch(query)
+    is List<*> -> any { it.matchesSearchValue(query) }
+    else -> toString().lowercase().contains(query)
 }

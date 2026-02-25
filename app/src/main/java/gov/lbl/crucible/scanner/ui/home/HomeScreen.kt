@@ -15,10 +15,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import gov.lbl.crucible.scanner.BuildConfig
 import gov.lbl.crucible.scanner.R
 import gov.lbl.crucible.scanner.data.api.ApiClient
 import gov.lbl.crucible.scanner.data.cache.CacheManager
+import gov.lbl.crucible.scanner.ui.common.allLoadingMessages
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -446,68 +449,53 @@ private fun EasterEggDialog(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         icon = {
             Icon(
-                Icons.Default.Science,
+                Icons.Default.AutoAwesome,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(36.dp)
             )
         },
         title = {
             Text(
-                text = "You Found the Secret!",
+                text = "Loading Messages",
                 style = MaterialTheme.typography.titleLarge
             )
         },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = "🔬 Fun Nanoscience Facts:",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    text = "All ${allLoadingMessages.size} things the app thinks about while you wait:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                Spacer(modifier = Modifier.height(8.dp))
+                allLoadingMessages.forEachIndexed { index, message ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Top
                     ) {
                         Text(
-                            text = "• A single human hair is about 80,000-100,000 nanometers wide",
+                            text = "${index + 1}.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.width(28.dp)
                         )
                         Text(
-                            text = "• The Molecular Foundry enables research at scales 1,000x smaller than that!",
+                            text = message,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            text = "• Gold nanoparticles can be red, purple, or blue depending on their size",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
-
-                HorizontalDivider()
-
-                Text(
-                    text = "This app was crafted with ❤️ for the nanoscience community. Keep exploring the molecular world!",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
             }
         },
         confirmButton = {
             Button(onClick = onDismiss) {
-                Text("Cool!")
+                Text("Nice!")
             }
         }
     )
