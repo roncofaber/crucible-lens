@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import gov.lbl.crucible.scanner.data.api.ApiClient
+import gov.lbl.crucible.scanner.data.cache.CacheManager
 import gov.lbl.crucible.scanner.data.model.Project
 import kotlinx.coroutines.launch
 
@@ -29,14 +30,27 @@ fun ProjectsListScreen(
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    fun loadProjects(forceRefresh: Boolean = false) {
         scope.launch {
             try {
+                // Check cache first if not forcing refresh
+                if (!forceRefresh) {
+                    val cachedProjects = CacheManager.getProjects()
+                    if (cachedProjects != null) {
+                        projects = cachedProjects
+                        isLoading = false
+                        return@launch
+                    }
+                }
+
                 isLoading = true
                 error = null
                 val response = ApiClient.service.getProjects()
                 if (response.isSuccessful) {
-                    projects = response.body()
+                    val fetchedProjects = response.body()
+                    projects = fetchedProjects
+                    // Cache the projects
+                    fetchedProjects?.let { CacheManager.cacheProjects(it) }
                 } else {
                     error = "Failed to load projects: ${response.message()}"
                 }
@@ -46,6 +60,10 @@ fun ProjectsListScreen(
                 isLoading = false
             }
         }
+    }
+
+    LaunchedEffect(Unit) {
+        loadProjects()
     }
 
     Scaffold(
@@ -58,6 +76,14 @@ fun ProjectsListScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            CacheManager.clearProjectsCache()
+                            loadProjects(forceRefresh = true)
+                        }
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
                     IconButton(onClick = onHome) {
                         Icon(Icons.Default.Home, contentDescription = "Home")
                     }

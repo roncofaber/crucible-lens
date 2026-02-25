@@ -37,6 +37,15 @@ class MainActivity : ComponentActivity() {
             val accentColor by preferencesManager.accentColor.collectAsState(
                 initial = PreferencesManager.DEFAULT_ACCENT_COLOR
             )
+            val lastVisitedResource by preferencesManager.lastVisitedResource.collectAsState(
+                initial = null
+            )
+            val lastVisitedResourceName by preferencesManager.lastVisitedResourceName.collectAsState(
+                initial = null
+            )
+            val smoothAnimations by preferencesManager.smoothAnimations.collectAsState(
+                initial = true
+            )
             val scope = rememberCoroutineScope()
 
             // Set API key and base URL in client when they change
@@ -67,6 +76,9 @@ class MainActivity : ComponentActivity() {
                     themeMode = themeMode,
                     accentColor = accentColor,
                     darkTheme = darkTheme,
+                    lastVisitedResource = lastVisitedResource,
+                    lastVisitedResourceName = lastVisitedResourceName,
+                    smoothAnimations = smoothAnimations,
                     onApiKeySave = { key ->
                         scope.launch {
                             preferencesManager.saveApiKey(key)
@@ -92,6 +104,16 @@ class MainActivity : ComponentActivity() {
                     onAccentColorSave = { color ->
                         scope.launch {
                             preferencesManager.saveAccentColor(color)
+                        }
+                    },
+                    onLastVisitedResourceSave = { uuid, name ->
+                        scope.launch {
+                            preferencesManager.saveLastVisitedResource(uuid, name)
+                        }
+                    },
+                    onSmoothAnimationsSave = { enabled ->
+                        scope.launch {
+                            preferencesManager.saveSmoothAnimations(enabled)
                         }
                     }
                 )

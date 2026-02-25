@@ -30,11 +30,13 @@ fun SettingsScreen(
     currentGraphExplorerUrl: String,
     currentThemeMode: String,
     currentAccentColor: String,
+    currentSmoothAnimations: Boolean,
     onApiKeySave: (String) -> Unit,
     onApiBaseUrlSave: (String) -> Unit,
     onGraphExplorerUrlSave: (String) -> Unit,
     onThemeModeSave: (String) -> Unit,
     onAccentColorSave: (String) -> Unit,
+    onSmoothAnimationsSave: (Boolean) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -43,6 +45,7 @@ fun SettingsScreen(
     var graphExplorerUrlInput by remember { mutableStateOf(currentGraphExplorerUrl) }
     var themeModeInput by remember { mutableStateOf(currentThemeMode) }
     var accentColorInput by remember { mutableStateOf(currentAccentColor) }
+    var smoothAnimationsInput by remember { mutableStateOf(currentSmoothAnimations) }
     var isApiKeyVisible by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -69,6 +72,7 @@ fun SettingsScreen(
                     onGraphExplorerUrlSave(graphExplorerUrlInput)
                     onThemeModeSave(themeModeInput)
                     onAccentColorSave(accentColorInput)
+                    onSmoothAnimationsSave(smoothAnimationsInput)
                     scope.launch {
                         snackbarHostState.showSnackbar(
                             message = "Settings saved successfully",
@@ -294,6 +298,44 @@ fun SettingsScreen(
                             contentDescription = "Choose color"
                         )
                     }
+                }
+            }
+
+            // Smooth Animations Toggle
+            Card {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            Icons.Default.Animation,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column {
+                            Text(
+                                text = "Smooth Animations",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Disable for maximum speed",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = smoothAnimationsInput,
+                        onCheckedChange = { smoothAnimationsInput = it }
+                    )
                 }
             }
 
@@ -580,19 +622,35 @@ private fun ColorPickerDialog(
     onDismiss: () -> Unit
 ) {
     val colors = listOf(
+        // Row 1
         "blue" to Color(0xFF1976D2),
         "purple" to Color(0xFF9C27B0),
         "green" to Color(0xFF388E3C),
         "orange" to Color(0xFFF57C00),
+        // Row 2
         "red" to Color(0xFFD32F2F),
         "teal" to Color(0xFF00796B),
         "pink" to Color(0xFFE91E63),
         "indigo" to Color(0xFF3F51B5),
+        // Row 3
         "amber" to Color(0xFFFFA000),
         "lime" to Color(0xFFAFB42B),
         "cyan" to Color(0xFF0097A7),
-        "brown" to Color(0xFF5D4037)
+        "brown" to Color(0xFF5D4037),
+        // Row 4 - New colors
+        "deepPurple" to Color(0xFF512DA8),
+        "lightBlue" to Color(0xFF0288D1),
+        "lightGreen" to Color(0xFF689F38),
+        "deepOrange" to Color(0xFFE64A19),
+        // Row 5 - More new colors
+        "blueGrey" to Color(0xFF455A64),
+        "yellow" to Color(0xFFF9A825),
+        "magenta" to Color(0xFFAD1457),
+        "turquoise" to Color(0xFF00897B)
     )
+
+    var showCustomInput by remember { mutableStateOf(false) }
+    var customHex by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -606,6 +664,7 @@ private fun ColorPickerDialog(
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Predefined colors grid
                 colors.chunked(4).forEach { rowColors ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -625,7 +684,10 @@ private fun ColorPickerDialog(
                                             MaterialTheme.colorScheme.outline,
                                         shape = MaterialTheme.shapes.medium
                                     )
-                                    .clickable { onColorSelected(name) },
+                                    .clickable {
+                                        onColorSelected(name)
+                                        onDismiss()
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (currentColor == name) {
@@ -633,9 +695,62 @@ private fun ColorPickerDialog(
                                         Icons.Default.Check,
                                         contentDescription = "Selected",
                                         tint = Color.White,
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // Custom color section
+                if (!showCustomInput) {
+                    OutlinedButton(
+                        onClick = { showCustomInput = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Palette, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Custom Color (Hex)")
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = customHex,
+                            onValueChange = { customHex = it.uppercase() },
+                            label = { Text("Hex Color") },
+                            placeholder = { Text("1976D2") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            prefix = { Text("#") },
+                            isError = customHex.isNotEmpty() && !isValidHex(customHex)
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    showCustomInput = false
+                                    customHex = ""
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Cancel")
+                            }
+                            Button(
+                                onClick = {
+                                    if (isValidHex(customHex)) {
+                                        onColorSelected("#$customHex")
+                                        onDismiss()
+                                    }
+                                },
+                                enabled = isValidHex(customHex),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Apply")
                             }
                         }
                     }
@@ -643,14 +758,30 @@ private fun ColorPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
+            if (!showCustomInput) {
+                TextButton(onClick = onDismiss) {
+                    Text("Close")
+                }
             }
         }
     )
 }
 
+private fun isValidHex(hex: String): Boolean {
+    if (hex.length != 6) return false
+    return hex.all { it in '0'..'9' || it in 'A'..'F' || it in 'a'..'f' }
+}
+
 private fun getColorFromName(colorName: String): Color {
+    // Check if it's a custom hex color
+    if (colorName.startsWith("#") && colorName.length == 7) {
+        return try {
+            Color(android.graphics.Color.parseColor(colorName))
+        } catch (e: Exception) {
+            Color(0xFF1976D2) // Default to blue if parsing fails
+        }
+    }
+
     return when (colorName.lowercase()) {
         "blue" -> Color(0xFF1976D2)
         "purple" -> Color(0xFF9C27B0)
@@ -664,6 +795,14 @@ private fun getColorFromName(colorName: String): Color {
         "lime" -> Color(0xFFAFB42B)
         "cyan" -> Color(0xFF0097A7)
         "brown" -> Color(0xFF5D4037)
+        "deeppurple" -> Color(0xFF512DA8)
+        "lightblue" -> Color(0xFF0288D1)
+        "lightgreen" -> Color(0xFF689F38)
+        "deeporange" -> Color(0xFFE64A19)
+        "bluegrey" -> Color(0xFF455A64)
+        "yellow" -> Color(0xFFF9A825)
+        "magenta" -> Color(0xFFAD1457)
+        "turquoise" -> Color(0xFF00897B)
         else -> Color(0xFF1976D2) // Default to blue
     }
 }

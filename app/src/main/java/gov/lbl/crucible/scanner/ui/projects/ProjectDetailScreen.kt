@@ -1,6 +1,15 @@
 package gov.lbl.crucible.scanner.ui.projects
 
 import android.content.Intent
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.with
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,11 +24,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import gov.lbl.crucible.scanner.data.api.ApiClient
+import gov.lbl.crucible.scanner.data.cache.CacheManager
 import gov.lbl.crucible.scanner.data.model.Dataset
 import gov.lbl.crucible.scanner.data.model.Sample
+import gov.lbl.crucible.scanner.ui.common.LoadingMessage
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun ProjectDetailScreen(
     projectId: String,
@@ -37,19 +48,43 @@ fun ProjectDetailScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    LaunchedEffect(projectId) {
+    fun loadProjectData(forceRefresh: Boolean = false) {
         scope.launch {
             try {
                 isLoading = true
                 error = null
+
+                // Check cache first (unless force refresh)
+                if (!forceRefresh) {
+                    val cachedSamples = CacheManager.getProjectSamples(projectId)
+                    val cachedDatasets = CacheManager.getProjectDatasets(projectId)
+
+                    if (cachedSamples != null && cachedDatasets != null) {
+                        samples = cachedSamples
+                        datasets = cachedDatasets
+                        isLoading = false
+                        return@launch
+                    }
+                }
 
                 // Load samples and datasets in parallel
                 val samplesResponse = ApiClient.service.getSamplesByProject(projectId)
                 val datasetsResponse = ApiClient.service.getDatasetsByProject(projectId)
 
                 if (samplesResponse.isSuccessful && datasetsResponse.isSuccessful) {
-                    samples = samplesResponse.body()
-                    datasets = datasetsResponse.body()
+                    val loadedSamples = samplesResponse.body()
+                    val loadedDatasets = datasetsResponse.body()
+
+                    if (loadedSamples != null && loadedDatasets != null) {
+                        // Cache the results
+                        CacheManager.cacheProjectSamples(projectId, loadedSamples)
+                        CacheManager.cacheProjectDatasets(projectId, loadedDatasets)
+
+                        samples = loadedSamples
+                        datasets = loadedDatasets
+                    } else {
+                        error = "Failed to load project data"
+                    }
                 } else {
                     error = "Failed to load project data"
                 }
@@ -59,6 +94,10 @@ fun ProjectDetailScreen(
                 isLoading = false
             }
         }
+    }
+
+    LaunchedEffect(projectId) {
+        loadProjectData()
     }
 
     Scaffold(
@@ -71,6 +110,14 @@ fun ProjectDetailScreen(
                     }
                 },
                 actions = {
+                    // Refresh button
+                    IconButton(onClick = {
+                        CacheManager.clearProjectDetail(projectId)
+                        loadProjectData(forceRefresh = true)
+                    }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
+
                     // Share button
                     IconButton(onClick = {
                         val url = "$graphExplorerUrl/$projectId"
@@ -116,20 +163,54 @@ fun ProjectDetailScreen(
 
             when {
                 isLoading -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                    val loadingMessage = LoadingMessage()
+
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator()
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "Loading project data...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Card(
+                            modifier = Modifier.padding(32.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(20.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(48.dp),
+                                    strokeWidth = 4.dp
+                                )
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Loading Project Data",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    AnimatedContent(
+                                        targetState = loadingMessage,
+                                        transitionSpec = {
+                                            fadeIn(animationSpec = tween(500)) with
+                                                fadeOut(animationSpec = tween(500))
+                                        },
+                                        label = "loading message"
+                                    ) { message ->
+                                        Text(
+                                            text = message,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 error != null -> {
@@ -243,7 +324,7 @@ private fun SamplesList(
                         Column(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            samplesInGroup.forEach { sample ->
+                            samplesInGroup.sortedBy { it.uniqueId }.forEach { sample ->
                                 ResourceCard(
                                     title = sample.name,
                                     subtitle = null,
@@ -317,7 +398,7 @@ private fun DatasetsList(
                         Column(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            datasetsInGroup.forEach { dataset ->
+                            datasetsInGroup.sortedBy { it.uniqueId }.forEach { dataset ->
                                 ResourceCard(
                                     title = dataset.name,
                                     subtitle = null,
@@ -394,7 +475,11 @@ private fun CollapsibleGroup(
             }
 
             // Content
-            if (expanded) {
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(animationSpec = tween(150)) + fadeIn(animationSpec = tween(150)),
+                exit = shrinkVertically(animationSpec = tween(150)) + fadeOut(animationSpec = tween(150))
+            ) {
                 Column(
                     modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp, top = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)

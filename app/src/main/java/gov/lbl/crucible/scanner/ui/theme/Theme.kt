@@ -172,6 +172,110 @@ private val BrownLightColorScheme = lightColorScheme(
     tertiary = Color(0xFF388E3C)
 )
 
+// Deep Purple theme
+private val DeepPurpleDarkColorScheme = darkColorScheme(
+    primary = Color(0xFF9575CD),
+    secondary = Color(0xFF90CAF9),
+    tertiary = Color(0xFFA5D6A7)
+)
+
+private val DeepPurpleLightColorScheme = lightColorScheme(
+    primary = Color(0xFF512DA8),
+    secondary = Color(0xFF1976D2),
+    tertiary = Color(0xFF388E3C)
+)
+
+// Light Blue theme
+private val LightBlueDarkColorScheme = darkColorScheme(
+    primary = Color(0xFF4FC3F7),
+    secondary = Color(0xFFCE93D8),
+    tertiary = Color(0xFFA5D6A7)
+)
+
+private val LightBlueLightColorScheme = lightColorScheme(
+    primary = Color(0xFF0288D1),
+    secondary = Color(0xFF9C27B0),
+    tertiary = Color(0xFF388E3C)
+)
+
+// Light Green theme
+private val LightGreenDarkColorScheme = darkColorScheme(
+    primary = Color(0xFF9CCC65),
+    secondary = Color(0xFF90CAF9),
+    tertiary = Color(0xFFCE93D8)
+)
+
+private val LightGreenLightColorScheme = lightColorScheme(
+    primary = Color(0xFF689F38),
+    secondary = Color(0xFF1976D2),
+    tertiary = Color(0xFF9C27B0)
+)
+
+// Deep Orange theme
+private val DeepOrangeDarkColorScheme = darkColorScheme(
+    primary = Color(0xFFFF8A65),
+    secondary = Color(0xFF90CAF9),
+    tertiary = Color(0xFFA5D6A7)
+)
+
+private val DeepOrangeLightColorScheme = lightColorScheme(
+    primary = Color(0xFFE64A19),
+    secondary = Color(0xFF1976D2),
+    tertiary = Color(0xFF388E3C)
+)
+
+// Blue Grey theme
+private val BlueGreyDarkColorScheme = darkColorScheme(
+    primary = Color(0xFF78909C),
+    secondary = Color(0xFF90CAF9),
+    tertiary = Color(0xFFA5D6A7)
+)
+
+private val BlueGreyLightColorScheme = lightColorScheme(
+    primary = Color(0xFF455A64),
+    secondary = Color(0xFF1976D2),
+    tertiary = Color(0xFF388E3C)
+)
+
+// Yellow theme
+private val YellowDarkColorScheme = darkColorScheme(
+    primary = Color(0xFFFDD835),
+    secondary = Color(0xFF90CAF9),
+    tertiary = Color(0xFFA5D6A7)
+)
+
+private val YellowLightColorScheme = lightColorScheme(
+    primary = Color(0xFFF9A825),
+    secondary = Color(0xFF1976D2),
+    tertiary = Color(0xFF388E3C)
+)
+
+// Magenta theme
+private val MagentaDarkColorScheme = darkColorScheme(
+    primary = Color(0xFFEC407A),
+    secondary = Color(0xFF90CAF9),
+    tertiary = Color(0xFFA5D6A7)
+)
+
+private val MagentaLightColorScheme = lightColorScheme(
+    primary = Color(0xFFAD1457),
+    secondary = Color(0xFF1976D2),
+    tertiary = Color(0xFF388E3C)
+)
+
+// Turquoise theme
+private val TurquoiseDarkColorScheme = darkColorScheme(
+    primary = Color(0xFF26A69A),
+    secondary = Color(0xFF90CAF9),
+    tertiary = Color(0xFFCE93D8)
+)
+
+private val TurquoiseLightColorScheme = lightColorScheme(
+    primary = Color(0xFF00897B),
+    secondary = Color(0xFF1976D2),
+    tertiary = Color(0xFF9C27B0)
+)
+
 @Composable
 fun CrucibleScannerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -183,6 +287,28 @@ fun CrucibleScannerTheme(
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        // Check if it's a custom hex color
+        accentColor.startsWith("#") -> {
+            val customColor = try {
+                Color(android.graphics.Color.parseColor(accentColor))
+            } catch (e: Exception) {
+                Color(0xFF1976D2) // Default to blue
+            }
+            // Create a custom color scheme with the hex color
+            if (darkTheme) {
+                darkColorScheme(
+                    primary = customColor,
+                    secondary = Color(0xFF90CAF9),
+                    tertiary = Color(0xFFA5D6A7)
+                )
+            } else {
+                lightColorScheme(
+                    primary = customColor,
+                    secondary = Color(0xFF1976D2),
+                    tertiary = Color(0xFF388E3C)
+                )
+            }
         }
         else -> {
             when (accentColor.lowercase()) {
@@ -197,6 +323,14 @@ fun CrucibleScannerTheme(
                 "lime" -> if (darkTheme) LimeDarkColorScheme else LimeLightColorScheme
                 "cyan" -> if (darkTheme) CyanDarkColorScheme else CyanLightColorScheme
                 "brown" -> if (darkTheme) BrownDarkColorScheme else BrownLightColorScheme
+                "deeppurple" -> if (darkTheme) DeepPurpleDarkColorScheme else DeepPurpleLightColorScheme
+                "lightblue" -> if (darkTheme) LightBlueDarkColorScheme else LightBlueLightColorScheme
+                "lightgreen" -> if (darkTheme) LightGreenDarkColorScheme else LightGreenLightColorScheme
+                "deeporange" -> if (darkTheme) DeepOrangeDarkColorScheme else DeepOrangeLightColorScheme
+                "bluegrey" -> if (darkTheme) BlueGreyDarkColorScheme else BlueGreyLightColorScheme
+                "yellow" -> if (darkTheme) YellowDarkColorScheme else YellowLightColorScheme
+                "magenta" -> if (darkTheme) MagentaDarkColorScheme else MagentaLightColorScheme
+                "turquoise" -> if (darkTheme) TurquoiseDarkColorScheme else TurquoiseLightColorScheme
                 else -> if (darkTheme) BlueDarkColorScheme else BlueLightColorScheme
             }
         }

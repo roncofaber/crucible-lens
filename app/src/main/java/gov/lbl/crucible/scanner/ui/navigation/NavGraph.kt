@@ -1,15 +1,22 @@
 package gov.lbl.crucible.scanner.ui.navigation
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
+import kotlinx.coroutines.delay
 import gov.lbl.crucible.scanner.ui.home.HomeScreen
 import gov.lbl.crucible.scanner.ui.scanner.QRScannerScreen
 import gov.lbl.crucible.scanner.ui.settings.SettingsScreen
@@ -18,6 +25,7 @@ import gov.lbl.crucible.scanner.ui.viewmodel.UiState
 import gov.lbl.crucible.scanner.ui.detail.ResourceDetailScreen
 import gov.lbl.crucible.scanner.ui.projects.ProjectsListScreen
 import gov.lbl.crucible.scanner.ui.projects.ProjectDetailScreen
+import gov.lbl.crucible.scanner.ui.common.LoadingMessage
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -40,6 +48,8 @@ sealed class Screen(val route: String) {
     }
 }
 
+
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun NavGraph(
     navController: NavHostController,
@@ -49,20 +59,60 @@ fun NavGraph(
     themeMode: String,
     accentColor: String,
     darkTheme: Boolean,
+    lastVisitedResource: String?,
+    lastVisitedResourceName: String?,
+    smoothAnimations: Boolean,
     onApiKeySave: (String) -> Unit,
     onApiBaseUrlSave: (String) -> Unit,
     onGraphExplorerUrlSave: (String) -> Unit,
     onThemeModeSave: (String) -> Unit,
     onAccentColorSave: (String) -> Unit,
+    onLastVisitedResourceSave: (String, String) -> Unit,
+    onSmoothAnimationsSave: (Boolean) -> Unit,
     viewModel: ScannerViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    viewModel.setSmoothAnimations(smoothAnimations)
 
-    NavHost(navController = navController, startDestination = Screen.Home.route) {
+    NavHost(
+        navController = navController,
+        startDestination = Screen.Home.route,
+        enterTransition = {
+            if (smoothAnimations) {
+                fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
+            } else {
+                fadeIn(animationSpec = tween(0))
+            }
+        },
+        exitTransition = {
+            if (smoothAnimations) {
+                fadeOut(animationSpec = tween(200))
+            } else {
+                fadeOut(animationSpec = tween(0))
+            }
+        },
+        popEnterTransition = {
+            if (smoothAnimations) {
+                fadeIn(animationSpec = tween(300))
+            } else {
+                fadeIn(animationSpec = tween(0))
+            }
+        },
+        popExitTransition = {
+            if (smoothAnimations) {
+                fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
+            } else {
+                fadeOut(animationSpec = tween(0))
+            }
+        }
+    ) {
         composable(Screen.Home.route) {
             HomeScreen(
                 graphExplorerUrl = graphExplorerUrl,
                 isDarkTheme = darkTheme,
+                lastVisitedResource = lastVisitedResource,
+                lastVisitedResourceName = lastVisitedResourceName,
+                apiKey = apiKey,
                 onScanClick = {
                     if (apiKey.isNullOrBlank()) {
                         navController.navigate(Screen.Settings.route)
@@ -106,11 +156,13 @@ fun NavGraph(
                 currentGraphExplorerUrl = graphExplorerUrl,
                 currentThemeMode = themeMode,
                 currentAccentColor = accentColor,
+                currentSmoothAnimations = smoothAnimations,
                 onApiKeySave = onApiKeySave,
                 onApiBaseUrlSave = onApiBaseUrlSave,
                 onGraphExplorerUrlSave = onGraphExplorerUrlSave,
                 onThemeModeSave = onThemeModeSave,
                 onAccentColorSave = onAccentColorSave,
+                onSmoothAnimationsSave = onSmoothAnimationsSave,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -125,8 +177,15 @@ fun NavGraph(
                 viewModel.fetchResource(mfid)
             }
 
-            when (val state = uiState) {
+            Crossfade(
+                targetState = uiState,
+                animationSpec = tween(if (smoothAnimations) 300 else 0),
+                label = "resource state"
+            ) { state ->
+            when (state) {
                 is UiState.Loading -> {
+                    val loadingMessage = LoadingMessage()
+
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -155,17 +214,37 @@ fun NavGraph(
                                         style = MaterialTheme.typography.titleMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    Text(
-                                        text = "Fetching data from Crucible...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                    )
+                                    AnimatedContent(
+                                        targetState = loadingMessage,
+                                        transitionSpec = {
+                                            if (smoothAnimations) {
+                                                fadeIn(animationSpec = tween(500)) with
+                                                    fadeOut(animationSpec = tween(500))
+                                            } else {
+                                                fadeIn(animationSpec = tween(0)) with
+                                                    fadeOut(animationSpec = tween(0))
+                                            }
+                                        },
+                                        label = "loading message"
+                                    ) { message ->
+                                        Text(
+                                            text = message,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
                 is UiState.Success -> {
+                    // Save last visited resource
+                    LaunchedEffect(state.resource) {
+                        onLastVisitedResourceSave(state.resource.uniqueId, state.resource.name)
+                    }
+
                     ResourceDetailScreen(
                         resource = state.resource,
                         thumbnails = state.thumbnails,
@@ -180,6 +259,9 @@ fun NavGraph(
                             navController.navigate(Screen.Home.route) {
                                 popUpTo(Screen.Home.route) { inclusive = false }
                             }
+                        },
+                        onRefresh = {
+                            viewModel.refreshResource(mfid)
                         }
                     )
                 }
@@ -273,9 +355,40 @@ fun NavGraph(
                     }
                 }
             }
+            }
         }
 
-        composable(Screen.Projects.route) {
+        composable(
+            route = Screen.Projects.route,
+            enterTransition = {
+                if (smoothAnimations) {
+                    fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
+                } else {
+                    fadeIn(animationSpec = tween(0))
+                }
+            },
+            exitTransition = {
+                if (smoothAnimations) {
+                    fadeOut(animationSpec = tween(200))
+                } else {
+                    fadeOut(animationSpec = tween(0))
+                }
+            },
+            popEnterTransition = {
+                if (smoothAnimations) {
+                    fadeIn(animationSpec = tween(300))
+                } else {
+                    fadeIn(animationSpec = tween(0))
+                }
+            },
+            popExitTransition = {
+                if (smoothAnimations) {
+                    fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
+                } else {
+                    fadeOut(animationSpec = tween(0))
+                }
+            }
+        ) {
             ProjectsListScreen(
                 onBack = { navController.popBackStack() },
                 onHome = {
@@ -291,7 +404,35 @@ fun NavGraph(
 
         composable(
             route = Screen.ProjectDetail.route,
-            arguments = listOf(navArgument("projectId") { type = NavType.StringType })
+            arguments = listOf(navArgument("projectId") { type = NavType.StringType }),
+            enterTransition = {
+                if (smoothAnimations) {
+                    fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
+                } else {
+                    fadeIn(animationSpec = tween(0))
+                }
+            },
+            exitTransition = {
+                if (smoothAnimations) {
+                    fadeOut(animationSpec = tween(200))
+                } else {
+                    fadeOut(animationSpec = tween(0))
+                }
+            },
+            popEnterTransition = {
+                if (smoothAnimations) {
+                    fadeIn(animationSpec = tween(300))
+                } else {
+                    fadeIn(animationSpec = tween(0))
+                }
+            },
+            popExitTransition = {
+                if (smoothAnimations) {
+                    fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
+                } else {
+                    fadeOut(animationSpec = tween(0))
+                }
+            }
         ) { backStackEntry ->
             val projectId = backStackEntry.arguments?.getString("projectId") ?: ""
             ProjectDetailScreen(

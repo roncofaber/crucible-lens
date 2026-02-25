@@ -19,6 +19,9 @@ class PreferencesManager(private val context: Context) {
         private val GRAPH_EXPLORER_URL = stringPreferencesKey("graph_explorer_url")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
         private val ACCENT_COLOR = stringPreferencesKey("accent_color")
+        private val LAST_VISITED_RESOURCE = stringPreferencesKey("last_visited_resource")
+        private val LAST_VISITED_RESOURCE_NAME = stringPreferencesKey("last_visited_resource_name")
+        private val SMOOTH_ANIMATIONS = stringPreferencesKey("smooth_animations")
 
         const val DEFAULT_API_BASE_URL = "https://crucible.lbl.gov/api/v1/"
         const val DEFAULT_GRAPH_EXPLORER_URL = "https://crucible-graph-explorer-776258882599.us-central1.run.app"
@@ -48,6 +51,18 @@ class PreferencesManager(private val context: Context) {
         preferences[ACCENT_COLOR] ?: DEFAULT_ACCENT_COLOR
     }
 
+    val lastVisitedResource: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[LAST_VISITED_RESOURCE]
+    }
+
+    val lastVisitedResourceName: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[LAST_VISITED_RESOURCE_NAME]
+    }
+
+    val smoothAnimations: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[SMOOTH_ANIMATIONS]?.toBoolean() ?: true // Default to true
+    }
+
     suspend fun saveApiKey(key: String) {
         context.dataStore.edit { preferences ->
             preferences[API_KEY] = key
@@ -75,6 +90,19 @@ class PreferencesManager(private val context: Context) {
     suspend fun saveAccentColor(color: String) {
         context.dataStore.edit { preferences ->
             preferences[ACCENT_COLOR] = color
+        }
+    }
+
+    suspend fun saveLastVisitedResource(uuid: String, name: String) {
+        context.dataStore.edit { preferences ->
+            preferences[LAST_VISITED_RESOURCE] = uuid
+            preferences[LAST_VISITED_RESOURCE_NAME] = name
+        }
+    }
+
+    suspend fun saveSmoothAnimations(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[SMOOTH_ANIMATIONS] = enabled.toString()
         }
     }
 

@@ -3,6 +3,7 @@ package gov.lbl.crucible.scanner.ui.home
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -15,12 +16,18 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import gov.lbl.crucible.scanner.R
+import gov.lbl.crucible.scanner.data.api.ApiClient
+import gov.lbl.crucible.scanner.data.cache.CacheManager
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     graphExplorerUrl: String,
     isDarkTheme: Boolean,
+    lastVisitedResource: String?,
+    lastVisitedResourceName: String?,
+    apiKey: String?,
     onScanClick: () -> Unit,
     onManualEntry: (String) -> Unit,
     onBrowseProjects: () -> Unit,
@@ -29,12 +36,50 @@ fun HomeScreen(
 ) {
     var uuidInput by remember { mutableStateOf("") }
     var showHelpDialog by remember { mutableStateOf(false) }
+    var showEasterEggDialog by remember { mutableStateOf(false) }
+    var clickCount by remember { mutableStateOf(0) }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // Preload projects data in background if API key is available
+    LaunchedEffect(apiKey) {
+        if (!apiKey.isNullOrBlank()) {
+            // Only load if not already cached
+            if (CacheManager.getProjects() == null) {
+                scope.launch {
+                    try {
+                        val response = ApiClient.service.getProjects()
+                        if (response.isSuccessful) {
+                            response.body()?.let { projects ->
+                                CacheManager.cacheProjects(projects)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        // Silently fail - user can still load manually
+                    }
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Crucible Lens") },
+                title = {
+                    Text(
+                        "Crucible Lens",
+                        modifier = Modifier.clickable(
+                            indication = null,
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                        ) {
+                            clickCount++
+                            if (clickCount >= 7) {
+                                showEasterEggDialog = true
+                                clickCount = 0
+                            }
+                        }
+                    )
+                },
                 actions = {
                     IconButton(onClick = { showHelpDialog = true }) {
                         Icon(Icons.Default.Help, contentDescription = "Help")
@@ -54,7 +99,7 @@ fun HomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            Spacer(modifier = Modifier.weight(0.1f))
+            Spacer(modifier = Modifier.weight(0.05f))
 
             // Crucible Logo Text
             Image(
@@ -65,7 +110,7 @@ fun HomeScreen(
                 modifier = Modifier.height(60.dp)
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 text = "Your mobile window into the Molecular Foundry's data ecosystem",
@@ -75,7 +120,31 @@ fun HomeScreen(
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.weight(0.2f))
+            // Last Visited Resource Button
+            if (lastVisitedResource != null && lastVisitedResourceName != null) {
+                TextButton(
+                    onClick = { onManualEntry(lastVisitedResource) },
+                    modifier = Modifier.padding(top = 0.dp, bottom = 4.dp)
+                ) {
+                    Icon(
+                        Icons.Default.History,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Last visited: $lastVisitedResourceName",
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            // Divider
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
 
             // Browse Projects Button
             Button(
@@ -235,6 +304,11 @@ fun HomeScreen(
     if (showHelpDialog) {
         HelpDialog(onDismiss = { showHelpDialog = false })
     }
+
+    // Easter Egg Dialog
+    if (showEasterEggDialog) {
+        EasterEggDialog(onDismiss = { showEasterEggDialog = false })
+    }
 }
 
 @Composable
@@ -260,15 +334,21 @@ private fun HelpDialog(onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 HelpSection(
+                    icon = Icons.Default.Folder,
+                    title = "Browse Projects",
+                    description = "Explore all available projects and browse their samples and datasets organized by type. Tap to expand groups and view details."
+                )
+
+                HelpSection(
                     icon = Icons.Default.QrCodeScanner,
                     title = "Scan QR Codes",
-                    description = "Tap 'Scan QR Code' and point your camera at any Crucible QR code to instantly view sample or dataset information."
+                    description = "Point your camera at any Crucible QR code to instantly view sample or dataset information."
                 )
 
                 HelpSection(
                     icon = Icons.Default.Fingerprint,
                     title = "Manual Lookup",
-                    description = "Enter an MFID directly in the text field and tap 'Look Up' to search for a specific resource."
+                    description = "Enter an MFID in the text field and tap the search icon to look up a specific resource."
                 )
 
                 HelpSection(
@@ -359,4 +439,77 @@ private fun HelpSection(
             )
         }
     }
+}
+
+@Composable
+private fun EasterEggDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Default.Science,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(48.dp)
+            )
+        },
+        title = {
+            Text(
+                text = "You Found the Secret!",
+                style = MaterialTheme.typography.titleLarge
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "🔬 Fun Nanoscience Facts:",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "• A single human hair is about 80,000-100,000 nanometers wide",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = "• The Molecular Foundry enables research at scales 1,000x smaller than that!",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = "• Gold nanoparticles can be red, purple, or blue depending on their size",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
+                HorizontalDivider()
+
+                Text(
+                    text = "This app was crafted with ❤️ for the nanoscience community. Keep exploring the molecular world!",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("Cool!")
+            }
+        }
+    )
 }

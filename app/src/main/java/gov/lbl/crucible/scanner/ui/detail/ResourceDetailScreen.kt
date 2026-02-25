@@ -43,6 +43,7 @@ fun ResourceDetailScreen(
     onBack: () -> Unit,
     onNavigateToResource: (String) -> Unit,
     onHome: () -> Unit,
+    onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -50,71 +51,106 @@ fun ResourceDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Resource Details") },
+                title = { Text("Details") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, "Back")
                     }
                 },
                 actions = {
-                    // Share button
-                    IconButton(onClick = {
-                        val projectId = when (resource) {
-                            is Sample -> resource.projectId
-                            is Dataset -> resource.projectId
-                            else -> null
+                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
+                        // Refresh button
+                        IconButton(
+                            onClick = onRefresh,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Refresh",
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
 
-                        if (projectId != null) {
-                            val resourceType = when (resource) {
-                                is Sample -> "sample-graph"
-                                is Dataset -> "dataset"
+                        // Share button
+                        IconButton(
+                            onClick = {
+                            val projectId = when (resource) {
+                                is Sample -> resource.projectId
+                                is Dataset -> resource.projectId
                                 else -> null
                             }
 
-                            if (resourceType != null) {
-                                val url = "$graphExplorerUrl/$projectId/$resourceType/${resource.uniqueId}"
-                                val shareIntent = Intent().apply {
-                                    action = Intent.ACTION_SEND
-                                    putExtra(Intent.EXTRA_TEXT, "Check out this ${if (resource is Sample) "sample" else "dataset"} in Crucible: $url")
-                                    putExtra(Intent.EXTRA_SUBJECT, resource.name)
-                                    type = "text/plain"
+                            if (projectId != null) {
+                                val resourceType = when (resource) {
+                                    is Sample -> "sample-graph"
+                                    is Dataset -> "dataset"
+                                    else -> null
                                 }
-                                context.startActivity(Intent.createChooser(shareIntent, "Share via"))
+
+                                if (resourceType != null) {
+                                    val url = "$graphExplorerUrl/$projectId/$resourceType/${resource.uniqueId}"
+                                    val shareIntent = Intent().apply {
+                                        action = Intent.ACTION_SEND
+                                        putExtra(Intent.EXTRA_TEXT, "Check out this ${if (resource is Sample) "sample" else "dataset"} in Crucible: $url")
+                                        putExtra(Intent.EXTRA_SUBJECT, resource.name)
+                                        type = "text/plain"
+                                    }
+                                    context.startActivity(Intent.createChooser(shareIntent, "Share via"))
+                                }
                             }
-                        }
-                    }) {
-                        Icon(Icons.Default.Share, contentDescription = "Share")
-                    }
-
-                    // Open in Graph Explorer button
-                    IconButton(onClick = {
-                        val projectId = when (resource) {
-                            is Sample -> resource.projectId
-                            is Dataset -> resource.projectId
-                            else -> null
+                        },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Share,
+                                contentDescription = "Share",
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
 
-                        if (projectId != null) {
-                            val resourceType = when (resource) {
-                                is Sample -> "sample-graph"
-                                is Dataset -> "dataset"
+                        // Open in Graph Explorer button
+                        IconButton(
+                            onClick = {
+                            val projectId = when (resource) {
+                                is Sample -> resource.projectId
+                                is Dataset -> resource.projectId
                                 else -> null
                             }
 
-                            if (resourceType != null) {
-                                val url = "$graphExplorerUrl/$projectId/$resourceType/${resource.uniqueId}"
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                context.startActivity(intent)
-                            }
-                        }
-                    }) {
-                        Icon(Icons.Default.OpenInBrowser, contentDescription = "Open in Graph Explorer")
-                    }
+                            if (projectId != null) {
+                                val resourceType = when (resource) {
+                                    is Sample -> "sample-graph"
+                                    is Dataset -> "dataset"
+                                    else -> null
+                                }
 
-                    // Home button
-                    IconButton(onClick = onHome) {
-                        Icon(Icons.Default.Home, contentDescription = "Home")
+                                if (resourceType != null) {
+                                    val url = "$graphExplorerUrl/$projectId/$resourceType/${resource.uniqueId}"
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                    context.startActivity(intent)
+                                }
+                            }
+                        },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Public,
+                                contentDescription = "Open in Graph Explorer",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        // Home button
+                        IconButton(
+                            onClick = onHome,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Home,
+                                contentDescription = "Home",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 }
             )
