@@ -32,10 +32,11 @@ fun AppearanceSettingsScreen(
     onHome: () -> Unit
 ) {
     // Snapshot of values at screen entry — used for hasChanges detection and revert
-    val initialThemeMode    = remember { currentThemeMode }
-    val initialAccentColor  = remember { currentAccentColor }
-    val initialSmooth       = remember { currentSmoothAnimations }
-    val initialFloating     = remember { currentFloatingScanButton }
+    // Stored as mutable state so they can be updated when the user confirms
+    var initialThemeMode    by remember { mutableStateOf(currentThemeMode) }
+    var initialAccentColor  by remember { mutableStateOf(currentAccentColor) }
+    var initialSmooth       by remember { mutableStateOf(currentSmoothAnimations) }
+    var initialFloating     by remember { mutableStateOf(currentFloatingScanButton) }
 
     var themeModeInput       by remember { mutableStateOf(currentThemeMode) }
     var accentColorInput     by remember { mutableStateOf(currentAccentColor) }
@@ -89,7 +90,11 @@ fun AppearanceSettingsScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    // Already applied live — just show confirmation
+                    // Advance the baseline so hasChanges resets to false
+                    initialThemeMode   = themeModeInput
+                    initialAccentColor = accentColorInput
+                    initialSmooth      = smoothAnimationsInput
+                    initialFloating    = floatingScanButtonInput
                     scope.launch {
                         snackbarHostState.showSnackbar(
                             message = "Appearance settings saved",
@@ -246,6 +251,25 @@ fun AppearanceSettingsScreen(
                         }
                     )
                 }
+            }
+
+            // Reset to defaults
+            OutlinedButton(
+                onClick = {
+                    themeModeInput = "system";       onThemeModeSave("system")
+                    accentColorInput = "blue";       onAccentColorSave("blue")
+                    smoothAnimationsInput = true;    onSmoothAnimationsSave(true)
+                    floatingScanButtonInput = true;  onFloatingScanButtonSave(true)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                ),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+            ) {
+                Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Reset to Defaults")
             }
         }
     }

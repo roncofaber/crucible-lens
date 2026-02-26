@@ -115,21 +115,27 @@ fun HomeScreen(
             // Crucible Logo Text
             val taglines = remember {
                 listOf(
-                    "Your mobile window into the Molecular Foundry's data ecosystem",
-                    "Because scientists deserve decent mobile apps too",
+                    "Your mobile window into the Molecular Foundry's data ecosystem.",
+                    "Because scientists deserve decent mobile apps, too.",
                     "Point. Scan. Science.",
-                    "The Molecular Foundry in your pocket — data only, lab stays there",
-                    "For when you need your sample data but forgot your laptop",
-                    "Turning QR codes into knowledge, one scan at a time",
-                    "Making nanoscience slightly less paperwork-y",
+                    "The Molecular Foundry in your pocket — data only tho, the lab stays there.",
+                    "For when you need your sample data but left your laptop behind.",
+                    "Turning QR codes into knowledge, one scan at a time.",
+                    "Making nanoscience slightly less paperworki-y.",
                     "Data at your fingertips. Samples in the lab. Coffee in hand.",
-                    "Scan first, ask questions later",
-                    "Where QR codes meet actual science",
-                    "Bridging the gap between the lab bench and your couch",
-                    "Your lab notebook, but it fits in your pocket and doesn't get coffee on it"
+                    "Scan first, ask questions later...",
+                    "Where QR codes meet 'real' science.",
+                    "Bridging the gap between the glove box and the couch.",
+                    "Your lab notebook — fits in your pocket and won't absorb spills.",
+                    "Because even nanomaterials deserve good metadata.",
+                    "Track samples, not sticky notes.",
+                    "Less clipboard, more science.",
+                    "Samples have stories. Crucible helps tell them."
+                    "What about the 11k project?"
                 )
             }
             var tagline by remember { mutableStateOf(taglines.random()) }
+            var lastTapTime by remember { mutableStateOf(0L) }
 
             Image(
                 painter = painterResource(
@@ -138,7 +144,15 @@ fun HomeScreen(
                 contentDescription = "Crucible",
                 modifier = Modifier
                     .height(60.dp)
-                    .clickable { tagline = taglines.filter { it != tagline }.random() }
+                    .clickable {
+                        val now = System.currentTimeMillis()
+                        if (now - lastTapTime < 350L) {
+                            tagline = taglines.filter { it != tagline }.random()
+                            lastTapTime = 0L
+                        } else {
+                            lastTapTime = now
+                        }
+                    }
             )
 
             Spacer(modifier = Modifier.height(4.dp))
