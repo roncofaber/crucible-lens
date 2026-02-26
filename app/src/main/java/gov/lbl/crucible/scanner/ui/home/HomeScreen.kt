@@ -3,6 +3,7 @@ package gov.lbl.crucible.scanner.ui.home
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -36,6 +37,8 @@ fun HomeScreen(
     onManualEntry: (String) -> Unit,
     onBrowseProjects: () -> Unit,
     onSettingsClick: () -> Unit,
+    onHistory: () -> Unit = {},
+    onSearch: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var uuidInput by remember { mutableStateOf("") }
@@ -85,6 +88,12 @@ fun HomeScreen(
                     )
                 },
                 actions = {
+                    IconButton(onClick = onSearch) {
+                        Icon(Icons.Default.Search, contentDescription = "Search")
+                    }
+                    IconButton(onClick = onHistory) {
+                        Icon(Icons.Default.History, contentDescription = "History")
+                    }
                     IconButton(onClick = { showHelpDialog = true }) {
                         Icon(Icons.Default.Help, contentDescription = "Help")
                     }
@@ -104,29 +113,62 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Crucible Logo Text
+            val taglines = remember {
+                listOf(
+                    "Your mobile window into the Molecular Foundry's data ecosystem",
+                    "Because scientists deserve decent mobile apps too",
+                    "Point. Scan. Science.",
+                    "The Molecular Foundry in your pocket — data only, lab stays there",
+                    "For when you need your sample data but forgot your laptop",
+                    "Turning QR codes into knowledge, one scan at a time",
+                    "Making nanoscience slightly less paperwork-y",
+                    "Data at your fingertips. Samples in the lab. Coffee in hand.",
+                    "Scan first, ask questions later",
+                    "Where QR codes meet actual science",
+                    "Bridging the gap between the lab bench and your couch",
+                    "Your lab notebook, but it fits in your pocket and doesn't get coffee on it"
+                )
+            }
+            var tagline by remember { mutableStateOf(taglines.random()) }
+
             Image(
                 painter = painterResource(
                     id = if (isDarkTheme) R.drawable.crucible_text_dark else R.drawable.crucible_text_logo
                 ),
                 contentDescription = "Crucible",
-                modifier = Modifier.height(60.dp)
+                modifier = Modifier
+                    .height(60.dp)
+                    .clickable { tagline = taglines.filter { it != tagline }.random() }
             )
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            Text(
-                text = "Your mobile window into the Molecular Foundry's data ecosystem",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 8.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .padding(horizontal = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Crossfade(targetState = tagline, label = "tagline") { text ->
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        maxLines = 2,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
 
             // Last Visited Resource Button
             if (lastVisitedResource != null && lastVisitedResourceName != null) {
                 TextButton(
                     onClick = { onManualEntry(lastVisitedResource) },
-                    modifier = Modifier.padding(top = 0.dp, bottom = 4.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 0.dp, bottom = 4.dp)
                 ) {
                     Icon(
                         Icons.Default.History,
@@ -135,9 +177,17 @@ fun HomeScreen(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Last visited: $lastVisitedResourceName",
+                        text = "Last visited: ",
                         style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                    Text(
+                        text = lastVisitedResourceName,
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
@@ -292,13 +342,32 @@ fun HomeScreen(
             Spacer(modifier = Modifier.weight(0.2f))
 
             // Footer with version and credits
-            Text(
-                text = "Crucible Lens v${BuildConfig.VERSION_NAME} • by @roncofaber • Molecular Foundry",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            val footerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            val footerStyle = MaterialTheme.typography.labelSmall
+            Row(
                 modifier = Modifier.padding(top = 16.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Crucible Lens v${BuildConfig.VERSION_NAME} • by ",
+                    style = footerStyle,
+                    color = footerColor
+                )
+                Text(
+                    text = "@roncofaber",
+                    style = footerStyle,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                    modifier = Modifier.clickable {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/roncofaber"))
+                        context.startActivity(intent)
+                    }
+                )
+                Text(
+                    text = " • Molecular Foundry",
+                    style = footerStyle,
+                    color = footerColor
+                )
+            }
         }
     }
 

@@ -157,4 +157,14 @@ object CacheManager {
     fun getCacheStats(): String {
         return "Resources: ${resourceCache.size}, Thumbnails: ${thumbnailCache.size}, Projects: ${if (projectsCache != null) "cached" else "empty"}, Project Details: ${projectSamplesCache.size + projectDatasetsCache.size}"
     }
+
+    // Age query methods (return null if not cached, otherwise age in minutes)
+    fun getProjectsAgeMinutes(): Long? =
+        projectsCache?.let { (System.currentTimeMillis() - it.timestamp) / 60000 }
+
+    fun getProjectDataAgeMinutes(projectId: String): Long? =
+        projectSamplesCache[projectId]?.let { (System.currentTimeMillis() - it.timestamp) / 60000 }
+
+    fun getResourceAgeMinutes(uuid: String): Long? =
+        resourceCache[uuid]?.let { (System.currentTimeMillis() - it.timestamp) / 60000 }
 }

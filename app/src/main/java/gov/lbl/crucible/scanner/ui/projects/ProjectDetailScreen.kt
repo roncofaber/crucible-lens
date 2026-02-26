@@ -1,6 +1,7 @@
 package gov.lbl.crucible.scanner.ui.projects
 
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -18,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +42,8 @@ fun ProjectDetailScreen(
     onBack: () -> Unit,
     onHome: () -> Unit,
     onResourceClick: (String) -> Unit,
+    isPinned: Boolean = false,
+    onTogglePin: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val project = remember(projectId) {
@@ -52,6 +56,7 @@ fun ProjectDetailScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var selectedTab by remember { mutableStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
+    var fromCache by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -77,10 +82,12 @@ fun ProjectDetailScreen(
                     if (cachedSamples != null && cachedDatasets != null) {
                         samples = cachedSamples
                         datasets = cachedDatasets
+                        fromCache = true
                         isLoading = false
                         return@launch
                     }
                 }
+                fromCache = false
 
                 val samplesResponse = ApiClient.service.getSamplesByProject(projectId)
                 val datasetsResponse = ApiClient.service.getDatasetsByProject(projectId)
@@ -128,6 +135,19 @@ fun ProjectDetailScreen(
                     }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
+                    IconButton(onClick = onTogglePin) {
+                        Icon(
+                            if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            contentDescription = if (isPinned) "Unpin" else "Pin",
+                            tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                        )
+                    }
+                    IconButton(onClick = {
+                        val url = "$graphExplorerUrl/$projectId"
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }) {
+                        Icon(Icons.Default.Public, contentDescription = "Open in browser")
+                    }
                     IconButton(onClick = {
                         val url = "$graphExplorerUrl/$projectId"
                         val shareIntent = Intent().apply {
@@ -157,7 +177,8 @@ fun ProjectDetailScreen(
                 project = project,
                 projectId = projectId,
                 searchQuery = searchQuery,
-                onSearchChange = { searchQuery = it }
+                onSearchChange = { searchQuery = it },
+                fromCache = fromCache
             )
 
             // Tabs
@@ -296,7 +317,8 @@ private fun ProjectHeader(
     project: Project?,
     projectId: String,
     searchQuery: String,
-    onSearchChange: (String) -> Unit
+    onSearchChange: (String) -> Unit,
+    fromCache: Boolean = false
 ) {
     Surface(
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
@@ -330,6 +352,23 @@ private fun ProjectHeader(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                    if (fromCache) {
+                        val ageMin = CacheManager.getProjectDataAgeMinutes(projectId) ?: 0
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.CloudOff,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "Cached ${ageMin}m ago",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -687,8 +726,9 @@ private fun ResourceCard(
             ) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
                 )
                 if (subtitle != null) {
                     Text(

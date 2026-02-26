@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.navigation.compose.rememberNavController
 import gov.lbl.crucible.scanner.data.api.ApiClient
+import gov.lbl.crucible.scanner.data.preferences.HistoryItem
 import gov.lbl.crucible.scanner.data.preferences.PreferencesManager
 import gov.lbl.crucible.scanner.ui.navigation.NavGraph
 import gov.lbl.crucible.scanner.ui.theme.CrucibleScannerTheme
@@ -21,6 +22,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         preferencesManager = PreferencesManager(this)
+
+        val deepLinkUuid: String? = intent?.data?.pathSegments?.lastOrNull()?.takeIf { it.length > 8 }
 
         setContent {
             val navController = rememberNavController()
@@ -48,6 +51,12 @@ class MainActivity : ComponentActivity() {
             )
             val floatingScanButton by preferencesManager.floatingScanButton.collectAsState(
                 initial = true
+            )
+            val pinnedProjects by preferencesManager.pinnedProjects.collectAsState(
+                initial = emptySet()
+            )
+            val resourceHistory by preferencesManager.resourceHistory.collectAsState(
+                initial = emptyList()
             )
             val scope = rememberCoroutineScope()
 
@@ -83,6 +92,14 @@ class MainActivity : ComponentActivity() {
                     lastVisitedResourceName = lastVisitedResourceName,
                     smoothAnimations = smoothAnimations,
                     floatingScanButton = floatingScanButton,
+                    deepLinkUuid = deepLinkUuid,
+                    pinnedProjects = pinnedProjects,
+                    resourceHistory = resourceHistory,
+                    onHistoryAdd = { uuid, name ->
+                        scope.launch {
+                            preferencesManager.addToHistory(uuid, name)
+                        }
+                    },
                     onApiKeySave = { key ->
                         scope.launch {
                             preferencesManager.saveApiKey(key)
@@ -123,6 +140,11 @@ class MainActivity : ComponentActivity() {
                     onFloatingScanButtonSave = { enabled ->
                         scope.launch {
                             preferencesManager.saveFloatingScanButton(enabled)
+                        }
+                    },
+                    onTogglePinnedProject = { id ->
+                        scope.launch {
+                            preferencesManager.togglePinnedProject(id)
                         }
                     }
                 )

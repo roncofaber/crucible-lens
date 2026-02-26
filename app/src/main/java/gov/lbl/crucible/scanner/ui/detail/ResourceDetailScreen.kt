@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,11 +31,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import android.util.Base64
 import android.util.Log
+import gov.lbl.crucible.scanner.data.cache.CacheManager
 import gov.lbl.crucible.scanner.data.model.CrucibleResource
 import gov.lbl.crucible.scanner.data.model.Dataset
 import gov.lbl.crucible.scanner.data.model.DatasetReference
 import gov.lbl.crucible.scanner.data.model.Sample
 import gov.lbl.crucible.scanner.data.model.SampleReference
+import gov.lbl.crucible.scanner.ui.common.QrCodeDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +52,7 @@ fun ResourceDetailScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var showQrDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -61,6 +65,18 @@ fun ResourceDetailScreen(
                 },
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
+                        // QR Code button
+                        IconButton(
+                            onClick = { showQrDialog = true },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.QrCode,
+                                contentDescription = "Show QR Code",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
                         // Refresh button
                         IconButton(
                             onClick = onRefresh,
@@ -183,7 +199,7 @@ fun ResourceDetailScreen(
                             Icon(
                                 Icons.Default.Info,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.secondary
+                                tint = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
@@ -304,7 +320,24 @@ fun ResourceDetailScreen(
             item {
                 MfidCard(resource.uniqueId)
             }
+            val ageMin = CacheManager.getResourceAgeMinutes(resource.uniqueId)
+            if (ageMin != null) {
+                item {
+                    Text(
+                        text = "Cached ${ageMin}m ago",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            }
         }
+    }
+
+    // QR Code Dialog
+    if (showQrDialog) {
+        QrCodeDialog(resource.uniqueId) { showQrDialog = false }
     }
 }
 
@@ -336,7 +369,7 @@ private fun ResourceTypeBadge(resource: CrucibleResource) {
 
 @Composable
 private fun BasicInfoCard(resource: CrucibleResource) {
-    Card {
+    Card(border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = resource.name,

@@ -23,11 +23,15 @@ fun ProjectsListScreen(
     onBack: () -> Unit,
     onHome: () -> Unit,
     onProjectClick: (String) -> Unit,
+    pinnedProjects: Set<String> = emptySet(),
+    onTogglePin: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var projects by remember { mutableStateOf<List<Project>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Map of projectId -> Pair(sampleCount, datasetCount), null means still loading
+    var projectCounts by remember { mutableStateOf<Map<String, Pair<Int?, Int?>>>(emptyMap()) }
     val scope = rememberCoroutineScope()
 
     fun loadProjects(forceRefresh: Boolean = false) {
@@ -66,6 +70,48 @@ fun ProjectsListScreen(
         loadProjects()
     }
 
+    // Pre-load and cache samples/datasets per project in background (also populates counts)
+    LaunchedEffect(projects) {
+        val projectList = projects ?: return@LaunchedEffect
+        projectList.forEach { project ->
+            scope.launch {
+                // Use already-cached data if available — no API call needed
+                val cachedSamples = CacheManager.getProjectSamples(project.projectId)
+                val cachedDatasets = CacheManager.getProjectDatasets(project.projectId)
+                if (cachedSamples != null && cachedDatasets != null) {
+                    projectCounts = projectCounts + (project.projectId to Pair(cachedSamples.size, cachedDatasets.size))
+                    return@launch
+                }
+
+                // Stage 1 — fast: fetch samples (cacheable) + datasets without metadata (count only)
+                val sampleCount = try {
+                    val resp = ApiClient.service.getSamplesByProject(project.projectId)
+                    if (resp.isSuccessful) {
+                        resp.body()?.also { CacheManager.cacheProjectSamples(project.projectId, it) }?.size
+                    } else null
+                } catch (e: Exception) { null }
+
+                val datasetCount = try {
+                    val resp = ApiClient.service.getDatasetsByProject(project.projectId, includeMetadata = false)
+                    if (resp.isSuccessful) resp.body()?.size else null
+                } catch (e: Exception) { null }
+
+                // Show counts immediately without waiting for heavy metadata
+                projectCounts = projectCounts + (project.projectId to Pair(sampleCount, datasetCount))
+
+                // Stage 2 — background: fetch full datasets to warm navigation cache
+                launch {
+                    try {
+                        val resp = ApiClient.service.getDatasetsByProject(project.projectId, includeMetadata = true)
+                        if (resp.isSuccessful) {
+                            resp.body()?.let { CacheManager.cacheProjectDatasets(project.projectId, it) }
+                        }
+                    } catch (e: Exception) { /* best effort */ }
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -79,6 +125,8 @@ fun ProjectsListScreen(
                     IconButton(
                         onClick = {
                             CacheManager.clearProjectsCache()
+                            CacheManager.clearProjectDetailsCache()
+                            projectCounts = emptyMap()
                             loadProjects(forceRefresh = true)
                         }
                     ) {
@@ -193,10 +241,14 @@ fun ProjectsListScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(projects ?: emptyList()) { project ->
+                        val sortedProjects = (projects ?: emptyList()).sortedByDescending { it.projectId in pinnedProjects }
+                        items(sortedProjects) { project ->
                             ProjectCard(
                                 project = project,
-                                onClick = { onProjectClick(project.projectId) }
+                                counts = projectCounts[project.projectId],
+                                onClick = { onProjectClick(project.projectId) },
+                                isPinned = project.projectId in pinnedProjects,
+                                onTogglePin = { onTogglePin(project.projectId) }
                             )
                         }
                     }
@@ -209,21 +261,30 @@ fun ProjectsListScreen(
 @Composable
 private fun ProjectCard(
     project: Project,
-    onClick: () -> Unit
+    counts: Pair<Int?, Int?>?,
+    onClick: () -> Unit,
+    isPinned: Boolean = false,
+    onTogglePin: () -> Unit = {}
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable(onClick = onClick)
                 .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Folder icon with accent color
+            Icon(
+                Icons.Default.Folder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(36.dp).padding(end = 12.dp)
+            )
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -240,17 +301,95 @@ private fun ProjectCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Text(
-                    text = "ID: ${project.projectId}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                // Only show ID when it differs from the display name
+                if (project.projectName != null && project.projectName != project.projectId) {
+                    Text(
+                        text = "ID: ${project.projectId}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                // Count chips — spinner while loading, numbers once ready
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CountChip(
+                        icon = Icons.Default.Science,
+                        count = counts?.first,
+                        loading = counts == null,
+                        contentDescription = "Samples"
+                    )
+                    CountChip(
+                        icon = Icons.Default.Dataset,
+                        count = counts?.second,
+                        loading = counts == null,
+                        contentDescription = "Datasets"
+                    )
+                }
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy((-8).dp)
+            ) {
+                IconButton(
+                    onClick = { onTogglePin() },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = if (isPinned) "Unpin" else "Pin",
+                        modifier = Modifier.size(24.dp),
+                        tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun CountChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    count: Int?,
+    loading: Boolean,
+    contentDescription: String
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+        shape = MaterialTheme.shapes.small
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .height(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             Icon(
-                Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(12.dp),
+                tint = MaterialTheme.colorScheme.primary
             )
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(10.dp),
+                    strokeWidth = 1.5.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                Text(
+                    text = count?.toString() ?: "?",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }

@@ -16,7 +16,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -79,6 +81,7 @@ private fun CameraPreview(
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     var lastScannedCode by remember { mutableStateOf<String?>(null) }
+    val haptic = LocalHapticFeedback.current
 
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
     DisposableEffect(Unit) {
@@ -107,6 +110,7 @@ private fun CameraPreview(
                                 barcodes.firstOrNull()?.rawValue?.let { code ->
                                     if (code != lastScannedCode) {
                                         lastScannedCode = code
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         onQRCodeScanned(code)
                                     }
                                 }

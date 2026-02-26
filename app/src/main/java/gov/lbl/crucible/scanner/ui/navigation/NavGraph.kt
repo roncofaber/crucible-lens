@@ -17,9 +17,15 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import kotlinx.coroutines.delay
+import gov.lbl.crucible.scanner.data.preferences.HistoryItem
 import gov.lbl.crucible.scanner.ui.home.HomeScreen
+import gov.lbl.crucible.scanner.ui.history.HistoryScreen
 import gov.lbl.crucible.scanner.ui.scanner.QRScannerScreen
+import gov.lbl.crucible.scanner.ui.search.SearchScreen
 import gov.lbl.crucible.scanner.ui.settings.SettingsScreen
+import gov.lbl.crucible.scanner.ui.settings.ApiSettingsScreen
+import gov.lbl.crucible.scanner.ui.settings.AppearanceSettingsScreen
+import gov.lbl.crucible.scanner.ui.settings.AboutSettingsScreen
 import gov.lbl.crucible.scanner.ui.viewmodel.ScannerViewModel
 import gov.lbl.crucible.scanner.ui.viewmodel.UiState
 import gov.lbl.crucible.scanner.ui.detail.ResourceDetailScreen
@@ -41,6 +47,9 @@ sealed class Screen(val route: String) {
     object Home : Screen("home")
     object Scanner : Screen("scanner")
     object Settings : Screen("settings")
+    object SettingsApi : Screen("settings/api")
+    object SettingsAppearance : Screen("settings/appearance")
+    object SettingsAbout : Screen("settings/about")
     object Projects : Screen("projects")
     object ProjectDetail : Screen("project/{projectId}") {
         fun createRoute(projectId: String) = "project/$projectId"
@@ -48,6 +57,8 @@ sealed class Screen(val route: String) {
     object Detail : Screen("detail/{mfid}") {
         fun createRoute(mfid: String) = "detail/$mfid"
     }
+    object History : Screen("history")
+    object Search : Screen("search")
 }
 
 
@@ -65,6 +76,10 @@ fun NavGraph(
     lastVisitedResourceName: String?,
     smoothAnimations: Boolean,
     floatingScanButton: Boolean,
+    deepLinkUuid: String?,
+    pinnedProjects: Set<String>,
+    resourceHistory: List<HistoryItem>,
+    onHistoryAdd: (String, String) -> Unit,
     onApiKeySave: (String) -> Unit,
     onApiBaseUrlSave: (String) -> Unit,
     onGraphExplorerUrlSave: (String) -> Unit,
@@ -73,8 +88,14 @@ fun NavGraph(
     onLastVisitedResourceSave: (String, String) -> Unit,
     onSmoothAnimationsSave: (Boolean) -> Unit,
     onFloatingScanButtonSave: (Boolean) -> Unit,
+    onTogglePinnedProject: (String) -> Unit,
     viewModel: ScannerViewModel = viewModel()
 ) {
+    LaunchedEffect(deepLinkUuid) {
+        if (!deepLinkUuid.isNullOrBlank()) {
+            navController.navigate(Screen.Detail.createRoute(deepLinkUuid))
+        }
+    }
     val uiState by viewModel.uiState.collectAsState()
     viewModel.setSmoothAnimations(smoothAnimations)
 
@@ -84,7 +105,7 @@ fun NavGraph(
     val showFab = floatingScanButton &&
         currentRoute != null &&
         currentRoute != Screen.Home.route &&
-        currentRoute != Screen.Settings.route &&
+        !currentRoute.startsWith("settings") &&
         currentRoute != Screen.Scanner.route
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -151,6 +172,12 @@ fun NavGraph(
                 },
                 onSettingsClick = {
                     navController.navigate(Screen.Settings.route)
+                },
+                onHistory = {
+                    navController.navigate(Screen.History.route)
+                },
+                onSearch = {
+                    navController.navigate(Screen.Search.route)
                 }
             )
         }
@@ -166,20 +193,63 @@ fun NavGraph(
         composable(Screen.Settings.route) {
             SettingsScreen(
                 currentApiKey = apiKey,
+                currentAccentColor = accentColor,
+                onNavigateToApi = { navController.navigate(Screen.SettingsApi.route) },
+                onNavigateToAppearance = { navController.navigate(Screen.SettingsAppearance.route) },
+                onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },
+                onBack = { navController.popBackStack() },
+                onHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = false }
+                    }
+                }
+            )
+        }
+
+        composable(Screen.SettingsApi.route) {
+            ApiSettingsScreen(
+                currentApiKey = apiKey,
                 currentApiBaseUrl = apiBaseUrl,
                 currentGraphExplorerUrl = graphExplorerUrl,
+                onApiKeySave = onApiKeySave,
+                onApiBaseUrlSave = onApiBaseUrlSave,
+                onGraphExplorerUrlSave = onGraphExplorerUrlSave,
+                onBack = { navController.popBackStack() },
+                onHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = false }
+                    }
+                }
+            )
+        }
+
+        composable(Screen.SettingsAppearance.route) {
+            AppearanceSettingsScreen(
                 currentThemeMode = themeMode,
                 currentAccentColor = accentColor,
                 currentSmoothAnimations = smoothAnimations,
                 currentFloatingScanButton = floatingScanButton,
-                onApiKeySave = onApiKeySave,
-                onApiBaseUrlSave = onApiBaseUrlSave,
-                onGraphExplorerUrlSave = onGraphExplorerUrlSave,
                 onThemeModeSave = onThemeModeSave,
                 onAccentColorSave = onAccentColorSave,
                 onSmoothAnimationsSave = onSmoothAnimationsSave,
                 onFloatingScanButtonSave = onFloatingScanButtonSave,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = false }
+                    }
+                }
+            )
+        }
+
+        composable(Screen.SettingsAbout.route) {
+            AboutSettingsScreen(
+                onBack = { navController.popBackStack() },
+                onHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = false }
+                    }
+                }
             )
         }
 
@@ -286,9 +356,10 @@ fun NavGraph(
                     }
                 }
                 is UiState.Success -> {
-                    // Save last visited resource
+                    // Save last visited resource and add to history
                     LaunchedEffect(state.resource) {
                         onLastVisitedResourceSave(state.resource.uniqueId, state.resource.name)
+                        onHistoryAdd(state.resource.uniqueId, state.resource.name)
                     }
 
                     ResourceDetailScreen(
@@ -448,7 +519,9 @@ fun NavGraph(
                 },
                 onProjectClick = { projectId ->
                     navController.navigate(Screen.ProjectDetail.createRoute(projectId))
-                }
+                },
+                pinnedProjects = pinnedProjects,
+                onTogglePin = onTogglePinnedProject
             )
         }
 
@@ -496,6 +569,38 @@ fun NavGraph(
                 },
                 onResourceClick = { mfid ->
                     navController.navigate(Screen.Detail.createRoute(mfid))
+                },
+                isPinned = projectId in pinnedProjects,
+                onTogglePin = { onTogglePinnedProject(projectId) }
+            )
+        }
+
+        composable(Screen.History.route) {
+            HistoryScreen(
+                history = resourceHistory,
+                onBack = { navController.popBackStack() },
+                onHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = false }
+                    }
+                },
+                onItemClick = { uuid ->
+                    navController.navigate(Screen.Detail.createRoute(uuid))
+                }
+            )
+        }
+
+        composable(Screen.Search.route) {
+            SearchScreen(
+                apiKey = apiKey,
+                onBack = { navController.popBackStack() },
+                onHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = false }
+                    }
+                },
+                onResourceClick = { uuid ->
+                    navController.navigate(Screen.Detail.createRoute(uuid))
                 }
             )
         }
