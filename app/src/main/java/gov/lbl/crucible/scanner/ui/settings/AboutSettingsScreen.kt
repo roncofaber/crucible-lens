@@ -8,17 +8,23 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import coil.decode.SvgDecoder
+import coil.request.ImageRequest
 import gov.lbl.crucible.scanner.BuildConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutSettingsScreen(
+    isDarkTheme: Boolean,
     onBack: () -> Unit,
     onHome: () -> Unit
 ) {
@@ -30,7 +36,7 @@ fun AboutSettingsScreen(
                 title = { Text("About") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 },
                 actions = {
@@ -92,13 +98,50 @@ fun AboutSettingsScreen(
             }
 
             // Developer Card
+            Card {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Group,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column {
+                        Text(
+                            text = "Developed by",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "Crucible Development Team",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            text = "Molecular Foundry, LBNL",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Resources section
+            Text(
+                text = "Resources",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 4.dp, start = 4.dp)
+            )
+
+            // Crucible Website Card
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                ),
                 modifier = Modifier.clickable {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/roncofaber"))
-                    context.startActivity(intent)
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://crucible.lbl.gov/")))
                 }
             ) {
                 Row(
@@ -112,38 +155,62 @@ fun AboutSettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data("file:///android_asset/${if (isDarkTheme) "crucible_icon_dark.svg" else "crucible_icon_light.svg"}")
+                                .decoderFactory(SvgDecoder.Factory())
+                                .build(),
+                            contentDescription = "Crucible",
+                            modifier = Modifier.size(26.dp)
                         )
                         Column {
+                            Text("Crucible", style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                text = "Developer",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                            )
-                            Text(
-                                text = "@roncofaber",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                "crucible.lbl.gov",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                    Icon(
-                        Icons.Default.OpenInNew,
-                        contentDescription = "Open GitHub profile",
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 }
             }
 
-            // GitHub Repository Card
+            // App Source Code Card
             Card(
                 modifier = Modifier.clickable {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/roncofaber/nano-crucible-app"))
-                    context.startActivity(intent)
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/roncofaber/nano-crucible-app")))
+                }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Column {
+                            Text("Crucible Lens (this app)", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "github.com/roncofaber/nano-crucible-app",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                }
+            }
+
+            // Python Client Card
+            Card(
+                modifier = Modifier.clickable {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MolecularFoundryCrucible/nano-crucible")))
                 }
             ) {
                 Row(
@@ -159,23 +226,22 @@ fun AboutSettingsScreen(
                     ) {
                         Icon(Icons.Default.Code, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Column {
-                            Text("Source Code", style = MaterialTheme.typography.bodyLarge)
+                            Text("nano-crucible", style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                "github.com/roncofaber/nano-crucible-app",
+                                "Python client library",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                    Icon(Icons.Default.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 }
             }
 
             // Molecular Foundry Card
             Card(
                 modifier = Modifier.clickable {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://foundry.lbl.gov/"))
-                    context.startActivity(intent)
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://foundry.lbl.gov/")))
                 }
             ) {
                 Row(
@@ -199,7 +265,7 @@ fun AboutSettingsScreen(
                             )
                         }
                     }
-                    Icon(Icons.Default.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 }
             }
 

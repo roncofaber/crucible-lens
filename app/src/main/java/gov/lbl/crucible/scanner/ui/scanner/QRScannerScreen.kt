@@ -148,7 +148,7 @@ private fun CameraPreview(
                 .size(250.dp)
                 .border(
                     width = 2.dp,
-                    color = MaterialTheme.colorScheme.secondary,
+                    color = MaterialTheme.colorScheme.primary,
                     shape = MaterialTheme.shapes.medium
                 )
         )

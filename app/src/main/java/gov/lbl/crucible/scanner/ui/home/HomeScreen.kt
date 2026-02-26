@@ -39,9 +39,10 @@ fun HomeScreen(
     onSettingsClick: () -> Unit,
     onHistory: () -> Unit = {},
     onSearch: () -> Unit = {},
+    pinnedProjects: Set<String> = emptySet(),
+    onProjectClick: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var uuidInput by remember { mutableStateOf("") }
     var showHelpDialog by remember { mutableStateOf(false) }
     var showEasterEggDialog by remember { mutableStateOf(false) }
     var clickCount by remember { mutableStateOf(0) }
@@ -88,9 +89,6 @@ fun HomeScreen(
                     )
                 },
                 actions = {
-                    IconButton(onClick = onSearch) {
-                        Icon(Icons.Default.Search, contentDescription = "Search")
-                    }
                     IconButton(onClick = onHistory) {
                         Icon(Icons.Default.History, contentDescription = "History")
                     }
@@ -134,7 +132,7 @@ fun HomeScreen(
                     "What about the 11k project?"
                 )
             }
-            var tagline by remember { mutableStateOf(taglines.random()) }
+            var tagline by remember { mutableStateOf(taglines[0]) }
             var lastTapTime by remember { mutableStateOf(0L) }
 
             Image(
@@ -144,7 +142,10 @@ fun HomeScreen(
                 contentDescription = "Crucible",
                 modifier = Modifier
                     .height(60.dp)
-                    .clickable {
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) {
                         val now = System.currentTimeMillis()
                         if (now - lastTapTime < 350L) {
                             tagline = taglines.filter { it != tagline }.random()
@@ -178,6 +179,10 @@ fun HomeScreen(
 
             // Last Visited Resource Button
             if (lastVisitedResource != null && lastVisitedResourceName != null) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
                 TextButton(
                     onClick = { onManualEntry(lastVisitedResource) },
                     modifier = Modifier
@@ -212,124 +217,119 @@ fun HomeScreen(
                 color = MaterialTheme.colorScheme.outlineVariant
             )
 
-            // Browse Projects Button
-            Button(
-                onClick = onBrowseProjects,
+            // Search Button
+            OutlinedButton(
+                onClick = onSearch,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.primary
                 )
             ) {
-                Icon(Icons.Default.Folder, contentDescription = null)
+                Icon(Icons.Default.Search, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Browse Projects", style = MaterialTheme.typography.titleMedium)
+                Text("Search", style = MaterialTheme.typography.titleMedium)
             }
 
-            // Divider with "OR"
+            // Browse Projects + Scan QR Code side by side
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Divider(modifier = Modifier.weight(1f))
-                Text(
-                    text = "OR",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Divider(modifier = Modifier.weight(1f))
+                Button(
+                    onClick = onBrowseProjects,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(88.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(32.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Projects", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+                Button(
+                    onClick = onScanClick,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(88.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(32.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Scan QR Code", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
             }
 
-            // Scan Button
-            Button(
-                onClick = onScanClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Icon(Icons.Default.QrCodeScanner, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Scan QR Code", style = MaterialTheme.typography.titleMedium)
+            // Pinned Projects (up to 3)
+            val allProjects = remember(pinnedProjects) { CacheManager.getProjects() ?: emptyList() }
+            val pinnedList = remember(pinnedProjects, allProjects) {
+                allProjects.filter { it.projectId in pinnedProjects }.take(3)
             }
-
-            // Divider with "OR"
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Divider(modifier = Modifier.weight(1f))
-                Text(
-                    text = "OR",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Divider(modifier = Modifier.weight(1f))
-            }
-
-            // Manual UUID Entry
-            OutlinedTextField(
-                value = uuidInput,
-                onValueChange = { uuidInput = it },
-                label = { Text("Enter MFID") },
-                placeholder = {
-                    Text(
-                        "e.g., 0tc3s8wqb1zbx000sm7drrpsc8",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = MaterialTheme.shapes.large,
-                leadingIcon = {
+            if (pinnedList.isNotEmpty()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+                ) {
                     Icon(
-                        Icons.Default.Fingerprint,
+                        Icons.Default.Bookmark,
                         contentDescription = null,
+                        modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
-                },
-                trailingIcon = {
-                    if (uuidInput.isNotEmpty()) {
-                        Row {
-                            IconButton(onClick = { uuidInput = "" }) {
-                                Icon(
-                                    Icons.Default.Clear,
-                                    contentDescription = "Clear",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    if (uuidInput.isNotBlank()) {
-                                        onManualEntry(uuidInput)
-                                        uuidInput = ""
-                                    }
-                                },
-                                enabled = uuidInput.isNotBlank()
+                    Text(
+                        "Pinned",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    pinnedList.forEach { project ->
+                        Card(
+                            onClick = { onProjectClick(project.projectId) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
+                                Text(
+                                    text = project.projectName ?: project.projectId,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
                                 Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = "Look Up",
-                                    tint = if (uuidInput.isNotBlank())
-                                        MaterialTheme.colorScheme.primary
-                                    else
-                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                                    Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                     }
-                },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    cursorColor = MaterialTheme.colorScheme.primary
-                )
-            )
+                }
+            }
 
             Spacer(modifier = Modifier.weight(0.3f))
 
@@ -387,7 +387,10 @@ fun HomeScreen(
 
     // Help Dialog
     if (showHelpDialog) {
-        HelpDialog(onDismiss = { showHelpDialog = false })
+        HelpDialog(
+            onDismiss = { showHelpDialog = false },
+            onSettings = { showHelpDialog = false; onSettingsClick() }
+        )
     }
 
     // Easter Egg Dialog
@@ -397,7 +400,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HelpDialog(onDismiss: () -> Unit) {
+private fun HelpDialog(onDismiss: () -> Unit, onSettings: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
@@ -416,24 +419,37 @@ private fun HelpDialog(onDismiss: () -> Unit) {
         },
         text = {
             Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 HelpSection(
-                    icon = Icons.Default.Folder,
-                    title = "Browse Projects",
-                    description = "Explore all available projects and browse their samples and datasets organized by type. Tap to expand groups and view details."
-                )
-
-                HelpSection(
                     icon = Icons.Default.QrCodeScanner,
                     title = "Scan QR Codes",
-                    description = "Point your camera at any Crucible QR code to instantly view sample or dataset information."
+                    description = "Point your camera at any Crucible QR code to instantly load sample or dataset details. The app vibrates when a code is detected."
                 )
 
                 HelpSection(
-                    icon = Icons.Default.Fingerprint,
-                    title = "Manual Lookup",
-                    description = "Enter an MFID in the text field and tap the search icon to look up a specific resource."
+                    icon = Icons.Default.Search,
+                    title = "Global Search",
+                    description = "Search across all cached samples and datasets by name, type, keywords, metadata, and more. Available from the home screen and from any browse or detail screen."
+                )
+
+                HelpSection(
+                    icon = Icons.Default.Folder,
+                    title = "Browse Projects",
+                    description = "Explore all projects and their contents. Tap the bookmark icon to pin favorites — they appear on the home screen for quick access. Swipe a project left to archive it."
+                )
+
+                HelpSection(
+                    icon = Icons.Default.History,
+                    title = "History",
+                    description = "The clock icon (top right) shows recently viewed resources so you can jump back to them instantly."
+                )
+
+                HelpSection(
+                    icon = Icons.Default.Info,
+                    title = "Resource Details",
+                    description = "From any sample or dataset card: copy the unique ID, display its QR code, share a link, or open it directly in the Graph Explorer."
                 )
 
                 HelpSection(
@@ -442,11 +458,11 @@ private fun HelpDialog(onDismiss: () -> Unit) {
                     description = "Access the full Crucible web interface for advanced features and data exploration."
                 )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                 Card(
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                        containerColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
                     Column(
@@ -460,29 +476,37 @@ private fun HelpDialog(onDismiss: () -> Unit) {
                             Icon(
                                 Icons.Default.Lightbulb,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                tint = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Text(
                                 text = "About Crucible",
                                 style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = MaterialTheme.colorScheme.onPrimary
                             )
                         }
                         Text(
                             text = "Crucible is the Molecular Foundry's data management system for tracking samples, datasets, and experimental workflows.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onPrimary
                         )
                     }
                 }
 
-                Text(
-                    text = "Need to configure your API key? Go to Settings.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Need to configure your API key? ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Go to Settings.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable(onClick = onSettings)
+                    )
+                }
             }
         },
         confirmButton = {

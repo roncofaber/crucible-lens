@@ -15,11 +15,12 @@ data class Sample(
     @Json(name = "sample_name") override val name: String,
     @Json(name = "description") override val description: String? = null,
     @Json(name = "sample_type") val sampleType: String? = null,
+    @Json(name = "owner_orcid") val ownerOrcid: String? = null,
     @Json(name = "project_id") val projectId: String? = null,
     @Json(name = "datasets") val datasets: List<DatasetReference>? = null,
     @Json(name = "parent_samples") val parentSamples: List<SampleReference>? = null,
     @Json(name = "keywords") val keywords: List<String>? = null,
-    @Json(name = "creation_time") val createdAt: String? = null,
+    @Json(name = "date_created") val createdAt: String? = null,
     @Json(name = "id") val internalId: Int? = null,
     var childSamples: List<SampleReference>? = null
 ) : CrucibleResource()

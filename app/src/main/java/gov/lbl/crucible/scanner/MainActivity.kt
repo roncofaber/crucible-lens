@@ -55,6 +55,9 @@ class MainActivity : ComponentActivity() {
             val pinnedProjects by preferencesManager.pinnedProjects.collectAsState(
                 initial = emptySet()
             )
+            val archivedProjects by preferencesManager.archivedProjects.collectAsState(
+                initial = emptySet()
+            )
             val resourceHistory by preferencesManager.resourceHistory.collectAsState(
                 initial = emptyList()
             )
@@ -145,6 +148,12 @@ class MainActivity : ComponentActivity() {
                     onTogglePinnedProject = { id ->
                         scope.launch {
                             preferencesManager.togglePinnedProject(id)
+                        }
+                    },
+                    archivedProjects = archivedProjects,
+                    onToggleArchive = { id ->
+                        scope.launch {
+                            preferencesManager.toggleArchivedProject(id)
                         }
                     }
                 )

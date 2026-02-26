@@ -1,5 +1,6 @@
 package gov.lbl.crucible.scanner.ui.projects
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,8 +24,11 @@ fun ProjectsListScreen(
     onBack: () -> Unit,
     onHome: () -> Unit,
     onProjectClick: (String) -> Unit,
+    onSearch: () -> Unit = {},
     pinnedProjects: Set<String> = emptySet(),
     onTogglePin: (String) -> Unit = {},
+    archivedProjects: Set<String> = emptySet(),
+    onToggleArchive: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var projects by remember { mutableStateOf<List<Project>?>(null) }
@@ -32,6 +36,7 @@ fun ProjectsListScreen(
     var error by remember { mutableStateOf<String?>(null) }
     // Map of projectId -> Pair(sampleCount, datasetCount), null means still loading
     var projectCounts by remember { mutableStateOf<Map<String, Pair<Int?, Int?>>>(emptyMap()) }
+    var archivedExpanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     fun loadProjects(forceRefresh: Boolean = false) {
@@ -131,6 +136,9 @@ fun ProjectsListScreen(
                         }
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
+                    IconButton(onClick = onSearch) {
+                        Icon(Icons.Default.Search, contentDescription = "Search")
                     }
                     IconButton(onClick = onHome) {
                         Icon(Icons.Default.Home, contentDescription = "Home")
@@ -236,20 +244,134 @@ fun ProjectsListScreen(
                     }
                 }
                 else -> {
+                    val allProjects = projects ?: emptyList()
+                    val activeProjects = allProjects
+                        .filter { it.projectId !in archivedProjects }
+                        .sortedByDescending { it.projectId in pinnedProjects }
+                    val archivedProjectsList = allProjects
+                        .filter { it.projectId in archivedProjects }
+
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        val sortedProjects = (projects ?: emptyList()).sortedByDescending { it.projectId in pinnedProjects }
-                        items(sortedProjects) { project ->
-                            ProjectCard(
-                                project = project,
-                                counts = projectCounts[project.projectId],
-                                onClick = { onProjectClick(project.projectId) },
-                                isPinned = project.projectId in pinnedProjects,
-                                onTogglePin = { onTogglePin(project.projectId) }
+                        items(activeProjects, key = { it.projectId }) { project ->
+                            val dismissState = rememberSwipeToDismissBoxState(
+                                confirmValueChange = { value ->
+                                    if (value == SwipeToDismissBoxValue.EndToStart) {
+                                        onToggleArchive(project.projectId)
+                                        true
+                                    } else false
+                                }
                             )
+                            SwipeToDismissBox(
+                                state = dismissState,
+                                enableDismissFromStartToEnd = false,
+                                enableDismissFromEndToStart = true,
+                                backgroundContent = {
+                                    val color = MaterialTheme.colorScheme.secondaryContainer
+                                    val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(color, MaterialTheme.shapes.medium)
+                                            .padding(end = 20.dp),
+                                        contentAlignment = Alignment.CenterEnd
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(Icons.Default.Archive, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
+                                            Text("Archive", style = MaterialTheme.typography.labelSmall, color = contentColor)
+                                        }
+                                    }
+                                }
+                            ) {
+                                ProjectCard(
+                                    project = project,
+                                    counts = projectCounts[project.projectId],
+                                    onClick = { onProjectClick(project.projectId) },
+                                    isPinned = project.projectId in pinnedProjects,
+                                    onTogglePin = { onTogglePin(project.projectId) }
+                                )
+                            }
+                        }
+
+                        if (archivedProjectsList.isNotEmpty()) {
+                            item(key = "__archived_header__") {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { archivedExpanded = !archivedExpanded }
+                                        .padding(vertical = 4.dp, horizontal = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Archive,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Text(
+                                            "Archived (${archivedProjectsList.size})",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Icon(
+                                        if (archivedExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            if (archivedExpanded) {
+                                items(archivedProjectsList, key = { "arch_${it.projectId}" }) { project ->
+                                    val dismissState = rememberSwipeToDismissBoxState(
+                                        confirmValueChange = { value ->
+                                            if (value == SwipeToDismissBoxValue.StartToEnd) {
+                                                onToggleArchive(project.projectId)
+                                                true
+                                            } else false
+                                        }
+                                    )
+                                    SwipeToDismissBox(
+                                        state = dismissState,
+                                        enableDismissFromStartToEnd = true,
+                                        enableDismissFromEndToStart = false,
+                                        backgroundContent = {
+                                            val color = MaterialTheme.colorScheme.primary
+                                            val contentColor = MaterialTheme.colorScheme.onPrimary
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(color, MaterialTheme.shapes.medium)
+                                                    .padding(start = 20.dp),
+                                                contentAlignment = Alignment.CenterStart
+                                            ) {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    Icon(Icons.Default.Unarchive, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
+                                                    Text("Unarchive", style = MaterialTheme.typography.labelSmall, color = contentColor)
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        ProjectCard(
+                                            project = project,
+                                            counts = projectCounts[project.projectId],
+                                            onClick = { onProjectClick(project.projectId) },
+                                            isPinned = false,
+                                            onTogglePin = {},
+                                            isArchived = true
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -264,11 +386,16 @@ private fun ProjectCard(
     counts: Pair<Int?, Int?>?,
     onClick: () -> Unit,
     isPinned: Boolean = false,
-    onTogglePin: () -> Unit = {}
+    onTogglePin: () -> Unit = {},
+    isArchived: Boolean = false
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isArchived) 0.dp else 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isArchived) MaterialTheme.colorScheme.surfaceVariant
+                             else MaterialTheme.colorScheme.surface
+        )
     ) {
         Row(
             modifier = Modifier
@@ -278,13 +405,18 @@ private fun ProjectCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Folder icon with accent color
-            Icon(
-                Icons.Default.Folder,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(36.dp).padding(end = 12.dp)
-            )
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    if (isArchived) Icons.Default.Archive else Icons.Default.Folder,
+                    contentDescription = null,
+                    tint = if (isArchived) MaterialTheme.colorScheme.onSurfaceVariant
+                           else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -327,21 +459,24 @@ private fun ProjectCard(
                         contentDescription = "Datasets"
                     )
                 }
-            }
+            } // Column
+            } // inner Row (icon + text)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy((-8).dp)
             ) {
-                IconButton(
-                    onClick = { onTogglePin() },
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                        contentDescription = if (isPinned) "Unpin" else "Pin",
-                        modifier = Modifier.size(24.dp),
-                        tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                if (!isArchived) {
+                    IconButton(
+                        onClick = { onTogglePin() },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            contentDescription = if (isPinned) "Unpin" else "Pin",
+                            modifier = Modifier.size(24.dp),
+                            tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 Icon(
                     Icons.Default.ChevronRight,

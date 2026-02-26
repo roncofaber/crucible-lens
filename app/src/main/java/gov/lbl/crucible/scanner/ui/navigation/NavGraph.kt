@@ -36,12 +36,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.currentBackStackEntryAsState
+import android.net.Uri
 
 sealed class Screen(val route: String) {
     object Home : Screen("home")
@@ -55,7 +57,7 @@ sealed class Screen(val route: String) {
         fun createRoute(projectId: String) = "project/$projectId"
     }
     object Detail : Screen("detail/{mfid}") {
-        fun createRoute(mfid: String) = "detail/$mfid"
+        fun createRoute(mfid: String) = "detail/${Uri.encode(mfid)}"
     }
     object History : Screen("history")
     object Search : Screen("search")
@@ -89,6 +91,8 @@ fun NavGraph(
     onSmoothAnimationsSave: (Boolean) -> Unit,
     onFloatingScanButtonSave: (Boolean) -> Unit,
     onTogglePinnedProject: (String) -> Unit,
+    archivedProjects: Set<String>,
+    onToggleArchive: (String) -> Unit,
     viewModel: ScannerViewModel = viewModel()
 ) {
     LaunchedEffect(deepLinkUuid) {
@@ -178,6 +182,10 @@ fun NavGraph(
                 },
                 onSearch = {
                     navController.navigate(Screen.Search.route)
+                },
+                pinnedProjects = pinnedProjects,
+                onProjectClick = { projectId ->
+                    navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                 }
             )
         }
@@ -185,7 +193,13 @@ fun NavGraph(
         composable(Screen.Scanner.route) {
             QRScannerScreen(
                 onQRCodeScanned = { code ->
-                    navController.navigate(Screen.Detail.createRoute(code))
+                    // If the scanned code is a URL (e.g. a graph-explorer share link),
+                    // extract the last path segment as the UUID. Otherwise use as-is.
+                    val uuid = runCatching {
+                        val parsed = Uri.parse(code)
+                        if (parsed.scheme != null) parsed.lastPathSegment ?: code else code
+                    }.getOrDefault(code).trim()
+                    navController.navigate(Screen.Detail.createRoute(uuid))
                 }
             )
         }
@@ -244,6 +258,7 @@ fun NavGraph(
 
         composable(Screen.SettingsAbout.route) {
             AboutSettingsScreen(
+                isDarkTheme = darkTheme,
                 onBack = { navController.popBackStack() },
                 onHome = {
                     navController.navigate(Screen.Home.route) {
@@ -334,10 +349,10 @@ fun NavGraph(
                                         targetState = loadingMessage,
                                         transitionSpec = {
                                             if (smoothAnimations) {
-                                                fadeIn(animationSpec = tween(500)) with
+                                                fadeIn(animationSpec = tween(500)) togetherWith
                                                     fadeOut(animationSpec = tween(500))
                                             } else {
-                                                fadeIn(animationSpec = tween(0)) with
+                                                fadeIn(animationSpec = tween(0)) togetherWith
                                                     fadeOut(animationSpec = tween(0))
                                             }
                                         },
@@ -372,6 +387,10 @@ fun NavGraph(
                         onNavigateToResource = { newMfid ->
                             navController.navigate(Screen.Detail.createRoute(newMfid))
                         },
+                        onNavigateToProject = { projectId ->
+                            navController.navigate(Screen.ProjectDetail.createRoute(projectId))
+                        },
+                        onSearch = { navController.navigate(Screen.Search.route) },
                         onHome = {
                             navController.navigate(Screen.Home.route) {
                                 popUpTo(Screen.Home.route) { inclusive = false }
@@ -449,7 +468,7 @@ fun NavGraph(
                                     OutlinedButton(
                                         onClick = { navController.popBackStack() }
                                     ) {
-                                        Icon(Icons.Default.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text("Go Back")
                                     }
@@ -517,11 +536,14 @@ fun NavGraph(
                         popUpTo(Screen.Home.route) { inclusive = false }
                     }
                 },
+                onSearch = { navController.navigate(Screen.Search.route) },
                 onProjectClick = { projectId ->
                     navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                 },
                 pinnedProjects = pinnedProjects,
-                onTogglePin = onTogglePinnedProject
+                onTogglePin = onTogglePinnedProject,
+                archivedProjects = archivedProjects,
+                onToggleArchive = onToggleArchive
             )
         }
 
@@ -567,6 +589,7 @@ fun NavGraph(
                         popUpTo(Screen.Home.route) { inclusive = false }
                     }
                 },
+                onSearch = { navController.navigate(Screen.Search.route) },
                 onResourceClick = { mfid ->
                     navController.navigate(Screen.Detail.createRoute(mfid))
                 },

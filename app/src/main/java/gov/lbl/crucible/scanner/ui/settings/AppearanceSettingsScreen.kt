@@ -1,6 +1,5 @@
 package gov.lbl.crucible.scanner.ui.settings
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,7 +14,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,84 +29,27 @@ fun AppearanceSettingsScreen(
     onBack: () -> Unit,
     onHome: () -> Unit
 ) {
-    // Snapshot of values at screen entry — used for hasChanges detection and revert
-    // Stored as mutable state so they can be updated when the user confirms
-    var initialThemeMode    by remember { mutableStateOf(currentThemeMode) }
-    var initialAccentColor  by remember { mutableStateOf(currentAccentColor) }
-    var initialSmooth       by remember { mutableStateOf(currentSmoothAnimations) }
-    var initialFloating     by remember { mutableStateOf(currentFloatingScanButton) }
-
-    var themeModeInput       by remember { mutableStateOf(currentThemeMode) }
-    var accentColorInput     by remember { mutableStateOf(currentAccentColor) }
+    var themeModeInput        by remember { mutableStateOf(currentThemeMode) }
+    var accentColorInput      by remember { mutableStateOf(currentAccentColor) }
     var smoothAnimationsInput by remember { mutableStateOf(currentSmoothAnimations) }
     var floatingScanButtonInput by remember { mutableStateOf(currentFloatingScanButton) }
-    var showColorPicker      by remember { mutableStateOf(false) }
-    var showLeaveDialog      by remember { mutableStateOf(false) }
-    var pendingNavigation    by remember { mutableStateOf<(() -> Unit)?>(null) }
-
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-
-    val hasChanges = themeModeInput != initialThemeMode ||
-        accentColorInput != initialAccentColor ||
-        smoothAnimationsInput != initialSmooth ||
-        floatingScanButtonInput != initialFloating
-
-    // Helper — intercepts navigation when there are unsaved changes
-    fun navigate(action: () -> Unit) {
-        if (hasChanges) {
-            pendingNavigation = action
-            showLeaveDialog = true
-        } else {
-            action()
-        }
-    }
-
-    // Hardware/gesture back button
-    BackHandler(enabled = hasChanges) {
-        pendingNavigation = onBack
-        showLeaveDialog = true
-    }
+    var showColorPicker       by remember { mutableStateOf(false) }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Appearance") },
                 navigationIcon = {
-                    IconButton(onClick = { navigate(onBack) }) {
+                    IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, "Back")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { navigate(onHome) }) {
+                    IconButton(onClick = onHome) {
                         Icon(Icons.Default.Home, contentDescription = "Home")
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    // Advance the baseline so hasChanges resets to false
-                    initialThemeMode   = themeModeInput
-                    initialAccentColor = accentColorInput
-                    initialSmooth      = smoothAnimationsInput
-                    initialFloating    = floatingScanButtonInput
-                    scope.launch {
-                        snackbarHostState.showSnackbar(
-                            message = "Appearance settings saved",
-                            duration = SnackbarDuration.Short
-                        )
-                    }
-                },
-                containerColor = if (hasChanges) MaterialTheme.colorScheme.primary
-                                 else MaterialTheme.colorScheme.surfaceVariant,
-                contentColor   = if (hasChanges) MaterialTheme.colorScheme.onPrimary
-                                 else MaterialTheme.colorScheme.onSurfaceVariant
-            ) {
-                Icon(Icons.Default.Check, contentDescription = "Confirm")
-            }
         }
     ) { padding ->
         Column(
@@ -116,8 +57,7 @@ fun AppearanceSettingsScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp)
-                .padding(bottom = 80.dp),
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("Appearance", style = MaterialTheme.typography.titleLarge)
@@ -283,37 +223,6 @@ fun AppearanceSettingsScreen(
                 onAccentColorSave(color)
             },
             onDismiss = { showColorPicker = false }
-        )
-    }
-
-    // Leave without confirming dialog
-    if (showLeaveDialog) {
-        AlertDialog(
-            onDismissRequest = { showLeaveDialog = false },
-            icon = { Icon(Icons.Default.Warning, contentDescription = null) },
-            title = { Text("Unsaved changes") },
-            text = { Text("You changed appearance settings without confirming. Revert to previous settings?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showLeaveDialog = false
-                    pendingNavigation?.invoke()
-                }) {
-                    Text("Keep changes")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    // Revert all to initial values
-                    onThemeModeSave(initialThemeMode)
-                    onAccentColorSave(initialAccentColor)
-                    onSmoothAnimationsSave(initialSmooth)
-                    onFloatingScanButtonSave(initialFloating)
-                    showLeaveDialog = false
-                    pendingNavigation?.invoke()
-                }) {
-                    Text("Revert")
-                }
-            }
         )
     }
 }

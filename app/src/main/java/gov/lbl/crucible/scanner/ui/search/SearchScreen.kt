@@ -303,6 +303,7 @@ private fun Sample.matchesSearch(query: String): Boolean {
         uniqueId.lowercase().contains(q) ||
         (createdAt?.lowercase()?.contains(q) == true) ||
         (internalId?.toString()?.contains(q) == true) ||
+        (ownerOrcid?.lowercase()?.contains(q) == true) ||
         (keywords?.any { it.lowercase().contains(q) } == true)
 }
 

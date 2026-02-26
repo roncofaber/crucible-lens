@@ -1,7 +1,6 @@
 package gov.lbl.crucible.scanner.ui.projects
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -21,6 +20,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -32,6 +32,7 @@ import gov.lbl.crucible.scanner.data.model.Dataset
 import gov.lbl.crucible.scanner.data.model.Project
 import gov.lbl.crucible.scanner.data.model.Sample
 import gov.lbl.crucible.scanner.ui.common.LoadingMessage
+import gov.lbl.crucible.scanner.ui.common.openUrlInBrowser
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
@@ -41,6 +42,7 @@ fun ProjectDetailScreen(
     graphExplorerUrl: String,
     onBack: () -> Unit,
     onHome: () -> Unit,
+    onSearch: () -> Unit = {},
     onResourceClick: (String) -> Unit,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
@@ -54,8 +56,8 @@ fun ProjectDetailScreen(
     var datasets by remember { mutableStateOf<List<Dataset>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    var selectedTab by remember { mutableStateOf(0) }
-    var searchQuery by remember { mutableStateOf("") }
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     var fromCache by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -144,12 +146,6 @@ fun ProjectDetailScreen(
                     }
                     IconButton(onClick = {
                         val url = "$graphExplorerUrl/$projectId"
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                    }) {
-                        Icon(Icons.Default.Public, contentDescription = "Open in browser")
-                    }
-                    IconButton(onClick = {
-                        val url = "$graphExplorerUrl/$projectId"
                         val shareIntent = Intent().apply {
                             action = Intent.ACTION_SEND
                             putExtra(Intent.EXTRA_TEXT, "Check out this project in Crucible: $url")
@@ -159,6 +155,15 @@ fun ProjectDetailScreen(
                         context.startActivity(Intent.createChooser(shareIntent, "Share via"))
                     }) {
                         Icon(Icons.Default.Share, contentDescription = "Share")
+                    }
+                    IconButton(onClick = {
+                        val url = "$graphExplorerUrl/$projectId"
+                        openUrlInBrowser(context, url)
+                    }) {
+                        Icon(Icons.Default.Public, contentDescription = "Open in browser")
+                    }
+                    IconButton(onClick = onSearch) {
+                        Icon(Icons.Default.Search, contentDescription = "Search")
                     }
                     IconButton(onClick = onHome) {
                         Icon(Icons.Default.Home, contentDescription = "Home")

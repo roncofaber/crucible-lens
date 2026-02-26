@@ -26,6 +26,7 @@ class PreferencesManager(private val context: Context) {
         private val SMOOTH_ANIMATIONS = stringPreferencesKey("smooth_animations")
         private val FLOATING_SCAN_BUTTON = stringPreferencesKey("floating_scan_button")
         private val PINNED_PROJECTS = stringPreferencesKey("pinned_projects")
+        private val ARCHIVED_PROJECTS = stringPreferencesKey("archived_projects")
         private val RESOURCE_HISTORY = stringPreferencesKey("resource_history")
 
         const val DEFAULT_API_BASE_URL = "https://crucible.lbl.gov/api/v1/"
@@ -74,6 +75,10 @@ class PreferencesManager(private val context: Context) {
 
     val pinnedProjects: Flow<Set<String>> = context.dataStore.data.map { prefs ->
         prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+    }
+
+    val archivedProjects: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[ARCHIVED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     }
 
     val resourceHistory: Flow<List<HistoryItem>> = context.dataStore.data.map { prefs ->
@@ -143,6 +148,14 @@ class PreferencesManager(private val context: Context) {
             val current = prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
             if (id in current) current.remove(id) else current.add(id)
             prefs[PINNED_PROJECTS] = current.joinToString(",")
+        }
+    }
+
+    suspend fun toggleArchivedProject(id: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[ARCHIVED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+            if (id in current) current.remove(id) else current.add(id)
+            prefs[ARCHIVED_PROJECTS] = current.joinToString(",")
         }
     }
 

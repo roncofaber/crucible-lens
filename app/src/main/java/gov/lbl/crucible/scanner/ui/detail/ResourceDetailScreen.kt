@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import android.util.Base64
 import android.util.Log
@@ -38,6 +39,7 @@ import gov.lbl.crucible.scanner.data.model.DatasetReference
 import gov.lbl.crucible.scanner.data.model.Sample
 import gov.lbl.crucible.scanner.data.model.SampleReference
 import gov.lbl.crucible.scanner.ui.common.QrCodeDialog
+import gov.lbl.crucible.scanner.ui.common.openUrlInBrowser
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +49,8 @@ fun ResourceDetailScreen(
     graphExplorerUrl: String,
     onBack: () -> Unit,
     onNavigateToResource: (String) -> Unit,
+    onNavigateToProject: (String) -> Unit,
+    onSearch: () -> Unit = {},
     onHome: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
@@ -65,18 +69,6 @@ fun ResourceDetailScreen(
                 },
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        // QR Code button
-                        IconButton(
-                            onClick = { showQrDialog = true },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.QrCode,
-                                contentDescription = "Show QR Code",
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-
                         // Refresh button
                         IconButton(
                             onClick = onRefresh,
@@ -85,6 +77,18 @@ fun ResourceDetailScreen(
                             Icon(
                                 Icons.Default.Refresh,
                                 contentDescription = "Refresh",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        // QR Code button
+                        IconButton(
+                            onClick = { showQrDialog = true },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.QrCode,
+                                contentDescription = "Show QR Code",
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -144,8 +148,7 @@ fun ResourceDetailScreen(
 
                                 if (resourceType != null) {
                                     val url = "$graphExplorerUrl/$projectId/$resourceType/${resource.uniqueId}"
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                    context.startActivity(intent)
+                                    openUrlInBrowser(context, url)
                                 }
                             }
                         },
@@ -154,6 +157,18 @@ fun ResourceDetailScreen(
                             Icon(
                                 Icons.Default.Public,
                                 contentDescription = "Open in Graph Explorer",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        // Search button
+                        IconButton(
+                            onClick = onSearch,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = "Search",
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -216,12 +231,12 @@ fun ResourceDetailScreen(
             when (resource) {
                 is Sample -> {
                     item {
-                        SampleDetailsCard(resource)
+                        SampleDetailsCard(resource, onProjectClick = onNavigateToProject)
                     }
                 }
                 is Dataset -> {
                     item {
-                        DatasetDetailsCard(resource)
+                        DatasetDetailsCard(resource, onProjectClick = onNavigateToProject)
                     }
                 }
             }
@@ -374,17 +389,10 @@ private fun BasicInfoCard(resource: CrucibleResource) {
             Text(
                 text = resource.name,
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
-            val description = resource.description
-            if (!description.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
     }
 }
@@ -474,7 +482,8 @@ private fun ThumbnailsSection(thumbnails: List<String>) {
 }
 
 @Composable
-private fun SampleDetailsCard(sample: Sample) {
+private fun SampleDetailsCard(sample: Sample, onProjectClick: (String) -> Unit) {
+    val context = LocalContext.current
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
@@ -484,17 +493,33 @@ private fun SampleDetailsCard(sample: Sample) {
             )
             Spacer(modifier = Modifier.height(12.dp))
 
+            InfoRow(icon = Icons.Default.Notes, label = "Description", value = sample.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
             InfoRow(icon = Icons.Default.Category, label = "Type", value = sample.sampleType ?: "None")
-            InfoRow(icon = Icons.Default.Folder, label = "Project", value = sample.projectId ?: "None")
+            val projectId = sample.projectId
+            if (projectId != null) {
+                ClickableInfoRow(icon = Icons.Default.Folder, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })
+            } else {
+                InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
+            }
             InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = sample.createdAt ?: "None")
+            if (sample.ownerOrcid != null) {
+                ClickableInfoRow(
+                    icon = Icons.Default.Person,
+                    label = "Owner ORCID",
+                    value = sample.ownerOrcid,
+                    onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://orcid.org/${sample.ownerOrcid}")))
+                    }
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun DatasetDetailsCard(dataset: Dataset) {
+private fun DatasetDetailsCard(dataset: Dataset, onProjectClick: (String) -> Unit) {
     val context = LocalContext.current
-    var advanced by remember { mutableStateOf(false) }
+    var advanced by rememberSaveable { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -508,25 +533,38 @@ private fun DatasetDetailsCard(dataset: Dataset) {
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                TextButton(
-                    onClick = { advanced = !advanced },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                Row(
+                    modifier = Modifier
+                        .clickable { advanced = !advanced }
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(
                         if (advanced) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(if (advanced) "Basic" else "Advanced")
+                    Text(
+                        if (advanced) "Basic" else "Advanced",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
 
             // Basic fields
+            InfoRow(icon = Icons.Default.Notes, label = "Description", value = dataset.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
             InfoRow(icon = Icons.Default.Science, label = "Measurement", value = dataset.measurement ?: "None")
             InfoRow(icon = Icons.Default.Build, label = "Instrument", value = dataset.instrumentName ?: "None")
-            InfoRow(icon = Icons.Default.Folder, label = "Project", value = dataset.projectId ?: "None")
+            val projectId = dataset.projectId
+            if (projectId != null) {
+                ClickableInfoRow(icon = Icons.Default.Folder, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })
+            } else {
+                InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
+            }
             InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = dataset.createdAt ?: "None")
             InfoRow(
                 icon = when (dataset.isPublic) {
@@ -585,7 +623,7 @@ private fun DatasetDetailsCard(dataset: Dataset) {
 
 @Composable
 private fun ScientificMetadataCard(metadata: Map<String, Any?>) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -627,7 +665,7 @@ private fun MetadataTree(data: Map<String, Any?>, indentLevel: Int) {
         key(entryKey) {
             when (entryValue) {
                 is Map<*, *> -> {
-                    var expanded by remember { mutableStateOf(false) }
+                    var expanded by rememberSaveable { mutableStateOf(false) }
 
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
@@ -769,7 +807,7 @@ private fun ParentDatasetsCard(
     parents: List<DatasetReference>,
     onNavigateToResource: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -827,7 +865,7 @@ private fun ChildDatasetsCard(
     children: List<DatasetReference>,
     onNavigateToResource: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -885,7 +923,7 @@ private fun LinkedSamplesCard(
     samples: List<SampleReference>,
     onNavigateToResource: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -940,7 +978,7 @@ private fun LinkedDatasetsCard(
     datasets: List<DatasetReference>,
     onNavigateToResource: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -998,7 +1036,7 @@ private fun ParentSamplesCard(
     parents: List<SampleReference>,
     onNavigateToResource: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1053,7 +1091,7 @@ private fun ChildSamplesCard(
     children: List<SampleReference>,
     onNavigateToResource: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1159,12 +1197,17 @@ private fun formatFileSize(bytes: Long): String = when {
 }
 
 @Composable
-private fun InfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
+private fun InfoRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    verticalAlignment: Alignment.Vertical = Alignment.CenterVertically
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = verticalAlignment
     ) {
         Icon(
             icon,
