@@ -1,5 +1,6 @@
 package gov.lbl.crucible.scanner.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,13 +31,43 @@ fun AppearanceSettingsScreen(
     onBack: () -> Unit,
     onHome: () -> Unit
 ) {
-    var themeModeInput by remember { mutableStateOf(currentThemeMode) }
-    var accentColorInput by remember { mutableStateOf(currentAccentColor) }
+    // Snapshot of values at screen entry — used for hasChanges detection and revert
+    val initialThemeMode    = remember { currentThemeMode }
+    val initialAccentColor  = remember { currentAccentColor }
+    val initialSmooth       = remember { currentSmoothAnimations }
+    val initialFloating     = remember { currentFloatingScanButton }
+
+    var themeModeInput       by remember { mutableStateOf(currentThemeMode) }
+    var accentColorInput     by remember { mutableStateOf(currentAccentColor) }
     var smoothAnimationsInput by remember { mutableStateOf(currentSmoothAnimations) }
     var floatingScanButtonInput by remember { mutableStateOf(currentFloatingScanButton) }
-    var showColorPicker by remember { mutableStateOf(false) }
+    var showColorPicker      by remember { mutableStateOf(false) }
+    var showLeaveDialog      by remember { mutableStateOf(false) }
+    var pendingNavigation    by remember { mutableStateOf<(() -> Unit)?>(null) }
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    val hasChanges = themeModeInput != initialThemeMode ||
+        accentColorInput != initialAccentColor ||
+        smoothAnimationsInput != initialSmooth ||
+        floatingScanButtonInput != initialFloating
+
+    // Helper — intercepts navigation when there are unsaved changes
+    fun navigate(action: () -> Unit) {
+        if (hasChanges) {
+            pendingNavigation = action
+            showLeaveDialog = true
+        } else {
+            action()
+        }
+    }
+
+    // Hardware/gesture back button
+    BackHandler(enabled = hasChanges) {
+        pendingNavigation = onBack
+        showLeaveDialog = true
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -44,12 +75,12 @@ fun AppearanceSettingsScreen(
             TopAppBar(
                 title = { Text("Appearance") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { navigate(onBack) }) {
                         Icon(Icons.Default.ArrowBack, "Back")
                     }
                 },
                 actions = {
-                    IconButton(onClick = onHome) {
+                    IconButton(onClick = { navigate(onHome) }) {
                         Icon(Icons.Default.Home, contentDescription = "Home")
                     }
                 }
@@ -58,10 +89,7 @@ fun AppearanceSettingsScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    onThemeModeSave(themeModeInput)
-                    onAccentColorSave(accentColorInput)
-                    onSmoothAnimationsSave(smoothAnimationsInput)
-                    onFloatingScanButtonSave(floatingScanButtonInput)
+                    // Already applied live — just show confirmation
                     scope.launch {
                         snackbarHostState.showSnackbar(
                             message = "Appearance settings saved",
@@ -69,10 +97,12 @@ fun AppearanceSettingsScreen(
                         )
                     }
                 },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
+                containerColor = if (hasChanges) MaterialTheme.colorScheme.primary
+                                 else MaterialTheme.colorScheme.surfaceVariant,
+                contentColor   = if (hasChanges) MaterialTheme.colorScheme.onPrimary
+                                 else MaterialTheme.colorScheme.onSurfaceVariant
             ) {
-                Icon(Icons.Default.Save, contentDescription = "Save")
+                Icon(Icons.Default.Check, contentDescription = "Confirm")
             }
         }
     ) { padding ->
@@ -87,7 +117,7 @@ fun AppearanceSettingsScreen(
         ) {
             Text("Appearance", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Customize the look and feel of the app.",
+                "Changes apply immediately as you select them.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -115,7 +145,10 @@ fun AppearanceSettingsScreen(
                         listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (value, label) ->
                             FilterChip(
                                 selected = themeModeInput == value,
-                                onClick = { themeModeInput = value },
+                                onClick = {
+                                    themeModeInput = value
+                                    onThemeModeSave(value)
+                                },
                                 label = { Text(label) },
                                 leadingIcon = if (themeModeInput == value) {
                                     { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
@@ -177,7 +210,13 @@ fun AppearanceSettingsScreen(
                             Text("Disable for maximum speed", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    Switch(checked = smoothAnimationsInput, onCheckedChange = { smoothAnimationsInput = it })
+                    Switch(
+                        checked = smoothAnimationsInput,
+                        onCheckedChange = {
+                            smoothAnimationsInput = it
+                            onSmoothAnimationsSave(it)
+                        }
+                    )
                 }
             }
 
@@ -199,17 +238,58 @@ fun AppearanceSettingsScreen(
                             Text("Show a quick-scan FAB while browsing", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    Switch(checked = floatingScanButtonInput, onCheckedChange = { floatingScanButtonInput = it })
+                    Switch(
+                        checked = floatingScanButtonInput,
+                        onCheckedChange = {
+                            floatingScanButtonInput = it
+                            onFloatingScanButtonSave(it)
+                        }
+                    )
                 }
             }
         }
     }
 
+    // Color picker
     if (showColorPicker) {
         ColorPickerDialog(
             currentColor = accentColorInput,
-            onColorSelected = { accentColorInput = it },
+            onColorSelected = { color ->
+                accentColorInput = color
+                onAccentColorSave(color)
+            },
             onDismiss = { showColorPicker = false }
+        )
+    }
+
+    // Leave without confirming dialog
+    if (showLeaveDialog) {
+        AlertDialog(
+            onDismissRequest = { showLeaveDialog = false },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null) },
+            title = { Text("Unsaved changes") },
+            text = { Text("You changed appearance settings without confirming. Revert to previous settings?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLeaveDialog = false
+                    pendingNavigation?.invoke()
+                }) {
+                    Text("Keep changes")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    // Revert all to initial values
+                    onThemeModeSave(initialThemeMode)
+                    onAccentColorSave(initialAccentColor)
+                    onSmoothAnimationsSave(initialSmooth)
+                    onFloatingScanButtonSave(initialFloating)
+                    showLeaveDialog = false
+                    pendingNavigation?.invoke()
+                }) {
+                    Text("Revert")
+                }
+            }
         )
     }
 }
