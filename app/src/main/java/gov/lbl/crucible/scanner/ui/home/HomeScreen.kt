@@ -121,7 +121,7 @@ fun HomeScreen(
                     "The Molecular Foundry in your pocket — data only tho, the lab stays there.",
                     "For when you need your sample data but left your laptop behind.",
                     "Turning QR codes into knowledge, one scan at a time.",
-                    "Making nanoscience slightly less paperworki-y.",
+                    "Making nanoscience slightly less paperwork-y.",
                     "Data at your fingertips. Samples in the lab. Coffee in hand.",
                     "Scan first, ask questions later...",
                     "Where QR codes meet 'real' science.",
@@ -130,7 +130,7 @@ fun HomeScreen(
                     "Because even nanomaterials deserve good metadata.",
                     "Track samples, not sticky notes.",
                     "Less clipboard, more science.",
-                    "Samples have stories. Crucible helps tell them."
+                    "Samples have stories. Crucible helps tell them.",
                     "What about the 11k project?"
                 )
             }
