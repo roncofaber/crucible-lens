@@ -302,7 +302,8 @@ private fun Sample.matchesSearch(query: String): Boolean {
         (projectId?.lowercase()?.contains(q) == true) ||
         uniqueId.lowercase().contains(q) ||
         (createdAt?.lowercase()?.contains(q) == true) ||
-        (internalId?.toString()?.contains(q) == true)
+        (internalId?.toString()?.contains(q) == true) ||
+        (keywords?.any { it.lowercase().contains(q) } == true)
 }
 
 private fun Dataset.matchesSearch(query: String): Boolean {
@@ -321,5 +322,21 @@ private fun Dataset.matchesSearch(query: String): Boolean {
         (sourceFolder?.lowercase()?.contains(q) == true) ||
         (fileToUpload?.lowercase()?.contains(q) == true) ||
         (jsonLink?.lowercase()?.contains(q) == true) ||
-        (sha256Hash?.lowercase()?.contains(q) == true)
+        (sha256Hash?.lowercase()?.contains(q) == true) ||
+        (keywords?.any { it.lowercase().contains(q) } == true) ||
+        (scientificMetadata?.containsQuery(q) == true)
+}
+
+private fun Map<String, Any?>.containsQuery(q: String): Boolean =
+    entries.any { (key, value) -> key.lowercase().contains(q) || value.matchesQuery(q) }
+
+private fun Any?.matchesQuery(q: String): Boolean = when (this) {
+    null -> false
+    is String -> lowercase().contains(q)
+    is Number -> toString().contains(q)
+    is Map<*, *> -> entries.any { (k, v) ->
+        k.toString().lowercase().contains(q) || v.matchesQuery(q)
+    }
+    is List<*> -> any { it.matchesQuery(q) }
+    else -> toString().lowercase().contains(q)
 }
