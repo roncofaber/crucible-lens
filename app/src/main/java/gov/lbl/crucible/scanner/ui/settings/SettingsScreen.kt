@@ -83,7 +83,9 @@ fun SettingsScreen(
                             duration = SnackbarDuration.Short
                         )
                     }
-                }
+                },
+                containerColor = getColorFromName(accentColorInput),
+                contentColor = Color.White
             ) {
                 Icon(Icons.Default.Save, contentDescription = "Save All Settings")
             }
@@ -223,6 +225,11 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        val chipColors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f),
+                            selectedLabelColor = MaterialTheme.colorScheme.secondary,
+                            selectedLeadingIconColor = MaterialTheme.colorScheme.secondary
+                        )
                         FilterChip(
                             selected = themeModeInput == "system",
                             onClick = { themeModeInput = "system" },
@@ -230,7 +237,16 @@ fun SettingsScreen(
                             leadingIcon = if (themeModeInput == "system") {
                                 { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
                             } else null,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            colors = chipColors,
+                            border = FilterChipDefaults.filterChipBorder(
+                                borderColor = MaterialTheme.colorScheme.outline,
+                                selectedBorderColor = MaterialTheme.colorScheme.secondary,
+                                borderWidth = 1.dp,
+                                selectedBorderWidth = 1.5.dp,
+                                enabled = true,
+                                selected = themeModeInput == "system"
+                            )
                         )
                         FilterChip(
                             selected = themeModeInput == "light",
@@ -239,7 +255,16 @@ fun SettingsScreen(
                             leadingIcon = if (themeModeInput == "light") {
                                 { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
                             } else null,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            colors = chipColors,
+                            border = FilterChipDefaults.filterChipBorder(
+                                borderColor = MaterialTheme.colorScheme.outline,
+                                selectedBorderColor = MaterialTheme.colorScheme.secondary,
+                                borderWidth = 1.dp,
+                                selectedBorderWidth = 1.5.dp,
+                                enabled = true,
+                                selected = themeModeInput == "light"
+                            )
                         )
                         FilterChip(
                             selected = themeModeInput == "dark",
@@ -248,7 +273,16 @@ fun SettingsScreen(
                             leadingIcon = if (themeModeInput == "dark") {
                                 { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
                             } else null,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            colors = chipColors,
+                            border = FilterChipDefaults.filterChipBorder(
+                                borderColor = MaterialTheme.colorScheme.outline,
+                                selectedBorderColor = MaterialTheme.colorScheme.secondary,
+                                borderWidth = 1.dp,
+                                selectedBorderWidth = 1.5.dp,
+                                enabled = true,
+                                selected = themeModeInput == "dark"
+                            )
                         )
                     }
                 }
@@ -283,7 +317,6 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Color preview box
                         Box(
                             modifier = Modifier
                                 .size(32.dp)
@@ -665,29 +698,16 @@ private fun ColorPickerDialog(
     val colors = listOf(
         // Row 1
         "blue" to Color(0xFF1976D2),
-        "purple" to Color(0xFF9C27B0),
-        "green" to Color(0xFF388E3C),
-        "orange" to Color(0xFFF57C00),
-        // Row 2
-        "red" to Color(0xFFD32F2F),
-        "teal" to Color(0xFF00796B),
-        "pink" to Color(0xFFE91E63),
         "indigo" to Color(0xFF3F51B5),
-        // Row 3
+        "purple" to Color(0xFF9C27B0),
+        "pink" to Color(0xFFE91E63),
+        "red" to Color(0xFFD32F2F),
+        // Row 2
+        "orange" to Color(0xFFF57C00),
         "amber" to Color(0xFFFFA000),
-        "lime" to Color(0xFFAFB42B),
-        "cyan" to Color(0xFF0097A7),
-        "brown" to Color(0xFF5D4037),
-        // Row 4 - New colors
-        "deepPurple" to Color(0xFF512DA8),
-        "lightBlue" to Color(0xFF0288D1),
-        "lightGreen" to Color(0xFF689F38),
-        "deepOrange" to Color(0xFFE64A19),
-        // Row 5 - More new colors
-        "blueGrey" to Color(0xFF455A64),
-        "yellow" to Color(0xFFF9A825),
-        "magenta" to Color(0xFFAD1457),
-        "turquoise" to Color(0xFF00897B)
+        "green" to Color(0xFF388E3C),
+        "teal" to Color(0xFF00796B),
+        "brown" to Color(0xFF5D4037)
     )
 
     var showCustomInput by remember { mutableStateOf(false) }
@@ -706,7 +726,7 @@ private fun ColorPickerDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Predefined colors grid
-                colors.chunked(4).forEach { rowColors ->
+                colors.chunked(5).forEach { rowColors ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -824,26 +844,16 @@ private fun getColorFromName(colorName: String): Color {
     }
 
     return when (colorName.lowercase()) {
-        "blue" -> Color(0xFF1976D2)
-        "purple" -> Color(0xFF9C27B0)
-        "green" -> Color(0xFF388E3C)
-        "orange" -> Color(0xFFF57C00)
-        "red" -> Color(0xFFD32F2F)
-        "teal" -> Color(0xFF00796B)
-        "pink" -> Color(0xFFE91E63)
+        "blue"   -> Color(0xFF1976D2)
         "indigo" -> Color(0xFF3F51B5)
-        "amber" -> Color(0xFFFFA000)
-        "lime" -> Color(0xFFAFB42B)
-        "cyan" -> Color(0xFF0097A7)
-        "brown" -> Color(0xFF5D4037)
-        "deeppurple" -> Color(0xFF512DA8)
-        "lightblue" -> Color(0xFF0288D1)
-        "lightgreen" -> Color(0xFF689F38)
-        "deeporange" -> Color(0xFFE64A19)
-        "bluegrey" -> Color(0xFF455A64)
-        "yellow" -> Color(0xFFF9A825)
-        "magenta" -> Color(0xFFAD1457)
-        "turquoise" -> Color(0xFF00897B)
+        "purple" -> Color(0xFF9C27B0)
+        "pink"   -> Color(0xFFE91E63)
+        "red"    -> Color(0xFFD32F2F)
+        "orange" -> Color(0xFFF57C00)
+        "amber"  -> Color(0xFFFFA000)
+        "green"  -> Color(0xFF388E3C)
+        "teal"   -> Color(0xFF00796B)
+        "brown"  -> Color(0xFF5D4037)
         else -> Color(0xFF1976D2) // Default to blue
     }
 }

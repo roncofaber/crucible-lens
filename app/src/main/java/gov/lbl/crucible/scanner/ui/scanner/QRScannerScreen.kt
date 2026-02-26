@@ -10,6 +10,7 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -138,10 +139,14 @@ private fun CameraPreview(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Surface(
-            modifier = Modifier.size(250.dp),
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-            shape = MaterialTheme.shapes.medium
-        ) {}
+        Box(
+            modifier = Modifier
+                .size(250.dp)
+                .border(
+                    width = 2.dp,
+                    color = MaterialTheme.colorScheme.secondary,
+                    shape = MaterialTheme.shapes.medium
+                )
+        )
     }
 }

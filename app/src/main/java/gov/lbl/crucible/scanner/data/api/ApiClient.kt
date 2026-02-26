@@ -53,7 +53,7 @@ object ApiClient {
                 if (BuildConfig.DEBUG) {
                     clientBuilder.addInterceptor(
                         HttpLoggingInterceptor().apply {
-                            level = HttpLoggingInterceptor.Level.HEADERS
+                            level = HttpLoggingInterceptor.Level.BASIC
                         }
                     )
                 }
