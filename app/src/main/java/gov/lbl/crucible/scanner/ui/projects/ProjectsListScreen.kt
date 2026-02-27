@@ -1,5 +1,8 @@
 package gov.lbl.crucible.scanner.ui.projects
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import gov.lbl.crucible.scanner.data.api.ApiClient
@@ -18,7 +22,7 @@ import gov.lbl.crucible.scanner.data.cache.CacheManager
 import gov.lbl.crucible.scanner.data.model.Project
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ProjectsListScreen(
     onBack: () -> Unit,
@@ -75,10 +79,16 @@ fun ProjectsListScreen(
         loadProjects()
     }
 
-    // Pre-load and cache samples/datasets per project in background (also populates counts)
+    // Pre-load and cache samples/datasets per project in background (also populates counts).
+    // Priority: pinned projects first, archived projects last (stage 2 skipped for archived).
     LaunchedEffect(projects) {
         val projectList = projects ?: return@LaunchedEffect
-        projectList.forEach { project ->
+        val prioritizedProjects = projectList
+            .sortedWith(compareByDescending<Project> { it.projectId in pinnedProjects }
+                .thenBy { it.projectId in archivedProjects })
+
+        prioritizedProjects.forEach { project ->
+            val isArchived = project.projectId in archivedProjects
             scope.launch {
                 // Use already-cached data if available — no API call needed
                 val cachedSamples = CacheManager.getProjectSamples(project.projectId)
@@ -104,14 +114,17 @@ fun ProjectsListScreen(
                 // Show counts immediately without waiting for heavy metadata
                 projectCounts = projectCounts + (project.projectId to Pair(sampleCount, datasetCount))
 
-                // Stage 2 — background: fetch full datasets to warm navigation cache
-                launch {
-                    try {
-                        val resp = ApiClient.service.getDatasetsByProject(project.projectId, includeMetadata = true)
-                        if (resp.isSuccessful) {
-                            resp.body()?.let { CacheManager.cacheProjectDatasets(project.projectId, it) }
-                        }
-                    } catch (e: Exception) { /* best effort */ }
+                // Stage 2 — background: fetch full datasets to warm navigation cache.
+                // Skipped for archived projects since they are rarely browsed.
+                if (!isArchived) {
+                    launch {
+                        try {
+                            val resp = ApiClient.service.getDatasetsByProject(project.projectId, includeMetadata = true)
+                            if (resp.isSuccessful) {
+                                resp.body()?.let { CacheManager.cacheProjectDatasets(project.projectId, it) }
+                            }
+                        } catch (e: Exception) { /* best effort */ }
+                    }
                 }
             }
         }
@@ -265,21 +278,33 @@ fun ProjectsListScreen(
                                     } else false
                                 }
                             )
+                            val iconScale by animateFloatAsState(
+                                targetValue = 0.75f + 0.5f * dismissState.progress,
+                                animationSpec = spring(),
+                                label = "archiveIconScale"
+                            )
                             SwipeToDismissBox(
                                 state = dismissState,
                                 enableDismissFromStartToEnd = false,
                                 enableDismissFromEndToStart = true,
+                                modifier = Modifier.animateItemPlacement(spring()),
                                 backgroundContent = {
                                     val color = MaterialTheme.colorScheme.secondaryContainer
                                     val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .background(color, MaterialTheme.shapes.medium)
+                                            .background(
+                                                color.copy(alpha = 0.4f + 0.6f * dismissState.progress),
+                                                MaterialTheme.shapes.medium
+                                            )
                                             .padding(end = 20.dp),
                                         contentAlignment = Alignment.CenterEnd
                                     ) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier.scale(iconScale)
+                                        ) {
                                             Icon(Icons.Default.Archive, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
                                             Text("Archive", style = MaterialTheme.typography.labelSmall, color = contentColor)
                                         }
@@ -340,21 +365,33 @@ fun ProjectsListScreen(
                                             } else false
                                         }
                                     )
+                                    val unarchiveIconScale by animateFloatAsState(
+                                        targetValue = 0.75f + 0.5f * dismissState.progress,
+                                        animationSpec = spring(),
+                                        label = "unarchiveIconScale"
+                                    )
                                     SwipeToDismissBox(
                                         state = dismissState,
                                         enableDismissFromStartToEnd = true,
                                         enableDismissFromEndToStart = false,
+                                        modifier = Modifier.animateItemPlacement(spring()),
                                         backgroundContent = {
                                             val color = MaterialTheme.colorScheme.primary
                                             val contentColor = MaterialTheme.colorScheme.onPrimary
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()
-                                                    .background(color, MaterialTheme.shapes.medium)
+                                                    .background(
+                                                        color.copy(alpha = 0.4f + 0.6f * dismissState.progress),
+                                                        MaterialTheme.shapes.medium
+                                                    )
                                                     .padding(start = 20.dp),
                                                 contentAlignment = Alignment.CenterStart
                                             ) {
-                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Column(
+                                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                                    modifier = Modifier.scale(unarchiveIconScale)
+                                                ) {
                                                     Icon(Icons.Default.Unarchive, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
                                                     Text("Unarchive", style = MaterialTheme.typography.labelSmall, color = contentColor)
                                                 }

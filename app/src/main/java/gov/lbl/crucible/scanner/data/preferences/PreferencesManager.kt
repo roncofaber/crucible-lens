@@ -146,7 +146,7 @@ class PreferencesManager(private val context: Context) {
     suspend fun togglePinnedProject(id: String) {
         context.dataStore.edit { prefs ->
             val current = prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
-            if (id in current) current.remove(id) else current.add(id)
+            if (id in current) current.remove(id) else if (current.size < 3) current.add(id)
             prefs[PINNED_PROJECTS] = current.joinToString(",")
         }
     }

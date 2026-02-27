@@ -11,17 +11,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
 import com.google.zxing.EncodeHintType
 
 @Composable
-fun QrCodeDialog(mfid: String, onDismiss: () -> Unit) {
+fun QrCodeDialog(mfid: String, name: String, onDismiss: () -> Unit) {
     val bitmap = remember(mfid) { generateQrBitmap(mfid, 512) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("QR Code") },
+        title = {
+            Text(
+                text = name,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Image(

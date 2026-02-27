@@ -14,7 +14,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -61,6 +63,8 @@ fun ProjectDetailScreen(
     var fromCache by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val samplesListState = rememberLazyListState()
+    val datasetsListState = rememberLazyListState()
 
     val filteredSamples = remember(samples, searchQuery) {
         if (searchQuery.isBlank()) samples ?: emptyList()
@@ -124,49 +128,53 @@ fun ProjectDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {},
+                title = { Text("Project") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, "Back")
                     }
                 },
                 actions = {
-                    IconButton(onClick = {
-                        CacheManager.clearProjectDetail(projectId)
-                        loadProjectData(forceRefresh = true)
-                    }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                    }
-                    IconButton(onClick = onTogglePin) {
-                        Icon(
-                            if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                            contentDescription = if (isPinned) "Unpin" else "Pin",
-                            tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current
-                        )
-                    }
-                    IconButton(onClick = {
-                        val url = "$graphExplorerUrl/$projectId"
-                        val shareIntent = Intent().apply {
-                            action = Intent.ACTION_SEND
-                            putExtra(Intent.EXTRA_TEXT, "Check out this project in Crucible: $url")
-                            putExtra(Intent.EXTRA_SUBJECT, "Crucible Project: ${project?.projectName ?: projectId}")
-                            type = "text/plain"
+                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
+                        IconButton(
+                            onClick = {
+                                CacheManager.clearProjectDetail(projectId)
+                                loadProjectData(forceRefresh = true)
+                            },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh", modifier = Modifier.size(24.dp))
                         }
-                        context.startActivity(Intent.createChooser(shareIntent, "Share via"))
-                    }) {
-                        Icon(Icons.Default.Share, contentDescription = "Share")
-                    }
-                    IconButton(onClick = {
-                        val url = "$graphExplorerUrl/$projectId"
-                        openUrlInBrowser(context, url)
-                    }) {
-                        Icon(Icons.Default.Public, contentDescription = "Open in browser")
-                    }
-                    IconButton(onClick = onSearch) {
-                        Icon(Icons.Default.Search, contentDescription = "Search")
-                    }
-                    IconButton(onClick = onHome) {
-                        Icon(Icons.Default.Home, contentDescription = "Home")
+                        IconButton(
+                            onClick = {
+                                val url = "$graphExplorerUrl/$projectId"
+                                val shareIntent = Intent().apply {
+                                    action = Intent.ACTION_SEND
+                                    putExtra(Intent.EXTRA_TEXT, "Check out this project in Crucible: $url")
+                                    putExtra(Intent.EXTRA_SUBJECT, "Crucible Project: ${project?.projectName ?: projectId}")
+                                    type = "text/plain"
+                                }
+                                context.startActivity(Intent.createChooser(shareIntent, "Share via"))
+                            },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = "Share", modifier = Modifier.size(24.dp))
+                        }
+                        IconButton(
+                            onClick = {
+                                val url = "$graphExplorerUrl/$projectId"
+                                openUrlInBrowser(context, url)
+                            },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(Icons.Default.Public, contentDescription = "Open in browser", modifier = Modifier.size(24.dp))
+                        }
+                        IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
+                            Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
+                        }
+                        IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
+                            Icon(Icons.Default.Home, contentDescription = "Home", modifier = Modifier.size(24.dp))
+                        }
                     }
                 }
             )
@@ -183,14 +191,19 @@ fun ProjectDetailScreen(
                 projectId = projectId,
                 searchQuery = searchQuery,
                 onSearchChange = { searchQuery = it },
-                fromCache = fromCache
+                fromCache = fromCache,
+                isPinned = isPinned,
+                onTogglePin = onTogglePin
             )
 
             // Tabs
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
                     selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
+                    onClick = {
+                        selectedTab = 0
+                        scope.launch { samplesListState.animateScrollToItem(0) }
+                    },
                     text = {
                         val count = filteredSamples.size
                         val total = samples?.size ?: 0
@@ -200,7 +213,10 @@ fun ProjectDetailScreen(
                 )
                 Tab(
                     selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
+                    onClick = {
+                        selectedTab = 1
+                        scope.launch { datasetsListState.animateScrollToItem(0) }
+                    },
                     text = {
                         val count = filteredDatasets.size
                         val total = datasets?.size ?: 0
@@ -303,11 +319,13 @@ fun ProjectDetailScreen(
                         0 -> SamplesList(
                             samples = filteredSamples,
                             isFiltered = searchQuery.isNotBlank(),
+                            listState = samplesListState,
                             onSampleClick = onResourceClick
                         )
                         1 -> DatasetsList(
                             datasets = filteredDatasets,
                             isFiltered = searchQuery.isNotBlank(),
+                            listState = datasetsListState,
                             onDatasetClick = onResourceClick
                         )
                     }
@@ -323,7 +341,9 @@ private fun ProjectHeader(
     projectId: String,
     searchQuery: String,
     onSearchChange: (String) -> Unit,
-    fromCache: Boolean = false
+    fromCache: Boolean = false,
+    isPinned: Boolean = false,
+    onTogglePin: () -> Unit = {}
 ) {
     Surface(
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
@@ -333,48 +353,49 @@ private fun ProjectHeader(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Name + icon row
+            // Name row: folder icon + text (weight 1f) + pin button top-right
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
             ) {
-                Icon(
-                    Icons.Default.Folder,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = project?.projectName ?: projectId,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        Icons.Default.Folder,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
                     )
-                    project?.projectLeadEmail?.takeIf { it.isNotBlank() }?.let {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            text = "Lead: $it",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = project?.projectName ?: projectId,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                    }
-                    if (fromCache) {
-                        val ageMin = CacheManager.getProjectDataAgeMinutes(projectId) ?: 0
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.CloudOff,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
+                        project?.projectLeadEmail?.takeIf { it.isNotBlank() }?.let {
                             Text(
-                                "Cached ${ageMin}m ago",
+                                text = "Lead: $it",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
+                }
+                IconButton(
+                    onClick = onTogglePin,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = if (isPinned) "Unpin" else "Pin",
+                        tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
 
@@ -445,6 +466,19 @@ private fun ProjectHeader(
                     }
                 }
             }
+
+            // Cache age — bottom-right of the title panel, always rendered to keep height stable
+            val ageMin = if (fromCache) CacheManager.getProjectDataAgeMinutes(projectId) ?: 0 else 0
+            Text(
+                text = if (fromCache) "Cached ${ageMin}m ago" else " ",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (fromCache)
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0f),
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = androidx.compose.ui.text.style.TextAlign.End
+            )
         }
     }
 }
@@ -482,6 +516,7 @@ private fun StatChip(
 private fun SamplesList(
     samples: List<Sample>,
     isFiltered: Boolean,
+    listState: LazyListState = rememberLazyListState(),
     onSampleClick: (String) -> Unit
 ) {
     if (samples.isEmpty()) {
@@ -523,6 +558,7 @@ private fun SamplesList(
         val groupedSamples = samples.groupBy { it.sampleType ?: "Unspecified Type" }
             .entries.sortedBy { it.key.lowercase() }
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -556,6 +592,7 @@ private fun SamplesList(
 private fun DatasetsList(
     datasets: List<Dataset>,
     isFiltered: Boolean,
+    listState: LazyListState = rememberLazyListState(),
     onDatasetClick: (String) -> Unit
 ) {
     if (datasets.isEmpty()) {
@@ -597,6 +634,7 @@ private fun DatasetsList(
         val groupedDatasets = datasets.groupBy { it.measurement ?: "Unspecified Measurement" }
             .entries.sortedBy { it.key.lowercase() }
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -633,7 +671,7 @@ private fun CollapsibleGroup(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     content: @Composable () -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable(key = title) { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),

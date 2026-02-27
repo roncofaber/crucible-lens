@@ -8,6 +8,9 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -18,18 +21,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import gov.lbl.crucible.scanner.data.api.ApiClient
 import android.util.Base64
 import android.util.Log
 import gov.lbl.crucible.scanner.data.cache.CacheManager
@@ -39,6 +48,7 @@ import gov.lbl.crucible.scanner.data.model.DatasetReference
 import gov.lbl.crucible.scanner.data.model.Sample
 import gov.lbl.crucible.scanner.data.model.SampleReference
 import gov.lbl.crucible.scanner.ui.common.QrCodeDialog
+import gov.lbl.crucible.scanner.ui.common.ShareCardGenerator
 import gov.lbl.crucible.scanner.ui.common.openUrlInBrowser
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,10 +63,47 @@ fun ResourceDetailScreen(
     onSearch: () -> Unit = {},
     onHome: () -> Unit,
     onRefresh: () -> Unit,
+    onNavigateToSibling: (uuid: String, direction: Int) -> Unit = { uuid, _ -> onNavigateToResource(uuid) },
+    onSaveToHistory: (uuid: String, name: String) -> Unit = { _, _ -> },
+    darkTheme: Boolean,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val bannerColorInt = MaterialTheme.colorScheme.primary.toArgb()
     var showQrDialog by remember { mutableStateOf(false) }
+
+    // Compute same-type siblings for Sample navigation
+    var sameTypeSamples by remember { mutableStateOf<List<Sample>>(emptyList()) }
+    LaunchedEffect(resource) {
+        if (resource !is Sample) return@LaunchedEffect
+        val projectId = resource.projectId ?: return@LaunchedEffect
+        fun List<Sample>.filterAndSort() = filter { it.sampleType == resource.sampleType }
+            .sortedBy { it.internalId ?: Int.MAX_VALUE }
+        val cached = CacheManager.getProjectSamples(projectId)
+        if (cached != null) {
+            sameTypeSamples = cached.filterAndSort()
+        } else {
+            try {
+                val response = ApiClient.service.getSamplesByProject(projectId)
+                if (response.isSuccessful) {
+                    val all = response.body() ?: emptyList()
+                    CacheManager.cacheProjectSamples(projectId, all)
+                    sameTypeSamples = all.filterAndSort()
+                }
+            } catch (e: Exception) { }
+        }
+    }
+    val siblingIndex = remember(sameTypeSamples, resource) {
+        sameTypeSamples.indexOfFirst { it.uniqueId == resource.uniqueId }
+    }
+
+    // Prev/next siblings for swipe and button navigation
+    val prevSibling = if (siblingIndex > 0) sameTypeSamples.getOrNull(siblingIndex - 1) else null
+    val nextSibling = if (siblingIndex >= 0) sameTypeSamples.getOrNull(siblingIndex + 1) else null
+
+    // Swipe threshold for horizontal drag-to-navigate
+    val swipeThresholdPx = with(LocalDensity.current) { 80.dp.toPx() }
+    var horizontalDragTotal by remember { mutableStateOf(0f) }
 
     Scaffold(
         topBar = {
@@ -111,11 +158,19 @@ fun ResourceDetailScreen(
 
                                 if (resourceType != null) {
                                     val url = "$graphExplorerUrl/$projectId/$resourceType/${resource.uniqueId}"
+                                    val shareText = "Check out this ${if (resource is Sample) "sample" else "dataset"} in Crucible: $url"
+                                    val imageUri = ShareCardGenerator.generate(context, resource, url, bannerColorInt, darkTheme)
                                     val shareIntent = Intent().apply {
                                         action = Intent.ACTION_SEND
-                                        putExtra(Intent.EXTRA_TEXT, "Check out this ${if (resource is Sample) "sample" else "dataset"} in Crucible: $url")
+                                        putExtra(Intent.EXTRA_TEXT, shareText)
                                         putExtra(Intent.EXTRA_SUBJECT, resource.name)
-                                        type = "text/plain"
+                                        if (imageUri != null) {
+                                            putExtra(Intent.EXTRA_STREAM, imageUri)
+                                            type = "image/*"
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        } else {
+                                            type = "text/plain"
+                                        }
                                     }
                                     context.startActivity(Intent.createChooser(shareIntent, "Share via"))
                                 }
@@ -189,162 +244,123 @@ fun ResourceDetailScreen(
             )
         }
     ) { padding ->
-        LazyColumn(
+        Box(
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .draggable(
+                    orientation = Orientation.Horizontal,
+                    state = rememberDraggableState { delta -> horizontalDragTotal += delta },
+                    onDragStopped = {
+                        val drag = horizontalDragTotal
+                        horizontalDragTotal = 0f
+                        when {
+                            drag >  swipeThresholdPx && prevSibling != null ->
+                                onNavigateToSibling(prevSibling.uniqueId, -1)
+                            drag < -swipeThresholdPx && nextSibling != null ->
+                                onNavigateToSibling(nextSibling.uniqueId, 1)
+                        }
+                    }
+                )
         ) {
-            // Basic Info Card
-            item {
-                BasicInfoCard(resource)
-            }
-
-            // Thumbnails (if dataset)
-            item {
-                if (thumbnails.isNotEmpty()) {
-                    ThumbnailsSection(thumbnails)
-                } else if (resource is Dataset) {
-                    Card {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Default.Info,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "No images available for this dataset",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Type-specific content
-            when (resource) {
-                is Sample -> {
-                    item {
-                        SampleDetailsCard(resource, onProjectClick = onNavigateToProject)
-                    }
-                }
-                is Dataset -> {
-                    item {
-                        DatasetDetailsCard(resource, onProjectClick = onNavigateToProject)
-                    }
-                }
-            }
-
-            // Relationship cards - Order: Linked samples, Parent datasets, Child datasets
-            when (resource) {
-                is Dataset -> {
-                    // 1. Linked samples
-                    if (!resource.samples.isNullOrEmpty()) {
-                        item {
-                            LinkedSamplesCard(
-                                samples = resource.samples.orEmpty()
-                                    .distinctBy { it.uniqueId }
-                                    .sortedBy { it.uniqueId },
-                                onNavigateToResource = onNavigateToResource
-                            )
-                        }
-                    }
-                    // 2. Parent datasets
-                    if (!resource.parentDatasets.isNullOrEmpty()) {
-                        item {
-                            ParentDatasetsCard(
-                                parents = resource.parentDatasets.orEmpty()
-                                    .distinctBy { it.uniqueId }
-                                    .sortedBy { it.uniqueId },
-                                onNavigateToResource = onNavigateToResource
-                            )
-                        }
-                    }
-                    // 3. Child datasets
-                    if (!resource.childDatasets.isNullOrEmpty()) {
-                        item {
-                            ChildDatasetsCard(
-                                children = resource.childDatasets.orEmpty()
-                                    .distinctBy { it.uniqueId }
-                                    .sortedBy { it.uniqueId },
-                                onNavigateToResource = onNavigateToResource
-                            )
-                        }
-                    }
-                    // 4. Scientific metadata
-                    if (!resource.scientificMetadata.isNullOrEmpty()) {
-                        item {
-                            ScientificMetadataCard(resource.scientificMetadata)
-                        }
-                    }
-                    // 5. Keywords
-                    if (!resource.keywords.isNullOrEmpty()) {
-                        item {
-                            KeywordsCard(resource.keywords ?: emptyList())
-                        }
-                    }
-                }
-                is Sample -> {
-                    if (!resource.parentSamples.isNullOrEmpty()) {
-                        item {
-                            ParentSamplesCard(
-                                parents = resource.parentSamples.orEmpty()
-                                    .distinctBy { it.uniqueId }
-                                    .sortedBy { it.uniqueId },
-                                onNavigateToResource = onNavigateToResource
-                            )
-                        }
-                    }
-                    if (!resource.childSamples.isNullOrEmpty()) {
-                        item {
-                            ChildSamplesCard(
-                                children = resource.childSamples.orEmpty()
-                                    .distinctBy { it.uniqueId }
-                                    .sortedBy { it.uniqueId },
-                                onNavigateToResource = onNavigateToResource
-                            )
-                        }
-                    }
-                    if (!resource.datasets.isNullOrEmpty()) {
-                        item {
-                            LinkedDatasetsCard(
-                                datasets = resource.datasets.orEmpty()
-                                    .distinctBy { it.uniqueId }
-                                    .sortedBy { it.uniqueId },
-                                onNavigateToResource = onNavigateToResource
-                            )
-                        }
-                    }
-                    // Keywords for samples
-                    if (!resource.keywords.isNullOrEmpty()) {
-                        item {
-                            KeywordsCard(resource.keywords ?: emptyList())
-                        }
-                    }
-                }
-                else -> {}
-            }
-
-            // MFID Card
-            item {
-                MfidCard(resource.uniqueId)
-            }
-            val ageMin = CacheManager.getResourceAgeMinutes(resource.uniqueId)
-            if (ageMin != null) {
-                item {
-                    Text(
-                        text = "Cached ${ageMin}m ago",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                item(key = "basic_info") {
+                    BasicInfoCard(
+                        resource = resource,
+                        onPrev = prevSibling?.let { s -> { onNavigateToSibling(s.uniqueId, -1) } },
+                        onNext = nextSibling?.let { s -> { onNavigateToSibling(s.uniqueId, 1) } },
+                        currentIndex = siblingIndex,
+                        totalCount = sameTypeSamples.size
                     )
+                }
+
+                if (thumbnails.isNotEmpty()) {
+                    item(key = "thumbnails") { ThumbnailsSection(thumbnails) }
+                } else if (resource is Dataset) {
+                    item(key = "no_thumbnails") {
+                        Card {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("No images available for this dataset", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+
+                when (resource) {
+                    is Sample -> item(key = "type_details") { SampleDetailsCard(resource, onProjectClick = onNavigateToProject) }
+                    is Dataset -> item(key = "type_details") { DatasetDetailsCard(resource, onProjectClick = onNavigateToProject) }
+                }
+
+                when (resource) {
+                    is Dataset -> {
+                        if (!resource.samples.isNullOrEmpty()) {
+                            item(key = "linked_samples") {
+                                LinkedSamplesCard(samples = resource.samples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId }, onNavigateToResource = onNavigateToResource)
+                            }
+                        }
+                        if (!resource.parentDatasets.isNullOrEmpty()) {
+                            item(key = "parent_datasets") {
+                                ParentDatasetsCard(parents = resource.parentDatasets.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId }, onNavigateToResource = onNavigateToResource)
+                            }
+                        }
+                        if (!resource.childDatasets.isNullOrEmpty()) {
+                            item(key = "child_datasets") {
+                                ChildDatasetsCard(children = resource.childDatasets.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId }, onNavigateToResource = onNavigateToResource)
+                            }
+                        }
+                        if (!resource.scientificMetadata.isNullOrEmpty()) {
+                            item(key = "scientific_metadata") { ScientificMetadataCard(resource.scientificMetadata) }
+                        }
+                        if (!resource.keywords.isNullOrEmpty()) {
+                            item(key = "keywords") { KeywordsCard(resource.keywords ?: emptyList()) }
+                        }
+                    }
+                    is Sample -> {
+                        if (!resource.parentSamples.isNullOrEmpty()) {
+                            item(key = "parent_samples") {
+                                ParentSamplesCard(parents = resource.parentSamples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId }, onNavigateToResource = onNavigateToResource)
+                            }
+                        }
+                        if (!resource.childSamples.isNullOrEmpty()) {
+                            item(key = "child_samples") {
+                                ChildSamplesCard(children = resource.childSamples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId }, onNavigateToResource = onNavigateToResource)
+                            }
+                        }
+                        if (!resource.datasets.isNullOrEmpty()) {
+                            item(key = "linked_datasets") {
+                                LinkedDatasetsCard(datasets = resource.datasets.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId }, onNavigateToResource = onNavigateToResource)
+                            }
+                        }
+                        if (!resource.keywords.isNullOrEmpty()) {
+                            item(key = "keywords") { KeywordsCard(resource.keywords ?: emptyList()) }
+                        }
+                    }
+                    else -> {}
+                }
+
+                item(key = "mfid") { MfidCard(resource.uniqueId) }
+
+                val ageMin = CacheManager.getResourceAgeMinutes(resource.uniqueId)
+                if (ageMin != null) {
+                    item(key = "cache_age") {
+                        Text(
+                            text = "Cached ${ageMin}m ago",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             }
         }
@@ -352,7 +368,7 @@ fun ResourceDetailScreen(
 
     // QR Code Dialog
     if (showQrDialog) {
-        QrCodeDialog(resource.uniqueId) { showQrDialog = false }
+        QrCodeDialog(mfid = resource.uniqueId, name = resource.name) { showQrDialog = false }
     }
 }
 
@@ -383,16 +399,77 @@ private fun ResourceTypeBadge(resource: CrucibleResource) {
 }
 
 @Composable
-private fun BasicInfoCard(resource: CrucibleResource) {
+private fun BasicInfoCard(
+    resource: CrucibleResource,
+    onPrev: (() -> Unit)? = null,
+    onNext: (() -> Unit)? = null,
+    currentIndex: Int = -1,
+    totalCount: Int = 0
+) {
     Card(border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = resource.name,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (totalCount > 1) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { onPrev?.invoke() },
+                        enabled = onPrev != null,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ChevronLeft,
+                            contentDescription = "Previous sample",
+                            tint = if (onPrev != null) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                        )
+                    }
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = resource.name,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        if (currentIndex >= 0) {
+                            Text(
+                                text = "${currentIndex + 1} / $totalCount",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = { onNext?.invoke() },
+                        enabled = onNext != null,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = "Next sample",
+                            tint = if (onNext != null) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                        )
+                    }
+                }
+            } else {
+                Text(
+                    text = resource.name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }
@@ -838,10 +915,10 @@ private fun ParentDatasetsCard(
                 for (parent in parents) {
                     ListItem(
                         headlineContent = {
-                            Text(parent.datasetName ?: parent.uniqueId.take(13))
+                            Text(parent.datasetName ?: parent.uniqueId.take(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         },
                         supportingContent = parent.measurement?.let { measurement ->
-                            @Composable { Text(measurement) }
+                            @Composable { Text(measurement, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         },
                         leadingContent = {
                             Icon(Icons.Default.DataObject, contentDescription = null)
@@ -896,10 +973,10 @@ private fun ChildDatasetsCard(
                 for (child in children) {
                     ListItem(
                         headlineContent = {
-                            Text(child.datasetName ?: child.uniqueId.take(13))
+                            Text(child.datasetName ?: child.uniqueId.take(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         },
                         supportingContent = child.measurement?.let { measurement ->
-                            @Composable { Text(measurement) }
+                            @Composable { Text(measurement, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         },
                         leadingContent = {
                             Icon(Icons.Default.DataObject, contentDescription = null)
@@ -954,7 +1031,7 @@ private fun LinkedSamplesCard(
                 for (sample in samples) {
                     ListItem(
                         headlineContent = {
-                            Text(sample.sampleName ?: sample.uniqueId.take(13))
+                            Text(sample.sampleName ?: sample.uniqueId.take(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         },
                         leadingContent = {
                             Icon(Icons.Default.BubbleChart, contentDescription = null)
@@ -1009,10 +1086,10 @@ private fun LinkedDatasetsCard(
                 for (dataset in datasets) {
                     ListItem(
                         headlineContent = {
-                            Text(dataset.datasetName ?: dataset.uniqueId.take(13))
+                            Text(dataset.datasetName ?: dataset.uniqueId.take(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         },
                         supportingContent = dataset.measurement?.let { measurement ->
-                            @Composable { Text(measurement) }
+                            @Composable { Text(measurement, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         },
                         leadingContent = {
                             Icon(Icons.Default.DataObject, contentDescription = null)
@@ -1067,7 +1144,7 @@ private fun ParentSamplesCard(
                 for (parent in parents) {
                     ListItem(
                         headlineContent = {
-                            Text(parent.sampleName ?: parent.uniqueId.take(13))
+                            Text(parent.sampleName ?: parent.uniqueId.take(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         },
                         leadingContent = {
                             Icon(Icons.Default.BubbleChart, contentDescription = null)
@@ -1122,7 +1199,7 @@ private fun ChildSamplesCard(
                 for (child in children) {
                     ListItem(
                         headlineContent = {
-                            Text(child.sampleName ?: child.uniqueId.take(13))
+                            Text(child.sampleName ?: child.uniqueId.take(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         },
                         leadingContent = {
                             Icon(Icons.Default.BubbleChart, contentDescription = null)

@@ -8,7 +8,6 @@ import gov.lbl.crucible.scanner.data.model.Dataset
 import gov.lbl.crucible.scanner.data.model.Sample
 import gov.lbl.crucible.scanner.data.repository.CrucibleRepository
 import gov.lbl.crucible.scanner.data.repository.ResourceResult
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,32 +28,27 @@ class ScannerViewModel : ViewModel() {
 
     private var smoothAnimations: Boolean = true
 
+    /** -1 = swiped to previous, 1 = swiped to next, 0 = normal navigation */
+    var siblingNavDirection: Int = 0
+        private set
+
     fun setSmoothAnimations(enabled: Boolean) {
         smoothAnimations = enabled
     }
 
-    companion object {
-        // Delay for cached resources to show loading animation (in milliseconds)
-        private const val CACHE_LOADING_DELAY_MS = 350L
+    fun prepareSiblingNav(direction: Int) {
+        siblingNavDirection = direction
     }
 
     fun fetchResource(uuid: String) {
         viewModelScope.launch {
             val trimmedUuid = uuid.trim()
 
-            // Always show loading state briefly for smooth transition
-            _uiState.value = UiState.Loading
-
-            // Check cache first
+            // Check cache first — emit Success immediately without Loading state
             val cachedResource = CacheManager.getResource(trimmedUuid)
             val cachedThumbnails = CacheManager.getThumbnails(trimmedUuid)
 
             if (cachedResource != null) {
-                // Brief delay to show loading animation (only if smooth animations enabled)
-                if (smoothAnimations) {
-                    delay(CACHE_LOADING_DELAY_MS)
-                }
-                // Use cached data
                 _uiState.value = UiState.Success(
                     cachedResource,
                     cachedThumbnails ?: emptyList()
@@ -63,6 +57,9 @@ class ScannerViewModel : ViewModel() {
                 preloadRelatedResources(cachedResource)
                 return@launch
             }
+
+            // Not cached — show loading state while fetching
+            _uiState.value = UiState.Loading
 
             when (val result = repository.fetchResourceByUuid(trimmedUuid)) {
                 is ResourceResult.Success -> {
@@ -156,6 +153,23 @@ class ScannerViewModel : ViewModel() {
                     }
                 }
             }
+        }
+    }
+
+    /** Fetches and caches a resource by UUID without touching [uiState]. Returns null on failure. */
+    suspend fun ensureResourceCached(uuid: String): CrucibleResource? {
+        val cached = CacheManager.getResource(uuid)
+        if (cached != null) return cached
+        return try {
+            when (val result = repository.fetchResourceByUuid(uuid)) {
+                is ResourceResult.Success -> {
+                    CacheManager.cacheResource(uuid, result.resource)
+                    result.resource
+                }
+                else -> null
+            }
+        } catch (e: Exception) {
+            null
         }
     }
 

@@ -100,6 +100,7 @@ dependencies {
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("io.coil-kt:coil-svg:2.6.0")
+    implementation("com.caverock:androidsvg-aar:1.4")
 
     // DataStore for preferences
     implementation("androidx.datastore:datastore-preferences:1.1.1")

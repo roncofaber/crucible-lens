@@ -23,7 +23,6 @@ import gov.lbl.crucible.scanner.R
 import gov.lbl.crucible.scanner.data.api.ApiClient
 import gov.lbl.crucible.scanner.data.cache.CacheManager
 import gov.lbl.crucible.scanner.ui.common.allLoadingMessages
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,25 +46,27 @@ fun HomeScreen(
     var showEasterEggDialog by remember { mutableStateOf(false) }
     var clickCount by remember { mutableStateOf(0) }
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+
+    // Reactive projects list — drives the pinned section; updated when cache is populated
+    var allProjects by remember { mutableStateOf(CacheManager.getProjects() ?: emptyList()) }
 
     // Preload projects data in background if API key is available
     LaunchedEffect(apiKey) {
-        if (!apiKey.isNullOrBlank()) {
-            // Only load if not already cached
-            if (CacheManager.getProjects() == null) {
-                scope.launch {
-                    try {
-                        val response = ApiClient.service.getProjects()
-                        if (response.isSuccessful) {
-                            response.body()?.let { projects ->
-                                CacheManager.cacheProjects(projects)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        // Silently fail - user can still load manually
+        if (apiKey.isNullOrBlank()) return@LaunchedEffect
+        val cached = CacheManager.getProjects()
+        if (cached != null) {
+            allProjects = cached          // already cached — make sure state is set
+        } else {
+            try {
+                val response = ApiClient.service.getProjects()
+                if (response.isSuccessful) {
+                    response.body()?.let { projects ->
+                        CacheManager.cacheProjects(projects)
+                        allProjects = projects   // triggers recomposition → pinned cards appear
                     }
                 }
+            } catch (e: Exception) {
+                // Silently fail — user can still load manually
             }
         }
     }
@@ -177,50 +178,40 @@ fun HomeScreen(
                 }
             }
 
-            // Last Visited Resource Button
-            if (lastVisitedResource != null && lastVisitedResourceName != null) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 4.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                TextButton(
-                    onClick = { onManualEntry(lastVisitedResource) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 0.dp, bottom = 4.dp)
-                ) {
-                    Icon(
-                        Icons.Default.History,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Last visited: ",
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                    Text(
-                        text = lastVisitedResourceName,
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
+            // Last Visited Resource Button — always shown, tight against its dividers
+            Column(modifier = Modifier.fillMaxWidth()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                if (lastVisitedResource != null && lastVisitedResourceName != null) {
+                    TextButton(
+                        onClick = { onManualEntry(lastVisitedResource) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "Last visited: ", style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
+                        Text(
+                            text = lastVisitedResourceName,
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                } else {
+                    TextButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "No recent resource", style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                    }
                 }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
-
-            // Divider
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 4.dp),
-                color = MaterialTheme.colorScheme.outlineVariant
-            )
 
             // Search Button
             OutlinedButton(
                 onClick = onSearch,
                 modifier = Modifier
+                    .padding(top = 8.dp)
                     .fillMaxWidth()
                     .height(56.dp),
                 border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
@@ -235,7 +226,7 @@ fun HomeScreen(
 
             // Browse Projects + Scan QR Code side by side
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Button(
@@ -272,16 +263,14 @@ fun HomeScreen(
                 }
             }
 
-            // Pinned Projects (up to 3)
-            val allProjects = remember(pinnedProjects) { CacheManager.getProjects() ?: emptyList() }
+            // Pinned Projects — always 3 slots to keep layout stable
             val pinnedList = remember(pinnedProjects, allProjects) {
                 allProjects.filter { it.projectId in pinnedProjects }.take(3)
             }
-            if (pinnedList.isNotEmpty()) {
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(
                         Icons.Default.Bookmark,
@@ -289,25 +278,18 @@ fun HomeScreen(
                         modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
-                    Text(
-                        "Pinned",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Text("Pinned", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    pinnedList.forEach { project ->
+                repeat(3) { index ->
+                    val project = pinnedList.getOrNull(index)
+                    if (project != null) {
                         Card(
                             onClick = { onProjectClick(project.projectId) },
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -319,13 +301,21 @@ fun HomeScreen(
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f)
                                 )
-                                Icon(
-                                    Icons.Default.ChevronRight,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
+                        }
+                    } else {
+                        // Transparent placeholder — same height as a real card, invisible
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 0.dp, vertical = 10.dp)
+                        ) {
+                            Text(
+                                text = " ",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0f)
+                            )
                         }
                     }
                 }
