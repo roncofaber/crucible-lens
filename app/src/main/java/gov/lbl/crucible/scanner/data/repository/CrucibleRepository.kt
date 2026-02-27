@@ -43,14 +43,14 @@ class CrucibleRepository {
                     val sampleResponse = api.getSample(uuid)
                     val sampleBody = sampleResponse.body()
                     if (sampleResponse.isSuccessful && sampleBody != null) {
-                        val sample = coroutineScope {
+                        val sample: Sample = coroutineScope {
                             val parentsDeferred = async { api.getParentSamples(uuid) }
                             val childrenDeferred = async { api.getChildSamples(uuid) }
 
                             val parentsResponse = parentsDeferred.await()
                             val childrenResponse = childrenDeferred.await()
 
-                            var s = sampleBody
+                            var s: Sample = sampleBody
                             val parentsBody = parentsResponse.body()
                             if (parentsResponse.isSuccessful && parentsBody != null) {
                                 s = s.copy(
@@ -76,7 +76,7 @@ class CrucibleRepository {
                     val datasetResponse = api.getDataset(uuid)
                     val datasetBody = datasetResponse.body()
                     if (datasetResponse.isSuccessful && datasetBody != null) {
-                        val dataset = coroutineScope {
+                        val dataset: Dataset = coroutineScope {
                             val metadataDeferred = async { api.getScientificMetadata(uuid) }
                             val parentsDeferred  = async { api.getParentDatasets(uuid) }
                             val childrenDeferred = async { api.getChildDatasets(uuid) }
@@ -87,25 +87,28 @@ class CrucibleRepository {
                             val childrenResponse = childrenDeferred.await()
                             val samplesResponse  = samplesDeferred.await()
 
-                            var d = datasetBody
+                            var d: Dataset = datasetBody
                             if (metadataResponse.isSuccessful) {
                                 d = d.copy(scientificMetadata = metadataResponse.body())
                             }
-                            parentsResponse.body()?.let { body ->
-                                d.parentDatasets = body
+                            val parentsBody = parentsResponse.body()
+                            if (parentsResponse.isSuccessful && parentsBody != null) {
+                                d.parentDatasets = parentsBody
                                     .map { DatasetReference(it.uniqueId, it.name, it.measurement) }
                                     .distinctBy { it.uniqueId }
                                     .sortedBy { it.uniqueId }
                             }
-                            childrenResponse.body()?.let { body ->
-                                d.childDatasets = body
+                            val childrenBody = childrenResponse.body()
+                            if (childrenResponse.isSuccessful && childrenBody != null) {
+                                d.childDatasets = childrenBody
                                     .map { DatasetReference(it.uniqueId, it.name, it.measurement) }
                                     .distinctBy { it.uniqueId }
                                     .sortedBy { it.uniqueId }
                             }
-                            samplesResponse.body()?.let { body ->
+                            val samplesBody = samplesResponse.body()
+                            if (samplesResponse.isSuccessful && samplesBody != null) {
                                 d = d.copy(
-                                    samples = body
+                                    samples = samplesBody
                                         .map { SampleReference(it.uniqueId, it.name) }
                                         .distinctBy { it.uniqueId }
                                         .sortedBy { it.uniqueId }
