@@ -1,57 +1,36 @@
-# Crucible Lens
+<p align="center">
+  <img src="app/src/main/assets/crucible_text_light.svg" alt="Crucible Lens" width="320">
+</p>
 
-Android app for scanning QR codes to view samples and datasets from the Molecular Foundry's Crucible data system.
+Android app for browsing and scanning samples and datasets from the [Molecular Foundry](https://foundry.lbl.gov/)'s Crucible data system.
 
 ## Features
 
-- 📷 QR code scanning for Crucible resource UUIDs
-- 🔍 Manual UUID lookup
-- 📊 Detailed sample and dataset information
-- 🖼️ Dataset thumbnails and images
-- 🔗 Navigate through parent/child relationships and linked resources
-- 🔐 Secure API key storage
+- 📷 QR code scanning and manual UUID lookup
+- 🔍 Full-text search across cached samples and datasets
+- 📁 Project browser with pinning and archiving
+- 📊 Sample and dataset detail views with swipe-based sibling navigation
+- 🖼️ Dataset thumbnails and scientific metadata explorer
+- 🔗 Parent/child relationship navigation and Graph Explorer integration
+- 📤 Share cards with embedded QR code
+- 🕐 Browsing history and last-visited shortcut
+- 🌙 Light/dark theme with accent color picker
 
 ## Requirements
 
 - Android 8.0 (API 26) or higher
-- Crucible API key from https://crucible.lbl.gov/api/v1/user_apikey
+- Crucible API key — [get yours here](https://crucible.lbl.gov/api/v1/user_apikey)
 
 ## Setup
 
 1. Clone and open in Android Studio
 2. Build and install the APK
-3. Open app → Settings → Enter your API key
-
-## Usage
-
-**Scan QR Code**: Tap "Scan QR Code" and point camera at a Crucible QR code
-
-**Manual Entry**: Enter a UUID in the text field and tap "Look Up"
-
-**Browse**: Navigate between samples, datasets, and their relationships
+3. Open the app → Settings → Enter your API key
 
 ## Tech Stack
 
-- Kotlin + Jetpack Compose + Material 3
-- CameraX + ML Kit (QR scanning)
-- Retrofit + Moshi (API)
-- Coil (image loading)
-
-## API
-
-Base URL: `https://crucible.lbl.gov/api/v1/`
-
-Endpoints: samples, datasets, scientific metadata, thumbnails, parent/child relationships
+Kotlin · Jetpack Compose · Material 3 · CameraX · ML Kit · Retrofit · Moshi · Coil
 
 ## License
 
-BSD-3-Clause
-
-## Contact
-
-- Email: roncoroni@lbl.gov, mkwall@lbl.gov
-- Molecular Foundry: https://foundry.lbl.gov/
-
----
-
-Developed by the Data Group at the Molecular Foundry, Lawrence Berkeley National Laboratory.
+BSD-3-Clause — developed by the Data Group at the [Molecular Foundry](https://foundry.lbl.gov/), Lawrence Berkeley National Laboratory.

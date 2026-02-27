@@ -5,15 +5,15 @@ plugins {
 }
 
 android {
-    namespace = "gov.lbl.crucible.scanner"
+    namespace = "crucible.lens"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "gov.lbl.crucible.scanner"
+        applicationId = "crucible.lens"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 1
+        versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
