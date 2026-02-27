@@ -38,7 +38,11 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -131,6 +135,11 @@ fun ResourceDetailScreen(
         }
     }
     val scope = rememberCoroutineScope()
+
+    val pullRefreshState = rememberPullToRefreshState()
+    if (pullRefreshState.isRefreshing) {
+        LaunchedEffect(true) { onRefresh() }
+    }
 
     Scaffold(
         topBar = {
@@ -263,12 +272,9 @@ fun ResourceDetailScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding)
+                .nestedScroll(pullRefreshState.nestedScrollConnection)
                 .graphicsLayer {
                     translationX = dragOffset + contentOffset.value
-                    // Once content is mostly off-screen make it invisible so the
-                    // nav framework's 1-frame "reset" of the transform can't flash.
-                    alpha = if (dragOffset > screenWidthPx * 0.85f ||
-                                dragOffset < -screenWidthPx * 0.85f) 0f else 1f
                 }
                 .draggable(
                     orientation = Orientation.Horizontal,
@@ -463,6 +469,10 @@ fun ResourceDetailScreen(
                     }
                 }
             }
+            PullToRefreshContainer(
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 
