@@ -76,6 +76,7 @@ fun ResourceDetailScreen(
     onNavigateToSibling: (uuid: String, direction: Int) -> Unit = { uuid, _ -> onNavigateToResource(uuid) },
     onSaveToHistory: (uuid: String, name: String) -> Unit = { _, _ -> },
     darkTheme: Boolean,
+    siblingNavDirection: Int = 0,
     getCardState: (key: String) -> Boolean = { false },
     onCardStateChange: (key: String, value: Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
@@ -118,6 +119,17 @@ fun ResourceDetailScreen(
     val swipeThresholdPx = with(density) { 80.dp.toPx() }
     val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
     var dragOffset by remember { mutableStateOf(0f) }
+    // Slide-in animation for the content area on sibling navigation.
+    // The top bar (Scaffold) appears instantly (EnterTransition.None at NavGraph level),
+    // while the content slides in from the direction of travel.
+    val contentOffset = remember {
+        Animatable(if (siblingNavDirection != 0) siblingNavDirection * screenWidthPx else 0f)
+    }
+    LaunchedEffect(Unit) {
+        if (siblingNavDirection != 0) {
+            contentOffset.animateTo(0f, animationSpec = tween(durationMillis = 220))
+        }
+    }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -252,7 +264,7 @@ fun ResourceDetailScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .graphicsLayer {
-                    translationX = dragOffset
+                    translationX = dragOffset + contentOffset.value
                     // Once content is mostly off-screen make it invisible so the
                     // nav framework's 1-frame "reset" of the transform can't flash.
                     alpha = if (dragOffset > screenWidthPx * 0.85f ||
@@ -710,7 +722,7 @@ private fun SampleDetailsCard(
             } else {
                 InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
             }
-            InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = sample.createdAt ?: "None")
+            InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = if (advanced) sample.createdAt ?: "None" else formatDateTime(sample.createdAt))
             CopyableInfoRow(context = context, icon = Icons.Default.Fingerprint, label = "MFID", value = sample.uniqueId)
 
             // Advanced fields
@@ -800,7 +812,7 @@ private fun DatasetDetailsCard(
             } else {
                 InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
             }
-            InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = dataset.createdAt ?: "None")
+            InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = if (advanced) dataset.createdAt ?: "None" else formatDateTime(dataset.createdAt))
             CopyableInfoRow(context = context, icon = Icons.Default.Fingerprint, label = "MFID", value = dataset.uniqueId)
 
             // Advanced fields
@@ -1422,6 +1434,38 @@ private fun ResourceRow(
     }
 }
 
+private fun formatDateTime(raw: String?): String {
+    if (raw == null) return "None"
+    // Strip timezone suffix so SimpleDateFormat can parse on all API levels
+    val cleaned = raw.trim()
+        .removeSuffix("Z")
+        .replace(Regex("[+-]\\d{2}:\\d{2}$"), "")
+    // Date-only (≤10 chars after stripping)
+    if (cleaned.length <= 10) {
+        return try {
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+            sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+            java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
+                .format(sdf.parse(cleaned)!!)
+        } catch (e: Exception) { raw }
+    }
+    val patterns = listOf(
+        "yyyy-MM-dd'T'HH:mm:ss.SSSSSS",
+        "yyyy-MM-dd'T'HH:mm:ss.SSS",
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "yyyy-MM-dd HH:mm:ss"
+    )
+    val outFmt = java.text.SimpleDateFormat("MMM d, yyyy · h:mm a", java.util.Locale.getDefault())
+    for (pattern in patterns) {
+        try {
+            val sdf = java.text.SimpleDateFormat(pattern, java.util.Locale.US)
+            sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+            return outFmt.format(sdf.parse(cleaned)!!)
+        } catch (e: Exception) { continue }
+    }
+    return raw
+}
+
 private fun formatFileSize(bytes: Long): String = when {
     bytes >= 1_073_741_824 -> "%.2f GB".format(bytes / 1_073_741_824.0)
     bytes >= 1_048_576     -> "%.2f MB".format(bytes / 1_048_576.0)
@@ -1452,9 +1496,9 @@ private fun CopyableInfoRow(
         Text(
             text = "$label:",
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(0.3f)
+            fontWeight = FontWeight.Medium
         )
+        Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,

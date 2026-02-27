@@ -303,7 +303,7 @@ fun NavGraph(
                 when {
                     isSibling -> EnterTransition.None
                     smoothAnimations ->
-                        fadeIn(animationSpec = tween(450)) + slideInHorizontally(initialOffsetX = { it / 10 })
+                        fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
                     else -> fadeIn(animationSpec = tween(0))
                 }
             },
@@ -311,20 +311,20 @@ fun NavGraph(
                 val isSibling = targetState.destination.route?.startsWith("detail/") == true
                 when {
                     isSibling -> ExitTransition.None
-                    smoothAnimations -> fadeOut(animationSpec = tween(300))
+                    smoothAnimations -> fadeOut(animationSpec = tween(200))
                     else -> fadeOut(animationSpec = tween(0))
                 }
             },
             popEnterTransition = {
                 if (smoothAnimations) {
-                    fadeIn(animationSpec = tween(450))
+                    fadeIn(animationSpec = tween(300))
                 } else {
                     fadeIn(animationSpec = tween(0))
                 }
             },
             popExitTransition = {
                 if (smoothAnimations) {
-                    fadeOut(animationSpec = tween(300)) + slideOutHorizontally(targetOffsetX = { it / 10 })
+                    fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
                 } else {
                     fadeOut(animationSpec = tween(0))
                 }
@@ -444,6 +444,7 @@ fun NavGraph(
                         thumbnails = state.thumbnails,
                         graphExplorerUrl = graphExplorerUrl,
                         darkTheme = darkTheme,
+                        siblingNavDirection = viewModel.siblingNavDirection,
                         onSaveToHistory = { uuid, name ->
                             onLastVisitedResourceSave(uuid, name)
                             onHistoryAdd(uuid, name)
