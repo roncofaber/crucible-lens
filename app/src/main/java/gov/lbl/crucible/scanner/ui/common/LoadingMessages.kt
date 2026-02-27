@@ -41,6 +41,7 @@ val allLoadingMessages = listOf(
         "ALS beamtime secured, samples prepared, detector broke yesterday...",
         "News from ALS: the beamline is up, the data system is down, the PI is on vacation.",
         "Your dataset will be ready when Strawberry Gate opens again...",
+        "Biking up Oof \uD83D\uDEB2",
 
         // Crucible
         "Digging through Crucible's storage.",
@@ -52,9 +53,9 @@ val allLoadingMessages = listOf(
         "Declan ran out of solvent, sourcing more...",
 
         // Tim
-        "Tim is unjamming the spinbot again...",
+        "Tim is unjamming the SpinBot again...",
         "Tim swears the last recipe definitely worked fine...",
-        "Tim is talking the spinbot out of an existential crisis...",
+        "Tim is talking the SpinBot out of an existential crisis...",
 
         // Fabo
         "Fabo is fixing a bug he absolutely did not introduce...",
@@ -64,11 +65,11 @@ val allLoadingMessages = listOf(
         // Morgan
         "Asking Morgan why the API returned that...",
         "Morgan promised this endpoint would never break.",
-        "Filing ticket #347 with Morgan…",
+        "The API will be back up when Morgan returns from the marathon.",
 
         // Ed
         "Ed is writing a ScopeFoundry plugin for this exact situation...",
-        "Ed says we should automate this loading screen too…",
+        "Ed says we should automate this loading screen too...",
 
         // Maher
         "Running Maher's GPR model — he says it'll converge eventually.",
@@ -81,7 +82,7 @@ val allLoadingMessages = listOf(
         "Ari wanted to make this loading screen with the CNC machine...",
 
         // Movies
-        "Those are not the datasets you are looking for."
+        "Those are not the datasets you are looking for.",
 )
 
 @Composable

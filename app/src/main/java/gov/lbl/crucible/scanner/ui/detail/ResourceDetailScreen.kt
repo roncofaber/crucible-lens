@@ -61,6 +61,7 @@ import gov.lbl.crucible.scanner.data.model.Dataset
 import gov.lbl.crucible.scanner.data.model.DatasetReference
 import gov.lbl.crucible.scanner.data.model.Sample
 import gov.lbl.crucible.scanner.data.model.SampleReference
+import gov.lbl.crucible.scanner.ui.common.LoadingMessage
 import gov.lbl.crucible.scanner.ui.common.QrCodeDialog
 import gov.lbl.crucible.scanner.ui.common.ShareCardGenerator
 import gov.lbl.crucible.scanner.ui.common.openUrlInBrowser
@@ -91,34 +92,61 @@ fun ResourceDetailScreen(
     val bannerColorInt = MaterialTheme.colorScheme.primary.toArgb()
     var showQrDialog by remember { mutableStateOf(false) }
 
-    // Compute same-type siblings for Sample navigation
+    // Sibling navigation: same type within the same project
+    // Samples grouped by sampleType, Datasets grouped by measurement
     var sameTypeSamples by remember { mutableStateOf<List<Sample>>(emptyList()) }
+    var sameTypeDatasets by remember { mutableStateOf<List<Dataset>>(emptyList()) }
     LaunchedEffect(resource) {
-        if (resource !is Sample) return@LaunchedEffect
-        val projectId = resource.projectId ?: return@LaunchedEffect
-        fun List<Sample>.filterAndSort() = filter { it.sampleType == resource.sampleType }
-            .sortedBy { it.internalId ?: Int.MAX_VALUE }
-        val cached = CacheManager.getProjectSamples(projectId)
-        if (cached != null) {
-            sameTypeSamples = cached.filterAndSort()
-        } else {
-            try {
-                val response = ApiClient.service.getSamplesByProject(projectId)
-                if (response.isSuccessful) {
-                    val all = response.body() ?: emptyList()
-                    CacheManager.cacheProjectSamples(projectId, all)
-                    sameTypeSamples = all.filterAndSort()
+        when (resource) {
+            is Sample -> {
+                val projectId = resource.projectId ?: return@LaunchedEffect
+                fun List<Sample>.filterAndSort() = filter { it.sampleType == resource.sampleType }
+                    .sortedBy { it.internalId ?: Int.MAX_VALUE }
+                val cached = CacheManager.getProjectSamples(projectId)
+                if (cached != null) {
+                    sameTypeSamples = cached.filterAndSort()
+                } else {
+                    try {
+                        val response = ApiClient.service.getSamplesByProject(projectId)
+                        if (response.isSuccessful) {
+                            val all = response.body() ?: emptyList()
+                            CacheManager.cacheProjectSamples(projectId, all)
+                            sameTypeSamples = all.filterAndSort()
+                        }
+                    } catch (e: Exception) { }
                 }
-            } catch (e: Exception) { }
+            }
+            is Dataset -> {
+                val projectId = resource.projectId ?: return@LaunchedEffect
+                fun List<Dataset>.filterAndSort() = filter { it.measurement == resource.measurement }
+                    .sortedBy { it.internalId ?: Int.MAX_VALUE }
+                val cached = CacheManager.getProjectDatasets(projectId)
+                if (cached != null) {
+                    sameTypeDatasets = cached.filterAndSort()
+                } else {
+                    try {
+                        val response = ApiClient.service.getDatasetsByProject(projectId)
+                        if (response.isSuccessful) {
+                            val all = response.body() ?: emptyList()
+                            CacheManager.cacheProjectDatasets(projectId, all)
+                            sameTypeDatasets = all.filterAndSort()
+                        }
+                    } catch (e: Exception) { }
+                }
+            }
         }
     }
-    val siblingIndex = remember(sameTypeSamples, resource) {
-        sameTypeSamples.indexOfFirst { it.uniqueId == resource.uniqueId }
+    val siblingList: List<CrucibleResource> = when (resource) {
+        is Sample -> sameTypeSamples
+        is Dataset -> sameTypeDatasets
+    }
+    val siblingIndex = remember(siblingList, resource) {
+        siblingList.indexOfFirst { it.uniqueId == resource.uniqueId }
     }
 
     // Prev/next siblings for swipe and button navigation
-    val prevSibling = if (siblingIndex > 0) sameTypeSamples.getOrNull(siblingIndex - 1) else null
-    val nextSibling = if (siblingIndex >= 0) sameTypeSamples.getOrNull(siblingIndex + 1) else null
+    val prevSibling = if (siblingIndex > 0) siblingList.getOrNull(siblingIndex - 1) else null
+    val nextSibling = if (siblingIndex >= 0) siblingList.getOrNull(siblingIndex + 1) else null
 
     // Swipe gesture state
     val density = LocalDensity.current
@@ -314,12 +342,6 @@ fun ResourceDetailScreen(
                     }
                 )
         ) {
-            if (resource.uniqueId != mfid) {
-                // Sibling navigation in progress — show a spinner until the new resource arrives
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -332,9 +354,51 @@ fun ResourceDetailScreen(
                         onPrev = prevSibling?.let { s -> { onNavigateToSibling(s.uniqueId, -1) } },
                         onNext = nextSibling?.let { s -> { onNavigateToSibling(s.uniqueId, 1) } },
                         currentIndex = siblingIndex,
-                        totalCount = sameTypeSamples.size
+                        totalCount = siblingList.size
                     )
                 }
+
+                if (resource.uniqueId != mfid || isRefreshing) {
+                    item(key = "loading_content") {
+                        val loadingMessage = LoadingMessage()
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                                Column(
+                                    modifier = Modifier.padding(32.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(48.dp), strokeWidth = 4.dp)
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "Loading Resource",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        AnimatedContent(
+                                            targetState = loadingMessage,
+                                            transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(500)) },
+                                            label = "loading message"
+                                        ) { message ->
+                                            Text(
+                                                text = message,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
 
                 when (resource) {
                     is Sample -> item(key = "type_details") {
@@ -479,12 +543,12 @@ fun ResourceDetailScreen(
                         )
                     }
                 }
+                } // end else (detail content)
             }
             PullToRefreshContainer(
                 state = pullRefreshState,
                 modifier = Modifier.align(Alignment.TopCenter)
             )
-            } // end else (resource loaded)
         }
     }
 

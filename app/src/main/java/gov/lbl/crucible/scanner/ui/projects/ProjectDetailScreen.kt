@@ -417,16 +417,27 @@ private fun ProjectHeader(
                         }
                     }
                 }
-                IconButton(
-                    onClick = onTogglePin,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                        contentDescription = if (isPinned) "Unpin" else "Pin",
-                        tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                        modifier = Modifier.size(20.dp)
-                    )
+                Column(horizontalAlignment = Alignment.End) {
+                    IconButton(
+                        onClick = onTogglePin,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            contentDescription = if (isPinned) "Unpin" else "Pin",
+                            tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    val ageMin = if (fromCache) CacheManager.getProjectDataAgeMinutes(projectId) ?: 0 else 0
+                    if (fromCache) {
+                        Text(
+                            text = "Cached ${ageMin}m ago",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.End
+                        )
+                    }
                 }
             }
 
@@ -499,18 +510,6 @@ private fun ProjectHeader(
                 }
             }
 
-            // Cache age — bottom-right of the title panel, always rendered to keep height stable
-            val ageMin = if (fromCache) CacheManager.getProjectDataAgeMinutes(projectId) ?: 0 else 0
-            Text(
-                text = if (fromCache) "Cached ${ageMin}m ago" else " ",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (fromCache)
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0f),
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = androidx.compose.ui.text.style.TextAlign.End
-            )
         }
     }
 }
