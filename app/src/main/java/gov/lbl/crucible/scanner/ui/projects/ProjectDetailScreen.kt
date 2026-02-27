@@ -35,6 +35,7 @@ import gov.lbl.crucible.scanner.data.model.Project
 import gov.lbl.crucible.scanner.data.model.Sample
 import gov.lbl.crucible.scanner.ui.common.LoadingMessage
 import gov.lbl.crucible.scanner.ui.common.openUrlInBrowser
+import androidx.compose.ui.graphics.SolidColor
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -456,6 +457,7 @@ private fun ProjectHeader(
                             textStyle = MaterialTheme.typography.bodyMedium.copy(
                                 color = MaterialTheme.colorScheme.onSurface
                             ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                             singleLine = true
                         )
                     }

@@ -368,22 +368,22 @@ fun NavGraph(
                     )
                 }
                 is UiState.Loading -> {
-                    // Delay the spinner so cache hits (fast loads) never flash a card.
-                    var showSpinner by remember { mutableStateOf(false) }
+                    // Delay everything so fast swipes (cache hits) show nothing at all.
+                    // The NavGraph BoxWithConstraints background fills the gap invisibly.
+                    var showContent by remember { mutableStateOf(false) }
                     LaunchedEffect(Unit) {
-                        delay(200L)
-                        showSpinner = true
+                        delay(400L)
+                        showContent = true
                     }
                     val loadingMessage = LoadingMessage()
 
-                    Box(
+                    if (showContent) Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (showSpinner) {
-                            Card(
+                        Card(
                                 modifier = Modifier.padding(32.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -432,7 +432,6 @@ fun NavGraph(
                             }
                         }
                     }
-                }
                 is UiState.Success -> {
                     // Save last visited resource and add to history
                     LaunchedEffect(state.resource) {

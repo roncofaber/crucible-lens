@@ -139,18 +139,6 @@ fun ResourceDetailScreen(
                             )
                         }
 
-                        // QR Code button
-                        IconButton(
-                            onClick = { showQrDialog = true },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.QrCode,
-                                contentDescription = "Show QR Code",
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-
                         // Share button
                         IconButton(
                             onClick = {
@@ -333,8 +321,8 @@ fun ResourceDetailScreen(
                 }
 
                 when (resource) {
-                    is Sample -> item(key = "type_details") { SampleDetailsCard(resource, onProjectClick = onNavigateToProject) }
-                    is Dataset -> item(key = "type_details") { DatasetDetailsCard(resource, onProjectClick = onNavigateToProject) }
+                    is Sample -> item(key = "type_details") { SampleDetailsCard(resource, onProjectClick = onNavigateToProject, onShowQr = { showQrDialog = true }) }
+                    is Dataset -> item(key = "type_details") { DatasetDetailsCard(resource, onProjectClick = onNavigateToProject, onShowQr = { showQrDialog = true }) }
                 }
 
                 when (resource) {
@@ -595,15 +583,29 @@ private fun ThumbnailsSection(thumbnails: List<String>) {
 }
 
 @Composable
-private fun SampleDetailsCard(sample: Sample, onProjectClick: (String) -> Unit) {
+private fun SampleDetailsCard(sample: Sample, onProjectClick: (String) -> Unit, onShowQr: () -> Unit = {}) {
     val context = LocalContext.current
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Sample Information",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Sample Information",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(onClick = onShowQr, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.QrCode,
+                        contentDescription = "Show QR Code",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(12.dp))
 
             InfoRow(icon = Icons.Default.Notes, label = "Description", value = sample.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
@@ -630,7 +632,7 @@ private fun SampleDetailsCard(sample: Sample, onProjectClick: (String) -> Unit) 
 }
 
 @Composable
-private fun DatasetDetailsCard(dataset: Dataset, onProjectClick: (String) -> Unit) {
+private fun DatasetDetailsCard(dataset: Dataset, onProjectClick: (String) -> Unit, onShowQr: () -> Unit = {}) {
     val context = LocalContext.current
     var advanced by rememberSaveable { mutableStateOf(false) }
 
@@ -647,23 +649,36 @@ private fun DatasetDetailsCard(dataset: Dataset, onProjectClick: (String) -> Uni
                     fontWeight = FontWeight.Bold
                 )
                 Row(
-                    modifier = Modifier
-                        .clickable { advanced = !advanced }
-                        .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(
-                        if (advanced) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        if (advanced) "Basic" else "Advanced",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    IconButton(onClick = onShowQr, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            Icons.Default.QrCode,
+                            contentDescription = "Show QR Code",
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .clickable { advanced = !advanced }
+                            .padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            if (advanced) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            if (advanced) "Basic" else "Advanced",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
