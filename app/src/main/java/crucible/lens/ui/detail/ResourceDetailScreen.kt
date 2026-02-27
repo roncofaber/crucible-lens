@@ -356,14 +356,16 @@ fun ResourceDetailScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                item(key = "basic_info") {
-                    BasicInfoCard(
-                        resource = resource,
-                        onPrev = prevSibling?.let { s -> { onNavigateToSibling(s.uniqueId, -1) } },
-                        onNext = nextSibling?.let { s -> { onNavigateToSibling(s.uniqueId, 1) } },
-                        currentIndex = siblingIndex,
-                        totalCount = siblingList.size
-                    )
+                if (resource.uniqueId == mfid) {
+                    item(key = "basic_info") {
+                        BasicInfoCard(
+                            resource = resource,
+                            onPrev = prevSibling?.let { s -> { onNavigateToSibling(s.uniqueId, -1) } },
+                            onNext = nextSibling?.let { s -> { onNavigateToSibling(s.uniqueId, 1) } },
+                            currentIndex = siblingIndex,
+                            totalCount = siblingList.size
+                        )
+                    }
                 }
 
                 if (resource.uniqueId != mfid || isRefreshing) {

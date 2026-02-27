@@ -50,7 +50,6 @@ class ScannerViewModel : ViewModel() {
 
     fun prepareSiblingNav(direction: Int) {
         siblingNavDirection = direction
-        _uiState.value = UiState.Idle
     }
 
     fun fetchResource(uuid: String) {
