@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
 sealed class UiState {
     object Idle : UiState()
     object Loading : UiState()
-    data class Success(val resource: CrucibleResource, val thumbnails: List<String> = emptyList()) : UiState()
+    data class Success(val resource: CrucibleResource, val thumbnails: List<String> = emptyList(), val isRefreshing: Boolean = false) : UiState()
     data class Error(val message: String) : UiState()
 }
 
@@ -70,8 +70,11 @@ class ScannerViewModel : ViewModel() {
                 return@launch
             }
 
-            // Not cached — show loading state while fetching
-            _uiState.value = UiState.Loading
+            // Not cached — stay in Success (isRefreshing=true) if we already have something
+            // to show, so the TopAppBar never disappears. Only go to Loading from scratch.
+            val current = _uiState.value
+            _uiState.value = if (current is UiState.Success) current.copy(isRefreshing = true)
+                             else UiState.Loading
 
             when (val result = repository.fetchResourceByUuid(trimmedUuid)) {
                 is ResourceResult.Success -> {

@@ -442,6 +442,8 @@ fun NavGraph(
                     ResourceDetailScreen(
                         resource = state.resource,
                         thumbnails = state.thumbnails,
+                        mfid = mfid,
+                        isRefreshing = state.isRefreshing,
                         graphExplorerUrl = graphExplorerUrl,
                         darkTheme = darkTheme,
                         siblingNavDirection = viewModel.siblingNavDirection,

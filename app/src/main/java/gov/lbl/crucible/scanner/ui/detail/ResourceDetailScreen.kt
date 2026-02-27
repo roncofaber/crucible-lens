@@ -70,6 +70,8 @@ import gov.lbl.crucible.scanner.ui.common.openUrlInBrowser
 fun ResourceDetailScreen(
     resource: CrucibleResource,
     thumbnails: List<String>,
+    mfid: String = resource.uniqueId,
+    isRefreshing: Boolean = false,
     graphExplorerUrl: String,
     onBack: () -> Unit,
     onNavigateToResource: (String) -> Unit,
@@ -139,6 +141,9 @@ fun ResourceDetailScreen(
     val pullRefreshState = rememberPullToRefreshState()
     if (pullRefreshState.isRefreshing) {
         LaunchedEffect(true) { onRefresh() }
+    }
+    LaunchedEffect(isRefreshing) {
+        if (!isRefreshing) pullRefreshState.endRefresh()
     }
 
     Scaffold(
@@ -309,6 +314,12 @@ fun ResourceDetailScreen(
                     }
                 )
         ) {
+            if (resource.uniqueId != mfid) {
+                // Sibling navigation in progress — show a spinner until the new resource arrives
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -473,6 +484,7 @@ fun ResourceDetailScreen(
                 state = pullRefreshState,
                 modifier = Modifier.align(Alignment.TopCenter)
             )
+            } // end else (resource loaded)
         }
     }
 
@@ -516,38 +528,12 @@ private fun BasicInfoCard(
     currentIndex: Int = -1,
     totalCount: Int = 0
 ) {
-    val context = LocalContext.current
     Card(border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)) {
         Column(
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // MFID centered at the top with copy button
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = resource.uniqueId,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                IconButton(
-                    onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("MFID", resource.uniqueId))
-                        Toast.makeText(context, "MFID copied to clipboard", Toast.LENGTH_SHORT).show()
-                    },
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        Icons.Default.ContentCopy,
-                        contentDescription = "Copy MFID",
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
             if (totalCount > 1) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -749,6 +735,36 @@ private fun SampleDetailsCard(
             }
             Spacer(modifier = Modifier.height(12.dp))
 
+            // MFID — centered, no label, copy button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = sample.uniqueId,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                IconButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("MFID", sample.uniqueId))
+                        Toast.makeText(context, "MFID copied to clipboard", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        Icons.Default.ContentCopy,
+                        contentDescription = "Copy MFID",
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
             // Basic fields
             InfoRow(icon = Icons.Default.Notes, label = "Description", value = sample.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
             InfoRow(icon = Icons.Default.Category, label = "Type", value = sample.sampleType ?: "None")
@@ -836,6 +852,36 @@ private fun DatasetDetailsCard(
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
+
+            // MFID — centered, no label, copy button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = dataset.uniqueId,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                IconButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("MFID", dataset.uniqueId))
+                        Toast.makeText(context, "MFID copied to clipboard", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        Icons.Default.ContentCopy,
+                        contentDescription = "Copy MFID",
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Basic fields
             InfoRow(icon = Icons.Default.Notes, label = "Description", value = dataset.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
