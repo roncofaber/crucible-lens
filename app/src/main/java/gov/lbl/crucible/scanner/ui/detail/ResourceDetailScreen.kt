@@ -303,23 +303,6 @@ fun ResourceDetailScreen(
                     )
                 }
 
-                if (thumbnails.isNotEmpty()) {
-                    item(key = "thumbnails") { ThumbnailsSection(thumbnails) }
-                } else if (resource is Dataset) {
-                    item(key = "no_thumbnails") {
-                        Card {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("No images available for this dataset", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
-
                 when (resource) {
                     is Sample -> item(key = "type_details") { SampleDetailsCard(resource, onProjectClick = onNavigateToProject, onShowQr = { showQrDialog = true }) }
                     is Dataset -> item(key = "type_details") { DatasetDetailsCard(resource, onProjectClick = onNavigateToProject, onShowQr = { showQrDialog = true }) }
@@ -327,6 +310,31 @@ fun ResourceDetailScreen(
 
                 when (resource) {
                     is Dataset -> {
+                        if (thumbnails.isNotEmpty()) {
+                            item(key = "thumbnails") {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(modifier = Modifier.fillMaxWidth(0.9f)) {
+                                        ThumbnailsSection(thumbnails)
+                                    }
+                                }
+                            }
+                        } else {
+                            item(key = "no_thumbnails") {
+                                Card {
+                                    Row(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("No images available for this dataset", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        }
                         if (!resource.samples.isNullOrEmpty()) {
                             item(key = "linked_samples") {
                                 LinkedSamplesCard(samples = resource.samples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId }, onNavigateToResource = onNavigateToResource)
@@ -597,12 +605,12 @@ private fun SampleDetailsCard(sample: Sample, onProjectClick: (String) -> Unit, 
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(onClick = onShowQr, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onShowQr, modifier = Modifier.size(36.dp)) {
                     Icon(
                         Icons.Default.QrCode,
                         contentDescription = "Show QR Code",
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
@@ -652,14 +660,6 @@ private fun DatasetDetailsCard(dataset: Dataset, onProjectClick: (String) -> Uni
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    IconButton(onClick = onShowQr, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            Icons.Default.QrCode,
-                            contentDescription = "Show QR Code",
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                     Row(
                         modifier = Modifier
                             .clickable { advanced = !advanced }
@@ -677,6 +677,14 @@ private fun DatasetDetailsCard(dataset: Dataset, onProjectClick: (String) -> Uni
                             if (advanced) "Basic" else "Advanced",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(onClick = onShowQr, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            Icons.Default.QrCode,
+                            contentDescription = "Show QR Code",
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
