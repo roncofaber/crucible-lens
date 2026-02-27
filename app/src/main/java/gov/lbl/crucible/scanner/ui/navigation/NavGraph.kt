@@ -300,13 +300,8 @@ fun NavGraph(
             arguments = listOf(navArgument("mfid") { type = NavType.StringType }),
             enterTransition = {
                 val isSibling = initialState.destination.route?.startsWith("detail/") == true
-                val dir = viewModel.siblingNavDirection
                 when {
-                    isSibling && smoothAnimations ->
-                        slideInHorizontally(
-                            animationSpec = tween(300),
-                            initialOffsetX = { if (dir >= 0) it else -it }
-                        )
+                    isSibling -> EnterTransition.None
                     smoothAnimations ->
                         fadeIn(animationSpec = tween(450)) + slideInHorizontally(initialOffsetX = { it / 10 })
                     else -> fadeIn(animationSpec = tween(0))
@@ -314,13 +309,8 @@ fun NavGraph(
             },
             exitTransition = {
                 val isSibling = targetState.destination.route?.startsWith("detail/") == true
-                val dir = viewModel.siblingNavDirection
                 when {
-                    isSibling && smoothAnimations ->
-                        slideOutHorizontally(
-                            animationSpec = tween(300),
-                            targetOffsetX = { if (dir >= 0) -it else it }
-                        )
+                    isSibling -> ExitTransition.None
                     smoothAnimations -> fadeOut(animationSpec = tween(300))
                     else -> fadeOut(animationSpec = tween(0))
                 }
@@ -350,12 +340,14 @@ fun NavGraph(
             AnimatedContent(
                 targetState = uiState,
                 transitionSpec = {
-                    // Success→Success means sibling navigation: the NavGraph slide handles
-                    // the visual, so suppress the inner crossfade entirely.
+                    // Success→Success: sibling nav, NavGraph handles the visual.
+                    // Idle→*: new composable just appeared, skip the crossfade so there
+                    // is no fade-from-nothing that would reveal the background color.
                     val isSuccessToSuccess =
                         initialState is UiState.Success && targetState is UiState.Success
+                    val isFromIdle = initialState is UiState.Idle
                     when {
-                        isSuccessToSuccess ->
+                        isSuccessToSuccess || isFromIdle ->
                             EnterTransition.None togetherWith ExitTransition.None
                         smoothAnimations ->
                             fadeIn(tween(300)) togetherWith fadeOut(tween(300))
@@ -366,7 +358,22 @@ fun NavGraph(
                 label = "resource state"
             ) { state ->
             when (state) {
+                is UiState.Idle -> {
+                    // Shown for the 1-2 frames before LaunchedEffect fires fetchResource.
+                    // Plain background so there is no transparent/white flash on entry.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
+                    )
+                }
                 is UiState.Loading -> {
+                    // Delay the spinner so cache hits (fast loads) never flash a card.
+                    var showSpinner by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        delay(200L)
+                        showSpinner = true
+                    }
                     val loadingMessage = LoadingMessage()
 
                     Box(
@@ -375,49 +382,51 @@ fun NavGraph(
                             .background(MaterialTheme.colorScheme.background),
                         contentAlignment = Alignment.Center
                     ) {
-                        Card(
-                            modifier = Modifier.padding(32.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        ) {
-                            Column(
+                        if (showSpinner) {
+                            Card(
                                 modifier = Modifier.padding(32.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(20.dp)
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(48.dp),
-                                    strokeWidth = 4.dp
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
+                            ) {
                                 Column(
+                                    modifier = Modifier.padding(32.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    verticalArrangement = Arrangement.spacedBy(20.dp)
                                 ) {
-                                    Text(
-                                        text = "Loading Resource",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(48.dp),
+                                        strokeWidth = 4.dp
                                     )
-                                    AnimatedContent(
-                                        targetState = loadingMessage,
-                                        transitionSpec = {
-                                            if (smoothAnimations) {
-                                                fadeIn(animationSpec = tween(500)) togetherWith
-                                                    fadeOut(animationSpec = tween(500))
-                                            } else {
-                                                fadeIn(animationSpec = tween(0)) togetherWith
-                                                    fadeOut(animationSpec = tween(0))
-                                            }
-                                        },
-                                        label = "loading message"
-                                    ) { message ->
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
                                         Text(
-                                            text = message,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                            textAlign = TextAlign.Center
+                                            text = "Loading Resource",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                        AnimatedContent(
+                                            targetState = loadingMessage,
+                                            transitionSpec = {
+                                                if (smoothAnimations) {
+                                                    fadeIn(animationSpec = tween(500)) togetherWith
+                                                        fadeOut(animationSpec = tween(500))
+                                                } else {
+                                                    fadeIn(animationSpec = tween(0)) togetherWith
+                                                        fadeOut(animationSpec = tween(0))
+                                                }
+                                            },
+                                            label = "loading message"
+                                        ) { message ->
+                                            Text(
+                                                text = message,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
                                     }
                                 }
                             }

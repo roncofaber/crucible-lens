@@ -20,7 +20,7 @@ import java.io.File
 
 object ShareCardGenerator {
 
-    private const val W = 720
+    private const val W = 600
     private const val H = 320
 
     fun generate(

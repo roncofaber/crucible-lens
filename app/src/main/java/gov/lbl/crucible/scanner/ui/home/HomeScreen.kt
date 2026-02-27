@@ -2,7 +2,6 @@ package gov.lbl.crucible.scanner.ui.home
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.Image
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,6 +11,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -90,6 +91,12 @@ fun HomeScreen(
                     )
                 },
                 actions = {
+                    IconButton(onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(graphExplorerUrl))
+                        context.startActivity(intent)
+                    }) {
+                        Icon(Icons.Default.Language, contentDescription = "Open Web Explorer")
+                    }
                     IconButton(onClick = onHistory) {
                         Icon(Icons.Default.History, contentDescription = "History")
                     }
@@ -107,10 +114,18 @@ fun HomeScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Scrollable main content — takes all available space, scrolls on small screens
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             // Crucible Logo Text
             val taglines = remember {
                 listOf(
@@ -138,11 +153,15 @@ fun HomeScreen(
 
             Image(
                 painter = painterResource(
-                    id = if (isDarkTheme) R.drawable.crucible_text_dark else R.drawable.crucible_text_logo
+                    id = if (isDarkTheme) R.drawable.crucible_text_dark
+                         else R.drawable.crucible_text_light
                 ),
                 contentDescription = "Crucible",
+                contentScale = ContentScale.Fit,
                 modifier = Modifier
-                    .height(60.dp)
+                    .padding(top = 16.dp)
+                    .fillMaxWidth()
+                    .height(80.dp)
                     .clickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null
@@ -278,7 +297,7 @@ fun HomeScreen(
                         modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
-                    Text("Pinned", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    Text("Pinned projects", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
                 repeat(3) { index ->
                     val project = pinnedList.getOrNull(index)
@@ -321,56 +340,55 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.weight(0.3f))
+            } // end scrollable content
 
-            // Web Explorer Button (smaller)
-            OutlinedButton(
-                onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(graphExplorerUrl))
-                    context.startActivity(intent)
-                },
-                modifier = Modifier.align(Alignment.CenterHorizontally)
+            // Explorer button + footer — always anchored at the bottom, never scrolled away
+            Column(
+                modifier = Modifier.padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    Icons.Default.Language,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    "Open Web Explorer",
-                    style = MaterialTheme.typography.labelLarge
-                )
-            }
-
-            Spacer(modifier = Modifier.weight(0.2f))
-
-            // Footer with version and credits
-            val footerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-            val footerStyle = MaterialTheme.typography.labelSmall
-            Row(
-                modifier = Modifier.padding(top = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Crucible Lens v${BuildConfig.VERSION_NAME} • by ",
-                    style = footerStyle,
-                    color = footerColor
-                )
-                Text(
-                    text = "@roncofaber",
-                    style = footerStyle,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                    modifier = Modifier.clickable {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/roncofaber"))
+                OutlinedButton(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(graphExplorerUrl))
                         context.startActivity(intent)
                     }
-                )
-                Text(
-                    text = " • Molecular Foundry",
-                    style = footerStyle,
-                    color = footerColor
-                )
+                ) {
+                    Icon(
+                        Icons.Default.Language,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "Open Web Explorer",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+
+                val footerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                val footerStyle = MaterialTheme.typography.labelSmall
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Crucible Lens v${BuildConfig.VERSION_NAME} • by ",
+                        style = footerStyle,
+                        color = footerColor
+                    )
+                    Text(
+                        text = "@roncofaber",
+                        style = footerStyle,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                        modifier = Modifier.clickable {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/roncofaber"))
+                            context.startActivity(intent)
+                        }
+                    )
+                    Text(
+                        text = " • Molecular Foundry",
+                        style = footerStyle,
+                        color = footerColor
+                    )
+                }
             }
         }
     }

@@ -31,13 +31,21 @@ import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
+import kotlinx.coroutines.launch
 import gov.lbl.crucible.scanner.data.api.ApiClient
 import android.util.Base64
 import android.util.Log
@@ -101,9 +109,12 @@ fun ResourceDetailScreen(
     val prevSibling = if (siblingIndex > 0) sameTypeSamples.getOrNull(siblingIndex - 1) else null
     val nextSibling = if (siblingIndex >= 0) sameTypeSamples.getOrNull(siblingIndex + 1) else null
 
-    // Swipe threshold for horizontal drag-to-navigate
-    val swipeThresholdPx = with(LocalDensity.current) { 80.dp.toPx() }
-    var horizontalDragTotal by remember { mutableStateOf(0f) }
+    // Swipe gesture state
+    val density = LocalDensity.current
+    val swipeThresholdPx = with(density) { 80.dp.toPx() }
+    val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+    var dragOffset by remember { mutableStateOf(0f) }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -248,17 +259,42 @@ fun ResourceDetailScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding)
+                .graphicsLayer {
+                    translationX = dragOffset
+                    // Once content is mostly off-screen make it invisible so the
+                    // nav framework's 1-frame "reset" of the transform can't flash.
+                    alpha = if (dragOffset > screenWidthPx * 0.85f ||
+                                dragOffset < -screenWidthPx * 0.85f) 0f else 1f
+                }
                 .draggable(
                     orientation = Orientation.Horizontal,
-                    state = rememberDraggableState { delta -> horizontalDragTotal += delta },
-                    onDragStopped = {
-                        val drag = horizontalDragTotal
-                        horizontalDragTotal = 0f
+                    state = rememberDraggableState { delta -> dragOffset += delta },
+                    onDragStopped = { _ ->
+                        val current = dragOffset
                         when {
-                            drag >  swipeThresholdPx && prevSibling != null ->
+                            current > swipeThresholdPx && prevSibling != null -> scope.launch {
+                                Animatable(current).animateTo(
+                                    targetValue = screenWidthPx,
+                                    animationSpec = tween(durationMillis = 180)
+                                ) { dragOffset = value }
                                 onNavigateToSibling(prevSibling.uniqueId, -1)
-                            drag < -swipeThresholdPx && nextSibling != null ->
+                            }
+                            current < -swipeThresholdPx && nextSibling != null -> scope.launch {
+                                Animatable(current).animateTo(
+                                    targetValue = -screenWidthPx,
+                                    animationSpec = tween(durationMillis = 180)
+                                ) { dragOffset = value }
                                 onNavigateToSibling(nextSibling.uniqueId, 1)
+                            }
+                            else -> scope.launch {
+                                Animatable(current).animateTo(
+                                    targetValue = 0f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMedium
+                                    )
+                                ) { dragOffset = value }
+                            }
                         }
                     }
                 )
