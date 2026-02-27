@@ -804,7 +804,7 @@ private fun SampleDetailsCard(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // MFID — centered, no label, copy button
             Row(
@@ -922,7 +922,7 @@ private fun DatasetDetailsCard(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // MFID — centered, no label, copy button
             Row(
@@ -1599,7 +1599,18 @@ private fun formatDateTime(raw: String?): String {
     } catch (_: Exception) { try {
         // Date only
         fmtDate.format(java.time.LocalDate.parse(s))
-    } catch (_: Exception) { raw } } }
+    } catch (_: Exception) {
+        // Compact date with AM/PM suffix: yyyyMMdd_am or yyyyMMdd_pm
+        val match = Regex("""(\d{8})_(am|pm)""", RegexOption.IGNORE_CASE).matchEntire(s)
+        if (match != null) try {
+            val date = java.time.LocalDate.parse(
+                match.groupValues[1],
+                java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")
+            )
+            fmtDate.format(date) + " · ${match.groupValues[2].uppercase()}"
+        } catch (_: Exception) { raw }
+        else raw
+    } } }
 }
 
 private fun formatFileSize(bytes: Long): String = when {
