@@ -372,7 +372,7 @@ fun ResourceDetailScreen(
                     item(key = "loading_content") {
                         val loadingMessage = LoadingMessage()
                         Box(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                            modifier = Modifier.fillParentMaxHeight().fillMaxWidth(),
                             contentAlignment = Alignment.Center
                         ) {
                             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
