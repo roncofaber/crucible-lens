@@ -127,7 +127,7 @@ fun NavGraph(
     var fabInitialized by remember { mutableStateOf(false) }
     val fabScope = rememberCoroutineScope()
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val density = LocalDensity.current
         val fabSizePx = with(density) { 56.dp.toPx() }
         val marginPx = with(density) { 16.dp.toPx() }
