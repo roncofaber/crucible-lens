@@ -20,7 +20,7 @@ import java.io.File
 
 object ShareCardGenerator {
 
-    private const val W = 600
+    private const val W = 560
     private const val H = 320
 
     fun generate(
@@ -80,15 +80,15 @@ object ShareCardGenerator {
 
         // ── QR code — right side of banner, vertically centred ────────────
         val qrSz   = 160
-        val qrLeft = W - qrSz - pad                // 540
-        val qrTop  = (headerH - qrSz) / 2          // 20 px
+        val qrLeft = W - qrSz - pad
+        val qrTop  = (headerH - qrSz) / 2
 
         val qrBmp = generateQrBitmap(resource.uniqueId, qrSz)
         p.color = colorWhite
         canvas.drawRoundRect(
-            RectF((qrLeft - 10).toFloat(), (qrTop - 10).toFloat(),
-                  (qrLeft + qrSz + 10).toFloat(), (qrTop + qrSz + 10).toFloat()),
-            12f, 12f, p
+            RectF((qrLeft - 5).toFloat(), (qrTop - 5).toFloat(),
+                  (qrLeft + qrSz + 5).toFloat(), (qrTop + qrSz + 5).toFloat()),
+            8f, 8f, p
         )
         canvas.drawBitmap(qrBmp, qrLeft.toFloat(), qrTop.toFloat(), null)
         qrBmp.recycle()
@@ -100,7 +100,7 @@ object ShareCardGenerator {
         p.color    = colorWhite
         p.textSize = nameFontSize
         p.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        val nameY = pad + nameFontSize   // baseline ≈ 54 px from top
+        val nameY = pad + nameFontSize   // baseline from top
         canvas.drawText(truncate(resource.name, p, textMaxW), textX, nameY, p)
 
         // ── Resource type — semi-transparent badge below name ──────────────
@@ -134,7 +134,7 @@ object ShareCardGenerator {
 
         // ── Body: icon bottom-right, 24 px top pad ────────────────────────
         val iconAsset = if (darkTheme) "crucible_icon_72px_dark.svg" else "crucible_icon_72px_light.svg"
-        val iconBodyX = (W - iconSz - pad).toFloat()   // 628
+        val iconBodyX = (W - iconSz - pad).toFloat()
         val iconBodyY = (headerH + 24).toFloat()        // icon top Y
 
         runCatching {
