@@ -380,8 +380,6 @@ fun ResourceDetailScreen(
                     else -> {}
                 }
 
-                item(key = "mfid") { MfidCard(resource.uniqueId) }
-
                 val ageMin = CacheManager.getResourceAgeMinutes(resource.uniqueId)
                 if (ageMin != null) {
                     item(key = "cache_age") {
@@ -593,6 +591,7 @@ private fun ThumbnailsSection(thumbnails: List<String>) {
 @Composable
 private fun SampleDetailsCard(sample: Sample, onProjectClick: (String) -> Unit, onShowQr: () -> Unit = {}) {
     val context = LocalContext.current
+    var advanced by rememberSaveable { mutableStateOf(false) }
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -605,17 +604,40 @@ private fun SampleDetailsCard(sample: Sample, onProjectClick: (String) -> Unit, 
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(onClick = onShowQr, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        Icons.Default.QrCode,
-                        contentDescription = "Show QR Code",
-                        modifier = Modifier.size(24.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier
+                            .clickable { advanced = !advanced }
+                            .padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            if (advanced) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            if (advanced) "Basic" else "Advanced",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    IconButton(onClick = onShowQr, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            Icons.Default.QrCode,
+                            contentDescription = "Show QR Code",
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Basic fields
             InfoRow(icon = Icons.Default.Notes, label = "Description", value = sample.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
             InfoRow(icon = Icons.Default.Category, label = "Type", value = sample.sampleType ?: "None")
             val projectId = sample.projectId
@@ -625,15 +647,22 @@ private fun SampleDetailsCard(sample: Sample, onProjectClick: (String) -> Unit, 
                 InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
             }
             InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = sample.createdAt ?: "None")
-            if (sample.ownerOrcid != null) {
-                ClickableInfoRow(
-                    icon = Icons.Default.Person,
-                    label = "Owner ORCID",
-                    value = sample.ownerOrcid,
-                    onClick = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://orcid.org/${sample.ownerOrcid}")))
-                    }
-                )
+            CopyableInfoRow(context = context, icon = Icons.Default.Fingerprint, label = "MFID", value = sample.uniqueId)
+
+            // Advanced fields
+            if (advanced) {
+                if (sample.ownerOrcid != null) {
+                    ClickableInfoRow(
+                        icon = Icons.Default.Person,
+                        label = "Owner ORCID",
+                        value = sample.ownerOrcid,
+                        onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://orcid.org/${sample.ownerOrcid}")))
+                        }
+                    )
+                } else {
+                    InfoRow(icon = Icons.Default.Person, label = "Owner ORCID", value = "None")
+                }
             }
         }
     }
@@ -702,22 +731,23 @@ private fun DatasetDetailsCard(dataset: Dataset, onProjectClick: (String) -> Uni
                 InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
             }
             InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = dataset.createdAt ?: "None")
-            InfoRow(
-                icon = when (dataset.isPublic) {
-                    true  -> Icons.Default.Public
-                    false -> Icons.Default.Lock
-                    null  -> Icons.Default.HelpOutline
-                },
-                label = "Visibility",
-                value = when (dataset.isPublic) {
-                    true  -> "Public"
-                    false -> "Private"
-                    null  -> "None"
-                }
-            )
+            CopyableInfoRow(context = context, icon = Icons.Default.Fingerprint, label = "MFID", value = dataset.uniqueId)
 
             // Advanced fields
             if (advanced) {
+                InfoRow(
+                    icon = when (dataset.isPublic) {
+                        true  -> Icons.Default.Public
+                        false -> Icons.Default.Lock
+                        null  -> Icons.Default.HelpOutline
+                    },
+                    label = "Visibility",
+                    value = when (dataset.isPublic) {
+                        true  -> "Public"
+                        false -> "Private"
+                        null  -> "None"
+                    }
+                )
                 InfoRow(icon = Icons.Default.Description, label = "Format", value = dataset.dataFormat ?: "None")
                 InfoRow(icon = Icons.Default.Tag, label = "Instrument ID", value = dataset.instrumentId?.toString() ?: "None")
                 InfoRow(icon = Icons.Default.PlayCircle, label = "Session", value = dataset.sessionName ?: "None")
@@ -750,7 +780,6 @@ private fun DatasetDetailsCard(dataset: Dataset, onProjectClick: (String) -> Uni
                 }
                 InfoRow(icon = Icons.Default.AccountCircle, label = "Owner User ID", value = dataset.ownerUserId?.toString() ?: "None")
                 InfoRow(icon = Icons.Default.Security, label = "SHA-256", value = dataset.sha256Hash ?: "None")
-                InfoRow(icon = Icons.Default.Fingerprint, label = "Unique ID", value = dataset.uniqueId)
                 InfoRow(icon = Icons.Default.Numbers, label = "Internal ID", value = dataset.internalId?.toString() ?: "None")
             }
         }
@@ -759,6 +788,12 @@ private fun DatasetDetailsCard(dataset: Dataset, onProjectClick: (String) -> Uni
 
 @Composable
 private fun ScientificMetadataCard(metadata: Map<String, Any?>) {
+    // The API wraps actual data inside a "scientific_metadata" key — unwrap it if present.
+    @Suppress("UNCHECKED_CAST")
+    val displayMetadata = (metadata["scientific_metadata"] as? Map<String, Any?>)
+        ?.takeIf { it.isNotEmpty() }
+        ?: metadata
+
     var expanded by rememberSaveable { mutableStateOf(false) }
 
     Card {
@@ -787,7 +822,7 @@ private fun ScientificMetadataCard(metadata: Map<String, Any?>) {
 
             if (expanded) {
                 Spacer(modifier = Modifier.height(8.dp))
-                MetadataTree(metadata, indentLevel = 0)
+                MetadataTree(displayMetadata, indentLevel = 0)
             }
         }
     }
@@ -1277,59 +1312,64 @@ private fun ChildSamplesCard(
     }
 }
 
-@Composable
-private fun MfidCard(mfid: String) {
-    val context = LocalContext.current
-
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        modifier = Modifier.clickable {
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip = ClipData.newPlainText("MFID", mfid)
-            clipboard.setPrimaryClip(clip)
-            Toast.makeText(context, "MFID copied to clipboard", Toast.LENGTH_SHORT).show()
-        }
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Fingerprint, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "MFID",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Icon(
-                    Icons.Default.ContentCopy,
-                    contentDescription = "Copy",
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = mfid,
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
 private fun formatFileSize(bytes: Long): String = when {
     bytes >= 1_073_741_824 -> "%.2f GB".format(bytes / 1_073_741_824.0)
     bytes >= 1_048_576     -> "%.2f MB".format(bytes / 1_048_576.0)
     bytes >= 1_024         -> "%.1f KB".format(bytes / 1_024.0)
     else                   -> "$bytes B"
+}
+
+@Composable
+private fun CopyableInfoRow(
+    context: Context,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "$label:",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(0.3f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        IconButton(
+            onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
+                Toast.makeText(context, "$label copied to clipboard", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(
+                Icons.Default.ContentCopy,
+                contentDescription = "Copy $label",
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
 }
 
 @Composable
