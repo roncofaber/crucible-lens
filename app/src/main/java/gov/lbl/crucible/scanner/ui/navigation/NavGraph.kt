@@ -558,16 +558,6 @@ fun NavGraph(
                         }
                     }
                 }
-                is UiState.Idle -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.background),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
             }
             }
         }

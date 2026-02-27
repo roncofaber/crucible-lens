@@ -35,6 +35,8 @@ import gov.lbl.crucible.scanner.data.model.Project
 import gov.lbl.crucible.scanner.data.model.Sample
 import gov.lbl.crucible.scanner.ui.common.LoadingMessage
 import gov.lbl.crucible.scanner.ui.common.openUrlInBrowser
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
@@ -95,8 +97,11 @@ fun ProjectDetailScreen(
                 }
                 fromCache = false
 
-                val samplesResponse = ApiClient.service.getSamplesByProject(projectId)
-                val datasetsResponse = ApiClient.service.getDatasetsByProject(projectId)
+                val (samplesResponse, datasetsResponse) = coroutineScope {
+                    val s = async { ApiClient.service.getSamplesByProject(projectId) }
+                    val d = async { ApiClient.service.getDatasetsByProject(projectId) }
+                    s.await() to d.await()
+                }
 
                 if (samplesResponse.isSuccessful && datasetsResponse.isSuccessful) {
                     val loadedSamples = samplesResponse.body()

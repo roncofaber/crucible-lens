@@ -161,7 +161,7 @@ fun HomeScreen(
                 modifier = Modifier
                     .padding(top = 16.dp)
                     .fillMaxWidth()
-                    .height(80.dp)
+                    .height(90.dp)
                     .clickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null

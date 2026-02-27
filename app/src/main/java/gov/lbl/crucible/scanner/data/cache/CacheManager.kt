@@ -15,6 +15,9 @@ object CacheManager {
     private const val CACHE_TTL = 10 * 60 * 1000L // 10 minutes
     private const val MAX_RESOURCE_CACHE_SIZE = 50
 
+    private fun <T> CachedItem<T>.isExpired() =
+        System.currentTimeMillis() - timestamp > CACHE_TTL
+
     private val resourceCache = ConcurrentHashMap<String, CachedItem<CrucibleResource>>()
     private val thumbnailCache = ConcurrentHashMap<String, CachedItem<List<String>>>()
     private var projectsCache: CachedItem<List<Project>>? = null
@@ -37,13 +40,7 @@ object CacheManager {
 
     fun getResource(uuid: String): CrucibleResource? {
         val cached = resourceCache[uuid] ?: return null
-
-        // Check if expired
-        if (System.currentTimeMillis() - cached.timestamp > CACHE_TTL) {
-            resourceCache.remove(uuid)
-            return null
-        }
-
+        if (cached.isExpired()) { resourceCache.remove(uuid); return null }
         return cached.data
     }
 
@@ -54,13 +51,7 @@ object CacheManager {
 
     fun getThumbnails(uuid: String): List<String>? {
         val cached = thumbnailCache[uuid] ?: return null
-
-        // Check if expired
-        if (System.currentTimeMillis() - cached.timestamp > CACHE_TTL) {
-            thumbnailCache.remove(uuid)
-            return null
-        }
-
+        if (cached.isExpired()) { thumbnailCache.remove(uuid); return null }
         return cached.data
     }
 
@@ -71,13 +62,7 @@ object CacheManager {
 
     fun getProjects(): List<Project>? {
         val cached = projectsCache ?: return null
-
-        // Check if expired
-        if (System.currentTimeMillis() - cached.timestamp > CACHE_TTL) {
-            projectsCache = null
-            return null
-        }
-
+        if (cached.isExpired()) { projectsCache = null; return null }
         return cached.data
     }
 
@@ -97,13 +82,7 @@ object CacheManager {
 
     fun getProjectSamples(projectId: String): List<Sample>? {
         val cached = projectSamplesCache[projectId] ?: return null
-
-        // Check if expired
-        if (System.currentTimeMillis() - cached.timestamp > CACHE_TTL) {
-            projectSamplesCache.remove(projectId)
-            return null
-        }
-
+        if (cached.isExpired()) { projectSamplesCache.remove(projectId); return null }
         return cached.data
     }
 
@@ -113,13 +92,7 @@ object CacheManager {
 
     fun getProjectDatasets(projectId: String): List<Dataset>? {
         val cached = projectDatasetsCache[projectId] ?: return null
-
-        // Check if expired
-        if (System.currentTimeMillis() - cached.timestamp > CACHE_TTL) {
-            projectDatasetsCache.remove(projectId)
-            return null
-        }
-
+        if (cached.isExpired()) { projectDatasetsCache.remove(projectId); return null }
         return cached.data
     }
 

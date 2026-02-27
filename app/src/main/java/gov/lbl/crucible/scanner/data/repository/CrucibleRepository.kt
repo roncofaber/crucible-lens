@@ -7,6 +7,8 @@ import gov.lbl.crucible.scanner.data.model.Dataset
 import gov.lbl.crucible.scanner.data.model.DatasetReference
 import gov.lbl.crucible.scanner.data.model.Sample
 import gov.lbl.crucible.scanner.data.model.SampleReference
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -41,30 +43,32 @@ class CrucibleRepository {
                     val sampleResponse = api.getSample(uuid)
                     val sampleBody = sampleResponse.body()
                     if (sampleResponse.isSuccessful && sampleBody != null) {
-                        var sample = sampleBody
+                        val sample = coroutineScope {
+                            val parentsDeferred = async { api.getParentSamples(uuid) }
+                            val childrenDeferred = async { api.getChildSamples(uuid) }
 
-                        // Fetch parent samples
-                        val parentsResponse = api.getParentSamples(uuid)
-                        val parentsBody = parentsResponse.body()
-                        if (parentsResponse.isSuccessful && parentsBody != null) {
-                            sample = sample.copy(
-                                parentSamples = parentsBody
+                            val parentsResponse = parentsDeferred.await()
+                            val childrenResponse = childrenDeferred.await()
+
+                            var s = sampleBody
+                            val parentsBody = parentsResponse.body()
+                            if (parentsResponse.isSuccessful && parentsBody != null) {
+                                s = s.copy(
+                                    parentSamples = parentsBody
+                                        .map { SampleReference(it.uniqueId, it.name) }
+                                        .distinctBy { it.uniqueId }
+                                        .sortedBy { it.uniqueId }
+                                )
+                            }
+                            val childrenBody = childrenResponse.body()
+                            if (childrenResponse.isSuccessful && childrenBody != null) {
+                                s.childSamples = childrenBody
                                     .map { SampleReference(it.uniqueId, it.name) }
                                     .distinctBy { it.uniqueId }
                                     .sortedBy { it.uniqueId }
-                            )
+                            }
+                            s
                         }
-
-                        // Fetch child samples
-                        val childrenResponse = api.getChildSamples(uuid)
-                        val childrenBody = childrenResponse.body()
-                        if (childrenResponse.isSuccessful && childrenBody != null) {
-                            sample.childSamples = childrenBody
-                                .map { SampleReference(it.uniqueId, it.name) }
-                                .distinctBy { it.uniqueId }
-                                .sortedBy { it.uniqueId }
-                        }
-
                         return@withContext ResourceResult.Success(sample)
                     }
                 }
@@ -72,46 +76,43 @@ class CrucibleRepository {
                     val datasetResponse = api.getDataset(uuid)
                     val datasetBody = datasetResponse.body()
                     if (datasetResponse.isSuccessful && datasetBody != null) {
-                        var dataset = datasetBody
+                        val dataset = coroutineScope {
+                            val metadataDeferred = async { api.getScientificMetadata(uuid) }
+                            val parentsDeferred  = async { api.getParentDatasets(uuid) }
+                            val childrenDeferred = async { api.getChildDatasets(uuid) }
+                            val samplesDeferred  = async { api.getDatasetSamples(uuid) }
 
-                        // Fetch scientific metadata
-                        val metadataResponse = api.getScientificMetadata(uuid)
-                        if (metadataResponse.isSuccessful) {
-                            dataset = dataset.copy(scientificMetadata = metadataResponse.body())
-                        }
+                            val metadataResponse = metadataDeferred.await()
+                            val parentsResponse  = parentsDeferred.await()
+                            val childrenResponse = childrenDeferred.await()
+                            val samplesResponse  = samplesDeferred.await()
 
-                        // Fetch parent datasets
-                        val parentsResponse = api.getParentDatasets(uuid)
-                        val parentsBody = parentsResponse.body()
-                        if (parentsResponse.isSuccessful && parentsBody != null) {
-                            dataset.parentDatasets = parentsBody
-                                .map { DatasetReference(it.uniqueId, it.name, it.measurement) }
-                                .distinctBy { it.uniqueId }
-                                .sortedBy { it.uniqueId }
-                        }
-
-                        // Fetch child datasets
-                        val childrenResponse = api.getChildDatasets(uuid)
-                        val childrenBody = childrenResponse.body()
-                        if (childrenResponse.isSuccessful && childrenBody != null) {
-                            dataset.childDatasets = childrenBody
-                                .map { DatasetReference(it.uniqueId, it.name, it.measurement) }
-                                .distinctBy { it.uniqueId }
-                                .sortedBy { it.uniqueId }
-                        }
-
-                        // Fetch samples associated with this dataset
-                        val samplesResponse = api.getDatasetSamples(uuid)
-                        val samplesBody = samplesResponse.body()
-                        if (samplesResponse.isSuccessful && samplesBody != null) {
-                            dataset = dataset.copy(
-                                samples = samplesBody
-                                    .map { SampleReference(it.uniqueId, it.name) }
+                            var d = datasetBody
+                            if (metadataResponse.isSuccessful) {
+                                d = d.copy(scientificMetadata = metadataResponse.body())
+                            }
+                            parentsResponse.body()?.let { body ->
+                                d.parentDatasets = body
+                                    .map { DatasetReference(it.uniqueId, it.name, it.measurement) }
                                     .distinctBy { it.uniqueId }
                                     .sortedBy { it.uniqueId }
-                            )
+                            }
+                            childrenResponse.body()?.let { body ->
+                                d.childDatasets = body
+                                    .map { DatasetReference(it.uniqueId, it.name, it.measurement) }
+                                    .distinctBy { it.uniqueId }
+                                    .sortedBy { it.uniqueId }
+                            }
+                            samplesResponse.body()?.let { body ->
+                                d = d.copy(
+                                    samples = body
+                                        .map { SampleReference(it.uniqueId, it.name) }
+                                        .distinctBy { it.uniqueId }
+                                        .sortedBy { it.uniqueId }
+                                )
+                            }
+                            d
                         }
-
                         return@withContext ResourceResult.Success(dataset)
                     }
                 }
