@@ -29,7 +29,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
@@ -45,7 +44,6 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
@@ -931,7 +929,7 @@ private fun MetadataTree(data: Map<String, Any?>, indentLevel: Int, expandAll: B
         key(entryKey) {
             when (entryValue) {
                 is Map<*, *> -> {
-                    var expanded by rememberSaveable(key = "$expandAll-$entryKey") { mutableStateOf(expandAll) }
+                    var expanded by remember(expandAll) { mutableStateOf(expandAll) }
 
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
@@ -1102,26 +1100,16 @@ private fun ParentDatasetsCard(
             }
 
             if (expanded) {
-                Spacer(modifier = Modifier.height(8.dp))
-                for (parent in parents) {
-                    ListItem(
-                        headlineContent = {
-                            Text(parent.datasetName ?: parent.uniqueId.take(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        },
-                        supportingContent = parent.measurement?.let { measurement ->
-                            @Composable { Text(measurement, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                        },
-                        leadingContent = {
-                            Icon(Icons.Default.DataObject, contentDescription = null)
-                        },
-                        trailingContent = {
-                            Icon(Icons.Default.ChevronRight, contentDescription = "Navigate")
-                        },
-                        modifier = Modifier.clickable {
-                            onNavigateToResource(parent.uniqueId)
-                        }
-                    )
-                    HorizontalDivider()
+                Spacer(modifier = Modifier.height(4.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    for (parent in parents) {
+                        ResourceRow(
+                            icon = Icons.Default.DataObject,
+                            name = parent.datasetName ?: parent.uniqueId.take(16),
+                            subtitle = parent.measurement,
+                            onClick = { onNavigateToResource(parent.uniqueId) }
+                        )
+                    }
                 }
             }
         }
@@ -1162,26 +1150,16 @@ private fun ChildDatasetsCard(
             }
 
             if (expanded) {
-                Spacer(modifier = Modifier.height(8.dp))
-                for (child in children) {
-                    ListItem(
-                        headlineContent = {
-                            Text(child.datasetName ?: child.uniqueId.take(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        },
-                        supportingContent = child.measurement?.let { measurement ->
-                            @Composable { Text(measurement, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                        },
-                        leadingContent = {
-                            Icon(Icons.Default.DataObject, contentDescription = null)
-                        },
-                        trailingContent = {
-                            Icon(Icons.Default.ChevronRight, contentDescription = "Navigate")
-                        },
-                        modifier = Modifier.clickable {
-                            onNavigateToResource(child.uniqueId)
-                        }
-                    )
-                    HorizontalDivider()
+                Spacer(modifier = Modifier.height(4.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    for (child in children) {
+                        ResourceRow(
+                            icon = Icons.Default.DataObject,
+                            name = child.datasetName ?: child.uniqueId.take(16),
+                            subtitle = child.measurement,
+                            onClick = { onNavigateToResource(child.uniqueId) }
+                        )
+                    }
                 }
             }
         }
@@ -1223,43 +1201,12 @@ private fun LinkedSamplesCard(
 
             if (expanded) {
                 Spacer(modifier = Modifier.height(4.dp))
-                for (sample in samples) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onNavigateToResource(sample.uniqueId) }
-                            .padding(vertical = 8.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.BubbleChart,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = sample.sampleName ?: sample.uniqueId.take(16),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Icon(
-                            Icons.Default.ChevronRight,
-                            contentDescription = "Navigate",
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    for (sample in samples) {
+                        ResourceRow(
+                            icon = Icons.Default.BubbleChart,
+                            name = sample.sampleName ?: sample.uniqueId.take(16),
+                            onClick = { onNavigateToResource(sample.uniqueId) }
                         )
                     }
                 }
@@ -1303,53 +1250,13 @@ private fun LinkedDatasetsCard(
 
             if (expanded) {
                 Spacer(modifier = Modifier.height(4.dp))
-                for (dataset in datasets) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onNavigateToResource(dataset.uniqueId) }
-                            .padding(vertical = 8.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.secondaryContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.DataObject,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = dataset.datasetName ?: dataset.uniqueId.take(16),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (dataset.measurement != null) {
-                                Text(
-                                    text = dataset.measurement,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                        Icon(
-                            Icons.Default.ChevronRight,
-                            contentDescription = "Navigate",
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    for (dataset in datasets) {
+                        ResourceRow(
+                            icon = Icons.Default.DataObject,
+                            name = dataset.datasetName ?: dataset.uniqueId.take(16),
+                            subtitle = dataset.measurement,
+                            onClick = { onNavigateToResource(dataset.uniqueId) }
                         )
                     }
                 }
@@ -1392,23 +1299,15 @@ private fun ParentSamplesCard(
             }
 
             if (expanded) {
-                Spacer(modifier = Modifier.height(8.dp))
-                for (parent in parents) {
-                    ListItem(
-                        headlineContent = {
-                            Text(parent.sampleName ?: parent.uniqueId.take(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        },
-                        leadingContent = {
-                            Icon(Icons.Default.BubbleChart, contentDescription = null)
-                        },
-                        trailingContent = {
-                            Icon(Icons.Default.ChevronRight, contentDescription = "Navigate")
-                        },
-                        modifier = Modifier.clickable {
-                            onNavigateToResource(parent.uniqueId)
-                        }
-                    )
-                    HorizontalDivider()
+                Spacer(modifier = Modifier.height(4.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    for (parent in parents) {
+                        ResourceRow(
+                            icon = Icons.Default.BubbleChart,
+                            name = parent.sampleName ?: parent.uniqueId.take(16),
+                            onClick = { onNavigateToResource(parent.uniqueId) }
+                        )
+                    }
                 }
             }
         }
@@ -1449,26 +1348,77 @@ private fun ChildSamplesCard(
             }
 
             if (expanded) {
-                Spacer(modifier = Modifier.height(8.dp))
-                for (child in children) {
-                    ListItem(
-                        headlineContent = {
-                            Text(child.sampleName ?: child.uniqueId.take(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        },
-                        leadingContent = {
-                            Icon(Icons.Default.BubbleChart, contentDescription = null)
-                        },
-                        trailingContent = {
-                            Icon(Icons.Default.ChevronRight, contentDescription = "Navigate")
-                        },
-                        modifier = Modifier.clickable {
-                            onNavigateToResource(child.uniqueId)
-                        }
-                    )
-                    HorizontalDivider()
+                Spacer(modifier = Modifier.height(4.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    for (child in children) {
+                        ResourceRow(
+                            icon = Icons.Default.BubbleChart,
+                            name = child.sampleName ?: child.uniqueId.take(16),
+                            onClick = { onNavigateToResource(child.uniqueId) }
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ResourceRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    name: String,
+    subtitle: String? = null,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp, horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        if (subtitle != null) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        } else {
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Icon(
+            Icons.Default.ChevronRight,
+            contentDescription = "Navigate",
+            modifier = Modifier.size(18.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        )
     }
 }
 
