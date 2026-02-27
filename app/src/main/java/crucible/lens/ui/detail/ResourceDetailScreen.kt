@@ -38,6 +38,11 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.ListAlt
+import androidx.compose.material.icons.automirrored.filled.Notes
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -168,6 +173,9 @@ fun ResourceDetailScreen(
             contentOffset.animateTo(0f, animationSpec = tween(durationMillis = 220))
         }
     }
+    LaunchedEffect(resource.uniqueId) {
+        onSaveToHistory(resource.uniqueId, resource.name)
+    }
     val scope = rememberCoroutineScope()
 
     val pullRefreshState = rememberPullToRefreshState()
@@ -184,7 +192,7 @@ fun ResourceDetailScreen(
                 title = { Text(if (resource is Sample) "Sample" else "Dataset") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 },
                 actions = {
@@ -207,20 +215,18 @@ fun ResourceDetailScreen(
                             val projectId = when (resource) {
                                 is Sample -> resource.projectId
                                 is Dataset -> resource.projectId
-                                else -> null
                             }
 
                             if (projectId != null) {
                                 val resourceType = when (resource) {
                                     is Sample -> "sample-graph"
                                     is Dataset -> "dataset"
-                                    else -> null
                                 }
 
                                 if (resourceType != null) {
                                     val url = "$graphExplorerUrl/$projectId/$resourceType/${resource.uniqueId}"
                                     val shareText = "Check out this ${if (resource is Sample) "sample" else "dataset"} in Crucible: $url"
-                                    val imageUri = ShareCardGenerator.generate(context, resource, url, bannerColorInt, darkTheme)
+                                    val imageUri = ShareCardGenerator.generate(context, resource, bannerColorInt, darkTheme)
                                     val shareIntent = Intent().apply {
                                         action = Intent.ACTION_SEND
                                         putExtra(Intent.EXTRA_TEXT, shareText)
@@ -252,14 +258,12 @@ fun ResourceDetailScreen(
                             val projectId = when (resource) {
                                 is Sample -> resource.projectId
                                 is Dataset -> resource.projectId
-                                else -> null
                             }
 
                             if (projectId != null) {
                                 val resourceType = when (resource) {
                                     is Sample -> "sample-graph"
                                     is Dataset -> "dataset"
-                                    else -> null
                                 }
 
                                 if (resourceType != null) {
@@ -494,7 +498,7 @@ fun ResourceDetailScreen(
                             }
                         }
                         if (!resource.keywords.isNullOrEmpty()) {
-                            item(key = "keywords") { KeywordsCard(resource.keywords ?: emptyList()) }
+                            item(key = "keywords") { KeywordsCard(resource.keywords) }
                         }
                     }
                     is Sample -> {
@@ -529,10 +533,9 @@ fun ResourceDetailScreen(
                             }
                         }
                         if (!resource.keywords.isNullOrEmpty()) {
-                            item(key = "keywords") { KeywordsCard(resource.keywords ?: emptyList()) }
+                            item(key = "keywords") { KeywordsCard(resource.keywords) }
                         }
                     }
-                    else -> {}
                 }
 
                 val ageMin = CacheManager.getResourceAgeMinutes(resource.uniqueId)
@@ -712,7 +715,7 @@ private fun ThumbnailsSection(thumbnails: List<String>) {
                             imageState = "success"
                         },
                         onError = {
-                            imageState = "error: ${it.result.throwable?.message}"
+                            imageState = "error: ${it.result.throwable.message}"
                         }
                     )
                 } else {
@@ -834,7 +837,7 @@ private fun SampleDetailsCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Basic fields
-            InfoRow(icon = Icons.Default.Notes, label = "Description", value = sample.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
+            InfoRow(icon = Icons.AutoMirrored.Filled.Notes, label = "Description", value = sample.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
             InfoRow(icon = Icons.Default.Category, label = "Type", value = sample.sampleType ?: "None")
             val projectId = sample.projectId
             if (projectId != null) {
@@ -952,7 +955,7 @@ private fun DatasetDetailsCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Basic fields
-            InfoRow(icon = Icons.Default.Notes, label = "Description", value = dataset.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
+            InfoRow(icon = Icons.AutoMirrored.Filled.Notes, label = "Description", value = dataset.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
             InfoRow(icon = Icons.Default.Science, label = "Measurement", value = dataset.measurement ?: "None")
             InfoRow(icon = Icons.Default.Build, label = "Instrument", value = dataset.instrumentName ?: "None")
             val projectId = dataset.projectId
@@ -969,7 +972,7 @@ private fun DatasetDetailsCard(
                     icon = when (dataset.isPublic) {
                         true  -> Icons.Default.Public
                         false -> Icons.Default.Lock
-                        null  -> Icons.Default.HelpOutline
+                        null  -> Icons.AutoMirrored.Filled.HelpOutline
                     },
                     label = "Visibility",
                     value = when (dataset.isPublic) {
@@ -1052,7 +1055,7 @@ private fun ScientificMetadataCard(
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Icon(Icons.Default.ListAlt, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Icon(Icons.AutoMirrored.Filled.ListAlt, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Scientific Metadata",
@@ -1733,7 +1736,7 @@ private fun ClickableInfoRow(
                 fontWeight = FontWeight.Medium
             )
             Icon(
-                Icons.Default.OpenInNew,
+                Icons.AutoMirrored.Filled.OpenInNew,
                 contentDescription = "Open link",
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.primary

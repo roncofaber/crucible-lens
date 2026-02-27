@@ -26,7 +26,6 @@ object ShareCardGenerator {
     fun generate(
         context: Context,
         resource: CrucibleResource,
-        url: String,
         bannerColorInt: Int,
         darkTheme: Boolean = false
     ): Uri? = runCatching {
@@ -108,7 +107,6 @@ object ShareCardGenerator {
         val typeText = when (resource) {
             is Sample  -> (resource.sampleType ?: "Sample").uppercase()
             is Dataset -> (resource.measurement ?: "Dataset").uppercase()
-            else       -> ""
         }
         if (typeText.isNotBlank()) {
             val typeFontSize = 17f

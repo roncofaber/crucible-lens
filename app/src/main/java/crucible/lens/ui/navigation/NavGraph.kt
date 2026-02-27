@@ -234,7 +234,6 @@ fun NavGraph(
         composable(Screen.Settings.route) {
             SettingsScreen(
                 currentApiKey = apiKey,
-                currentAccentColor = accentColor,
                 onNavigateToApi = { navController.navigate(Screen.SettingsApi.route) },
                 onNavigateToAppearance = { navController.navigate(Screen.SettingsAppearance.route) },
                 onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },

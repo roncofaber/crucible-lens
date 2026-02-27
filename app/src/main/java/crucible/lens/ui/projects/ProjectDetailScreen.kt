@@ -9,7 +9,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.with
+import androidx.compose.animation.togetherWith
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
@@ -153,7 +154,7 @@ fun ProjectDetailScreen(
                 title = { Text("Project") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 },
                 actions = {
@@ -286,7 +287,7 @@ fun ProjectDetailScreen(
                                     AnimatedContent(
                                         targetState = loadingMessage,
                                         transitionSpec = {
-                                            fadeIn(animationSpec = tween(500)) with
+                                            fadeIn(animationSpec = tween(500)) togetherWith
                                                 fadeOut(animationSpec = tween(500))
                                         },
                                         label = "loading message"
