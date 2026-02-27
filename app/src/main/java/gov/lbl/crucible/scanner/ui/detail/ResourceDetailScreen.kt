@@ -657,8 +657,7 @@ private fun DatasetDetailsCard(dataset: Dataset, onProjectClick: (String) -> Uni
                     fontWeight = FontWeight.Bold
                 )
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
                         modifier = Modifier
@@ -679,6 +678,7 @@ private fun DatasetDetailsCard(dataset: Dataset, onProjectClick: (String) -> Uni
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
+                    Spacer(modifier = Modifier.width(12.dp))
                     IconButton(onClick = onShowQr, modifier = Modifier.size(36.dp)) {
                         Icon(
                             Icons.Default.QrCode,
