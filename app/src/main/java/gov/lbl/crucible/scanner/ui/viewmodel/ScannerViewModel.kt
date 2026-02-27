@@ -1,5 +1,7 @@
 package gov.lbl.crucible.scanner.ui.viewmodel
 
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import gov.lbl.crucible.scanner.data.cache.CacheManager
@@ -31,6 +33,16 @@ class ScannerViewModel : ViewModel() {
     /** -1 = swiped to previous, 1 = swiped to next, 0 = normal navigation */
     var siblingNavDirection: Int = 0
         private set
+
+    /** Persists expanded/collapsed state of detail screen cards across sibling navigation. */
+    private val resourceCardState = mutableStateMapOf<String, SnapshotStateMap<String, Boolean>>()
+
+    fun getCardState(resourceId: String, key: String): Boolean =
+        resourceCardState[resourceId]?.get(key) ?: false
+
+    fun setCardState(resourceId: String, key: String, value: Boolean) {
+        resourceCardState.getOrPut(resourceId) { mutableStateMapOf() }[key] = value
+    }
 
     fun setSmoothAnimations(enabled: Boolean) {
         smoothAnimations = enabled

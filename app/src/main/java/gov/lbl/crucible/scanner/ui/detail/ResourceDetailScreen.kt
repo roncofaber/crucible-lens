@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -25,8 +26,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
@@ -74,6 +78,8 @@ fun ResourceDetailScreen(
     onNavigateToSibling: (uuid: String, direction: Int) -> Unit = { uuid, _ -> onNavigateToResource(uuid) },
     onSaveToHistory: (uuid: String, name: String) -> Unit = { _, _ -> },
     darkTheme: Boolean,
+    getCardState: (key: String) -> Boolean = { false },
+    onCardStateChange: (key: String, value: Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -304,8 +310,24 @@ fun ResourceDetailScreen(
                 }
 
                 when (resource) {
-                    is Sample -> item(key = "type_details") { SampleDetailsCard(resource, onProjectClick = onNavigateToProject, onShowQr = { showQrDialog = true }) }
-                    is Dataset -> item(key = "type_details") { DatasetDetailsCard(resource, onProjectClick = onNavigateToProject, onShowQr = { showQrDialog = true }) }
+                    is Sample -> item(key = "type_details") {
+                        SampleDetailsCard(
+                            sample = resource,
+                            onProjectClick = onNavigateToProject,
+                            onShowQr = { showQrDialog = true },
+                            initialAdvanced = getCardState("advanced"),
+                            onAdvancedChange = { onCardStateChange("advanced", it) }
+                        )
+                    }
+                    is Dataset -> item(key = "type_details") {
+                        DatasetDetailsCard(
+                            dataset = resource,
+                            onProjectClick = onNavigateToProject,
+                            onShowQr = { showQrDialog = true },
+                            initialAdvanced = getCardState("advanced"),
+                            onAdvancedChange = { onCardStateChange("advanced", it) }
+                        )
+                    }
                 }
 
                 when (resource) {
@@ -337,21 +359,44 @@ fun ResourceDetailScreen(
                         }
                         if (!resource.samples.isNullOrEmpty()) {
                             item(key = "linked_samples") {
-                                LinkedSamplesCard(samples = resource.samples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId }, onNavigateToResource = onNavigateToResource)
+                                LinkedSamplesCard(
+                                    samples = resource.samples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
+                                    onNavigateToResource = onNavigateToResource,
+                                    initialExpanded = getCardState("linked_samples"),
+                                    onExpandChange = { onCardStateChange("linked_samples", it) }
+                                )
                             }
                         }
                         if (!resource.parentDatasets.isNullOrEmpty()) {
                             item(key = "parent_datasets") {
-                                ParentDatasetsCard(parents = resource.parentDatasets.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId }, onNavigateToResource = onNavigateToResource)
+                                ParentDatasetsCard(
+                                    parents = resource.parentDatasets.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
+                                    onNavigateToResource = onNavigateToResource,
+                                    initialExpanded = getCardState("parent_datasets"),
+                                    onExpandChange = { onCardStateChange("parent_datasets", it) }
+                                )
                             }
                         }
                         if (!resource.childDatasets.isNullOrEmpty()) {
                             item(key = "child_datasets") {
-                                ChildDatasetsCard(children = resource.childDatasets.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId }, onNavigateToResource = onNavigateToResource)
+                                ChildDatasetsCard(
+                                    children = resource.childDatasets.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
+                                    onNavigateToResource = onNavigateToResource,
+                                    initialExpanded = getCardState("child_datasets"),
+                                    onExpandChange = { onCardStateChange("child_datasets", it) }
+                                )
                             }
                         }
                         if (!resource.scientificMetadata.isNullOrEmpty()) {
-                            item(key = "scientific_metadata") { ScientificMetadataCard(resource.scientificMetadata) }
+                            item(key = "scientific_metadata") {
+                                ScientificMetadataCard(
+                                    metadata = resource.scientificMetadata,
+                                    initialExpanded = getCardState("sci_meta_expanded"),
+                                    initialExpandAll = getCardState("sci_meta_expand_all"),
+                                    onExpandedChange = { onCardStateChange("sci_meta_expanded", it) },
+                                    onExpandAllChange = { onCardStateChange("sci_meta_expand_all", it) }
+                                )
+                            }
                         }
                         if (!resource.keywords.isNullOrEmpty()) {
                             item(key = "keywords") { KeywordsCard(resource.keywords ?: emptyList()) }
@@ -360,17 +405,32 @@ fun ResourceDetailScreen(
                     is Sample -> {
                         if (!resource.parentSamples.isNullOrEmpty()) {
                             item(key = "parent_samples") {
-                                ParentSamplesCard(parents = resource.parentSamples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId }, onNavigateToResource = onNavigateToResource)
+                                ParentSamplesCard(
+                                    parents = resource.parentSamples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
+                                    onNavigateToResource = onNavigateToResource,
+                                    initialExpanded = getCardState("parent_samples"),
+                                    onExpandChange = { onCardStateChange("parent_samples", it) }
+                                )
                             }
                         }
                         if (!resource.childSamples.isNullOrEmpty()) {
                             item(key = "child_samples") {
-                                ChildSamplesCard(children = resource.childSamples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId }, onNavigateToResource = onNavigateToResource)
+                                ChildSamplesCard(
+                                    children = resource.childSamples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
+                                    onNavigateToResource = onNavigateToResource,
+                                    initialExpanded = getCardState("child_samples"),
+                                    onExpandChange = { onCardStateChange("child_samples", it) }
+                                )
                             }
                         }
                         if (!resource.datasets.isNullOrEmpty()) {
                             item(key = "linked_datasets") {
-                                LinkedDatasetsCard(datasets = resource.datasets.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId }, onNavigateToResource = onNavigateToResource)
+                                LinkedDatasetsCard(
+                                    datasets = resource.datasets.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
+                                    onNavigateToResource = onNavigateToResource,
+                                    initialExpanded = getCardState("linked_datasets"),
+                                    onExpandChange = { onCardStateChange("linked_datasets", it) }
+                                )
                             }
                         }
                         if (!resource.keywords.isNullOrEmpty()) {
@@ -589,9 +649,15 @@ private fun ThumbnailsSection(thumbnails: List<String>) {
 }
 
 @Composable
-private fun SampleDetailsCard(sample: Sample, onProjectClick: (String) -> Unit, onShowQr: () -> Unit = {}) {
+private fun SampleDetailsCard(
+    sample: Sample,
+    onProjectClick: (String) -> Unit,
+    onShowQr: () -> Unit = {},
+    initialAdvanced: Boolean = false,
+    onAdvancedChange: (Boolean) -> Unit = {}
+) {
     val context = LocalContext.current
-    var advanced by rememberSaveable { mutableStateOf(false) }
+    var advanced by remember { mutableStateOf(initialAdvanced) }
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -607,7 +673,7 @@ private fun SampleDetailsCard(sample: Sample, onProjectClick: (String) -> Unit, 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Row(
                         modifier = Modifier
-                            .clickable { advanced = !advanced }
+                            .clickable { val new = !advanced; advanced = new; onAdvancedChange(new) }
                             .padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -669,9 +735,15 @@ private fun SampleDetailsCard(sample: Sample, onProjectClick: (String) -> Unit, 
 }
 
 @Composable
-private fun DatasetDetailsCard(dataset: Dataset, onProjectClick: (String) -> Unit, onShowQr: () -> Unit = {}) {
+private fun DatasetDetailsCard(
+    dataset: Dataset,
+    onProjectClick: (String) -> Unit,
+    onShowQr: () -> Unit = {},
+    initialAdvanced: Boolean = false,
+    onAdvancedChange: (Boolean) -> Unit = {}
+) {
     val context = LocalContext.current
-    var advanced by rememberSaveable { mutableStateOf(false) }
+    var advanced by remember { mutableStateOf(initialAdvanced) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -690,7 +762,7 @@ private fun DatasetDetailsCard(dataset: Dataset, onProjectClick: (String) -> Uni
                 ) {
                     Row(
                         modifier = Modifier
-                            .clickable { advanced = !advanced }
+                            .clickable { val new = !advanced; advanced = new; onAdvancedChange(new) }
                             .padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -787,56 +859,79 @@ private fun DatasetDetailsCard(dataset: Dataset, onProjectClick: (String) -> Uni
 }
 
 @Composable
-private fun ScientificMetadataCard(metadata: Map<String, Any?>) {
+private fun ScientificMetadataCard(
+    metadata: Map<String, Any?>,
+    initialExpanded: Boolean = false,
+    initialExpandAll: Boolean = false,
+    onExpandedChange: (Boolean) -> Unit = {},
+    onExpandAllChange: (Boolean) -> Unit = {}
+) {
     // The API wraps actual data inside a "scientific_metadata" key — unwrap it if present.
     @Suppress("UNCHECKED_CAST")
     val displayMetadata = (metadata["scientific_metadata"] as? Map<String, Any?>)
         ?.takeIf { it.isNotEmpty() }
         ?: metadata
 
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(initialExpanded) }
+    var expandAll by remember { mutableStateOf(initialExpandAll) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(Icons.Default.ListAlt, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Scientific Metadata",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { val new = !expanded; expanded = new; onExpandedChange(new) },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                        contentDescription = if (expanded) "Collapse" else "Expand",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(Icons.Default.ListAlt, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Scientific Metadata",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                if (expanded) {
+                    TextButton(
+                        onClick = { val new = !expandAll; expandAll = new; onExpandAllChange(new) },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Text(
+                            if (expandAll) "Collapse All" else "Expand All",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
             }
 
             if (expanded) {
                 Spacer(modifier = Modifier.height(8.dp))
-                MetadataTree(displayMetadata, indentLevel = 0)
+                MetadataTree(displayMetadata, indentLevel = 0, expandAll = expandAll)
             }
         }
     }
 }
 
 @Composable
-private fun MetadataTree(data: Map<String, Any?>, indentLevel: Int) {
+private fun MetadataTree(data: Map<String, Any?>, indentLevel: Int, expandAll: Boolean = false) {
     val entries = data.entries.toList()
     for ((index, entry) in entries.withIndex()) {
         val (entryKey, entryValue) = entry
         key(entryKey) {
             when (entryValue) {
                 is Map<*, *> -> {
-                    var expanded by rememberSaveable { mutableStateOf(false) }
+                    var expanded by rememberSaveable(key = "$expandAll-$entryKey") { mutableStateOf(expandAll) }
 
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
@@ -864,7 +959,7 @@ private fun MetadataTree(data: Map<String, Any?>, indentLevel: Int) {
 
                         if (expanded) {
                             @Suppress("UNCHECKED_CAST")
-                            MetadataTree(entryValue as Map<String, Any?>, indentLevel + 1)
+                            MetadataTree(entryValue as Map<String, Any?>, indentLevel + 1, expandAll)
                         }
                     }
                 }
@@ -976,16 +1071,18 @@ private fun KeywordsCard(keywords: List<String>) {
 @Composable
 private fun ParentDatasetsCard(
     parents: List<DatasetReference>,
-    onNavigateToResource: (String) -> Unit
+    onNavigateToResource: (String) -> Unit,
+    initialExpanded: Boolean = false,
+    onExpandChange: (Boolean) -> Unit = {}
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(initialExpanded) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = !expanded },
+                    .clickable { val new = !expanded; expanded = new; onExpandChange(new) },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -1034,16 +1131,18 @@ private fun ParentDatasetsCard(
 @Composable
 private fun ChildDatasetsCard(
     children: List<DatasetReference>,
-    onNavigateToResource: (String) -> Unit
+    onNavigateToResource: (String) -> Unit,
+    initialExpanded: Boolean = false,
+    onExpandChange: (Boolean) -> Unit = {}
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(initialExpanded) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = !expanded },
+                    .clickable { val new = !expanded; expanded = new; onExpandChange(new) },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -1092,16 +1191,18 @@ private fun ChildDatasetsCard(
 @Composable
 private fun LinkedSamplesCard(
     samples: List<SampleReference>,
-    onNavigateToResource: (String) -> Unit
+    onNavigateToResource: (String) -> Unit,
+    initialExpanded: Boolean = false,
+    onExpandChange: (Boolean) -> Unit = {}
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(initialExpanded) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = !expanded },
+                    .clickable { val new = !expanded; expanded = new; onExpandChange(new) },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -1121,23 +1222,46 @@ private fun LinkedSamplesCard(
             }
 
             if (expanded) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 for (sample in samples) {
-                    ListItem(
-                        headlineContent = {
-                            Text(sample.sampleName ?: sample.uniqueId.take(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        },
-                        leadingContent = {
-                            Icon(Icons.Default.BubbleChart, contentDescription = null)
-                        },
-                        trailingContent = {
-                            Icon(Icons.Default.ChevronRight, contentDescription = "Navigate")
-                        },
-                        modifier = Modifier.clickable {
-                            onNavigateToResource(sample.uniqueId)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onNavigateToResource(sample.uniqueId) }
+                            .padding(vertical = 8.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.BubbleChart,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                         }
-                    )
-                    HorizontalDivider()
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = sample.sampleName ?: sample.uniqueId.take(16),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = "Navigate",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                    }
                 }
             }
         }
@@ -1147,16 +1271,18 @@ private fun LinkedSamplesCard(
 @Composable
 private fun LinkedDatasetsCard(
     datasets: List<DatasetReference>,
-    onNavigateToResource: (String) -> Unit
+    onNavigateToResource: (String) -> Unit,
+    initialExpanded: Boolean = false,
+    onExpandChange: (Boolean) -> Unit = {}
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(initialExpanded) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = !expanded },
+                    .clickable { val new = !expanded; expanded = new; onExpandChange(new) },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -1176,26 +1302,56 @@ private fun LinkedDatasetsCard(
             }
 
             if (expanded) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 for (dataset in datasets) {
-                    ListItem(
-                        headlineContent = {
-                            Text(dataset.datasetName ?: dataset.uniqueId.take(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        },
-                        supportingContent = dataset.measurement?.let { measurement ->
-                            @Composable { Text(measurement, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                        },
-                        leadingContent = {
-                            Icon(Icons.Default.DataObject, contentDescription = null)
-                        },
-                        trailingContent = {
-                            Icon(Icons.Default.ChevronRight, contentDescription = "Navigate")
-                        },
-                        modifier = Modifier.clickable {
-                            onNavigateToResource(dataset.uniqueId)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onNavigateToResource(dataset.uniqueId) }
+                            .padding(vertical = 8.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.secondaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.DataObject,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
                         }
-                    )
-                    HorizontalDivider()
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = dataset.datasetName ?: dataset.uniqueId.take(16),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (dataset.measurement != null) {
+                                Text(
+                                    text = dataset.measurement,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = "Navigate",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                    }
                 }
             }
         }
@@ -1205,16 +1361,18 @@ private fun LinkedDatasetsCard(
 @Composable
 private fun ParentSamplesCard(
     parents: List<SampleReference>,
-    onNavigateToResource: (String) -> Unit
+    onNavigateToResource: (String) -> Unit,
+    initialExpanded: Boolean = false,
+    onExpandChange: (Boolean) -> Unit = {}
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(initialExpanded) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = !expanded },
+                    .clickable { val new = !expanded; expanded = new; onExpandChange(new) },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -1260,16 +1418,18 @@ private fun ParentSamplesCard(
 @Composable
 private fun ChildSamplesCard(
     children: List<SampleReference>,
-    onNavigateToResource: (String) -> Unit
+    onNavigateToResource: (String) -> Unit,
+    initialExpanded: Boolean = false,
+    onExpandChange: (Boolean) -> Unit = {}
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(initialExpanded) }
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = !expanded },
+                    .clickable { val new = !expanded; expanded = new; onExpandChange(new) },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -1347,7 +1507,7 @@ private fun CopyableInfoRow(
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),

@@ -471,7 +471,9 @@ fun NavGraph(
                         },
                         onRefresh = {
                             viewModel.refreshResource(mfid)
-                        }
+                        },
+                        getCardState = { key -> viewModel.getCardState(state.resource.uniqueId, key) },
+                        onCardStateChange = { key, value -> viewModel.setCardState(state.resource.uniqueId, key, value) }
                     )
                 }
                 is UiState.Error -> {
