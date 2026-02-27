@@ -1,5 +1,6 @@
 package crucible.lens.ui.projects
 
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -277,18 +278,24 @@ fun ProjectsListScreen(
                                         onToggleArchive(project.projectId)
                                         true
                                     } else false
-                                }
+                                },
+                                positionalThreshold = { totalDistance -> totalDistance * 0.65f }
                             )
                             val iconScale by animateFloatAsState(
                                 targetValue = 0.75f + 0.5f * dismissState.progress,
-                                animationSpec = spring(),
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMedium
+                                ),
                                 label = "archiveIconScale"
                             )
                             SwipeToDismissBox(
                                 state = dismissState,
                                 enableDismissFromStartToEnd = false,
                                 enableDismissFromEndToStart = true,
-                                modifier = Modifier.animateItemPlacement(spring()),
+                                modifier = Modifier.animateItemPlacement(
+                                    spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+                                ),
                                 backgroundContent = {
                                     val color = MaterialTheme.colorScheme.secondaryContainer
                                     val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -364,18 +371,24 @@ fun ProjectsListScreen(
                                                 onToggleArchive(project.projectId)
                                                 true
                                             } else false
-                                        }
+                                        },
+                                        positionalThreshold = { totalDistance -> totalDistance * 0.65f }
                                     )
                                     val unarchiveIconScale by animateFloatAsState(
                                         targetValue = 0.75f + 0.5f * dismissState.progress,
-                                        animationSpec = spring(),
+                                        animationSpec = spring(
+                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                            stiffness = Spring.StiffnessMedium
+                                        ),
                                         label = "unarchiveIconScale"
                                     )
                                     SwipeToDismissBox(
                                         state = dismissState,
                                         enableDismissFromStartToEnd = true,
                                         enableDismissFromEndToStart = false,
-                                        modifier = Modifier.animateItemPlacement(spring()),
+                                        modifier = Modifier.animateItemPlacement(
+                                            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+                                        ),
                                         backgroundContent = {
                                             val color = MaterialTheme.colorScheme.primary
                                             val contentColor = MaterialTheme.colorScheme.onPrimary
