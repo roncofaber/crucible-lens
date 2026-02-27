@@ -516,12 +516,38 @@ private fun BasicInfoCard(
     currentIndex: Int = -1,
     totalCount: Int = 0
 ) {
+    val context = LocalContext.current
     Card(border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)) {
         Column(
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            // MFID centered at the top with copy button
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = resource.uniqueId,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                IconButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("MFID", resource.uniqueId))
+                        Toast.makeText(context, "MFID copied to clipboard", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        Icons.Default.ContentCopy,
+                        contentDescription = "Copy MFID",
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             if (totalCount > 1) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -733,7 +759,6 @@ private fun SampleDetailsCard(
                 InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
             }
             InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = if (advanced) sample.createdAt ?: "None" else formatDateTime(sample.createdAt))
-            CopyableInfoRow(context = context, icon = Icons.Default.Fingerprint, label = "MFID", value = sample.uniqueId)
 
             // Advanced fields
             if (advanced) {
@@ -823,7 +848,6 @@ private fun DatasetDetailsCard(
                 InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
             }
             InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = if (advanced) dataset.createdAt ?: "None" else formatDateTime(dataset.createdAt))
-            CopyableInfoRow(context = context, icon = Icons.Default.Fingerprint, label = "MFID", value = dataset.uniqueId)
 
             // Advanced fields
             if (advanced) {
@@ -1446,34 +1470,19 @@ private fun ResourceRow(
 
 private fun formatDateTime(raw: String?): String {
     if (raw == null) return "None"
-    // Strip timezone suffix so SimpleDateFormat can parse on all API levels
-    val cleaned = raw.trim()
-        .removeSuffix("Z")
-        .replace(Regex("[+-]\\d{2}:\\d{2}$"), "")
-    // Date-only (≤10 chars after stripping)
-    if (cleaned.length <= 10) {
-        return try {
-            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-            sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
-            java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
-                .format(sdf.parse(cleaned)!!)
-        } catch (e: Exception) { raw }
-    }
-    val patterns = listOf(
-        "yyyy-MM-dd'T'HH:mm:ss.SSSSSS",
-        "yyyy-MM-dd'T'HH:mm:ss.SSS",
-        "yyyy-MM-dd'T'HH:mm:ss",
-        "yyyy-MM-dd HH:mm:ss"
-    )
-    val outFmt = java.text.SimpleDateFormat("MMM d, yyyy · h:mm a", java.util.Locale.getDefault())
-    for (pattern in patterns) {
-        try {
-            val sdf = java.text.SimpleDateFormat(pattern, java.util.Locale.US)
-            sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
-            return outFmt.format(sdf.parse(cleaned)!!)
-        } catch (e: Exception) { continue }
-    }
-    return raw
+    val s = raw.trim()
+    val fmtDateTime = java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a", java.util.Locale.getDefault())
+    val fmtDate     = java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy",           java.util.Locale.getDefault())
+    return try {
+        // Full datetime with timezone offset (Z, +HH:MM, etc.) — any fractional-second length
+        fmtDateTime.format(java.time.OffsetDateTime.parse(s).toLocalDateTime())
+    } catch (_: Exception) { try {
+        // Full datetime without timezone
+        fmtDateTime.format(java.time.LocalDateTime.parse(s))
+    } catch (_: Exception) { try {
+        // Date only
+        fmtDate.format(java.time.LocalDate.parse(s))
+    } catch (_: Exception) { raw } } }
 }
 
 private fun formatFileSize(bytes: Long): String = when {
