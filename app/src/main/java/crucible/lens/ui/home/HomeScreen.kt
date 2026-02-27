@@ -2,7 +2,11 @@ package crucible.lens.ui.home
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -186,7 +190,14 @@ fun HomeScreen(
                     .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Crossfade(targetState = tagline, label = "tagline") { text ->
+                AnimatedContent(
+                    targetState = tagline,
+                    transitionSpec = {
+                        fadeIn(tween(durationMillis = 500, delayMillis = 200)) togetherWith
+                            fadeOut(tween(durationMillis = 300))
+                    },
+                    label = "tagline"
+                ) { text ->
                     Text(
                         text = text,
                         style = MaterialTheme.typography.bodyMedium,
