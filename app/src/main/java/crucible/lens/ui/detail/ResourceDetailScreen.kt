@@ -806,7 +806,7 @@ private fun SampleDetailsCard(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // MFID — centered, no label, copy button
             Row(
@@ -832,11 +832,11 @@ private fun SampleDetailsCard(
                         Icons.Default.ContentCopy,
                         contentDescription = "Copy MFID",
                         modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Basic fields
             InfoRow(icon = Icons.AutoMirrored.Filled.Notes, label = "Description", value = sample.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
@@ -924,7 +924,7 @@ private fun DatasetDetailsCard(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // MFID — centered, no label, copy button
             Row(
@@ -950,11 +950,11 @@ private fun DatasetDetailsCard(
                         Icons.Default.ContentCopy,
                         contentDescription = "Copy MFID",
                         modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Basic fields
             InfoRow(icon = Icons.AutoMirrored.Filled.Notes, label = "Description", value = dataset.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
