@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "gov.lbl.crucible.scanner"
+    namespace = "crucible.lens"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "gov.lbl.crucible.scanner"
+        applicationId = "crucible.lens"
         minSdk = 26
         targetSdk = 34
         versionCode = 3
