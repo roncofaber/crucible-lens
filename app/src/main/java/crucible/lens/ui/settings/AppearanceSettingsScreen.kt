@@ -21,18 +21,18 @@ import androidx.compose.ui.unit.dp
 fun AppearanceSettingsScreen(
     currentThemeMode: String,
     currentAccentColor: String,
-    currentSmoothAnimations: Boolean,
+    currentAppIcon: String,
     currentFloatingScanButton: Boolean,
     onThemeModeSave: (String) -> Unit,
     onAccentColorSave: (String) -> Unit,
-    onSmoothAnimationsSave: (Boolean) -> Unit,
+    onAppIconSave: (String) -> Unit,
     onFloatingScanButtonSave: (Boolean) -> Unit,
     onBack: () -> Unit,
     onHome: () -> Unit
 ) {
     var themeModeInput        by remember { mutableStateOf(currentThemeMode) }
     var accentColorInput      by remember { mutableStateOf(currentAccentColor) }
-    var smoothAnimationsInput by remember { mutableStateOf(currentSmoothAnimations) }
+    var appIconInput          by remember { mutableStateOf(currentAppIcon) }
     var floatingScanButtonInput by remember { mutableStateOf(currentFloatingScanButton) }
     var showColorPicker       by remember { mutableStateOf(false) }
 
@@ -115,6 +115,59 @@ fun AppearanceSettingsScreen(
                 }
             }
 
+            // App Icon
+            Card {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Apps, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Text("App Icon", style = MaterialTheme.typography.titleMedium)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val chipColors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f),
+                            selectedLabelColor = MaterialTheme.colorScheme.secondary,
+                            selectedLeadingIconColor = MaterialTheme.colorScheme.secondary
+                        )
+                        listOf("light" to "Light", "dark" to "Dark").forEach { (value, label) ->
+                            FilterChip(
+                                selected = appIconInput == value,
+                                onClick = {
+                                    appIconInput = value
+                                    onAppIconSave(value)
+                                },
+                                label = { Text(label) },
+                                leadingIcon = if (appIconInput == value) {
+                                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                } else null,
+                                modifier = Modifier.weight(1f),
+                                colors = chipColors,
+                                border = FilterChipDefaults.filterChipBorder(
+                                    borderColor = MaterialTheme.colorScheme.outline,
+                                    selectedBorderColor = MaterialTheme.colorScheme.secondary,
+                                    borderWidth = 1.dp,
+                                    selectedBorderWidth = 1.5.dp,
+                                    enabled = true,
+                                    selected = appIconInput == value
+                                )
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Icon changes may take a few seconds to appear on your home screen",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             // Accent Color
             Card(modifier = Modifier.clickable { showColorPicker = true }) {
                 Row(
@@ -135,34 +188,6 @@ fun AppearanceSettingsScreen(
                         )
                         Icon(Icons.Default.ChevronRight, contentDescription = "Choose color")
                     }
-                }
-            }
-
-            // Smooth Animations
-            Card {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.Animation, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Column {
-                            Text("Smooth Animations", style = MaterialTheme.typography.titleMedium)
-                            Text("Disable for maximum speed", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    Switch(
-                        checked = smoothAnimationsInput,
-                        onCheckedChange = {
-                            smoothAnimationsInput = it
-                            onSmoothAnimationsSave(it)
-                        }
-                    )
                 }
             }
 
@@ -198,8 +223,8 @@ fun AppearanceSettingsScreen(
             OutlinedButton(
                 onClick = {
                     themeModeInput = "system";       onThemeModeSave("system")
+                    appIconInput = "light";          onAppIconSave("light")
                     accentColorInput = "blue";       onAccentColorSave("blue")
-                    smoothAnimationsInput = true;    onSmoothAnimationsSave(true)
                     floatingScanButtonInput = true;  onFloatingScanButtonSave(true)
                 },
                 modifier = Modifier.fillMaxWidth(),

@@ -3,25 +3,47 @@ package crucible.lens.ui.projects
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.offset
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntSize
+import kotlin.math.roundToInt
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.cache.PersistentProjectCache
+import crucible.lens.data.cache.ProjectSummary
+import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
+import crucible.lens.data.model.Sample
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -30,49 +52,90 @@ fun ProjectsListScreen(
     onBack: () -> Unit,
     onHome: () -> Unit,
     onProjectClick: (String) -> Unit,
-    onSearch: () -> Unit = {},
     pinnedProjects: Set<String> = emptySet(),
     onTogglePin: (String) -> Unit = {},
     archivedProjects: Set<String> = emptySet(),
     onToggleArchive: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var projects by remember { mutableStateOf<List<Project>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     // Map of projectId -> Pair(sampleCount, datasetCount), null means still loading
     var projectCounts by remember { mutableStateOf<Map<String, Pair<Int?, Int?>>>(emptyMap()) }
+    // Persistent cache summaries - loaded immediately for instant display
+    var persistentSummaries by remember { mutableStateOf<List<ProjectSummary>?>(null) }
     var archivedExpanded by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    // Track which projects were manually unarchived (so we don't auto-archive them again)
+    var manuallyUnarchived by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // Trigger for forcing background reload - increments on refresh
+    var reloadTrigger by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    val pullRefreshState = rememberPullToRefreshState()
+
+    // Load persistent cache immediately on startup for instant display
+    LaunchedEffect(Unit) {
+        persistentSummaries = PersistentProjectCache.loadProjectData(context)
+        // If we have persistent cache, populate counts immediately
+        persistentSummaries?.let { summaries ->
+            projectCounts = summaries.associate {
+                it.projectId to Pair(it.sampleCount, it.datasetCount)
+            }
+        }
+    }
 
     fun loadProjects(forceRefresh: Boolean = false) {
-        scope.launch {
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 // Check cache first if not forcing refresh
                 if (!forceRefresh) {
                     val cachedProjects = CacheManager.getProjects()
                     if (cachedProjects != null) {
-                        projects = cachedProjects
-                        isLoading = false
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            projects = cachedProjects
+                            isLoading = false
+                            pullRefreshState.endRefresh()
+                        }
                         return@launch
+                    }
+                } else {
+                    // Clear cache and counts when force refreshing so fresh data is loaded
+                    CacheManager.clearAll()
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        projectCounts = emptyMap()
+                        reloadTrigger++ // Trigger background reload
                     }
                 }
 
-                isLoading = true
-                error = null
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    isLoading = true
+                    error = null
+                }
                 val response = ApiClient.service.getProjects()
                 if (response.isSuccessful) {
                     val fetchedProjects = response.body()
-                    projects = fetchedProjects
                     // Cache the projects
                     fetchedProjects?.let { CacheManager.cacheProjects(it) }
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        projects = fetchedProjects
+                    }
                 } else {
-                    error = "Failed to load projects: ${response.message()}"
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        error = "Failed to load projects: ${response.message()}"
+                    }
                 }
             } catch (e: Exception) {
-                error = "Error: ${e.message}"
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    error = "Error: ${e.message}"
+                }
             } finally {
-                isLoading = false
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    isLoading = false
+                    pullRefreshState.endRefresh()
+                }
             }
         }
     }
@@ -81,94 +144,216 @@ fun ProjectsListScreen(
         loadProjects()
     }
 
+    // Function to save current state to persistent cache
+    fun saveToPersistentCache() {
+        val currentProjects = projects ?: return
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                // Build maps of samples and datasets
+                val samplesMap = mutableMapOf<String, List<crucible.lens.data.model.Sample>>()
+                val datasetsMap = mutableMapOf<String, List<Dataset>>()
+
+                currentProjects.forEach { project ->
+                    CacheManager.getProjectSamples(project.projectId)?.let {
+                        samplesMap[project.projectId] = it
+                    }
+                    CacheManager.getProjectDatasets(project.projectId)?.let {
+                        datasetsMap[project.projectId] = it
+                    }
+                }
+
+                PersistentProjectCache.saveProjectData(context, currentProjects, samplesMap, datasetsMap)
+            } catch (e: Exception) {
+                // Fail silently
+            }
+        }
+    }
+
     // Pre-load and cache samples/datasets per project in background (also populates counts).
     // Priority: pinned projects first, archived projects last (stage 2 skipped for archived).
-    LaunchedEffect(projects) {
+    // This automatically cancels when the user navigates away from this screen.
+    // Re-triggers when projects change OR when reloadTrigger increments (force refresh).
+    LaunchedEffect(projects, reloadTrigger) {
         val projectList = projects ?: return@LaunchedEffect
         val prioritizedProjects = projectList
             .sortedWith(compareByDescending<Project> { it.projectId in pinnedProjects }
                 .thenBy { it.projectId in archivedProjects })
 
-        prioritizedProjects.forEach { project ->
-            val isArchived = project.projectId in archivedProjects
-            scope.launch {
-                // Use already-cached data if available — no API call needed
-                val cachedSamples = CacheManager.getProjectSamples(project.projectId)
-                val cachedDatasets = CacheManager.getProjectDatasets(project.projectId)
-                if (cachedSamples != null && cachedDatasets != null) {
-                    projectCounts = projectCounts + (project.projectId to Pair(cachedSamples.size, cachedDatasets.size))
-                    return@launch
-                }
+        // Track consecutive failures to stop on network errors (thread-safe for concurrent launches)
+        val consecutiveFailures = java.util.concurrent.atomic.AtomicInteger(0)
+        val maxConsecutiveFailures = 5
 
-                // Stage 1 — fast: fetch samples (cacheable) + datasets without metadata (count only)
-                val sampleCount = try {
-                    val resp = ApiClient.service.getSamplesByProject(project.projectId)
-                    if (resp.isSuccessful) {
-                        resp.body()?.also { CacheManager.cacheProjectSamples(project.projectId, it) }?.size
-                    } else null
-                } catch (e: Exception) { null }
+        // Process in small batches to avoid overwhelming the device
+        prioritizedProjects.chunked(5).forEach { batch ->
+            // Stop if we've had too many consecutive failures (likely network issue)
+            if (consecutiveFailures.get() >= maxConsecutiveFailures) {
+                return@LaunchedEffect
+            }
+            batch.forEach { project ->
+                val isArchived = project.projectId in archivedProjects
+                launch(kotlinx.coroutines.Dispatchers.IO) {
+                    // Use already-cached data if available — no API call needed
+                    val cachedSamples = CacheManager.getProjectSamples(project.projectId)
+                    val cachedDatasets = CacheManager.getProjectDatasets(project.projectId)
+                    if (cachedSamples != null && cachedDatasets != null) {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            projectCounts = projectCounts + (project.projectId to Pair(cachedSamples.size, cachedDatasets.size))
 
-                val datasetCount = try {
-                    val resp = ApiClient.service.getDatasetsByProject(project.projectId, includeMetadata = false)
-                    if (resp.isSuccessful) resp.body()?.size else null
-                } catch (e: Exception) { null }
-
-                // Show counts immediately without waiting for heavy metadata
-                projectCounts = projectCounts + (project.projectId to Pair(sampleCount, datasetCount))
-
-                // Stage 2 — background: fetch full datasets to warm navigation cache.
-                // Skipped for archived projects since they are rarely browsed.
-                if (!isArchived) {
-                    launch {
-                        try {
-                            val resp = ApiClient.service.getDatasetsByProject(project.projectId, includeMetadata = true)
-                            if (resp.isSuccessful) {
-                                resp.body()?.let { CacheManager.cacheProjectDatasets(project.projectId, it) }
+                            // Auto-archive empty projects (unless manually unarchived or already archived)
+                            if (cachedSamples.isEmpty() && cachedDatasets.isEmpty() &&
+                                project.projectId !in manuallyUnarchived &&
+                                project.projectId !in archivedProjects) {
+                                onToggleArchive(project.projectId)
                             }
-                        } catch (e: Exception) { /* best effort */ }
+                        }
+                        return@launch
+                    }
+
+                    // Fetch samples and datasets with metadata for search functionality
+                    var hadError = false
+                    val sampleCount = try {
+                        val resp = ApiClient.service.getSamplesByProject(project.projectId)
+                        if (resp.isSuccessful) {
+                            consecutiveFailures.set(0) // Reset on success
+                            resp.body()?.also { CacheManager.cacheProjectSamples(project.projectId, it) }?.size
+                        } else null
+                    } catch (e: Exception) {
+                        hadError = true
+                        null
+                    }
+
+                    val datasetCount = try {
+                        // Load with metadata for search functionality
+                        val resp = ApiClient.service.getDatasetsByProject(project.projectId, includeMetadata = true)
+                        if (resp.isSuccessful) {
+                            consecutiveFailures.set(0) // Reset on success
+                            resp.body()?.also { CacheManager.cacheProjectDatasets(project.projectId, it) }?.size
+                        } else null
+                    } catch (e: Exception) {
+                        hadError = true
+                        null
+                    }
+
+                    // Track failures (thread-safe increment)
+                    if (hadError) {
+                        consecutiveFailures.incrementAndGet()
+                    }
+
+                    // Show counts after loading
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        projectCounts = projectCounts + (project.projectId to Pair(sampleCount, datasetCount))
+
+                        // Auto-archive empty projects (unless manually unarchived or already archived)
+                        if (sampleCount == 0 && datasetCount == 0 &&
+                            project.projectId !in manuallyUnarchived &&
+                            project.projectId !in archivedProjects) {
+                            onToggleArchive(project.projectId)
+                        }
                     }
                 }
             }
+            // Small delay between batches to avoid overwhelming the device
+            kotlinx.coroutines.delay(150)
         }
+
+        // After all batches complete, save to persistent cache
+        saveToPersistentCache()
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Projects") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            CacheManager.clearProjectsCache()
-                            CacheManager.clearProjectDetailsCache()
-                            projectCounts = emptyMap()
-                            loadProjects(forceRefresh = true)
+            Column {
+                TopAppBar(
+                    title = { Text("Projects") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                         }
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                CacheManager.clearProjectsCache()
+                                CacheManager.clearProjectDetailsCache()
+                                projectCounts = emptyMap()
+                                loadProjects(forceRefresh = true)
+                            }
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        }
+                        IconButton(onClick = onHome) {
+                            Icon(Icons.Default.Home, contentDescription = "Home")
+                        }
+                    }
+                )
+                // Search bar
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    placeholder = { Text("Search by name, ID, or project lead...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.medium
+                )
+            }
+        },
+        floatingActionButton = {
+            // Show scroll to top button when scrolled down
+            val showScrollToTop by remember {
+                derivedStateOf { listState.firstVisibleItemIndex > 0 }
+            }
+            if (showScrollToTop) {
+                FloatingActionButton(
+                    onClick = {
+                        scope.launch {
+                            listState.animateScrollToItem(0)
+                        }
+                    },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .padding(bottom = 72.dp)
+                        .size(44.dp),
+                    shape = MaterialTheme.shapes.extraLarge
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.offset(y = (-2).dp)
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                    }
-                    IconButton(onClick = onSearch) {
-                        Icon(Icons.Default.Search, contentDescription = "Search")
-                    }
-                    IconButton(onClick = onHome) {
-                        Icon(Icons.Default.Home, contentDescription = "Home")
+                        Icon(
+                            Icons.Default.ExpandLess,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp).offset(y = 5.dp)
+                        )
+                        Icon(
+                            Icons.Default.ExpandLess,
+                            contentDescription = "Scroll to top",
+                            modifier = Modifier.size(20.dp).offset(y = (-5).dp)
+                        )
                     }
                 }
-            )
+            }
         }
     ) { padding ->
         Box(
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding)
+                .nestedScroll(pullRefreshState.nestedScrollConnection)
         ) {
             when {
-                isLoading -> {
+                isLoading && persistentSummaries == null -> {
+                    // Loading with no cached data
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -259,14 +444,84 @@ fun ProjectsListScreen(
                     }
                 }
                 else -> {
-                    val allProjects = projects ?: emptyList()
-                    val activeProjects = allProjects
+                    // Use real projects if available, otherwise convert persistent summaries
+                    val allProjects = projects ?: persistentSummaries?.map { summary ->
+                        Project(
+                            projectId = summary.projectId,
+                            projectName = summary.projectName,
+                            description = summary.description,
+                            createdAt = summary.createdAt,
+                            projectLeadEmail = summary.projectLeadEmail
+                        )
+                    } ?: emptyList()
+
+                    // Filter projects based on search query (includes project, samples, and datasets with metadata)
+                    val filteredProjects = if (searchQuery.isBlank()) {
+                        allProjects
+                    } else {
+                        allProjects.filter { project ->
+                            // Search in project properties
+                            val matchesProject = project.projectName?.contains(searchQuery, ignoreCase = true) == true ||
+                                project.projectId.contains(searchQuery, ignoreCase = true) ||
+                                project.description?.contains(searchQuery, ignoreCase = true) == true ||
+                                project.projectLeadEmail?.contains(searchQuery, ignoreCase = true) == true
+
+                            // Search in cached samples
+                            val matchesSamples = CacheManager.getProjectSamples(project.projectId)
+                                ?.any { it.matchesSearch(searchQuery) } == true
+
+                            // Search in cached datasets (including metadata)
+                            val matchesDatasets = CacheManager.getProjectDatasets(project.projectId)
+                                ?.any { it.matchesSearch(searchQuery) } == true
+
+                            matchesProject || matchesSamples || matchesDatasets
+                        }
+                    }
+
+                    val activeProjects = filteredProjects
                         .filter { it.projectId !in archivedProjects }
                         .sortedByDescending { it.projectId in pinnedProjects }
-                    val archivedProjectsList = allProjects
+                    val archivedProjectsList = filteredProjects
                         .filter { it.projectId in archivedProjects }
 
-                    LazyColumn(
+                    // Show message when search returns no results
+                    if (searchQuery.isNotBlank() && filteredProjects.isEmpty()) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.SearchOff,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "No Results Found",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Text(
+                                    text = "No projects match \"$searchQuery\"",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    } else LazyColumn(
+                        state = listState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -368,6 +623,8 @@ fun ProjectsListScreen(
                                     val dismissState = rememberSwipeToDismissBoxState(
                                         confirmValueChange = { value ->
                                             if (value == SwipeToDismissBoxValue.StartToEnd) {
+                                                // Mark as manually unarchived to prevent auto-archiving
+                                                manuallyUnarchived = manuallyUnarchived + project.projectId
                                                 onToggleArchive(project.projectId)
                                                 true
                                             } else false
@@ -425,8 +682,43 @@ fun ProjectsListScreen(
                             }
                         }
                     }
+
+                    // Scrollbar for project list
+                    LazyColumnScrollbar(
+                        listState = listState,
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 4.dp)
+                    )
                 }
             }
+
+            // Only show pull-to-refresh indicator when not showing full loading screen
+            if ((pullRefreshState.isRefreshing || pullRefreshState.verticalOffset > 0f) &&
+                !(isLoading && persistentSummaries == null)) {
+                PullToRefreshContainer(
+                    state = pullRefreshState,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(isLoading) {
+        if (isLoading) {
+            pullRefreshState.startRefresh()
+        } else {
+            pullRefreshState.endRefresh()
+        }
+    }
+
+    if (pullRefreshState.isRefreshing && !isLoading) {
+        LaunchedEffect(Unit) {
+            CacheManager.clearProjectsCache()
+            CacheManager.clearProjectDetailsCache()
+            projectCounts = emptyMap()
+            loadProjects(forceRefresh = true)
         }
     }
 }
@@ -575,6 +867,201 @@ private fun CountChip(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
+            }
+        }
+    }
+}
+
+// Search helper functions
+private fun crucible.lens.data.model.Sample.matchesSearch(query: String): Boolean {
+    val q = query.lowercase()
+    return name.lowercase().contains(q) ||
+        (sampleType?.lowercase()?.contains(q) == true) ||
+        (projectId?.lowercase()?.contains(q) == true) ||
+        uniqueId.lowercase().contains(q) ||
+        (createdAt?.lowercase()?.contains(q) == true) ||
+        (internalId?.toString()?.contains(q) == true) ||
+        (ownerOrcid?.lowercase()?.contains(q) == true) ||
+        (keywords?.any { it.lowercase().contains(q) } == true)
+}
+
+private fun crucible.lens.data.model.Dataset.matchesSearch(query: String): Boolean {
+    val q = query.lowercase()
+    return name.lowercase().contains(q) ||
+        (measurement?.lowercase()?.contains(q) == true) ||
+        (instrumentName?.lowercase()?.contains(q) == true) ||
+        (instrumentId?.toString()?.contains(q) == true) ||
+        (sessionName?.lowercase()?.contains(q) == true) ||
+        (projectId?.lowercase()?.contains(q) == true) ||
+        uniqueId.lowercase().contains(q) ||
+        (createdAt?.lowercase()?.contains(q) == true) ||
+        (internalId?.toString()?.contains(q) == true) ||
+        (dataFormat?.lowercase()?.contains(q) == true) ||
+        (ownerOrcid?.lowercase()?.contains(q) == true) ||
+        (sourceFolder?.lowercase()?.contains(q) == true) ||
+        (fileToUpload?.lowercase()?.contains(q) == true) ||
+        (jsonLink?.lowercase()?.contains(q) == true) ||
+        (sha256Hash?.lowercase()?.contains(q) == true) ||
+        (keywords?.any { it.lowercase().contains(q) } == true) ||
+        (scientificMetadata?.containsQuery(q) == true)
+}
+
+private fun Map<String, Any?>.containsQuery(q: String): Boolean =
+    entries.any { (key, value) -> key.lowercase().contains(q) || value.matchesQuery(q) }
+
+private fun Any?.matchesQuery(q: String): Boolean = when (this) {
+    null -> false
+    is String -> lowercase().contains(q)
+    is Number -> toString().contains(q)
+    is Map<*, *> -> entries.any { (k, v) ->
+        k.toString().lowercase().contains(q) || v.matchesQuery(q)
+    }
+    is List<*> -> any { it.matchesQuery(q) }
+    else -> toString().lowercase().contains(q)
+}
+
+@Composable
+private fun LazyColumnScrollbar(
+    listState: LazyListState,
+    modifier: Modifier = Modifier,
+    thumbColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+    thumbWidth: androidx.compose.ui.unit.Dp = 4.dp
+) {
+    val density = LocalDensity.current
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
+    var isDragging by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val thumbAlpha by animateFloatAsState(
+        targetValue = if (isDragging || listState.isScrollInProgress) 1f else 0.3f,
+        label = "scrollbar_alpha"
+    )
+
+    Box(
+        modifier = modifier
+            .width(16.dp)
+            .onGloballyPositioned { containerSize = it.size }
+    ) {
+        // Force recomposition when list state changes
+        val layoutInfo = listState.layoutInfo
+        val firstVisibleIndex = listState.firstVisibleItemIndex
+        val firstVisibleOffset = listState.firstVisibleItemScrollOffset
+
+        val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+        val visibleItems = layoutInfo.visibleItemsInfo
+
+        if (viewportHeight > 0 && containerSize.height > 0 && layoutInfo.totalItemsCount > 0 && visibleItems.isNotEmpty()) {
+            // Build a map of actual item sizes from visible items
+            val visibleItemSizes = visibleItems.associate { it.index to it.size }
+
+            // Calculate total estimated height using actual visible sizes when available
+            var estimatedTotalHeight = 0f
+            val defaultItemHeight = visibleItems.sumOf { it.size } / visibleItems.size.toFloat()
+
+            // Sum up all items: use actual size if visible, else use default
+            for (i in 0 until layoutInfo.totalItemsCount) {
+                estimatedTotalHeight += visibleItemSizes[i]?.toFloat() ?: defaultItemHeight
+            }
+
+            // Calculate current scroll position by summing items before first visible
+            var currentScrollY = 0f
+            for (i in 0 until firstVisibleIndex) {
+                currentScrollY += visibleItemSizes[i]?.toFloat() ?: defaultItemHeight
+            }
+            currentScrollY += firstVisibleOffset
+
+            // Thumb metrics
+            val contentToViewportRatio = (viewportHeight / estimatedTotalHeight).coerceIn(0.05f, 1f)
+            val thumbHeight = (containerSize.height * contentToViewportRatio).coerceIn(
+                with(density) { 40.dp.toPx() },
+                containerSize.height.toFloat()
+            )
+
+            val scrollRange = (estimatedTotalHeight - viewportHeight).coerceAtLeast(1f)
+            val scrollFraction = (currentScrollY / scrollRange).coerceIn(0f, 1f)
+            val thumbTop = scrollFraction * (containerSize.height - thumbHeight)
+
+            // Only show scrollbar if content is scrollable
+            if (contentToViewportRatio < 1f) {
+                // Create a key that includes visible item sizes to trigger recomposition on expand/collapse
+                val layoutKey = visibleItemSizes.entries.joinToString { "${it.key}:${it.value}" }
+
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .alpha(thumbAlpha)
+                        .pointerInput(layoutKey) {
+                            var dragStartY = 0f
+                            var dragStartScrollOffset = 0f
+
+                            detectVerticalDragGestures(
+                                onDragStart = { offset ->
+                                    isDragging = true
+                                    dragStartY = offset.y
+                                    dragStartScrollOffset = currentScrollY
+
+                                    // Jump to tapped position if not on thumb
+                                    if (offset.y < thumbTop || offset.y > thumbTop + thumbHeight) {
+                                        val clickProgress = (offset.y / containerSize.height).coerceIn(0f, 1f)
+                                        val targetScroll = clickProgress * scrollRange
+
+                                        // Find which item index corresponds to this scroll position
+                                        var accumulatedHeight = 0f
+                                        var targetIndex = 0
+                                        for (i in 0 until layoutInfo.totalItemsCount) {
+                                            val itemHeight = visibleItemSizes[i]?.toFloat() ?: defaultItemHeight
+                                            if (accumulatedHeight + itemHeight > targetScroll) {
+                                                targetIndex = i
+                                                break
+                                            }
+                                            accumulatedHeight += itemHeight
+                                        }
+                                        val targetOffset = (targetScroll - accumulatedHeight).toInt().coerceAtLeast(0)
+
+                                        scope.launch {
+                                            listState.scrollToItem(targetIndex, targetOffset)
+                                        }
+                                    }
+                                },
+                                onDragEnd = { isDragging = false },
+                                onDragCancel = { isDragging = false }
+                            ) { change, dragAmount ->
+                                change.consume()
+
+                                // Calculate new scroll position based on drag
+                                val targetScroll = (dragStartScrollOffset + (change.position.y - dragStartY) / (containerSize.height - thumbHeight) * scrollRange)
+                                    .coerceIn(0f, scrollRange)
+
+                                // Find which item index corresponds to this scroll position
+                                var accumulatedHeight = 0f
+                                var targetIndex = 0
+                                for (i in 0 until layoutInfo.totalItemsCount) {
+                                    val itemHeight = visibleItemSizes[i]?.toFloat() ?: defaultItemHeight
+                                    if (accumulatedHeight + itemHeight > targetScroll) {
+                                        targetIndex = i
+                                        break
+                                    }
+                                    accumulatedHeight += itemHeight
+                                }
+                                val targetOffset = (targetScroll - accumulatedHeight).toInt().coerceAtLeast(0)
+
+                                scope.launch {
+                                    listState.scrollToItem(targetIndex, targetOffset)
+                                }
+                            }
+                        }
+                ) {
+                    drawRoundRect(
+                        color = thumbColor,
+                        topLeft = Offset(size.width - with(density) { thumbWidth.toPx() }, thumbTop),
+                        size = androidx.compose.ui.geometry.Size(
+                            with(density) { thumbWidth.toPx() },
+                            thumbHeight
+                        ),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                            with(density) { (thumbWidth / 2).toPx() }
+                        )
+                    )
+                }
             }
         }
     }

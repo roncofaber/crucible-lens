@@ -83,10 +83,10 @@ fun NavGraph(
     graphExplorerUrl: String,
     themeMode: String,
     accentColor: String,
+    appIcon: String,
     darkTheme: Boolean,
     lastVisitedResource: String?,
     lastVisitedResourceName: String?,
-    smoothAnimations: Boolean,
     floatingScanButton: Boolean,
     deepLinkUuid: String?,
     pinnedProjects: Set<String>,
@@ -97,8 +97,8 @@ fun NavGraph(
     onGraphExplorerUrlSave: (String) -> Unit,
     onThemeModeSave: (String) -> Unit,
     onAccentColorSave: (String) -> Unit,
+    onAppIconSave: (String) -> Unit,
     onLastVisitedResourceSave: (String, String) -> Unit,
-    onSmoothAnimationsSave: (Boolean) -> Unit,
     onFloatingScanButtonSave: (Boolean) -> Unit,
     onTogglePinnedProject: (String) -> Unit,
     archivedProjects: Set<String>,
@@ -107,11 +107,11 @@ fun NavGraph(
 ) {
     LaunchedEffect(deepLinkUuid) {
         if (!deepLinkUuid.isNullOrBlank()) {
+            viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
             navController.navigate(Screen.Detail.createRoute(deepLinkUuid))
         }
     }
     val uiState by viewModel.uiState.collectAsState()
-    viewModel.setSmoothAnimations(smoothAnimations)
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -144,32 +144,16 @@ fun NavGraph(
         navController = navController,
         startDestination = Screen.Home.route,
         enterTransition = {
-            if (smoothAnimations) {
-                fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
-            } else {
-                fadeIn(animationSpec = tween(0))
-            }
+            fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
         },
         exitTransition = {
-            if (smoothAnimations) {
-                fadeOut(animationSpec = tween(200))
-            } else {
-                fadeOut(animationSpec = tween(0))
-            }
+            fadeOut(animationSpec = tween(200))
         },
         popEnterTransition = {
-            if (smoothAnimations) {
-                fadeIn(animationSpec = tween(300))
-            } else {
-                fadeIn(animationSpec = tween(0))
-            }
+            fadeIn(animationSpec = tween(300))
         },
         popExitTransition = {
-            if (smoothAnimations) {
-                fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
-            } else {
-                fadeOut(animationSpec = tween(0))
-            }
+            fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
         }
     ) {
         composable(Screen.Home.route) {
@@ -191,6 +175,7 @@ fun NavGraph(
                     if (apiKey.isNullOrBlank()) {
                         navController.navigate(Screen.Settings.route)
                     } else {
+                        viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
                         navController.navigate(Screen.Detail.createRoute(uuid))
                     }
                 },
@@ -226,6 +211,7 @@ fun NavGraph(
                         val parsed = Uri.parse(code)
                         if (parsed.scheme != null) parsed.lastPathSegment ?: code else code
                     }.getOrDefault(code).trim()
+                    viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 }
             )
@@ -267,11 +253,11 @@ fun NavGraph(
             AppearanceSettingsScreen(
                 currentThemeMode = themeMode,
                 currentAccentColor = accentColor,
-                currentSmoothAnimations = smoothAnimations,
+                currentAppIcon = appIcon,
                 currentFloatingScanButton = floatingScanButton,
                 onThemeModeSave = onThemeModeSave,
                 onAccentColorSave = onAccentColorSave,
-                onSmoothAnimationsSave = onSmoothAnimationsSave,
+                onAppIconSave = onAppIconSave,
                 onFloatingScanButtonSave = onFloatingScanButtonSave,
                 onBack = { navController.popBackStack() },
                 onHome = {
@@ -299,34 +285,26 @@ fun NavGraph(
             arguments = listOf(navArgument("mfid") { type = NavType.StringType }),
             enterTransition = {
                 val isSibling = initialState.destination.route?.startsWith("detail/") == true
+                val fromProject = initialState.destination.route?.startsWith("project/") == true
                 when {
                     isSibling -> EnterTransition.None
-                    smoothAnimations ->
-                        fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
-                    else -> fadeIn(animationSpec = tween(0))
+                    fromProject -> fadeIn(animationSpec = tween(300))
+                    else -> fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
                 }
             },
             exitTransition = {
                 val isSibling = targetState.destination.route?.startsWith("detail/") == true
-                when {
-                    isSibling -> ExitTransition.None
-                    smoothAnimations -> fadeOut(animationSpec = tween(200))
-                    else -> fadeOut(animationSpec = tween(0))
+                if (isSibling) {
+                    ExitTransition.None
+                } else {
+                    fadeOut(animationSpec = tween(200))
                 }
             },
             popEnterTransition = {
-                if (smoothAnimations) {
-                    fadeIn(animationSpec = tween(300))
-                } else {
-                    fadeIn(animationSpec = tween(0))
-                }
+                fadeIn(animationSpec = tween(300))
             },
             popExitTransition = {
-                if (smoothAnimations) {
-                    fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
-                } else {
-                    fadeOut(animationSpec = tween(0))
-                }
+                fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
             }
         ) { backStackEntry ->
             val mfid = backStackEntry.arguments?.getString("mfid") ?: ""
@@ -345,13 +323,10 @@ fun NavGraph(
                     val isSuccessToSuccess =
                         initialState is UiState.Success && targetState is UiState.Success
                     val isFromIdle = initialState is UiState.Idle
-                    when {
-                        isSuccessToSuccess || isFromIdle ->
-                            EnterTransition.None togetherWith ExitTransition.None
-                        smoothAnimations ->
-                            fadeIn(tween(300)) togetherWith fadeOut(tween(300))
-                        else ->
-                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                    if (isSuccessToSuccess || isFromIdle) {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    } else {
+                        fadeIn(tween(300)) togetherWith fadeOut(tween(300))
                     }
                 },
                 label = "resource state"
@@ -409,13 +384,8 @@ fun NavGraph(
                                         AnimatedContent(
                                             targetState = loadingMessage,
                                             transitionSpec = {
-                                                if (smoothAnimations) {
-                                                    fadeIn(animationSpec = tween(500)) togetherWith
-                                                        fadeOut(animationSpec = tween(500))
-                                                } else {
-                                                    fadeIn(animationSpec = tween(0)) togetherWith
-                                                        fadeOut(animationSpec = tween(0))
-                                                }
+                                                fadeIn(animationSpec = tween(500)) togetherWith
+                                                    fadeOut(animationSpec = tween(500))
                                             },
                                             label = "loading message"
                                         ) { message ->
@@ -446,6 +416,7 @@ fun NavGraph(
                         graphExplorerUrl = graphExplorerUrl,
                         darkTheme = darkTheme,
                         siblingNavDirection = viewModel.siblingNavDirection,
+                        onResetSiblingNavDirection = { viewModel.resetSiblingNavDirection() },
                         onSaveToHistory = { uuid, name ->
                             onLastVisitedResourceSave(uuid, name)
                             onHistoryAdd(uuid, name)
@@ -454,6 +425,7 @@ fun NavGraph(
                             navController.popBackStack()
                         },
                         onNavigateToResource = { newMfid ->
+                            viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
                             navController.navigate(Screen.Detail.createRoute(newMfid))
                         },
                         onNavigateToProject = { projectId ->
@@ -568,32 +540,16 @@ fun NavGraph(
         composable(
             route = Screen.Projects.route,
             enterTransition = {
-                if (smoothAnimations) {
-                    fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
-                } else {
-                    fadeIn(animationSpec = tween(0))
-                }
+                fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
             },
             exitTransition = {
-                if (smoothAnimations) {
-                    fadeOut(animationSpec = tween(200))
-                } else {
-                    fadeOut(animationSpec = tween(0))
-                }
+                fadeOut(animationSpec = tween(200))
             },
             popEnterTransition = {
-                if (smoothAnimations) {
-                    fadeIn(animationSpec = tween(300))
-                } else {
-                    fadeIn(animationSpec = tween(0))
-                }
+                fadeIn(animationSpec = tween(300))
             },
             popExitTransition = {
-                if (smoothAnimations) {
-                    fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
-                } else {
-                    fadeOut(animationSpec = tween(0))
-                }
+                fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
             }
         ) {
             ProjectsListScreen(
@@ -603,7 +559,6 @@ fun NavGraph(
                         popUpTo(Screen.Home.route) { inclusive = false }
                     }
                 },
-                onSearch = { navController.navigate(Screen.Search.route) },
                 onProjectClick = { projectId ->
                     navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                 },
@@ -618,32 +573,16 @@ fun NavGraph(
             route = Screen.ProjectDetail.route,
             arguments = listOf(navArgument("projectId") { type = NavType.StringType }),
             enterTransition = {
-                if (smoothAnimations) {
-                    fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
-                } else {
-                    fadeIn(animationSpec = tween(0))
-                }
+                fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
             },
             exitTransition = {
-                if (smoothAnimations) {
-                    fadeOut(animationSpec = tween(200))
-                } else {
-                    fadeOut(animationSpec = tween(0))
-                }
+                fadeOut(animationSpec = tween(200))
             },
             popEnterTransition = {
-                if (smoothAnimations) {
-                    fadeIn(animationSpec = tween(300))
-                } else {
-                    fadeIn(animationSpec = tween(0))
-                }
+                fadeIn(animationSpec = tween(300))
             },
             popExitTransition = {
-                if (smoothAnimations) {
-                    fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
-                } else {
-                    fadeOut(animationSpec = tween(0))
-                }
+                fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
             }
         ) { backStackEntry ->
             val projectId = backStackEntry.arguments?.getString("projectId") ?: ""
@@ -658,6 +597,7 @@ fun NavGraph(
                 },
                 onSearch = { navController.navigate(Screen.Search.route) },
                 onResourceClick = { mfid ->
+                    viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
                     navController.navigate(Screen.Detail.createRoute(mfid))
                 },
                 isPinned = projectId in pinnedProjects,
@@ -675,6 +615,7 @@ fun NavGraph(
                     }
                 },
                 onItemClick = { uuid ->
+                    viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 }
             )
@@ -690,7 +631,12 @@ fun NavGraph(
                     }
                 },
                 onResourceClick = { uuid ->
+                    viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
                     navController.navigate(Screen.Detail.createRoute(uuid))
+                },
+                onProjectClick = { projectId ->
+                    viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
+                    navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                 }
             )
         }

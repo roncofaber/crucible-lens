@@ -28,7 +28,9 @@ import crucible.lens.BuildConfig
 import crucible.lens.R
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.ui.common.allLoadingMessages
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +58,23 @@ fun HomeScreen(
     // Reactive projects list — drives the pinned section; updated when cache is populated
     var allProjects by remember { mutableStateOf(CacheManager.getProjects() ?: emptyList()) }
 
+    // Load from persistent cache immediately on startup
+    LaunchedEffect(Unit) {
+        val persistentData = PersistentProjectCache.loadProjectData(context)
+        if (persistentData != null && allProjects.isEmpty()) {
+            // Convert summaries to Project objects for immediate display
+            allProjects = persistentData.map {
+                crucible.lens.data.model.Project(
+                    projectId = it.projectId,
+                    projectName = it.projectName,
+                    description = it.description,
+                    createdAt = it.createdAt,
+                    projectLeadEmail = it.projectLeadEmail
+                )
+            }
+        }
+    }
+
     // Preload projects data in background if API key is available
     LaunchedEffect(apiKey) {
         if (apiKey.isNullOrBlank()) return@LaunchedEffect
@@ -75,6 +94,88 @@ fun HomeScreen(
                 // Silently fail — user can still load manually
             }
         }
+    }
+
+    // Background pre-loading of project counts (samples/datasets) - throttled to avoid slowing phone
+    // This automatically cancels when the user navigates away from this screen.
+    LaunchedEffect(allProjects, pinnedProjects) {
+        if (apiKey.isNullOrBlank() || allProjects.isEmpty()) return@LaunchedEffect
+
+        // Delay initial start to let UI settle
+        kotlinx.coroutines.delay(500)
+
+        // Prioritize: pinned projects first, then others
+        val prioritizedProjects = allProjects
+            .sortedByDescending { it.projectId in pinnedProjects }
+
+        // Track consecutive failures to stop on network errors (thread-safe for concurrent launches)
+        val consecutiveFailures = java.util.concurrent.atomic.AtomicInteger(0)
+        val maxConsecutiveFailures = 5
+
+        // Throttle: process max 3 projects concurrently, with 150ms delay between batches
+        prioritizedProjects.chunked(3).forEach { batch ->
+            // Stop if we've had too many consecutive failures (likely network issue)
+            if (consecutiveFailures.get() >= maxConsecutiveFailures) {
+                return@LaunchedEffect
+            }
+            batch.forEach { project ->
+                launch(kotlinx.coroutines.Dispatchers.IO) {
+                    // Skip if already cached
+                    if (CacheManager.getProjectSamples(project.projectId) != null &&
+                        CacheManager.getProjectDatasets(project.projectId) != null) {
+                        return@launch
+                    }
+
+                    var hadError = false
+                    try {
+                        // Load samples (lightweight, always cache)
+                        val samplesResp = ApiClient.service.getSamplesByProject(project.projectId)
+                        if (samplesResp.isSuccessful) {
+                            consecutiveFailures.set(0) // Reset on success
+                            samplesResp.body()?.let { CacheManager.cacheProjectSamples(project.projectId, it) }
+                        }
+
+                        // Load datasets with metadata for search functionality and pre-warm cache
+                        val datasetsResp = ApiClient.service.getDatasetsByProject(project.projectId, includeMetadata = true)
+                        if (datasetsResp.isSuccessful) {
+                            consecutiveFailures.set(0) // Reset on success
+                            datasetsResp.body()?.let { CacheManager.cacheProjectDatasets(project.projectId, it) }
+                        }
+                    } catch (e: Exception) {
+                        // Track network/API failures
+                        hadError = true
+                    }
+
+                    // Increment failure counter (thread-safe increment)
+                    if (hadError) {
+                        consecutiveFailures.incrementAndGet()
+                    }
+                }
+            }
+            // Small delay between batches to avoid overwhelming the phone
+            kotlinx.coroutines.delay(150)
+        }
+
+        // After all batches complete, save to persistent cache
+        launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val samplesMap = mutableMapOf<String, List<crucible.lens.data.model.Sample>>()
+                    val datasetsMap = mutableMapOf<String, List<crucible.lens.data.model.Dataset>>()
+
+                    allProjects.forEach { project ->
+                        CacheManager.getProjectSamples(project.projectId)?.let {
+                            samplesMap[project.projectId] = it
+                        }
+                        CacheManager.getProjectDatasets(project.projectId)?.let {
+                            datasetsMap[project.projectId] = it
+                        }
+                    }
+
+                    PersistentProjectCache.saveProjectData(context, allProjects, samplesMap, datasetsMap)
+                } catch (e: Exception) {
+                    // Fail silently
+                }
+            }
     }
 
     Scaffold(

@@ -35,6 +35,7 @@ import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -93,6 +94,7 @@ fun ResourceDetailScreen(
     onSaveToHistory: (uuid: String, name: String) -> Unit = { _, _ -> },
     darkTheme: Boolean,
     siblingNavDirection: Int = 0,
+    onResetSiblingNavDirection: () -> Unit = {},
     getCardState: (key: String) -> Boolean = { false },
     onCardStateChange: (key: String, value: Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
@@ -103,8 +105,33 @@ fun ResourceDetailScreen(
 
     // Sibling navigation: same type within the same project
     // Samples grouped by sampleType, Datasets grouped by measurement
-    var sameTypeSamples by remember { mutableStateOf<List<Sample>>(emptyList()) }
-    var sameTypeDatasets by remember { mutableStateOf<List<Dataset>>(emptyList()) }
+    // Initialize with cached data to avoid flash of "-- / --" when navigating
+    var sameTypeSamples by remember(resource) {
+        mutableStateOf(
+            if (resource is Sample) {
+                val projectId = resource.projectId
+                if (projectId != null) {
+                    CacheManager.getProjectSamples(projectId)
+                        ?.filter { it.sampleType == resource.sampleType }
+                        ?.sortedBy { it.internalId ?: Int.MAX_VALUE }
+                        ?: emptyList()
+                } else emptyList()
+            } else emptyList()
+        )
+    }
+    var sameTypeDatasets by remember(resource) {
+        mutableStateOf(
+            if (resource is Dataset) {
+                val projectId = resource.projectId
+                if (projectId != null) {
+                    CacheManager.getProjectDatasets(projectId)
+                        ?.filter { it.measurement == resource.measurement }
+                        ?.sortedBy { it.internalId ?: Int.MAX_VALUE }
+                        ?: emptyList()
+                } else emptyList()
+            } else emptyList()
+        )
+    }
     LaunchedEffect(resource) {
         when (resource) {
             is Sample -> {
@@ -134,7 +161,7 @@ fun ResourceDetailScreen(
                     sameTypeDatasets = cached.filterAndSort()
                 } else {
                     try {
-                        val response = ApiClient.service.getDatasetsByProject(projectId)
+                        val response = ApiClient.service.getDatasetsByProject(projectId, includeMetadata = false)
                         if (response.isSuccessful) {
                             val all = response.body() ?: emptyList()
                             CacheManager.cacheProjectDatasets(projectId, all)
@@ -165,12 +192,18 @@ fun ResourceDetailScreen(
     // Slide-in animation for the content area on sibling navigation.
     // The top bar (Scaffold) appears instantly (EnterTransition.None at NavGraph level),
     // while the content slides in from the direction of travel.
-    val contentOffset = remember {
+    val contentOffset = remember(resource.uniqueId) {
         Animatable(if (siblingNavDirection != 0) siblingNavDirection * screenWidthPx else 0f)
     }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(resource.uniqueId, siblingNavDirection) {
         if (siblingNavDirection != 0) {
+            contentOffset.snapTo(siblingNavDirection * screenWidthPx)
             contentOffset.animateTo(0f, animationSpec = tween(durationMillis = 220))
+            // Reset direction after animation to prevent it from affecting non-sibling navigations
+            onResetSiblingNavDirection()
+        } else {
+            // Ensure offset is 0 for non-sibling navigation
+            contentOffset.snapTo(0f)
         }
     }
     LaunchedEffect(resource.uniqueId) {
@@ -223,24 +256,22 @@ fun ResourceDetailScreen(
                                     is Dataset -> "dataset"
                                 }
 
-                                if (resourceType != null) {
-                                    val url = "$graphExplorerUrl/$projectId/$resourceType/${resource.uniqueId}"
-                                    val shareText = "Check out this ${if (resource is Sample) "sample" else "dataset"} in Crucible: $url"
-                                    val imageUri = ShareCardGenerator.generate(context, resource, bannerColorInt, darkTheme)
-                                    val shareIntent = Intent().apply {
-                                        action = Intent.ACTION_SEND
-                                        putExtra(Intent.EXTRA_TEXT, shareText)
-                                        putExtra(Intent.EXTRA_SUBJECT, resource.name)
-                                        if (imageUri != null) {
-                                            putExtra(Intent.EXTRA_STREAM, imageUri)
-                                            type = "image/*"
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                        } else {
-                                            type = "text/plain"
-                                        }
+                                val url = "$graphExplorerUrl/$projectId/$resourceType/${resource.uniqueId}"
+                                val shareText = "Check out this ${if (resource is Sample) "sample" else "dataset"} in Crucible: $url"
+                                val imageUri = ShareCardGenerator.generate(context, resource, bannerColorInt, darkTheme)
+                                val shareIntent = Intent().apply {
+                                    action = Intent.ACTION_SEND
+                                    putExtra(Intent.EXTRA_TEXT, shareText)
+                                    putExtra(Intent.EXTRA_SUBJECT, resource.name)
+                                    if (imageUri != null) {
+                                        putExtra(Intent.EXTRA_STREAM, imageUri)
+                                        type = "image/*"
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    } else {
+                                        type = "text/plain"
                                     }
-                                    context.startActivity(Intent.createChooser(shareIntent, "Share via"))
                                 }
+                                context.startActivity(Intent.createChooser(shareIntent, "Share via"))
                             }
                         },
                             modifier = Modifier.size(40.dp)
@@ -266,10 +297,8 @@ fun ResourceDetailScreen(
                                     is Dataset -> "dataset"
                                 }
 
-                                if (resourceType != null) {
-                                    val url = "$graphExplorerUrl/$projectId/$resourceType/${resource.uniqueId}"
-                                    openUrlInBrowser(context, url)
-                                }
+                                val url = "$graphExplorerUrl/$projectId/$resourceType/${resource.uniqueId}"
+                                openUrlInBrowser(context, url)
                             }
                         },
                             modifier = Modifier.size(40.dp)
@@ -350,13 +379,65 @@ fun ResourceDetailScreen(
                     }
                 )
         ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+            // Animated loading state - centered nicely on screen
+            AnimatedVisibility(
+                visible = resource.uniqueId != mfid || isRefreshing,
+                enter = fadeIn(animationSpec = tween(durationMillis = 300)),
+                exit = fadeOut(animationSpec = tween(durationMillis = 200))
             ) {
-                if (resource.uniqueId == mfid) {
+                val loadingMessage = LoadingMessage()
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                        Column(
+                            modifier = Modifier.padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(20.dp)
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(48.dp), strokeWidth = 4.dp)
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Loading Resource",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                AnimatedContent(
+                                    targetState = loadingMessage,
+                                    transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(500)) },
+                                    label = "loading message"
+                                ) { message ->
+                                    Text(
+                                        text = message,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Animated main content
+            AnimatedVisibility(
+                visible = resource.uniqueId == mfid && !isRefreshing,
+                enter = fadeIn(animationSpec = tween(durationMillis = 300, delayMillis = 100)),
+                exit = fadeOut(animationSpec = tween(durationMillis = 200))
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
                     item(key = "basic_info") {
                         BasicInfoCard(
                             resource = resource,
@@ -366,49 +447,6 @@ fun ResourceDetailScreen(
                             totalCount = siblingList.size
                         )
                     }
-                }
-
-                if (resource.uniqueId != mfid || isRefreshing) {
-                    item(key = "loading_content") {
-                        val loadingMessage = LoadingMessage()
-                        Box(
-                            modifier = Modifier.fillParentMaxHeight().fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                                Column(
-                                    modifier = Modifier.padding(32.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                                ) {
-                                    CircularProgressIndicator(modifier = Modifier.size(48.dp), strokeWidth = 4.dp)
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Text(
-                                            text = "Loading Resource",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        AnimatedContent(
-                                            targetState = loadingMessage,
-                                            transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(500)) },
-                                            label = "loading message"
-                                        ) { message ->
-                                            Text(
-                                                text = message,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                                textAlign = TextAlign.Center
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
 
                 when (resource) {
                     is Sample -> item(key = "type_details") {
@@ -552,8 +590,8 @@ fun ResourceDetailScreen(
                         )
                     }
                 }
-                } // end else (detail content)
-            }
+                } // end LazyColumn items
+            } // end LazyColumn
             PullToRefreshContainer(
                 state = pullRefreshState,
                 modifier = Modifier.align(Alignment.TopCenter)
@@ -607,63 +645,76 @@ private fun BasicInfoCard(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            if (totalCount > 1) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            // Always show navigation UI to prevent layout shift
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { onPrev?.invoke() },
+                    enabled = onPrev != null,
+                    modifier = Modifier.size(36.dp)
                 ) {
-                    IconButton(
-                        onClick = { onPrev?.invoke() },
-                        enabled = onPrev != null,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ChevronLeft,
-                            contentDescription = "Previous sample",
-                            tint = if (onPrev != null) MaterialTheme.colorScheme.primary
-                                   else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
-                        )
-                    }
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
-                    ) {
+                    Icon(
+                        Icons.Default.ChevronLeft,
+                        contentDescription = "Previous sample",
+                        tint = if (onPrev != null) MaterialTheme.colorScheme.primary
+                               else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                    )
+                }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    // Animated resource name
+                    AnimatedContent(
+                        targetState = resource.name,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith
+                                fadeOut(animationSpec = tween(durationMillis = 200))
+                        },
+                        label = "resource_name"
+                    ) { name ->
                         Text(
-                            text = resource.name,
+                            text = name,
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center
                         )
-                        if (currentIndex >= 0) {
-                            Text(
-                                text = "${currentIndex + 1} / $totalCount",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
                     }
-                    IconButton(
-                        onClick = { onNext?.invoke() },
-                        enabled = onNext != null,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ChevronRight,
-                            contentDescription = "Next sample",
-                            tint = if (onNext != null) MaterialTheme.colorScheme.primary
-                                   else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                    // Animated counter - placeholder while loading, actual count when ready
+                    val counterText = when {
+                        currentIndex < 0 || totalCount == 0 -> "-- / --"
+                        else -> "${currentIndex + 1} / $totalCount"
+                    }
+                    AnimatedContent(
+                        targetState = counterText,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith
+                                fadeOut(animationSpec = tween(durationMillis = 200))
+                        },
+                        label = "sibling_counter"
+                    ) { text ->
+                        Text(
+                            text = text,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-            } else {
-                Text(
-                    text = resource.name,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
-                )
+                IconButton(
+                    onClick = { onNext?.invoke() },
+                    enabled = onNext != null,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = "Next sample",
+                        tint = if (onNext != null) MaterialTheme.colorScheme.primary
+                               else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                    )
+                }
             }
         }
     }

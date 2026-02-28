@@ -1,5 +1,7 @@
 package crucible.lens
 
+import android.content.ComponentName
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,6 +19,39 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var preferencesManager: PreferencesManager
+
+    private fun switchAppIcon(icon: String) {
+        val packageManager = packageManager
+        val lightAlias = ComponentName(this, "crucible.lens.MainActivityLight")
+        val darkAlias = ComponentName(this, "crucible.lens.MainActivityDark")
+
+        when (icon) {
+            PreferencesManager.APP_ICON_LIGHT -> {
+                packageManager.setComponentEnabledSetting(
+                    lightAlias,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                packageManager.setComponentEnabledSetting(
+                    darkAlias,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+            }
+            PreferencesManager.APP_ICON_DARK -> {
+                packageManager.setComponentEnabledSetting(
+                    lightAlias,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                packageManager.setComponentEnabledSetting(
+                    darkAlias,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,14 +75,14 @@ class MainActivity : ComponentActivity() {
             val accentColor by preferencesManager.accentColor.collectAsState(
                 initial = PreferencesManager.DEFAULT_ACCENT_COLOR
             )
+            val appIcon by preferencesManager.appIcon.collectAsState(
+                initial = PreferencesManager.APP_ICON_LIGHT
+            )
             val lastVisitedResource by preferencesManager.lastVisitedResource.collectAsState(
                 initial = null
             )
             val lastVisitedResourceName by preferencesManager.lastVisitedResourceName.collectAsState(
                 initial = null
-            )
-            val smoothAnimations by preferencesManager.smoothAnimations.collectAsState(
-                initial = true
             )
             val floatingScanButton by preferencesManager.floatingScanButton.collectAsState(
                 initial = true
@@ -90,10 +125,10 @@ class MainActivity : ComponentActivity() {
                     graphExplorerUrl = graphExplorerUrl,
                     themeMode = themeMode,
                     accentColor = accentColor,
+                    appIcon = appIcon,
                     darkTheme = darkTheme,
                     lastVisitedResource = lastVisitedResource,
                     lastVisitedResourceName = lastVisitedResourceName,
-                    smoothAnimations = smoothAnimations,
                     floatingScanButton = floatingScanButton,
                     deepLinkUuid = deepLinkUuid,
                     pinnedProjects = pinnedProjects,
@@ -130,14 +165,16 @@ class MainActivity : ComponentActivity() {
                             preferencesManager.saveAccentColor(color)
                         }
                     },
+                    onAppIconSave = { icon ->
+                        scope.launch {
+                            preferencesManager.saveAppIcon(icon)
+                            // Switch between icon aliases
+                            switchAppIcon(icon)
+                        }
+                    },
                     onLastVisitedResourceSave = { uuid, name ->
                         scope.launch {
                             preferencesManager.saveLastVisitedResource(uuid, name)
-                        }
-                    },
-                    onSmoothAnimationsSave = { enabled ->
-                        scope.launch {
-                            preferencesManager.saveSmoothAnimations(enabled)
                         }
                     },
                     onFloatingScanButtonSave = { enabled ->

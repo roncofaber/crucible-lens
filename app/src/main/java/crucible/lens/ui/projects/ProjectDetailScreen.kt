@@ -4,34 +4,53 @@ import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.offset
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.roundToInt
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
@@ -44,7 +63,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun ProjectDetailScreen(
     projectId: String,
@@ -65,13 +84,14 @@ fun ProjectDetailScreen(
     var datasets by remember { mutableStateOf<List<Dataset>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    var selectedTab by rememberSaveable { mutableStateOf(0) }
+    val pagerState = rememberPagerState(pageCount = { 2 })
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var fromCache by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val samplesListState = rememberLazyListState()
     val datasetsListState = rememberLazyListState()
+    val pullRefreshState = rememberPullToRefreshState()
 
     val filteredSamples = remember(samples, searchQuery) {
         if (searchQuery.isBlank()) samples ?: emptyList()
@@ -97,6 +117,7 @@ fun ProjectDetailScreen(
                         datasets = cachedDatasets
                         fromCache = true
                         isLoading = false
+                        pullRefreshState.endRefresh()
                         return@launch
                     }
                 }
@@ -104,7 +125,7 @@ fun ProjectDetailScreen(
 
                 val (samplesResponse, datasetsResponse) = coroutineScope {
                     val s = async { ApiClient.service.getSamplesByProject(projectId) }
-                    val d = async { ApiClient.service.getDatasetsByProject(projectId) }
+                    val d = async { ApiClient.service.getDatasetsByProject(projectId, includeMetadata = false) }
                     s.await() to d.await()
                 }
 
@@ -127,25 +148,13 @@ fun ProjectDetailScreen(
                 error = "Error: ${e.message}"
             } finally {
                 isLoading = false
+                pullRefreshState.endRefresh()
             }
         }
     }
 
     LaunchedEffect(projectId) {
         loadProjectData()
-    }
-
-    val pullRefreshState = rememberPullToRefreshState()
-    if (pullRefreshState.isRefreshing) {
-        LaunchedEffect(true) {
-            CacheManager.clearProjectDetail(projectId)
-            loadProjectData(forceRefresh = true)
-        }
-    }
-    LaunchedEffect(isLoading) {
-        if (!isLoading && pullRefreshState.isRefreshing) {
-            pullRefreshState.endRefresh()
-        }
     }
 
     Scaffold(
@@ -201,6 +210,41 @@ fun ProjectDetailScreen(
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            val currentListState = if (pagerState.currentPage == 0) samplesListState else datasetsListState
+            val showScrollToTop by remember {
+                derivedStateOf { currentListState.firstVisibleItemIndex > 0 }
+            }
+            if (showScrollToTop && !isLoading) {
+                FloatingActionButton(
+                    onClick = {
+                        scope.launch {
+                            currentListState.animateScrollToItem(0)
+                        }
+                    },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(44.dp),
+                    shape = MaterialTheme.shapes.extraLarge
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.offset(y = (-2).dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ExpandLess,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp).offset(y = 5.dp)
+                        )
+                        Icon(
+                            Icons.Default.ExpandLess,
+                            contentDescription = "Scroll to top",
+                            modifier = Modifier.size(20.dp).offset(y = (-5).dp)
+                        )
+                    }
+                }
+            }
         }
     ) { padding ->
         Box(
@@ -209,9 +253,9 @@ fun ProjectDetailScreen(
                 .padding(padding)
                 .nestedScroll(pullRefreshState.nestedScrollConnection)
         ) {
-        Column(
-            modifier = modifier.fillMaxSize()
-        ) {
+            Column(
+                modifier = modifier.fillMaxSize()
+            ) {
             // Project header with integrated search
             ProjectHeader(
                 project = project,
@@ -224,30 +268,62 @@ fun ProjectDetailScreen(
             )
 
             // Tabs
-            TabRow(selectedTabIndex = selectedTab) {
+            TabRow(selectedTabIndex = pagerState.currentPage) {
                 Tab(
-                    selected = selectedTab == 0,
+                    selected = pagerState.currentPage == 0,
                     onClick = {
-                        selectedTab = 0
-                        scope.launch { samplesListState.animateScrollToItem(0) }
+                        scope.launch {
+                            pagerState.animateScrollToPage(0)
+                            samplesListState.animateScrollToItem(0)
+                        }
                     },
                     text = {
                         val count = filteredSamples.size
-                        val total = samples?.size ?: 0
-                        Text(if (searchQuery.isBlank()) "Samples ($total)" else "Samples ($count/$total)")
+                        val total = samples?.size
+                        val label = when {
+                            total == null -> "Samples (--)"
+                            searchQuery.isBlank() -> "Samples ($total)"
+                            else -> "Samples ($count/$total)"
+                        }
+                        AnimatedContent(
+                            targetState = label,
+                            transitionSpec = {
+                                fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith
+                                    fadeOut(animationSpec = tween(durationMillis = 200))
+                            },
+                            label = "samples_tab_label"
+                        ) { text ->
+                            Text(text)
+                        }
                     },
                     icon = { Icon(Icons.Default.Science, contentDescription = null) }
                 )
                 Tab(
-                    selected = selectedTab == 1,
+                    selected = pagerState.currentPage == 1,
                     onClick = {
-                        selectedTab = 1
-                        scope.launch { datasetsListState.animateScrollToItem(0) }
+                        scope.launch {
+                            pagerState.animateScrollToPage(1)
+                            datasetsListState.animateScrollToItem(0)
+                        }
                     },
                     text = {
                         val count = filteredDatasets.size
-                        val total = datasets?.size ?: 0
-                        Text(if (searchQuery.isBlank()) "Datasets ($total)" else "Datasets ($count/$total)")
+                        val total = datasets?.size
+                        val label = when {
+                            total == null -> "Datasets (--)"
+                            searchQuery.isBlank() -> "Datasets ($total)"
+                            else -> "Datasets ($count/$total)"
+                        }
+                        AnimatedContent(
+                            targetState = label,
+                            transitionSpec = {
+                                fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith
+                                    fadeOut(animationSpec = tween(durationMillis = 200))
+                            },
+                            label = "datasets_tab_label"
+                        ) { text ->
+                            Text(text)
+                        }
                     },
                     icon = { Icon(Icons.Default.Dataset, contentDescription = null) }
                 )
@@ -257,7 +333,9 @@ fun ProjectDetailScreen(
                 isLoading -> {
                     val loadingMessage = LoadingMessage()
                     Box(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
                         contentAlignment = Alignment.Center
                     ) {
                         Card(
@@ -305,14 +383,19 @@ fun ProjectDetailScreen(
                     }
                 }
                 error != null -> {
-                    Card(
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        )
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
                     ) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            )
+                        ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -340,29 +423,54 @@ fun ProjectDetailScreen(
                             )
                         }
                     }
+                    }
                 }
                 else -> {
-                    when (selectedTab) {
-                        0 -> SamplesList(
-                            samples = filteredSamples,
-                            isFiltered = searchQuery.isNotBlank(),
-                            listState = samplesListState,
-                            onSampleClick = onResourceClick
-                        )
-                        1 -> DatasetsList(
-                            datasets = filteredDatasets,
-                            isFiltered = searchQuery.isNotBlank(),
-                            listState = datasetsListState,
-                            onDatasetClick = onResourceClick
-                        )
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize()
+                    ) { page ->
+                        when (page) {
+                            0 -> SamplesList(
+                                samples = filteredSamples,
+                                isFiltered = searchQuery.isNotBlank(),
+                                listState = samplesListState,
+                                onSampleClick = onResourceClick
+                            )
+                            1 -> DatasetsList(
+                                datasets = filteredDatasets,
+                                isFiltered = searchQuery.isNotBlank(),
+                                listState = datasetsListState,
+                                onDatasetClick = onResourceClick
+                            )
+                        }
                     }
                 }
             }
+            }
+
+            // Only show pull-to-refresh indicator when not showing full loading screen
+            if ((pullRefreshState.isRefreshing || pullRefreshState.verticalOffset > 0f) && !isLoading) {
+                PullToRefreshContainer(
+                    state = pullRefreshState,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
         }
-        PullToRefreshContainer(
-            state = pullRefreshState,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
+    }
+
+    LaunchedEffect(isLoading) {
+        if (isLoading) {
+            pullRefreshState.startRefresh()
+        } else {
+            pullRefreshState.endRefresh()
+        }
+    }
+
+    if (pullRefreshState.isRefreshing && !isLoading) {
+        LaunchedEffect(Unit) {
+            CacheManager.clearProjectDetail(projectId)
+            loadProjectData(forceRefresh = true)
         }
     }
 }
@@ -552,70 +660,86 @@ private fun SamplesList(
     onSampleClick: (String) -> Unit
 ) {
     if (samples.isEmpty()) {
-        Card(
+        // Wrap in scrollable Box so pull-to-refresh works even with empty state
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        if (isFiltered) Icons.Default.SearchOff else Icons.Default.Science,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            if (isFiltered) Icons.Default.SearchOff else Icons.Default.Science,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = if (isFiltered) "No Matching Samples" else "No Samples",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                     Text(
-                        text = if (isFiltered) "No Matching Samples" else "No Samples",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        text = if (isFiltered) "No samples match your search." else "This project has no samples.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Text(
-                    text = if (isFiltered) "No samples match your search." else "This project has no samples.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
     } else {
         val groupedSamples = samples.groupBy { it.sampleType ?: "Unspecified Type" }
             .entries.sortedBy { it.key.lowercase() }
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            groupedSamples.forEach { (sampleType, samplesInGroup) ->
-                item {
-                    CollapsibleGroup(
-                        title = sampleType,
-                        count = samplesInGroup.size,
-                        icon = Icons.Default.Science
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            samplesInGroup.sortedBy { it.internalId ?: Int.MAX_VALUE }.forEach { sample ->
-                                ResourceCard(
-                                    title = sample.name,
-                                    subtitle = null,
-                                    uniqueId = sample.uniqueId,
-                                    icon = Icons.Default.Science,
-                                    onClick = { onSampleClick(sample.uniqueId) }
-                                )
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                groupedSamples.forEach { (sampleType, samplesInGroup) ->
+                    item(key = "sample_group_$sampleType") {
+                        CollapsibleGroup(
+                            title = sampleType,
+                            count = samplesInGroup.size,
+                            icon = Icons.Default.Science
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                samplesInGroup.sortedBy { it.internalId ?: Int.MAX_VALUE }.forEach { sample ->
+                                    ResourceCard(
+                                        title = sample.name,
+                                        subtitle = null,
+                                        uniqueId = sample.uniqueId,
+                                        icon = Icons.Default.Science,
+                                        onClick = { onSampleClick(sample.uniqueId) }
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
+            LazyColumnScrollbar(
+                listState = listState,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 0.dp)
+            )
         }
     }
 }
@@ -628,70 +752,86 @@ private fun DatasetsList(
     onDatasetClick: (String) -> Unit
 ) {
     if (datasets.isEmpty()) {
-        Card(
+        // Wrap in scrollable Box so pull-to-refresh works even with empty state
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        if (isFiltered) Icons.Default.SearchOff else Icons.Default.Dataset,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            if (isFiltered) Icons.Default.SearchOff else Icons.Default.Dataset,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = if (isFiltered) "No Matching Datasets" else "No Datasets",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                     Text(
-                        text = if (isFiltered) "No Matching Datasets" else "No Datasets",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        text = if (isFiltered) "No datasets match your search." else "This project has no datasets.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Text(
-                    text = if (isFiltered) "No datasets match your search." else "This project has no datasets.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
     } else {
         val groupedDatasets = datasets.groupBy { it.measurement ?: "Unspecified Measurement" }
             .entries.sortedBy { it.key.lowercase() }
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            groupedDatasets.forEach { (measurement, datasetsInGroup) ->
-                item {
-                    CollapsibleGroup(
-                        title = measurement,
-                        count = datasetsInGroup.size,
-                        icon = Icons.Default.Dataset
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            datasetsInGroup.sortedBy { it.internalId ?: Int.MAX_VALUE }.forEach { dataset ->
-                                ResourceCard(
-                                    title = dataset.name,
-                                    subtitle = null,
-                                    uniqueId = dataset.uniqueId,
-                                    icon = Icons.Default.Dataset,
-                                    onClick = { onDatasetClick(dataset.uniqueId) }
-                                )
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                groupedDatasets.forEach { (measurement, datasetsInGroup) ->
+                    item(key = "dataset_group_$measurement") {
+                        CollapsibleGroup(
+                            title = measurement,
+                            count = datasetsInGroup.size,
+                            icon = Icons.Default.Dataset
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                datasetsInGroup.sortedBy { it.internalId ?: Int.MAX_VALUE }.forEach { dataset ->
+                                    ResourceCard(
+                                        title = dataset.name,
+                                        subtitle = null,
+                                        uniqueId = dataset.uniqueId,
+                                        icon = Icons.Default.Dataset,
+                                        onClick = { onDatasetClick(dataset.uniqueId) }
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
+            LazyColumnScrollbar(
+                listState = listState,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 0.dp)
+            )
         }
     }
 }
@@ -869,4 +1009,151 @@ private fun Any?.matchesSearchValue(query: String): Boolean = when (this) {
     is Map<*, *> -> @Suppress("UNCHECKED_CAST") (this as Map<String, Any?>).matchesSearch(query)
     is List<*> -> any { it.matchesSearchValue(query) }
     else -> toString().lowercase().contains(query)
+}
+
+@Composable
+private fun LazyColumnScrollbar(
+    listState: LazyListState,
+    modifier: Modifier = Modifier,
+    thumbColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+    thumbWidth: androidx.compose.ui.unit.Dp = 4.dp
+) {
+    val density = LocalDensity.current
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
+    var isDragging by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val thumbAlpha by animateFloatAsState(
+        targetValue = if (isDragging || listState.isScrollInProgress) 1f else 0.3f,
+        label = "scrollbar_alpha"
+    )
+
+    Box(
+        modifier = modifier
+            .width(16.dp)
+            .onGloballyPositioned { containerSize = it.size }
+    ) {
+        // Force recomposition when list state changes
+        val layoutInfo = listState.layoutInfo
+        val firstVisibleIndex = listState.firstVisibleItemIndex
+        val firstVisibleOffset = listState.firstVisibleItemScrollOffset
+
+        val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+        val visibleItems = layoutInfo.visibleItemsInfo
+
+        if (viewportHeight > 0 && containerSize.height > 0 && layoutInfo.totalItemsCount > 0 && visibleItems.isNotEmpty()) {
+            // Build a map of actual item sizes from visible items
+            val visibleItemSizes = visibleItems.associate { it.index to it.size }
+
+            // Calculate total estimated height using actual visible sizes when available
+            var estimatedTotalHeight = 0f
+            val defaultItemHeight = visibleItems.sumOf { it.size } / visibleItems.size.toFloat()
+
+            // Sum up all items: use actual size if visible, else use default
+            for (i in 0 until layoutInfo.totalItemsCount) {
+                estimatedTotalHeight += visibleItemSizes[i]?.toFloat() ?: defaultItemHeight
+            }
+
+            // Calculate current scroll position by summing items before first visible
+            var currentScrollY = 0f
+            for (i in 0 until firstVisibleIndex) {
+                currentScrollY += visibleItemSizes[i]?.toFloat() ?: defaultItemHeight
+            }
+            currentScrollY += firstVisibleOffset
+
+            // Thumb metrics
+            val contentToViewportRatio = (viewportHeight / estimatedTotalHeight).coerceIn(0.05f, 1f)
+            val thumbHeight = (containerSize.height * contentToViewportRatio).coerceIn(
+                with(density) { 40.dp.toPx() },
+                containerSize.height.toFloat()
+            )
+
+            val scrollRange = (estimatedTotalHeight - viewportHeight).coerceAtLeast(1f)
+            val scrollFraction = (currentScrollY / scrollRange).coerceIn(0f, 1f)
+            val thumbTop = scrollFraction * (containerSize.height - thumbHeight)
+
+            // Only show scrollbar if content is scrollable
+            if (contentToViewportRatio < 1f) {
+                // Create a key that includes visible item sizes to trigger recomposition on expand/collapse
+                val layoutKey = visibleItemSizes.entries.joinToString { "${it.key}:${it.value}" }
+
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .alpha(thumbAlpha)
+                        .pointerInput(layoutKey) {
+                            var dragStartY = 0f
+                            var dragStartScrollOffset = 0f
+
+                            detectVerticalDragGestures(
+                                onDragStart = { offset ->
+                                    isDragging = true
+                                    dragStartY = offset.y
+                                    dragStartScrollOffset = currentScrollY
+
+                                    // Jump to tapped position if not on thumb
+                                    if (offset.y < thumbTop || offset.y > thumbTop + thumbHeight) {
+                                        val clickProgress = (offset.y / containerSize.height).coerceIn(0f, 1f)
+                                        val targetScroll = clickProgress * scrollRange
+
+                                        // Find which item index corresponds to this scroll position
+                                        var accumulatedHeight = 0f
+                                        var targetIndex = 0
+                                        for (i in 0 until layoutInfo.totalItemsCount) {
+                                            val itemHeight = visibleItemSizes[i]?.toFloat() ?: defaultItemHeight
+                                            if (accumulatedHeight + itemHeight > targetScroll) {
+                                                targetIndex = i
+                                                break
+                                            }
+                                            accumulatedHeight += itemHeight
+                                        }
+                                        val targetOffset = (targetScroll - accumulatedHeight).toInt().coerceAtLeast(0)
+
+                                        scope.launch {
+                                            listState.scrollToItem(targetIndex, targetOffset)
+                                        }
+                                    }
+                                },
+                                onDragEnd = { isDragging = false },
+                                onDragCancel = { isDragging = false }
+                            ) { change, dragAmount ->
+                                change.consume()
+
+                                // Calculate new scroll position based on drag
+                                val targetScroll = (dragStartScrollOffset + (change.position.y - dragStartY) / (containerSize.height - thumbHeight) * scrollRange)
+                                    .coerceIn(0f, scrollRange)
+
+                                // Find which item index corresponds to this scroll position
+                                var accumulatedHeight = 0f
+                                var targetIndex = 0
+                                for (i in 0 until layoutInfo.totalItemsCount) {
+                                    val itemHeight = visibleItemSizes[i]?.toFloat() ?: defaultItemHeight
+                                    if (accumulatedHeight + itemHeight > targetScroll) {
+                                        targetIndex = i
+                                        break
+                                    }
+                                    accumulatedHeight += itemHeight
+                                }
+                                val targetOffset = (targetScroll - accumulatedHeight).toInt().coerceAtLeast(0)
+
+                                scope.launch {
+                                    listState.scrollToItem(targetIndex, targetOffset)
+                                }
+                            }
+                        }
+                ) {
+                    drawRoundRect(
+                        color = thumbColor,
+                        topLeft = Offset(size.width - with(density) { thumbWidth.toPx() }, thumbTop),
+                        size = Size(
+                            with(density) { thumbWidth.toPx() },
+                            thumbHeight
+                        ),
+                        cornerRadius = CornerRadius(
+                            with(density) { (thumbWidth / 2).toPx() }
+                        )
+                    )
+                }
+            }
+        }
+    }
 }

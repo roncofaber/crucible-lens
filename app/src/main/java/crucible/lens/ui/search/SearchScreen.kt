@@ -14,10 +14,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
+import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -27,9 +29,11 @@ fun SearchScreen(
     onBack: () -> Unit,
     onHome: () -> Unit,
     onResourceClick: (String) -> Unit,
+    onProjectClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var query by remember { mutableStateOf("") }
+    var allProjects by remember { mutableStateOf<List<Project>>(emptyList()) }
     var allSamples by remember { mutableStateOf<List<Sample>>(emptyList()) }
     var allDatasets by remember { mutableStateOf<List<Dataset>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
@@ -48,6 +52,8 @@ fun SearchScreen(
             } catch (e: Exception) { null }
 
         if (projects == null) { isLoading = false; return@LaunchedEffect }
+
+        allProjects = projects
 
         // Seed immediately from cache
         val samples = mutableListOf<Sample>()
@@ -70,7 +76,7 @@ fun SearchScreen(
         uncached.forEach { project ->
             try {
                 val sr = ApiClient.service.getSamplesByProject(project.projectId)
-                val dr = ApiClient.service.getDatasetsByProject(project.projectId)
+                val dr = ApiClient.service.getDatasetsByProject(project.projectId, includeMetadata = true)
                 if (sr.isSuccessful && dr.isSuccessful) {
                     val s = sr.body() ?: emptyList()
                     val d = dr.body() ?: emptyList()
@@ -88,6 +94,10 @@ fun SearchScreen(
         isLoading = false
     }
 
+    val filteredProjects = remember(allProjects, query) {
+        if (query.isBlank()) emptyList()
+        else allProjects.filter { it.matchesSearch(query) }
+    }
     val filteredSamples = remember(allSamples, query) {
         if (query.isBlank()) emptyList()
         else allSamples.filter { it.matchesSearch(query) }
@@ -107,7 +117,7 @@ fun SearchScreen(
                             onValueChange = { query = it },
                             placeholder = {
                                 Text(
-                                    "Search samples and datasets…",
+                                    "Search the Crucible...",
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             },
@@ -173,9 +183,9 @@ fun SearchScreen(
                 query.isBlank() -> EmptyState(
                     icon = Icons.Default.Search,
                     title = "Start typing",
-                    subtitle = "Search across ${allSamples.size} samples and ${allDatasets.size} datasets"
+                    subtitle = "Search across ${allProjects.size} projects, ${allSamples.size} samples, and ${allDatasets.size} datasets"
                 )
-                filteredSamples.isEmpty() && filteredDatasets.isEmpty() -> EmptyState(
+                filteredProjects.isEmpty() && filteredSamples.isEmpty() && filteredDatasets.isEmpty() -> EmptyState(
                     icon = Icons.Default.SearchOff,
                     title = "No results",
                     subtitle = "Try a different search term"
@@ -185,6 +195,24 @@ fun SearchScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    if (filteredProjects.isNotEmpty()) {
+                        item {
+                            Text(
+                                "Projects (${filteredProjects.size})",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        items(filteredProjects) { project ->
+                            SearchResultCard(
+                                name = project.projectName ?: project.projectId,
+                                uuid = project.projectId,
+                                type = "Project",
+                                onClick = { onProjectClick(project.projectId) }
+                            )
+                        }
+                    }
                     if (filteredSamples.isNotEmpty()) {
                         item {
                             Text(
@@ -248,7 +276,8 @@ private fun EmptyState(icon: androidx.compose.ui.graphics.vector.ImageVector, ti
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(subtitle, style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center)
         }
     }
     } // end Box
@@ -294,6 +323,15 @@ private fun SearchResultCard(name: String, uuid: String, type: String, onClick: 
             )
         }
     }
+}
+
+private fun Project.matchesSearch(query: String): Boolean {
+    val q = query.lowercase()
+    return (projectName?.lowercase()?.contains(q) == true) ||
+        projectId.lowercase().contains(q) ||
+        (description?.lowercase()?.contains(q) == true) ||
+        (projectLeadEmail?.lowercase()?.contains(q) == true) ||
+        (createdAt?.lowercase()?.contains(q) == true)
 }
 
 private fun Sample.matchesSearch(query: String): Boolean {

@@ -28,8 +28,6 @@ class ScannerViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    private var smoothAnimations: Boolean = true
-
     /** -1 = swiped to previous, 1 = swiped to next, 0 = normal navigation */
     var siblingNavDirection: Int = 0
         private set
@@ -44,12 +42,12 @@ class ScannerViewModel : ViewModel() {
         resourceCardState.getOrPut(resourceId) { mutableStateMapOf() }[key] = value
     }
 
-    fun setSmoothAnimations(enabled: Boolean) {
-        smoothAnimations = enabled
-    }
-
     fun prepareSiblingNav(direction: Int) {
         siblingNavDirection = direction
+    }
+
+    fun resetSiblingNavDirection() {
+        siblingNavDirection = 0
     }
 
     fun fetchResource(uuid: String) {
