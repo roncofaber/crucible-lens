@@ -30,6 +30,7 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.ui.common.allLoadingMessages
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -109,7 +110,7 @@ fun HomeScreen(
             .sortedByDescending { it.projectId in pinnedProjects }
 
         // Track consecutive failures to stop on network errors (thread-safe for concurrent launches)
-        val consecutiveFailures = java.util.concurrent.atomic.AtomicInteger(0)
+        val consecutiveFailures = AtomicInteger(0)
         val maxConsecutiveFailures = 5
 
         // Throttle: process max 3 projects concurrently, with 150ms delay between batches

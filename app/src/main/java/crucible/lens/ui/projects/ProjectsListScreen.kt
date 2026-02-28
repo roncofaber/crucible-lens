@@ -21,22 +21,12 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.offset
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.IntSize
-import kotlin.math.roundToInt
+import java.util.concurrent.atomic.AtomicInteger
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.cache.PersistentProjectCache
@@ -44,6 +34,8 @@ import crucible.lens.data.cache.ProjectSummary
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
+import crucible.lens.ui.common.LazyColumnScrollbar
+import crucible.lens.ui.common.UiConstants
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -180,7 +172,7 @@ fun ProjectsListScreen(
                 .thenBy { it.projectId in archivedProjects })
 
         // Track consecutive failures to stop on network errors (thread-safe for concurrent launches)
-        val consecutiveFailures = java.util.concurrent.atomic.AtomicInteger(0)
+        val consecutiveFailures = AtomicInteger(0)
         val maxConsecutiveFailures = 5
 
         // Process in small batches to avoid overwhelming the device
@@ -321,8 +313,8 @@ fun ProjectsListScreen(
                     },
                     containerColor = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
-                        .padding(bottom = 72.dp)
-                        .size(44.dp),
+                        .padding(bottom = UiConstants.ScrollToTopFabBottomPadding)
+                        .size(UiConstants.ScrollToTopFabSize),
                     shape = MaterialTheme.shapes.extraLarge
                 ) {
                     Column(
@@ -920,149 +912,3 @@ private fun Any?.matchesQuery(q: String): Boolean = when (this) {
     else -> toString().lowercase().contains(q)
 }
 
-@Composable
-private fun LazyColumnScrollbar(
-    listState: LazyListState,
-    modifier: Modifier = Modifier,
-    thumbColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-    thumbWidth: androidx.compose.ui.unit.Dp = 4.dp
-) {
-    val density = LocalDensity.current
-    var containerSize by remember { mutableStateOf(IntSize.Zero) }
-    var isDragging by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    val thumbAlpha by animateFloatAsState(
-        targetValue = if (isDragging || listState.isScrollInProgress) 1f else 0.3f,
-        label = "scrollbar_alpha"
-    )
-
-    Box(
-        modifier = modifier
-            .width(16.dp)
-            .onGloballyPositioned { containerSize = it.size }
-    ) {
-        // Force recomposition when list state changes
-        val layoutInfo = listState.layoutInfo
-        val firstVisibleIndex = listState.firstVisibleItemIndex
-        val firstVisibleOffset = listState.firstVisibleItemScrollOffset
-
-        val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
-        val visibleItems = layoutInfo.visibleItemsInfo
-
-        if (viewportHeight > 0 && containerSize.height > 0 && layoutInfo.totalItemsCount > 0 && visibleItems.isNotEmpty()) {
-            // Build a map of actual item sizes from visible items
-            val visibleItemSizes = visibleItems.associate { it.index to it.size }
-
-            // Calculate total estimated height using actual visible sizes when available
-            var estimatedTotalHeight = 0f
-            val defaultItemHeight = visibleItems.sumOf { it.size } / visibleItems.size.toFloat()
-
-            // Sum up all items: use actual size if visible, else use default
-            for (i in 0 until layoutInfo.totalItemsCount) {
-                estimatedTotalHeight += visibleItemSizes[i]?.toFloat() ?: defaultItemHeight
-            }
-
-            // Calculate current scroll position by summing items before first visible
-            var currentScrollY = 0f
-            for (i in 0 until firstVisibleIndex) {
-                currentScrollY += visibleItemSizes[i]?.toFloat() ?: defaultItemHeight
-            }
-            currentScrollY += firstVisibleOffset
-
-            // Thumb metrics
-            val contentToViewportRatio = (viewportHeight / estimatedTotalHeight).coerceIn(0.05f, 1f)
-            val thumbHeight = (containerSize.height * contentToViewportRatio).coerceIn(
-                with(density) { 40.dp.toPx() },
-                containerSize.height.toFloat()
-            )
-
-            val scrollRange = (estimatedTotalHeight - viewportHeight).coerceAtLeast(1f)
-            val scrollFraction = (currentScrollY / scrollRange).coerceIn(0f, 1f)
-            val thumbTop = scrollFraction * (containerSize.height - thumbHeight)
-
-            // Only show scrollbar if content is scrollable
-            if (contentToViewportRatio < 1f) {
-                // Create a key that includes visible item sizes to trigger recomposition on expand/collapse
-                val layoutKey = visibleItemSizes.entries.joinToString { "${it.key}:${it.value}" }
-
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .alpha(thumbAlpha)
-                        .pointerInput(layoutKey) {
-                            var dragStartY = 0f
-                            var dragStartScrollOffset = 0f
-
-                            detectVerticalDragGestures(
-                                onDragStart = { offset ->
-                                    isDragging = true
-                                    dragStartY = offset.y
-                                    dragStartScrollOffset = currentScrollY
-
-                                    // Jump to tapped position if not on thumb
-                                    if (offset.y < thumbTop || offset.y > thumbTop + thumbHeight) {
-                                        val clickProgress = (offset.y / containerSize.height).coerceIn(0f, 1f)
-                                        val targetScroll = clickProgress * scrollRange
-
-                                        // Find which item index corresponds to this scroll position
-                                        var accumulatedHeight = 0f
-                                        var targetIndex = 0
-                                        for (i in 0 until layoutInfo.totalItemsCount) {
-                                            val itemHeight = visibleItemSizes[i]?.toFloat() ?: defaultItemHeight
-                                            if (accumulatedHeight + itemHeight > targetScroll) {
-                                                targetIndex = i
-                                                break
-                                            }
-                                            accumulatedHeight += itemHeight
-                                        }
-                                        val targetOffset = (targetScroll - accumulatedHeight).toInt().coerceAtLeast(0)
-
-                                        scope.launch {
-                                            listState.scrollToItem(targetIndex, targetOffset)
-                                        }
-                                    }
-                                },
-                                onDragEnd = { isDragging = false },
-                                onDragCancel = { isDragging = false }
-                            ) { change, dragAmount ->
-                                change.consume()
-
-                                // Calculate new scroll position based on drag
-                                val targetScroll = (dragStartScrollOffset + (change.position.y - dragStartY) / (containerSize.height - thumbHeight) * scrollRange)
-                                    .coerceIn(0f, scrollRange)
-
-                                // Find which item index corresponds to this scroll position
-                                var accumulatedHeight = 0f
-                                var targetIndex = 0
-                                for (i in 0 until layoutInfo.totalItemsCount) {
-                                    val itemHeight = visibleItemSizes[i]?.toFloat() ?: defaultItemHeight
-                                    if (accumulatedHeight + itemHeight > targetScroll) {
-                                        targetIndex = i
-                                        break
-                                    }
-                                    accumulatedHeight += itemHeight
-                                }
-                                val targetOffset = (targetScroll - accumulatedHeight).toInt().coerceAtLeast(0)
-
-                                scope.launch {
-                                    listState.scrollToItem(targetIndex, targetOffset)
-                                }
-                            }
-                        }
-                ) {
-                    drawRoundRect(
-                        color = thumbColor,
-                        topLeft = Offset(size.width - with(density) { thumbWidth.toPx() }, thumbTop),
-                        size = androidx.compose.ui.geometry.Size(
-                            with(density) { thumbWidth.toPx() },
-                            thumbHeight
-                        ),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(
-                            with(density) { (thumbWidth / 2).toPx() }
-                        )
-                    )
-                }
-            }
-        }
-    }
-}
