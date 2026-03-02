@@ -22,6 +22,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,7 +35,9 @@ import crucible.lens.data.cache.ProjectSummary
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
+import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
 import crucible.lens.ui.common.LazyColumnScrollbar
+import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.UiConstants
 import kotlinx.coroutines.launch
 
@@ -67,6 +70,7 @@ fun ProjectsListScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val pullRefreshState = rememberPullToRefreshState()
+    val showScrollToTop = listState.firstVisibleItemIndex > 0
 
     // Load persistent cache immediately on startup for instant display
     LaunchedEffect(Unit) {
@@ -254,30 +258,52 @@ fun ProjectsListScreen(
 
     Scaffold(
         topBar = {
-            Column {
-                TopAppBar(
-                    title = { Text("Projects") },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                        }
-                    },
-                    actions = {
+            TopAppBar(
+                title = { Text("Projects") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                },
+                actions = {
+                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
                         IconButton(
                             onClick = {
                                 CacheManager.clearProjectsCache()
                                 CacheManager.clearProjectDetailsCache()
                                 projectCounts = emptyMap()
                                 loadProjects(forceRefresh = true)
-                            }
+                            },
+                            modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Refresh",
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
-                        IconButton(onClick = onHome) {
-                            Icon(Icons.Default.Home, contentDescription = "Home")
+                        IconButton(
+                            onClick = onHome,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Home,
+                                contentDescription = "Home",
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
                     }
-                )
+                }
+            )
+        }
+    ) { padding ->
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(padding)
+                .nestedScroll(pullRefreshState.nestedScrollConnection)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
                 // Search bar
                 OutlinedTextField(
                     value = searchQuery,
@@ -297,58 +323,14 @@ fun ProjectsListScreen(
                     singleLine = true,
                     shape = MaterialTheme.shapes.medium
                 )
-            }
-        },
-        floatingActionButton = {
-            // Show scroll to top button when scrolled down
-            val showScrollToTop by remember {
-                derivedStateOf { listState.firstVisibleItemIndex > 0 }
-            }
-            if (showScrollToTop) {
-                FloatingActionButton(
-                    onClick = {
-                        scope.launch {
-                            listState.animateScrollToItem(0)
-                        }
-                    },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .padding(bottom = UiConstants.ScrollToTopFabBottomPadding)
-                        .size(UiConstants.ScrollToTopFabSize),
-                    shape = MaterialTheme.shapes.extraLarge
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.offset(y = (-2).dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ExpandLess,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp).offset(y = 5.dp)
-                        )
-                        Icon(
-                            Icons.Default.ExpandLess,
-                            contentDescription = "Scroll to top",
-                            modifier = Modifier.size(20.dp).offset(y = (-5).dp)
-                        )
-                    }
-                }
-            }
-        }
-    ) { padding ->
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(padding)
-                .nestedScroll(pullRefreshState.nestedScrollConnection)
-        ) {
-            when {
-                isLoading && persistentSummaries == null -> {
+
+                when {
+                    isLoading && persistentSummaries == null -> {
                     // Loading with no cached data
                     Column(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxWidth()
+                            .weight(1f)
                             .padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
@@ -476,8 +458,14 @@ fun ProjectsListScreen(
                     val archivedProjectsList = filteredProjects
                         .filter { it.projectId in archivedProjects }
 
-                    // Show message when search returns no results
-                    if (searchQuery.isNotBlank() && filteredProjects.isEmpty()) {
+                    // Box to contain list + scrollbar
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        // Show message when search returns no results
+                        if (searchQuery.isNotBlank() && filteredProjects.isEmpty()) {
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -675,25 +663,40 @@ fun ProjectsListScreen(
                         }
                     }
 
-                    // Scrollbar for project list
-                    LazyColumnScrollbar(
-                        listState = listState,
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .align(Alignment.CenterEnd)
-                            .padding(end = 4.dp)
-                    )
+                        // Scrollbar for project list
+                        LazyColumnScrollbar(
+                            listState = listState,
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 4.dp)
+                        )
+                    } // end Box
                 }
             }
+            } // end Column
 
-            // Only show pull-to-refresh indicator when not showing full loading screen
-            if ((pullRefreshState.isRefreshing || pullRefreshState.verticalOffset > 0f) &&
-                !(isLoading && persistentSummaries == null)) {
-                PullToRefreshContainer(
-                    state = pullRefreshState,
-                    modifier = Modifier.align(Alignment.TopCenter)
-                )
-            }
+            // Pull-to-refresh indicator with spring animation
+            // Only show when not showing full loading screen
+            AnimatedPullToRefreshIndicator(
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter),
+                visible = (pullRefreshState.isRefreshing || pullRefreshState.verticalOffset > 0f) &&
+                        !(isLoading && persistentSummaries == null)
+            )
+
+            // Scroll-to-top button
+            ScrollToTopButton(
+                visible = showScrollToTop,
+                onClick = {
+                    scope.launch {
+                        listState.animateScrollToItem(0)
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+            )
         }
     }
 

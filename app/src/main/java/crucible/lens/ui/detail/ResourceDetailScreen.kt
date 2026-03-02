@@ -14,6 +14,7 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -71,8 +72,10 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.DatasetReference
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.SampleReference
+import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
 import crucible.lens.ui.common.LoadingMessage
 import crucible.lens.ui.common.QrCodeDialog
+import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.ShareCardGenerator
 import crucible.lens.ui.common.openUrlInBrowser
 
@@ -90,11 +93,9 @@ fun ResourceDetailScreen(
     onSearch: () -> Unit = {},
     onHome: () -> Unit,
     onRefresh: () -> Unit,
-    onNavigateToSibling: (uuid: String, direction: Int) -> Unit = { uuid, _ -> onNavigateToResource(uuid) },
+    onNavigateToSibling: (uuid: String) -> Unit = onNavigateToResource,
     onSaveToHistory: (uuid: String, name: String) -> Unit = { _, _ -> },
     darkTheme: Boolean,
-    siblingNavDirection: Int = 0,
-    onResetSiblingNavDirection: () -> Unit = {},
     getCardState: (key: String) -> Boolean = { false },
     onCardStateChange: (key: String, value: Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
@@ -189,29 +190,16 @@ fun ResourceDetailScreen(
     val swipeThresholdPx = with(density) { 80.dp.toPx() }
     val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
     var dragOffset by remember { mutableStateOf(0f) }
-    // Slide-in animation for the content area on sibling navigation.
-    // The top bar (Scaffold) appears instantly (EnterTransition.None at NavGraph level),
-    // while the content slides in from the direction of travel.
-    val contentOffset = remember(resource.uniqueId) {
-        Animatable(if (siblingNavDirection != 0) siblingNavDirection * screenWidthPx else 0f)
-    }
-    LaunchedEffect(resource.uniqueId, siblingNavDirection) {
-        if (siblingNavDirection != 0) {
-            contentOffset.snapTo(siblingNavDirection * screenWidthPx)
-            contentOffset.animateTo(0f, animationSpec = tween(durationMillis = 220))
-            // Reset direction after animation to prevent it from affecting non-sibling navigations
-            onResetSiblingNavDirection()
-        } else {
-            // Ensure offset is 0 for non-sibling navigation
-            contentOffset.snapTo(0f)
-        }
-    }
+
     LaunchedEffect(resource.uniqueId) {
         onSaveToHistory(resource.uniqueId, resource.name)
     }
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    val showScrollToTop = listState.firstVisibleItemIndex > 0
 
     val pullRefreshState = rememberPullToRefreshState()
+
     if (pullRefreshState.isRefreshing) {
         LaunchedEffect(true) { onRefresh() }
     }
@@ -344,7 +332,8 @@ fun ResourceDetailScreen(
                 .padding(padding)
                 .nestedScroll(pullRefreshState.nestedScrollConnection)
                 .graphicsLayer {
-                    translationX = dragOffset + contentOffset.value
+                    // Apply drag offset for swipe gesture feedback
+                    translationX = dragOffset
                 }
                 .draggable(
                     orientation = Orientation.Horizontal,
@@ -355,16 +344,22 @@ fun ResourceDetailScreen(
                             current > swipeThresholdPx && prevSibling != null -> scope.launch {
                                 Animatable(current).animateTo(
                                     targetValue = screenWidthPx,
-                                    animationSpec = tween(durationMillis = 180)
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    )
                                 ) { dragOffset = value }
-                                onNavigateToSibling(prevSibling.uniqueId, -1)
+                                onNavigateToSibling(prevSibling.uniqueId)
                             }
                             current < -swipeThresholdPx && nextSibling != null -> scope.launch {
                                 Animatable(current).animateTo(
                                     targetValue = -screenWidthPx,
-                                    animationSpec = tween(durationMillis = 180)
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    )
                                 ) { dragOffset = value }
-                                onNavigateToSibling(nextSibling.uniqueId, 1)
+                                onNavigateToSibling(nextSibling.uniqueId)
                             }
                             else -> scope.launch {
                                 Animatable(current).animateTo(
@@ -429,10 +424,11 @@ fun ResourceDetailScreen(
             // Animated main content
             AnimatedVisibility(
                 visible = resource.uniqueId == mfid && !isRefreshing,
-                enter = fadeIn(animationSpec = tween(durationMillis = 300, delayMillis = 100)),
+                enter = fadeIn(animationSpec = tween(durationMillis = 220)),
                 exit = fadeOut(animationSpec = tween(durationMillis = 200))
             ) {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(16.dp),
@@ -441,8 +437,8 @@ fun ResourceDetailScreen(
                     item(key = "basic_info") {
                         BasicInfoCard(
                             resource = resource,
-                            onPrev = prevSibling?.let { s -> { onNavigateToSibling(s.uniqueId, -1) } },
-                            onNext = nextSibling?.let { s -> { onNavigateToSibling(s.uniqueId, 1) } },
+                            onPrev = prevSibling?.let { s -> { onNavigateToSibling(s.uniqueId) } },
+                            onNext = nextSibling?.let { s -> { onNavigateToSibling(s.uniqueId) } },
                             currentIndex = siblingIndex,
                             totalCount = siblingList.size
                         )
@@ -592,9 +588,24 @@ fun ResourceDetailScreen(
                 }
                 } // end LazyColumn items
             } // end LazyColumn
-            PullToRefreshContainer(
+
+            // Pull-to-refresh indicator with spring animation
+            AnimatedPullToRefreshIndicator(
                 state = pullRefreshState,
                 modifier = Modifier.align(Alignment.TopCenter)
+            )
+
+            // Scroll-to-top button
+            ScrollToTopButton(
+                visible = showScrollToTop,
+                onClick = {
+                    scope.launch {
+                        listState.animateScrollToItem(0)
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
             )
         }
     }

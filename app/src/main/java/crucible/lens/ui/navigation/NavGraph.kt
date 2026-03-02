@@ -39,8 +39,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -107,7 +110,6 @@ fun NavGraph(
 ) {
     LaunchedEffect(deepLinkUuid) {
         if (!deepLinkUuid.isNullOrBlank()) {
-            viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
             navController.navigate(Screen.Detail.createRoute(deepLinkUuid))
         }
     }
@@ -130,33 +132,71 @@ fun NavGraph(
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val density = LocalDensity.current
         val fabSizePx = with(density) { 56.dp.toPx() }
+        val scrollButtonSizePx = with(density) { 42.dp.toPx() }
         val marginPx = with(density) { 16.dp.toPx() }
+        val gapPx = with(density) { 8.dp.toPx() }
         val screenWidthPx = with(density) { maxWidth.toPx() }
         val screenHeightPx = with(density) { maxHeight.toPx() }
         LaunchedEffect(screenWidthPx, screenHeightPx) {
             if (!fabInitialized) {
+                // Position at bottom-right, above where scroll-to-top button appears
                 fabOffsetX.snapTo(screenWidthPx - fabSizePx - marginPx)
-                fabOffsetY.snapTo(screenHeightPx - fabSizePx - marginPx)
+                fabOffsetY.snapTo(screenHeightPx - marginPx - scrollButtonSizePx - gapPx - fabSizePx)
                 fabInitialized = true
             }
         }
     NavHost(
         navController = navController,
         startDestination = Screen.Home.route,
+        // UNIFIED TRANSITIONS - Simple and consistent
+        // Forward: slide in from right
         enterTransition = {
-            fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
+            fadeIn(animationSpec = tween(300)) +
+            slideInHorizontally(initialOffsetX = { it / 4 }, animationSpec = tween(300))
         },
+        // Forward: fade out current screen
         exitTransition = {
             fadeOut(animationSpec = tween(200))
         },
+        // Back: fade in previous screen
         popEnterTransition = {
             fadeIn(animationSpec = tween(300))
         },
+        // Back: slide out to right
         popExitTransition = {
-            fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
+            fadeOut(animationSpec = tween(200)) +
+            slideOutHorizontally(targetOffsetX = { it / 4 }, animationSpec = tween(200))
         }
     ) {
-        composable(Screen.Home.route) {
+        composable(
+            route = Screen.Home.route,
+            // EXCEPTION: Home button from detail/project should fade only (context jump)
+            enterTransition = {
+                val fromDetailOrProject = initialState.destination.route?.startsWith("detail/") == true ||
+                                         initialState.destination.route?.startsWith("project") == true
+                if (fromDetailOrProject) {
+                    // Fade only - jumping contexts, not navigating linearly
+                    fadeIn(animationSpec = tween(300))
+                } else {
+                    // Use default (slide from right)
+                    null
+                }
+            },
+            exitTransition = {
+                val goingToDetailOrProject = targetState.destination.route?.startsWith("detail/") == true ||
+                                            targetState.destination.route?.startsWith("project") == true
+                if (goingToDetailOrProject) {
+                    // Slide out left to coordinate with detail sliding in from right
+                    fadeOut(animationSpec = tween(200)) + slideOutHorizontally(
+                        targetOffsetX = { -it / 4 },
+                        animationSpec = tween(300)
+                    )
+                } else {
+                    // Use default (fade)
+                    null
+                }
+            }
+        ) {
             HomeScreen(
                 graphExplorerUrl = graphExplorerUrl,
                 isDarkTheme = darkTheme,
@@ -175,7 +215,6 @@ fun NavGraph(
                     if (apiKey.isNullOrBlank()) {
                         navController.navigate(Screen.Settings.route)
                     } else {
-                        viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
                         navController.navigate(Screen.Detail.createRoute(uuid))
                     }
                 },
@@ -211,7 +250,6 @@ fun NavGraph(
                         val parsed = Uri.parse(code)
                         if (parsed.scheme != null) parsed.lastPathSegment ?: code else code
                     }.getOrDefault(code).trim()
-                    viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 }
             )
@@ -282,81 +320,62 @@ fun NavGraph(
 
         composable(
             route = Screen.Detail.route,
-            arguments = listOf(navArgument("mfid") { type = NavType.StringType }),
-            enterTransition = {
-                val isSibling = initialState.destination.route?.startsWith("detail/") == true
-                val fromProject = initialState.destination.route?.startsWith("project/") == true
-                when {
-                    isSibling -> EnterTransition.None
-                    fromProject -> fadeIn(animationSpec = tween(300))
-                    else -> fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
-                }
-            },
-            exitTransition = {
-                val isSibling = targetState.destination.route?.startsWith("detail/") == true
-                if (isSibling) {
-                    ExitTransition.None
-                } else {
-                    fadeOut(animationSpec = tween(200))
-                }
-            },
-            popEnterTransition = {
-                fadeIn(animationSpec = tween(300))
-            },
-            popExitTransition = {
-                fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
-            }
+            arguments = listOf(navArgument("mfid") { type = NavType.StringType })
+            // Uses all default transitions - even sibling navigation
         ) { backStackEntry ->
             val mfid = backStackEntry.arguments?.getString("mfid") ?: ""
 
             LaunchedEffect(mfid) {
                 viewModel.fetchResource(mfid)
-                viewModel.prepareSiblingNav(0)  // reset direction after navigation starts
             }
 
-            AnimatedContent(
-                targetState = uiState,
-                transitionSpec = {
-                    // Success→Success: sibling nav, NavGraph handles the visual.
-                    // Idle→*: new composable just appeared, skip the crossfade so there
-                    // is no fade-from-nothing that would reveal the background color.
-                    val isSuccessToSuccess =
-                        initialState is UiState.Success && targetState is UiState.Success
-                    val isFromIdle = initialState is UiState.Idle
-                    if (isSuccessToSuccess || isFromIdle) {
-                        EnterTransition.None togetherWith ExitTransition.None
-                    } else {
-                        fadeIn(tween(300)) togetherWith fadeOut(tween(300))
+            // Reset horizontal translation for ALL states to prevent diagonal animation
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        translationX = 0f
                     }
-                },
-                label = "resource state"
-            ) { state ->
-            when (state) {
-                is UiState.Idle -> {
-                    // Shown for the 1-2 frames before LaunchedEffect fires fetchResource.
-                    // Plain background so there is no transparent/white flash on entry.
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.background)
-                    )
-                }
-                is UiState.Loading -> {
-                    // Delay everything so fast swipes (cache hits) show nothing at all.
-                    // The NavGraph BoxWithConstraints background fills the gap invisibly.
-                    var showContent by remember { mutableStateOf(false) }
-                    LaunchedEffect(Unit) {
-                        delay(400L)
-                        showContent = true
+            ) {
+                AnimatedContent(
+                    targetState = uiState,
+                    transitionSpec = {
+                        // All transitions fade smoothly to work with NavGraph slide
+                        fadeIn(tween(220)) togetherWith fadeOut(tween(220))
+                    },
+                    label = "resource state"
+                ) { state ->
+                when (state) {
+                    is UiState.Idle -> {
+                        // Shown for the 1-2 frames before LaunchedEffect fires fetchResource.
+                        // Plain background so there is no transparent/white flash on entry.
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background)
+                        )
                     }
-                    val loadingMessage = LoadingMessage()
+                    is UiState.Loading -> {
+                        // Gracefully fade in after delay so fast cache hits show nothing.
+                        // The NavGraph BoxWithConstraints background fills the gap invisibly.
+                        var showContent by remember { mutableStateOf(false) }
+                        LaunchedEffect(Unit) {
+                            delay(200L)
+                            showContent = true
+                        }
+                        val loadingMessage = LoadingMessage()
 
-                    if (showContent) Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.background),
-                        contentAlignment = Alignment.Center
-                    ) {
+                        // Fade in smoothly instead of popping in
+                        AnimatedVisibility(
+                            visible = showContent,
+                            enter = fadeIn(animationSpec = tween(durationMillis = 200))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.background),
+                                contentAlignment = Alignment.Center
+                            ) {
                         Card(
                                 modifier = Modifier.padding(32.dp),
                                 colors = CardDefaults.cardColors(
@@ -400,7 +419,8 @@ fun NavGraph(
                                 }
                             }
                         }
-                    }
+                    } // end AnimatedVisibility
+                }
                 is UiState.Success -> {
                     // Save last visited resource and add to history
                     LaunchedEffect(state.resource) {
@@ -415,8 +435,6 @@ fun NavGraph(
                         isRefreshing = state.isRefreshing,
                         graphExplorerUrl = graphExplorerUrl,
                         darkTheme = darkTheme,
-                        siblingNavDirection = viewModel.siblingNavDirection,
-                        onResetSiblingNavDirection = { viewModel.resetSiblingNavDirection() },
                         onSaveToHistory = { uuid, name ->
                             onLastVisitedResourceSave(uuid, name)
                             onHistoryAdd(uuid, name)
@@ -425,17 +443,13 @@ fun NavGraph(
                             navController.popBackStack()
                         },
                         onNavigateToResource = { newMfid ->
-                            viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
                             navController.navigate(Screen.Detail.createRoute(newMfid))
                         },
                         onNavigateToProject = { projectId ->
                             navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                         },
-                        onNavigateToSibling = { siblingMfid, direction ->
-                            viewModel.prepareSiblingNav(direction)
-                            navController.navigate(Screen.Detail.createRoute(siblingMfid)) {
-                                popUpTo(Screen.Detail.route) { inclusive = true }
-                            }
+                        onNavigateToSibling = { siblingMfid ->
+                            navController.navigate(Screen.Detail.createRoute(siblingMfid))
                         },
                         onSearch = { navController.navigate(Screen.Search.route) },
                         onHome = {
@@ -534,24 +548,11 @@ fun NavGraph(
                     }
                 }
             }
-            }
+            } // end AnimatedContent
+            } // end Box wrapper
         }
 
-        composable(
-            route = Screen.Projects.route,
-            enterTransition = {
-                fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
-            },
-            exitTransition = {
-                fadeOut(animationSpec = tween(200))
-            },
-            popEnterTransition = {
-                fadeIn(animationSpec = tween(300))
-            },
-            popExitTransition = {
-                fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
-            }
-        ) {
+        composable(Screen.Projects.route) {
             ProjectsListScreen(
                 onBack = { navController.popBackStack() },
                 onHome = {
@@ -571,19 +572,8 @@ fun NavGraph(
 
         composable(
             route = Screen.ProjectDetail.route,
-            arguments = listOf(navArgument("projectId") { type = NavType.StringType }),
-            enterTransition = {
-                fadeIn(animationSpec = tween(300)) + slideInHorizontally(initialOffsetX = { it / 10 })
-            },
-            exitTransition = {
-                fadeOut(animationSpec = tween(200))
-            },
-            popEnterTransition = {
-                fadeIn(animationSpec = tween(300))
-            },
-            popExitTransition = {
-                fadeOut(animationSpec = tween(200)) + slideOutHorizontally(targetOffsetX = { it / 10 })
-            }
+            arguments = listOf(navArgument("projectId") { type = NavType.StringType })
+            // Uses all default transitions
         ) { backStackEntry ->
             val projectId = backStackEntry.arguments?.getString("projectId") ?: ""
             ProjectDetailScreen(
@@ -597,7 +587,6 @@ fun NavGraph(
                 },
                 onSearch = { navController.navigate(Screen.Search.route) },
                 onResourceClick = { mfid ->
-                    viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
                     navController.navigate(Screen.Detail.createRoute(mfid))
                 },
                 isPinned = projectId in pinnedProjects,
@@ -615,7 +604,6 @@ fun NavGraph(
                     }
                 },
                 onItemClick = { uuid ->
-                    viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 }
             )
@@ -631,87 +619,85 @@ fun NavGraph(
                     }
                 },
                 onResourceClick = { uuid ->
-                    viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 },
                 onProjectClick = { projectId ->
-                    viewModel.resetSiblingNavDirection() // Reset before non-sibling navigation
                     navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                 }
             )
         }
     } // end NavHost
 
-        if (showFab && fabInitialized) {
-            FloatingActionButton(
-                onClick = {
-                    if (!apiKey.isNullOrBlank()) {
-                        viewModel.reset()
-                        navController.navigate(Screen.Scanner.route)
-                    } else {
-                        navController.navigate(Screen.Settings.route)
-                    }
-                },
-                modifier = Modifier
-                    .offset { IntOffset(fabOffsetX.value.roundToInt(), fabOffsetY.value.roundToInt()) }
-                    .pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragEnd = {
-                                val distLeft   = fabOffsetX.value
-                                val distRight  = screenWidthPx  - fabSizePx - fabOffsetX.value
-                                val distTop    = fabOffsetY.value
-                                val distBottom = screenHeightPx - fabSizePx - fabOffsetY.value
-                                val spec = spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
-                                val xBounds = marginPx..(screenWidthPx  - fabSizePx - marginPx)
-                                val yBounds = marginPx..(screenHeightPx - fabSizePx - marginPx)
-                                if (minOf(distLeft, distRight) <= minOf(distTop, distBottom)) {
-                                    val targetX = if (distLeft <= distRight) marginPx else screenWidthPx - fabSizePx - marginPx
-                                    val targetY = fabOffsetY.value.coerceIn(yBounds)
-                                    fabScope.launch { fabOffsetX.animateTo(targetX, animationSpec = spec) }
-                                    fabScope.launch { fabOffsetY.animateTo(targetY, animationSpec = spec) }
-                                } else {
-                                    val targetY = if (distTop <= distBottom) marginPx else screenHeightPx - fabSizePx - marginPx
-                                    val targetX = fabOffsetX.value.coerceIn(xBounds)
-                                    fabScope.launch { fabOffsetY.animateTo(targetY, animationSpec = spec) }
-                                    fabScope.launch { fabOffsetX.animateTo(targetX, animationSpec = spec) }
-                                }
-                            },
-                            onDragCancel = {
-                                val distLeft   = fabOffsetX.value
-                                val distRight  = screenWidthPx  - fabSizePx - fabOffsetX.value
-                                val distTop    = fabOffsetY.value
-                                val distBottom = screenHeightPx - fabSizePx - fabOffsetY.value
-                                val spec = spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
-                                val xBounds = marginPx..(screenWidthPx  - fabSizePx - marginPx)
-                                val yBounds = marginPx..(screenHeightPx - fabSizePx - marginPx)
-                                if (minOf(distLeft, distRight) <= minOf(distTop, distBottom)) {
-                                    val targetX = if (distLeft <= distRight) marginPx else screenWidthPx - fabSizePx - marginPx
-                                    val targetY = fabOffsetY.value.coerceIn(yBounds)
-                                    fabScope.launch { fabOffsetX.animateTo(targetX, animationSpec = spec) }
-                                    fabScope.launch { fabOffsetY.animateTo(targetY, animationSpec = spec) }
-                                } else {
-                                    val targetY = if (distTop <= distBottom) marginPx else screenHeightPx - fabSizePx - marginPx
-                                    val targetX = fabOffsetX.value.coerceIn(xBounds)
-                                    fabScope.launch { fabOffsetY.animateTo(targetY, animationSpec = spec) }
-                                    fabScope.launch { fabOffsetX.animateTo(targetX, animationSpec = spec) }
-                                }
+    if (showFab && fabInitialized) {
+        FloatingActionButton(
+            onClick = {
+                if (!apiKey.isNullOrBlank()) {
+                    viewModel.reset()
+                    navController.navigate(Screen.Scanner.route)
+                } else {
+                    navController.navigate(Screen.Settings.route)
+                }
+            },
+            modifier = Modifier
+                .offset { IntOffset(fabOffsetX.value.roundToInt(), fabOffsetY.value.roundToInt()) }
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragEnd = {
+                            val distLeft   = fabOffsetX.value
+                            val distRight  = screenWidthPx  - fabSizePx - fabOffsetX.value
+                            val distTop    = fabOffsetY.value
+                            val distBottom = screenHeightPx - fabSizePx - fabOffsetY.value
+                            val spec = spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+                            val xBounds = marginPx..(screenWidthPx  - fabSizePx - marginPx)
+                            val yBounds = marginPx..(screenHeightPx - fabSizePx - marginPx)
+                            if (minOf(distLeft, distRight) <= minOf(distTop, distBottom)) {
+                                val targetX = if (distLeft <= distRight) marginPx else screenWidthPx - fabSizePx - marginPx
+                                val targetY = fabOffsetY.value.coerceIn(yBounds)
+                                fabScope.launch { fabOffsetX.animateTo(targetX, animationSpec = spec) }
+                                fabScope.launch { fabOffsetY.animateTo(targetY, animationSpec = spec) }
+                            } else {
+                                val targetY = if (distTop <= distBottom) marginPx else screenHeightPx - fabSizePx - marginPx
+                                val targetX = fabOffsetX.value.coerceIn(xBounds)
+                                fabScope.launch { fabOffsetY.animateTo(targetY, animationSpec = spec) }
+                                fabScope.launch { fabOffsetX.animateTo(targetX, animationSpec = spec) }
                             }
-                        ) { _, dragAmount ->
-                            fabScope.launch {
-                                fabOffsetX.snapTo((fabOffsetX.value + dragAmount.x).coerceIn(0f, screenWidthPx - fabSizePx))
-                                fabOffsetY.snapTo((fabOffsetY.value + dragAmount.y).coerceIn(0f, screenHeightPx - fabSizePx))
+                        },
+                        onDragCancel = {
+                            val distLeft   = fabOffsetX.value
+                            val distRight  = screenWidthPx  - fabSizePx - fabOffsetX.value
+                            val distTop    = fabOffsetY.value
+                            val distBottom = screenHeightPx - fabSizePx - fabOffsetY.value
+                            val spec = spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+                            val xBounds = marginPx..(screenWidthPx  - fabSizePx - marginPx)
+                            val yBounds = marginPx..(screenHeightPx - fabSizePx - marginPx)
+                            if (minOf(distLeft, distRight) <= minOf(distTop, distBottom)) {
+                                val targetX = if (distLeft <= distRight) marginPx else screenWidthPx - fabSizePx - marginPx
+                                val targetY = fabOffsetY.value.coerceIn(yBounds)
+                                fabScope.launch { fabOffsetX.animateTo(targetX, animationSpec = spec) }
+                                fabScope.launch { fabOffsetY.animateTo(targetY, animationSpec = spec) }
+                            } else {
+                                val targetY = if (distTop <= distBottom) marginPx else screenHeightPx - fabSizePx - marginPx
+                                val targetX = fabOffsetX.value.coerceIn(xBounds)
+                                fabScope.launch { fabOffsetY.animateTo(targetY, animationSpec = spec) }
+                                fabScope.launch { fabOffsetX.animateTo(targetX, animationSpec = spec) }
                             }
                         }
-                    },
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(
-                    Icons.Default.QrCodeScanner,
-                    contentDescription = "Scan QR Code",
-                    tint = MaterialTheme.colorScheme.onPrimary
-                )
-            }
+                    ) { _, dragAmount ->
+                        fabScope.launch {
+                            fabOffsetX.snapTo((fabOffsetX.value + dragAmount.x).coerceIn(0f, screenWidthPx - fabSizePx))
+                            fabOffsetY.snapTo((fabOffsetY.value + dragAmount.y).coerceIn(0f, screenHeightPx - fabSizePx))
+                        }
+                    }
+                },
+            containerColor = MaterialTheme.colorScheme.primary
+        ) {
+            Icon(
+                Icons.Default.QrCodeScanner,
+                contentDescription = "Scan QR Code",
+                tint = MaterialTheme.colorScheme.onPrimary
+            )
         }
+    }
     } // end BoxWithConstraints
 }
 

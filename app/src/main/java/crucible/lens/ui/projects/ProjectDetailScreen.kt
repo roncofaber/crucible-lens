@@ -5,6 +5,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -34,6 +36,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -43,8 +46,10 @@ import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
+import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingMessage
+import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.UiConstants
 import crucible.lens.ui.common.openUrlInBrowser
 import androidx.compose.ui.graphics.SolidColor
@@ -78,9 +83,21 @@ fun ProjectDetailScreen(
     var fromCache by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val mainScrollState = rememberScrollState()
     val samplesListState = rememberLazyListState()
     val datasetsListState = rememberLazyListState()
     val pullRefreshState = rememberPullToRefreshState()
+
+    // Show scroll-to-top when either tab is scrolled down
+    val showScrollToTop by remember {
+        derivedStateOf {
+            when (pagerState.currentPage) {
+                0 -> samplesListState.firstVisibleItemIndex > 0
+                1 -> datasetsListState.firstVisibleItemIndex > 0
+                else -> false
+            }
+        }
+    }
 
     val filteredSamples = remember(samples, searchQuery) {
         if (searchQuery.isBlank()) samples ?: emptyList()
@@ -199,41 +216,6 @@ fun ProjectDetailScreen(
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            val currentListState = if (pagerState.currentPage == 0) samplesListState else datasetsListState
-            val showScrollToTop by remember {
-                derivedStateOf { currentListState.firstVisibleItemIndex > 0 }
-            }
-            if (showScrollToTop && !isLoading) {
-                FloatingActionButton(
-                    onClick = {
-                        scope.launch {
-                            currentListState.animateScrollToItem(0)
-                        }
-                    },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(UiConstants.ScrollToTopFabSize),
-                    shape = MaterialTheme.shapes.extraLarge
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.offset(y = (-2).dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ExpandLess,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp).offset(y = 5.dp)
-                        )
-                        Icon(
-                            Icons.Default.ExpandLess,
-                            contentDescription = "Scroll to top",
-                            modifier = Modifier.size(20.dp).offset(y = (-5).dp)
-                        )
-                    }
-                }
-            }
         }
     ) { padding ->
         Box(
@@ -243,7 +225,9 @@ fun ProjectDetailScreen(
                 .nestedScroll(pullRefreshState.nestedScrollConnection)
         ) {
             Column(
-                modifier = modifier.fillMaxSize()
+                modifier = modifier
+                    .fillMaxSize()
+                    .verticalScroll(mainScrollState)
             ) {
             // Project header with integrated search
             ProjectHeader(
@@ -262,7 +246,13 @@ fun ProjectDetailScreen(
                     selected = pagerState.currentPage == 0,
                     onClick = {
                         scope.launch {
-                            pagerState.animateScrollToPage(0)
+                            pagerState.animateScrollToPage(
+                                page = 0,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium
+                                )
+                            )
                             samplesListState.animateScrollToItem(0)
                         }
                     },
@@ -291,7 +281,13 @@ fun ProjectDetailScreen(
                     selected = pagerState.currentPage == 1,
                     onClick = {
                         scope.launch {
-                            pagerState.animateScrollToPage(1)
+                            pagerState.animateScrollToPage(
+                                page = 1,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium
+                                )
+                            )
                             datasetsListState.animateScrollToItem(0)
                         }
                     },
@@ -323,8 +319,8 @@ fun ProjectDetailScreen(
                     val loadingMessage = LoadingMessage()
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState()),
+                            .fillMaxWidth()
+                            .weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
                         Card(
@@ -374,8 +370,8 @@ fun ProjectDetailScreen(
                 error != null -> {
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
+                            .fillMaxWidth()
+                            .weight(1f)
                     ) {
                         Card(
                             modifier = Modifier
@@ -417,7 +413,9 @@ fun ProjectDetailScreen(
                 else -> {
                     HorizontalPager(
                         state = pagerState,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
                     ) { page ->
                         when (page) {
                             0 -> SamplesList(
@@ -438,13 +436,29 @@ fun ProjectDetailScreen(
             }
             }
 
-            // Only show pull-to-refresh indicator when not showing full loading screen
-            if ((pullRefreshState.isRefreshing || pullRefreshState.verticalOffset > 0f) && !isLoading) {
-                PullToRefreshContainer(
-                    state = pullRefreshState,
-                    modifier = Modifier.align(Alignment.TopCenter)
-                )
-            }
+            // Pull-to-refresh indicator with spring animation
+            // Only show when not showing full loading screen
+            AnimatedPullToRefreshIndicator(
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter),
+                visible = (pullRefreshState.isRefreshing || pullRefreshState.verticalOffset > 0f) && !isLoading
+            )
+
+            // Scroll-to-top button (appears on both tabs when scrolled)
+            ScrollToTopButton(
+                visible = showScrollToTop,
+                onClick = {
+                    scope.launch {
+                        when (pagerState.currentPage) {
+                            0 -> samplesListState.animateScrollToItem(0)
+                            1 -> datasetsListState.animateScrollToItem(0)
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+            )
         }
     }
 

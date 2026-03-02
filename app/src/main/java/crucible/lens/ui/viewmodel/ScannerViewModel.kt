@@ -28,11 +28,7 @@ class ScannerViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    /** -1 = swiped to previous, 1 = swiped to next, 0 = normal navigation */
-    var siblingNavDirection: Int = 0
-        private set
-
-    /** Persists expanded/collapsed state of detail screen cards across sibling navigation. */
+    /** Persists expanded/collapsed state of detail screen cards across navigation. */
     private val resourceCardState = mutableStateMapOf<String, SnapshotStateMap<String, Boolean>>()
 
     fun getCardState(resourceId: String, key: String): Boolean =
@@ -40,14 +36,6 @@ class ScannerViewModel : ViewModel() {
 
     fun setCardState(resourceId: String, key: String, value: Boolean) {
         resourceCardState.getOrPut(resourceId) { mutableStateMapOf() }[key] = value
-    }
-
-    fun prepareSiblingNav(direction: Int) {
-        siblingNavDirection = direction
-    }
-
-    fun resetSiblingNavDirection() {
-        siblingNavDirection = 0
     }
 
     fun fetchResource(uuid: String) {
