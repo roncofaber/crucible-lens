@@ -28,7 +28,8 @@ fun AppearanceSettingsScreen(
     onAppIconSave: (String) -> Unit,
     onFloatingScanButtonSave: (Boolean) -> Unit,
     onBack: () -> Unit,
-    onHome: () -> Unit
+    onHome: () -> Unit,
+    onSearch: () -> Unit
 ) {
     var themeModeInput        by remember { mutableStateOf(currentThemeMode) }
     var accentColorInput      by remember { mutableStateOf(currentAccentColor) }
@@ -46,8 +47,27 @@ fun AppearanceSettingsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onHome) {
-                        Icon(Icons.Default.Home, contentDescription = "Home")
+                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
+                        IconButton(
+                            onClick = onSearch,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = "Search",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = onHome,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Home,
+                                contentDescription = "Home",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 }
             )
@@ -160,11 +180,22 @@ fun AppearanceSettingsScreen(
                         }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "Icon changes will apply the next time you restart the app",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.tertiary
+                        )
+                        Text(
+                            "Changing the icon will restart the app",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
                 }
             }
 

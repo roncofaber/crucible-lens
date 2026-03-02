@@ -28,7 +28,8 @@ import crucible.lens.BuildConfig
 fun AboutSettingsScreen(
     isDarkTheme: Boolean,
     onBack: () -> Unit,
-    onHome: () -> Unit
+    onHome: () -> Unit,
+    onSearch: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -42,8 +43,27 @@ fun AboutSettingsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onHome) {
-                        Icon(Icons.Default.Home, contentDescription = "Home")
+                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
+                        IconButton(
+                            onClick = onSearch,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = "Search",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = onHome,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Home,
+                                contentDescription = "Home",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 }
             )
@@ -95,7 +115,7 @@ fun AboutSettingsScreen(
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                     Text(
-                        text = "Scan QR codes to quickly access sample and dataset information from the Molecular Foundry's Crucible data system.",
+                        text = "A mobile companion app for the Molecular Foundry's Crucible data system at Lawrence Berkeley National Laboratory. Scan QR codes or use full-text search to explore scientific samples, datasets, and projects. Browse relationships between materials, view dataset thumbnails and metadata, navigate research projects with pinning and archiving, and seamlessly integrate with the Crucible Graph Explorer. Designed to bring nanoscience research data to your fingertips.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -309,7 +329,10 @@ fun AboutSettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 16.dp, bottom = 8.dp),
+                    .padding(top = 16.dp, bottom = 8.dp)
+                    .clickable {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/roncofaber")))
+                    },
                 textAlign = TextAlign.Center
             )
         }

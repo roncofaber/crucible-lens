@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="16"
+    android:viewportHeight="16">
+    <!-- Corner brackets -->
+    <path
+        android:fillColor="@color/widget_icon"
+        android:pathData="M0,0.5 A0.5,0.5 0 0,1 0.5,0 h3 a0.5,0.5 0 0,1 0,1 H1 v2.5 a0.5,0.5 0 0,1 -1,0 z m12,0 A0.5,0.5 0 0,1 12.5,0 h3 A0.5,0.5 0 0,1 16,0.5 v3 a0.5,0.5 0 0,1 -1,0 V1 H12.5 A0.5,0.5 0 0,1 12,0.5 M0.5,12 A0.5,0.5 0 0,1 1,12.5 V15 h2.5 a0.5,0.5 0 0,1 0,1 h-3 A0.5,0.5 0 0,1 0,15.5 v-3 A0.5,0.5 0 0,1 0.5,12 m15,0 a0.5,0.5 0 0,1 0.5,0.5 v3 A0.5,0.5 0 0,1 15.5,16 h-3 a0.5,0.5 0 0,1 0,-1 H15 V12.5 A0.5,0.5 0 0,1 15.5,12 M4,4 H5 V5 H4 Z" />
+    <!-- Top-left QR block -->
+    <path
+        android:fillColor="@color/widget_icon"
+        android:pathData="M7,2 H2 V7 H7 Z M3,3 H6 V6 H3 Z m2,8 H4 v1 h1 z" />
+    <!-- Bottom-left QR block -->
+    <path
+        android:fillColor="@color/widget_icon"
+        android:pathData="M7,9 H2 v5 h5 z m-4,1 h3 v3 H3 Z m8,-6 h1 v1 h-1 z" />
+    <!-- Top-right QR block and data pattern -->
+    <path
+        android:fillColor="@color/widget_icon"
+        android:pathData="m9,2 h5 V7 H9 Z m1,1 v3 h3 V3 Z M8,8 v2 h1 v1 H8 v1 h2 v-2 h1 v2 h1 v-1 h2 V10 H11 V8 Z m2,2 H9 V9 h1 z m4,2 h-1 v1 h-2 v1 h3 z m-4,2 V13 H8 v1 z" />
+    <!-- Additional data pattern -->
+    <path
+        android:fillColor="@color/widget_icon"
+        android:pathData="m12,9 h2 V8 h-2 z" />
+</vector>

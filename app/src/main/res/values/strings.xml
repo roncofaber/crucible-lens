@@ -11,4 +11,8 @@
     <string name="camera_permission_required">Camera permission is required to scan QR codes</string>
     <string name="grant_permission">Grant Permission</string>
     <string name="mfid_hint">Enter MFID (e.g., 0tc3s8wqb1zbx000sm7drrpsc8)</string>
+
+    <!-- Widget -->
+    <string name="scan_qr_code">Scan QR Code</string>
+    <string name="widget_description">Quick access to QR scanner</string>
 </resources>

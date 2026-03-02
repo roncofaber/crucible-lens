@@ -218,86 +218,6 @@ fun ResourceDetailScreen(
                 },
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        // Refresh button
-                        IconButton(
-                            onClick = onRefresh,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Refresh,
-                                contentDescription = "Refresh",
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-
-                        // Share button
-                        IconButton(
-                            onClick = {
-                            val projectId = when (resource) {
-                                is Sample -> resource.projectId
-                                is Dataset -> resource.projectId
-                            }
-
-                            if (projectId != null) {
-                                val resourceType = when (resource) {
-                                    is Sample -> "sample-graph"
-                                    is Dataset -> "dataset"
-                                }
-
-                                val url = "$graphExplorerUrl/$projectId/$resourceType/${resource.uniqueId}"
-                                val shareText = "Check out this ${if (resource is Sample) "sample" else "dataset"} in Crucible: $url"
-                                val imageUri = ShareCardGenerator.generate(context, resource, bannerColorInt, darkTheme)
-                                val shareIntent = Intent().apply {
-                                    action = Intent.ACTION_SEND
-                                    putExtra(Intent.EXTRA_TEXT, shareText)
-                                    putExtra(Intent.EXTRA_SUBJECT, resource.name)
-                                    if (imageUri != null) {
-                                        putExtra(Intent.EXTRA_STREAM, imageUri)
-                                        type = "image/*"
-                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    } else {
-                                        type = "text/plain"
-                                    }
-                                }
-                                context.startActivity(Intent.createChooser(shareIntent, "Share via"))
-                            }
-                        },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Share,
-                                contentDescription = "Share",
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-
-                        // Open in Graph Explorer button
-                        IconButton(
-                            onClick = {
-                            val projectId = when (resource) {
-                                is Sample -> resource.projectId
-                                is Dataset -> resource.projectId
-                            }
-
-                            if (projectId != null) {
-                                val resourceType = when (resource) {
-                                    is Sample -> "sample-graph"
-                                    is Dataset -> "dataset"
-                                }
-
-                                val url = "$graphExplorerUrl/$projectId/$resourceType/${resource.uniqueId}"
-                                openUrlInBrowser(context, url)
-                            }
-                        },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Public,
-                                contentDescription = "Open in Graph Explorer",
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-
                         // Search button
                         IconButton(
                             onClick = onSearch,
@@ -449,6 +369,9 @@ fun ResourceDetailScreen(
                         SampleDetailsCard(
                             sample = resource,
                             onProjectClick = onNavigateToProject,
+                            graphExplorerUrl = graphExplorerUrl,
+                            darkTheme = darkTheme,
+                            bannerColorInt = bannerColorInt,
                             onShowQr = { showQrDialog = true },
                             initialAdvanced = getCardState("advanced"),
                             onAdvancedChange = { onCardStateChange("advanced", it) }
@@ -458,6 +381,9 @@ fun ResourceDetailScreen(
                         DatasetDetailsCard(
                             dataset = resource,
                             onProjectClick = onNavigateToProject,
+                            graphExplorerUrl = graphExplorerUrl,
+                            darkTheme = darkTheme,
+                            bannerColorInt = bannerColorInt,
                             onShowQr = { showQrDialog = true },
                             initialAdvanced = getCardState("advanced"),
                             onAdvancedChange = { onCardStateChange("advanced", it) }
@@ -819,6 +745,9 @@ private fun ThumbnailsSection(thumbnails: List<String>) {
 private fun SampleDetailsCard(
     sample: Sample,
     onProjectClick: (String) -> Unit,
+    graphExplorerUrl: String,
+    darkTheme: Boolean,
+    bannerColorInt: Int,
     onShowQr: () -> Unit = {},
     initialAdvanced: Boolean = false,
     onAdvancedChange: (Boolean) -> Unit = {}
@@ -870,7 +799,7 @@ private fun SampleDetailsCard(
             }
             Spacer(modifier = Modifier.height(4.dp))
 
-            // MFID — centered, no label, copy button
+            // MFID — centered, no label, copy button, share, and open in browser
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
@@ -878,7 +807,7 @@ private fun SampleDetailsCard(
             ) {
                 Text(
                     text = sample.uniqueId,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -888,14 +817,63 @@ private fun SampleDetailsCard(
                         clipboard.setPrimaryClip(ClipData.newPlainText("MFID", sample.uniqueId))
                         Toast.makeText(context, "MFID copied to clipboard", Toast.LENGTH_SHORT).show()
                     },
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         Icons.Default.ContentCopy,
                         contentDescription = "Copy MFID",
-                        modifier = Modifier.size(14.dp),
+                        modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
+                }
+
+                // Share button
+                val projectId = sample.projectId
+                if (projectId != null) {
+                    IconButton(
+                        onClick = {
+                            val url = "$graphExplorerUrl/$projectId/sample-graph/${sample.uniqueId}"
+                            val shareText = "Check out this sample in Crucible: $url"
+                            val imageUri = ShareCardGenerator.generate(context, sample, bannerColorInt, darkTheme)
+                            val shareIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                                putExtra(Intent.EXTRA_SUBJECT, sample.name)
+                                if (imageUri != null) {
+                                    putExtra(Intent.EXTRA_STREAM, imageUri)
+                                    type = "image/*"
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                } else {
+                                    type = "text/plain"
+                                }
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Share via"))
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = "Share",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    // Open in Graph Explorer button
+                    IconButton(
+                        onClick = {
+                            val url = "$graphExplorerUrl/$projectId/sample-graph/${sample.uniqueId}"
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Public,
+                            contentDescription = "Open in Graph Explorer",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(6.dp))
@@ -934,6 +912,9 @@ private fun SampleDetailsCard(
 private fun DatasetDetailsCard(
     dataset: Dataset,
     onProjectClick: (String) -> Unit,
+    graphExplorerUrl: String,
+    darkTheme: Boolean,
+    bannerColorInt: Int,
     onShowQr: () -> Unit = {},
     initialAdvanced: Boolean = false,
     onAdvancedChange: (Boolean) -> Unit = {}
@@ -988,7 +969,7 @@ private fun DatasetDetailsCard(
             }
             Spacer(modifier = Modifier.height(4.dp))
 
-            // MFID — centered, no label, copy button
+            // MFID — centered, no label, copy button, share, and open in browser
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
@@ -996,7 +977,7 @@ private fun DatasetDetailsCard(
             ) {
                 Text(
                     text = dataset.uniqueId,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1006,14 +987,63 @@ private fun DatasetDetailsCard(
                         clipboard.setPrimaryClip(ClipData.newPlainText("MFID", dataset.uniqueId))
                         Toast.makeText(context, "MFID copied to clipboard", Toast.LENGTH_SHORT).show()
                     },
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         Icons.Default.ContentCopy,
                         contentDescription = "Copy MFID",
-                        modifier = Modifier.size(14.dp),
+                        modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
+                }
+
+                // Share button
+                val projectId = dataset.projectId
+                if (projectId != null) {
+                    IconButton(
+                        onClick = {
+                            val url = "$graphExplorerUrl/$projectId/dataset/${dataset.uniqueId}"
+                            val shareText = "Check out this dataset in Crucible: $url"
+                            val imageUri = ShareCardGenerator.generate(context, dataset, bannerColorInt, darkTheme)
+                            val shareIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                                putExtra(Intent.EXTRA_SUBJECT, dataset.name)
+                                if (imageUri != null) {
+                                    putExtra(Intent.EXTRA_STREAM, imageUri)
+                                    type = "image/*"
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                } else {
+                                    type = "text/plain"
+                                }
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Share via"))
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = "Share",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    // Open in Graph Explorer button
+                    IconButton(
+                        onClick = {
+                            val url = "$graphExplorerUrl/$projectId/dataset/${dataset.uniqueId}"
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Public,
+                            contentDescription = "Open in Graph Explorer",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(6.dp))
