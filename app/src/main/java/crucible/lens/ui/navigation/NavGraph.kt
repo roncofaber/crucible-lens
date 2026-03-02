@@ -608,7 +608,8 @@ fun NavGraph(
                     navController.navigate(Screen.Detail.createRoute(mfid))
                 },
                 isPinned = projectId in pinnedProjects,
-                onTogglePin = { onTogglePinnedProject(projectId) }
+                onTogglePin = { onTogglePinnedProject(projectId) },
+                isArchived = projectId in archivedProjects
             )
         }
 
