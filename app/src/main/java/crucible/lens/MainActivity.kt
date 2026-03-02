@@ -20,35 +20,57 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     private lateinit var preferencesManager: PreferencesManager
 
-    private fun switchAppIcon(icon: String) {
+    private fun applyAppIconIfNeeded() {
         val packageManager = packageManager
         val lightAlias = ComponentName(this, "crucible.lens.MainActivityLight")
         val darkAlias = ComponentName(this, "crucible.lens.MainActivityDark")
 
-        when (icon) {
-            PreferencesManager.APP_ICON_LIGHT -> {
-                packageManager.setComponentEnabledSetting(
-                    lightAlias,
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-                packageManager.setComponentEnabledSetting(
-                    darkAlias,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-            }
-            PreferencesManager.APP_ICON_DARK -> {
-                packageManager.setComponentEnabledSetting(
-                    lightAlias,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-                packageManager.setComponentEnabledSetting(
-                    darkAlias,
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    PackageManager.DONT_KILL_APP
-                )
+        // Get saved preference
+        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main)
+        scope.launch {
+            preferencesManager.appIcon.collect { icon ->
+                // Check if current icon matches preference
+                val currentLightEnabled = packageManager.getComponentEnabledSetting(lightAlias) ==
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                val currentDarkEnabled = packageManager.getComponentEnabledSetting(darkAlias) ==
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+
+                val needsChange = when (icon) {
+                    PreferencesManager.APP_ICON_LIGHT -> !currentLightEnabled
+                    PreferencesManager.APP_ICON_DARK -> !currentDarkEnabled
+                    else -> false
+                }
+
+                if (needsChange) {
+                    when (icon) {
+                        PreferencesManager.APP_ICON_LIGHT -> {
+                            packageManager.setComponentEnabledSetting(
+                                lightAlias,
+                                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                                PackageManager.DONT_KILL_APP
+                            )
+                            packageManager.setComponentEnabledSetting(
+                                darkAlias,
+                                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                                PackageManager.DONT_KILL_APP
+                            )
+                        }
+                        PreferencesManager.APP_ICON_DARK -> {
+                            packageManager.setComponentEnabledSetting(
+                                darkAlias,
+                                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                                PackageManager.DONT_KILL_APP
+                            )
+                            packageManager.setComponentEnabledSetting(
+                                lightAlias,
+                                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                                PackageManager.DONT_KILL_APP
+                            )
+                        }
+                    }
+                }
+                // Cancel collection after first value
+                throw kotlinx.coroutines.CancellationException()
             }
         }
     }
@@ -57,6 +79,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         preferencesManager = PreferencesManager(this)
+
+        // Apply icon change if needed (from previous session)
+        applyAppIconIfNeeded()
 
         val deepLinkUuid: String? = intent?.data?.pathSegments?.lastOrNull()?.takeIf { it.length > 8 }
 
@@ -168,8 +193,7 @@ class MainActivity : ComponentActivity() {
                     onAppIconSave = { icon ->
                         scope.launch {
                             preferencesManager.saveAppIcon(icon)
-                            // Switch between icon aliases
-                            switchAppIcon(icon)
+                            // Icon will be applied on next app restart
                         }
                     },
                     onLastVisitedResourceSave = { uuid, name ->

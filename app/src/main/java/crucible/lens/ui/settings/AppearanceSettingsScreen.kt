@@ -161,7 +161,7 @@ fun AppearanceSettingsScreen(
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "Icon changes may take a few seconds to appear on your home screen",
+                        "Icon changes will apply the next time you restart the app",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
