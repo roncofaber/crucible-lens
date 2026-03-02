@@ -68,6 +68,7 @@ fun ProjectDetailScreen(
     onResourceClick: (String) -> Unit,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
+    isArchived: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val project = remember(projectId) {
@@ -114,19 +115,31 @@ fun ProjectDetailScreen(
                 isLoading = true
                 error = null
 
-                if (!forceRefresh) {
-                    val cachedSamples = CacheManager.getProjectSamples(projectId)
-                    val cachedDatasets = CacheManager.getProjectDatasets(projectId)
+                // Always try cache first
+                val cachedSamples = CacheManager.getProjectSamples(projectId)
+                val cachedDatasets = CacheManager.getProjectDatasets(projectId)
 
-                    if (cachedSamples != null && cachedDatasets != null) {
-                        samples = cachedSamples
-                        datasets = cachedDatasets
-                        fromCache = true
-                        isLoading = false
-                        pullRefreshState.endRefresh()
-                        return@launch
-                    }
+                if (cachedSamples != null && cachedDatasets != null && !forceRefresh) {
+                    samples = cachedSamples
+                    datasets = cachedDatasets
+                    fromCache = true
+                    isLoading = false
+                    pullRefreshState.endRefresh()
+                    return@launch
                 }
+
+                // Skip API calls for archived projects (use cache only)
+                if (isArchived) {
+                    // Use cache if available, otherwise show empty
+                    samples = cachedSamples ?: emptyList()
+                    datasets = cachedDatasets ?: emptyList()
+                    fromCache = cachedSamples != null && cachedDatasets != null
+                    isLoading = false
+                    pullRefreshState.endRefresh()
+                    return@launch
+                }
+
+                // Only make API calls for non-archived projects
                 fromCache = false
 
                 val (samplesResponse, datasetsResponse) = coroutineScope {
@@ -735,14 +748,14 @@ private fun SamplesList(
                         val sortedSamples = remember(samplesInGroup) {
                             samplesInGroup.sortedBy { it.internalId ?: Int.MAX_VALUE }
                         }
-                        val displayedCount = displayedCounts[sampleType] ?: 80
+                        val displayedCount = displayedCounts[sampleType] ?: 50
                         val hasMore = displayedCount < sortedSamples.size
 
                         CollapsibleGroup(
                             title = sampleType,
                             count = samplesInGroup.size,
                             icon = Icons.Default.Science,
-                            onCollapse = { displayedCounts[sampleType] = 80 }
+                            onCollapse = { displayedCounts[sampleType] = 50 }
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 sortedSamples.take(displayedCount).forEach { sample ->
@@ -757,11 +770,11 @@ private fun SamplesList(
 
                                 if (hasMore) {
                                     val remainingCount = sortedSamples.size - displayedCount
-                                    val loadCount = minOf(80, remainingCount)
+                                    val loadCount = minOf(50, remainingCount)
 
                                     TextButton(
                                         onClick = {
-                                            displayedCounts[sampleType] = displayedCount + 80
+                                            displayedCounts[sampleType] = displayedCount + 50
                                         },
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
@@ -859,14 +872,14 @@ private fun DatasetsList(
                         val sortedDatasets = remember(datasetsInGroup) {
                             datasetsInGroup.sortedBy { it.internalId ?: Int.MAX_VALUE }
                         }
-                        val displayedCount = displayedCounts[measurement] ?: 80
+                        val displayedCount = displayedCounts[measurement] ?: 50
                         val hasMore = displayedCount < sortedDatasets.size
 
                         CollapsibleGroup(
                             title = measurement,
                             count = datasetsInGroup.size,
                             icon = Icons.Default.Dataset,
-                            onCollapse = { displayedCounts[measurement] = 80 }
+                            onCollapse = { displayedCounts[measurement] = 50 }
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 sortedDatasets.take(displayedCount).forEach { dataset ->
@@ -881,11 +894,11 @@ private fun DatasetsList(
 
                                 if (hasMore) {
                                     val remainingCount = sortedDatasets.size - displayedCount
-                                    val loadCount = minOf(80, remainingCount)
+                                    val loadCount = minOf(50, remainingCount)
 
                                     TextButton(
                                         onClick = {
-                                            displayedCounts[measurement] = displayedCount + 80
+                                            displayedCounts[measurement] = displayedCount + 50
                                         },
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
