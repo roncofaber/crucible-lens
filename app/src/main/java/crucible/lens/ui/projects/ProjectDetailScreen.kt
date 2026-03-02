@@ -174,39 +174,6 @@ fun ProjectDetailScreen(
                 },
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        IconButton(
-                            onClick = {
-                                CacheManager.clearProjectDetail(projectId)
-                                loadProjectData(forceRefresh = true)
-                            },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh", modifier = Modifier.size(24.dp))
-                        }
-                        IconButton(
-                            onClick = {
-                                val url = "$graphExplorerUrl/$projectId"
-                                val shareIntent = Intent().apply {
-                                    action = Intent.ACTION_SEND
-                                    putExtra(Intent.EXTRA_TEXT, "Check out this project in Crucible: $url")
-                                    putExtra(Intent.EXTRA_SUBJECT, "Crucible Project: ${project?.projectName ?: projectId}")
-                                    type = "text/plain"
-                                }
-                                context.startActivity(Intent.createChooser(shareIntent, "Share via"))
-                            },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(Icons.Default.Share, contentDescription = "Share", modifier = Modifier.size(24.dp))
-                        }
-                        IconButton(
-                            onClick = {
-                                val url = "$graphExplorerUrl/$projectId"
-                                openUrlInBrowser(context, url)
-                            },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(Icons.Default.Public, contentDescription = "Open in browser", modifier = Modifier.size(24.dp))
-                        }
                         IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
                             Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
                         }
@@ -237,7 +204,8 @@ fun ProjectDetailScreen(
                 onSearchChange = { searchQuery = it },
                 fromCache = fromCache,
                 isPinned = isPinned,
-                onTogglePin = onTogglePin
+                onTogglePin = onTogglePin,
+                graphExplorerUrl = graphExplorerUrl
             )
 
             // Tabs
@@ -486,8 +454,11 @@ private fun ProjectHeader(
     onSearchChange: (String) -> Unit,
     fromCache: Boolean = false,
     isPinned: Boolean = false,
-    onTogglePin: () -> Unit = {}
+    onTogglePin: () -> Unit = {},
+    graphExplorerUrl: String
 ) {
+    val context = LocalContext.current
+
     Surface(
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
         modifier = Modifier.fillMaxWidth()
@@ -530,16 +501,59 @@ private fun ProjectHeader(
                     }
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    IconButton(
-                        onClick = onTogglePin,
-                        modifier = Modifier.size(36.dp)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(0.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                            contentDescription = if (isPinned) "Unpin" else "Pin",
-                            tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        // Share button
+                        IconButton(
+                            onClick = {
+                                val shareText = "Check out this project in Crucible: $graphExplorerUrl/$projectId"
+                                val shareIntent = Intent().apply {
+                                    action = Intent.ACTION_SEND
+                                    putExtra(Intent.EXTRA_TEXT, shareText)
+                                    putExtra(Intent.EXTRA_SUBJECT, project?.projectName ?: projectId)
+                                    type = "text/plain"
+                                }
+                                context.startActivity(Intent.createChooser(shareIntent, "Share via"))
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Share,
+                                contentDescription = "Share",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        // Open in browser button
+                        IconButton(
+                            onClick = {
+                                openUrlInBrowser(context, "$graphExplorerUrl/$projectId")
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Public,
+                                contentDescription = "Open in Graph Explorer",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        // Pin button
+                        IconButton(
+                            onClick = onTogglePin,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                contentDescription = if (isPinned) "Unpin" else "Pin",
+                                tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                     val ageMin = if (fromCache) CacheManager.getProjectDataAgeMinutes(projectId) ?: 0 else 0
                     if (fromCache) {
@@ -662,6 +676,8 @@ private fun SamplesList(
     listState: LazyListState = rememberLazyListState(),
     onSampleClick: (String) -> Unit
 ) {
+    // Track how many items to display for each group (for infinite scroll)
+    val displayedCounts = remember { mutableStateMapOf<String, Int>() }
     if (samples.isEmpty()) {
         // Wrap in scrollable Box so pull-to-refresh works even with empty state
         Box(
@@ -716,13 +732,20 @@ private fun SamplesList(
             ) {
                 groupedSamples.forEach { (sampleType, samplesInGroup) ->
                     item(key = "sample_group_$sampleType") {
+                        val sortedSamples = remember(samplesInGroup) {
+                            samplesInGroup.sortedBy { it.internalId ?: Int.MAX_VALUE }
+                        }
+                        val displayedCount = displayedCounts[sampleType] ?: 80
+                        val hasMore = displayedCount < sortedSamples.size
+
                         CollapsibleGroup(
                             title = sampleType,
                             count = samplesInGroup.size,
-                            icon = Icons.Default.Science
+                            icon = Icons.Default.Science,
+                            onCollapse = { displayedCounts[sampleType] = 80 }
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                samplesInGroup.sortedBy { it.internalId ?: Int.MAX_VALUE }.forEach { sample ->
+                                sortedSamples.take(displayedCount).forEach { sample ->
                                     ResourceCard(
                                         title = sample.name,
                                         subtitle = null,
@@ -730,6 +753,29 @@ private fun SamplesList(
                                         icon = Icons.Default.Science,
                                         onClick = { onSampleClick(sample.uniqueId) }
                                     )
+                                }
+
+                                if (hasMore) {
+                                    val remainingCount = sortedSamples.size - displayedCount
+                                    val loadCount = minOf(80, remainingCount)
+
+                                    TextButton(
+                                        onClick = {
+                                            displayedCounts[sampleType] = displayedCount + 80
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            "Load $loadCount more... ($remainingCount remaining)",
+                                            style = MaterialTheme.typography.labelMedium
+                                        )
+                                    }
+
+                                    // Auto-load when button appears (infinite scroll effect)
+                                    LaunchedEffect(displayedCount) {
+                                        kotlinx.coroutines.delay(100)
+                                        displayedCounts[sampleType] = displayedCount + 80
+                                    }
                                 }
                             }
                         }
@@ -754,6 +800,8 @@ private fun DatasetsList(
     listState: LazyListState = rememberLazyListState(),
     onDatasetClick: (String) -> Unit
 ) {
+    // Track how many items to display for each group (for infinite scroll)
+    val displayedCounts = remember { mutableStateMapOf<String, Int>() }
     if (datasets.isEmpty()) {
         // Wrap in scrollable Box so pull-to-refresh works even with empty state
         Box(
@@ -808,13 +856,20 @@ private fun DatasetsList(
             ) {
                 groupedDatasets.forEach { (measurement, datasetsInGroup) ->
                     item(key = "dataset_group_$measurement") {
+                        val sortedDatasets = remember(datasetsInGroup) {
+                            datasetsInGroup.sortedBy { it.internalId ?: Int.MAX_VALUE }
+                        }
+                        val displayedCount = displayedCounts[measurement] ?: 80
+                        val hasMore = displayedCount < sortedDatasets.size
+
                         CollapsibleGroup(
                             title = measurement,
                             count = datasetsInGroup.size,
-                            icon = Icons.Default.Dataset
+                            icon = Icons.Default.Dataset,
+                            onCollapse = { displayedCounts[measurement] = 80 }
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                datasetsInGroup.sortedBy { it.internalId ?: Int.MAX_VALUE }.forEach { dataset ->
+                                sortedDatasets.take(displayedCount).forEach { dataset ->
                                     ResourceCard(
                                         title = dataset.name,
                                         subtitle = null,
@@ -822,6 +877,29 @@ private fun DatasetsList(
                                         icon = Icons.Default.Dataset,
                                         onClick = { onDatasetClick(dataset.uniqueId) }
                                     )
+                                }
+
+                                if (hasMore) {
+                                    val remainingCount = sortedDatasets.size - displayedCount
+                                    val loadCount = minOf(80, remainingCount)
+
+                                    TextButton(
+                                        onClick = {
+                                            displayedCounts[measurement] = displayedCount + 80
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            "Load $loadCount more... ($remainingCount remaining)",
+                                            style = MaterialTheme.typography.labelMedium
+                                        )
+                                    }
+
+                                    // Auto-load when button appears (infinite scroll effect)
+                                    LaunchedEffect(displayedCount) {
+                                        kotlinx.coroutines.delay(100)
+                                        displayedCounts[measurement] = displayedCount + 80
+                                    }
                                 }
                             }
                         }
@@ -844,9 +922,16 @@ private fun CollapsibleGroup(
     title: String,
     count: Int,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onCollapse: () -> Unit = {},
     content: @Composable () -> Unit
 ) {
     var expanded by rememberSaveable(key = title) { mutableStateOf(false) }
+
+    LaunchedEffect(expanded) {
+        if (!expanded) {
+            onCollapse()
+        }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),

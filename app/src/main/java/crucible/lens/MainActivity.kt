@@ -1,6 +1,7 @@
 package crucible.lens
 
 import android.content.ComponentName
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -8,70 +9,64 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.navigation.compose.rememberNavController
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.data.preferences.PreferencesManager
 import crucible.lens.ui.navigation.NavGraph
 import crucible.lens.ui.theme.CrucibleScannerTheme
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 class MainActivity : ComponentActivity() {
     private lateinit var preferencesManager: PreferencesManager
+    private var openScanner by mutableStateOf(false)
+    private var initialThemeMode by mutableStateOf(PreferencesManager.THEME_MODE_SYSTEM)
+    private var initialAccentColor by mutableStateOf(PreferencesManager.DEFAULT_ACCENT_COLOR)
 
-    private fun applyAppIconIfNeeded() {
+    private fun switchAppIcon(icon: String) {
         val packageManager = packageManager
         val lightAlias = ComponentName(this, "crucible.lens.MainActivityLight")
         val darkAlias = ComponentName(this, "crucible.lens.MainActivityDark")
 
-        // Get saved preference
-        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main)
-        scope.launch {
-            preferencesManager.appIcon.collect { icon ->
-                // Check if current icon matches preference
-                val currentLightEnabled = packageManager.getComponentEnabledSetting(lightAlias) ==
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                val currentDarkEnabled = packageManager.getComponentEnabledSetting(darkAlias) ==
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-
-                val needsChange = when (icon) {
-                    PreferencesManager.APP_ICON_LIGHT -> !currentLightEnabled
-                    PreferencesManager.APP_ICON_DARK -> !currentDarkEnabled
-                    else -> false
-                }
-
-                if (needsChange) {
-                    when (icon) {
-                        PreferencesManager.APP_ICON_LIGHT -> {
-                            packageManager.setComponentEnabledSetting(
-                                lightAlias,
-                                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                                PackageManager.DONT_KILL_APP
-                            )
-                            packageManager.setComponentEnabledSetting(
-                                darkAlias,
-                                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                                PackageManager.DONT_KILL_APP
-                            )
-                        }
-                        PreferencesManager.APP_ICON_DARK -> {
-                            packageManager.setComponentEnabledSetting(
-                                darkAlias,
-                                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                                PackageManager.DONT_KILL_APP
-                            )
-                            packageManager.setComponentEnabledSetting(
-                                lightAlias,
-                                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                                PackageManager.DONT_KILL_APP
-                            )
-                        }
-                    }
-                }
-                // Cancel collection after first value
-                throw kotlinx.coroutines.CancellationException()
+        // Enable new icon first, then disable old one
+        when (icon) {
+            PreferencesManager.APP_ICON_LIGHT -> {
+                packageManager.setComponentEnabledSetting(
+                    lightAlias,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                packageManager.setComponentEnabledSetting(
+                    darkAlias,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
             }
+            PreferencesManager.APP_ICON_DARK -> {
+                packageManager.setComponentEnabledSetting(
+                    darkAlias,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                packageManager.setComponentEnabledSetting(
+                    lightAlias,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Handle new intents when activity is already running
+        if (intent.action == "crucible.lens.OPEN_SCANNER") {
+            openScanner = true
         }
     }
 
@@ -80,10 +75,14 @@ class MainActivity : ComponentActivity() {
 
         preferencesManager = PreferencesManager(this)
 
-        // Apply icon change if needed (from previous session)
-        applyAppIconIfNeeded()
+        // Load theme preferences synchronously to prevent flash on startup
+        runBlocking {
+            initialThemeMode = preferencesManager.themeMode.first()
+            initialAccentColor = preferencesManager.accentColor.first()
+        }
 
         val deepLinkUuid: String? = intent?.data?.pathSegments?.lastOrNull()?.takeIf { it.length > 8 }
+        openScanner = intent?.action == "crucible.lens.OPEN_SCANNER"
 
         setContent {
             val navController = rememberNavController()
@@ -95,10 +94,10 @@ class MainActivity : ComponentActivity() {
                 initial = PreferencesManager.DEFAULT_GRAPH_EXPLORER_URL
             )
             val themeMode by preferencesManager.themeMode.collectAsState(
-                initial = PreferencesManager.THEME_MODE_SYSTEM
+                initial = initialThemeMode
             )
             val accentColor by preferencesManager.accentColor.collectAsState(
-                initial = PreferencesManager.DEFAULT_ACCENT_COLOR
+                initial = initialAccentColor
             )
             val appIcon by preferencesManager.appIcon.collectAsState(
                 initial = PreferencesManager.APP_ICON_LIGHT
@@ -156,6 +155,8 @@ class MainActivity : ComponentActivity() {
                     lastVisitedResourceName = lastVisitedResourceName,
                     floatingScanButton = floatingScanButton,
                     deepLinkUuid = deepLinkUuid,
+                    openScanner = openScanner,
+                    onScannerOpened = { openScanner = false },
                     pinnedProjects = pinnedProjects,
                     resourceHistory = resourceHistory,
                     onHistoryAdd = { uuid, name ->
@@ -193,7 +194,7 @@ class MainActivity : ComponentActivity() {
                     onAppIconSave = { icon ->
                         scope.launch {
                             preferencesManager.saveAppIcon(icon)
-                            // Icon will be applied on next app restart
+                            switchAppIcon(icon)
                         }
                     },
                     onLastVisitedResourceSave = { uuid, name ->

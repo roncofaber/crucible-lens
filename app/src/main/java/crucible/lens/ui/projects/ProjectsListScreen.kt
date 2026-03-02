@@ -46,6 +46,7 @@ import kotlinx.coroutines.launch
 fun ProjectsListScreen(
     onBack: () -> Unit,
     onHome: () -> Unit,
+    onSearch: () -> Unit,
     onProjectClick: (String) -> Unit,
     pinnedProjects: Set<String> = emptySet(),
     onTogglePin: (String) -> Unit = {},
@@ -92,6 +93,9 @@ fun ProjectsListScreen(
                     if (cachedProjects != null) {
                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                             projects = cachedProjects
+                            // Initialize all projects with null counts to show loading spinners
+                            val newCounts = cachedProjects.associate { it.projectId to Pair<Int?, Int?>(null, null) }
+                            projectCounts = projectCounts + newCounts
                             isLoading = false
                             pullRefreshState.endRefresh()
                         }
@@ -117,6 +121,11 @@ fun ProjectsListScreen(
                     fetchedProjects?.let { CacheManager.cacheProjects(it) }
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                         projects = fetchedProjects
+                        // Initialize all projects with null counts to show loading spinners
+                        fetchedProjects?.let { projectList ->
+                            val newCounts = projectList.associate { it.projectId to Pair<Int?, Int?>(null, null) }
+                            projectCounts = projectCounts + newCounts
+                        }
                     }
                 } else {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -268,17 +277,12 @@ fun ProjectsListScreen(
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
                         IconButton(
-                            onClick = {
-                                CacheManager.clearProjectsCache()
-                                CacheManager.clearProjectDetailsCache()
-                                projectCounts = emptyMap()
-                                loadProjects(forceRefresh = true)
-                            },
+                            onClick = onSearch,
                             modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
-                                Icons.Default.Refresh,
-                                contentDescription = "Refresh",
+                                Icons.Default.Search,
+                                contentDescription = "Search",
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -787,13 +791,13 @@ private fun ProjectCard(
                     CountChip(
                         icon = Icons.Default.Science,
                         count = counts?.first,
-                        loading = counts == null,
+                        loading = counts?.first == null,
                         contentDescription = "Samples"
                     )
                     CountChip(
                         icon = Icons.Default.Dataset,
                         count = counts?.second,
-                        loading = counts == null,
+                        loading = counts?.second == null,
                         contentDescription = "Datasets"
                     )
                 }

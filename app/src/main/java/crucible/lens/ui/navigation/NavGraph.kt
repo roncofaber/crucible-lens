@@ -92,6 +92,8 @@ fun NavGraph(
     lastVisitedResourceName: String?,
     floatingScanButton: Boolean,
     deepLinkUuid: String?,
+    openScanner: Boolean = false,
+    onScannerOpened: () -> Unit = {},
     pinnedProjects: Set<String>,
     resourceHistory: List<HistoryItem>,
     onHistoryAdd: (String, String) -> Unit,
@@ -111,6 +113,15 @@ fun NavGraph(
     LaunchedEffect(deepLinkUuid) {
         if (!deepLinkUuid.isNullOrBlank()) {
             navController.navigate(Screen.Detail.createRoute(deepLinkUuid))
+        }
+    }
+
+    LaunchedEffect(openScanner) {
+        if (openScanner && !apiKey.isNullOrBlank()) {
+            navController.navigate(Screen.Scanner.route) {
+                launchSingleTop = true
+            }
+            onScannerOpened()
         }
     }
     val uiState by viewModel.uiState.collectAsState()
@@ -208,7 +219,9 @@ fun NavGraph(
                         navController.navigate(Screen.Settings.route)
                     } else {
                         viewModel.reset()
-                        navController.navigate(Screen.Scanner.route)
+                        navController.navigate(Screen.Scanner.route) {
+                            launchSingleTop = true
+                        }
                     }
                 },
                 onManualEntry = { uuid ->
@@ -266,7 +279,8 @@ fun NavGraph(
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Home.route) { inclusive = false }
                     }
-                }
+                },
+                onSearch = { navController.navigate(Screen.Search.route) }
             )
         }
 
@@ -283,7 +297,8 @@ fun NavGraph(
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Home.route) { inclusive = false }
                     }
-                }
+                },
+                onSearch = { navController.navigate(Screen.Search.route) }
             )
         }
 
@@ -302,7 +317,8 @@ fun NavGraph(
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Home.route) { inclusive = false }
                     }
-                }
+                },
+                onSearch = { navController.navigate(Screen.Search.route) }
             )
         }
 
@@ -314,7 +330,8 @@ fun NavGraph(
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Home.route) { inclusive = false }
                     }
-                }
+                },
+                onSearch = { navController.navigate(Screen.Search.route) }
             )
         }
 
@@ -560,6 +577,7 @@ fun NavGraph(
                         popUpTo(Screen.Home.route) { inclusive = false }
                     }
                 },
+                onSearch = { navController.navigate(Screen.Search.route) },
                 onProjectClick = { projectId ->
                     navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                 },
@@ -603,6 +621,7 @@ fun NavGraph(
                         popUpTo(Screen.Home.route) { inclusive = false }
                     }
                 },
+                onSearch = { navController.navigate(Screen.Search.route) },
                 onItemClick = { uuid ->
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 }
@@ -633,7 +652,9 @@ fun NavGraph(
             onClick = {
                 if (!apiKey.isNullOrBlank()) {
                     viewModel.reset()
-                    navController.navigate(Screen.Scanner.route)
+                    navController.navigate(Screen.Scanner.route) {
+                        launchSingleTop = true
+                    }
                 } else {
                     navController.navigate(Screen.Settings.route)
                 }

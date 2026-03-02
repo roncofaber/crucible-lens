@@ -19,6 +19,7 @@ object CacheManager {
         System.currentTimeMillis() - timestamp > CACHE_TTL
 
     private val resourceCache = ConcurrentHashMap<String, CachedItem<CrucibleResource>>()
+    private val resourceTypeCache = ConcurrentHashMap<String, String>() // UUID -> "sample" or "dataset"
     private val thumbnailCache = ConcurrentHashMap<String, CachedItem<List<String>>>()
     private var projectsCache: CachedItem<List<Project>>? = null
     private val projectSamplesCache = ConcurrentHashMap<String, CachedItem<List<Sample>>>()
@@ -32,16 +33,43 @@ object CacheManager {
             val oldestKey = resourceCache.entries
                 .minByOrNull { it.value.timestamp }
                 ?.key
-            oldestKey?.let { resourceCache.remove(it) }
+            oldestKey?.let {
+                resourceCache.remove(it)
+                resourceTypeCache.remove(it)
+            }
         }
 
         resourceCache[uuid] = CachedItem(resource, System.currentTimeMillis())
+
+        // Also cache the resource type to avoid type-check API calls
+        val type = when (resource) {
+            is Sample -> "sample"
+            is Dataset -> "dataset"
+        }
+        resourceTypeCache[uuid] = type
     }
 
     fun getResource(uuid: String): CrucibleResource? {
         val cached = resourceCache[uuid] ?: return null
-        if (cached.isExpired()) { resourceCache.remove(uuid); return null }
+        if (cached.isExpired()) {
+            resourceCache.remove(uuid)
+            resourceTypeCache.remove(uuid)
+            return null
+        }
         return cached.data
+    }
+
+    // Resource type caching
+    fun getResourceType(uuid: String): String? {
+        return resourceTypeCache[uuid]
+    }
+
+    fun cacheResourceType(uuid: String, type: String) {
+        resourceTypeCache[uuid] = type
+    }
+
+    fun removeResourceType(uuid: String) {
+        resourceTypeCache.remove(uuid)
     }
 
     // Thumbnail caching
@@ -69,6 +97,7 @@ object CacheManager {
     // Clear individual items
     fun clearResource(uuid: String) {
         resourceCache.remove(uuid)
+        resourceTypeCache.remove(uuid)
     }
 
     fun clearThumbnail(uuid: String) {
@@ -104,6 +133,7 @@ object CacheManager {
     // Clear all cache methods
     fun clearResourceCache() {
         resourceCache.clear()
+        resourceTypeCache.clear()
     }
 
     fun clearThumbnailCache() {
