@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="app/src/main/assets/crucible_text_light.svg" alt="Crucible Lens" width="320">
+  <img src="app/src/main/res/drawable/crucible_text_light.png" alt="Crucible Lens" width="640">
 </p>
 
 Android app for browsing and scanning samples and datasets from the [Molecular Foundry](https://foundry.lbl.gov/)'s Crucible data system.
