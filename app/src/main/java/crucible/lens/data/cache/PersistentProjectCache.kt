@@ -1,6 +1,7 @@
 package crucible.lens.data.cache
 
 import android.content.Context
+import android.util.Log
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import crucible.lens.data.model.Dataset
@@ -82,9 +83,9 @@ object PersistentProjectCache {
             val file = File(context.filesDir, CACHE_FILE)
             file.writeText(adapter.toJson(cacheData))
         } catch (e: Exception) {
-            e.printStackTrace()
-            // Fail silently - cache is optional
+            Log.e("PersistentProjectCache", "Failed to save project data", e)
         }
+        Unit
     }
 
     /**
@@ -108,7 +109,7 @@ object PersistentProjectCache {
 
             cacheData.summaries
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("PersistentProjectCache", "Failed to load project data", e)
             null
         }
     }
@@ -121,8 +122,9 @@ object PersistentProjectCache {
             val file = File(context.filesDir, CACHE_FILE)
             if (file.exists()) file.delete()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("PersistentProjectCache", "Failed to clear cache", e)
         }
+        Unit
     }
 
     /**

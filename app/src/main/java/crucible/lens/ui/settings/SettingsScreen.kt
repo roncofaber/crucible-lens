@@ -19,6 +19,7 @@ fun SettingsScreen(
     currentApiKey: String?,
     onNavigateToApi: () -> Unit,
     onNavigateToAppearance: () -> Unit,
+    onNavigateToCache: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onBack: () -> Unit,
     onHome: () -> Unit,
@@ -83,6 +84,13 @@ fun SettingsScreen(
                 title = "Appearance",
                 subtitle = "Theme, accent color, animations",
                 onClick = onNavigateToAppearance
+            )
+
+            SettingsRow(
+                icon = Icons.Default.Storage,
+                title = "Cache",
+                subtitle = "Pre-loaded data for faster browsing",
+                onClick = onNavigateToCache
             )
 
             SettingsRow(

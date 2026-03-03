@@ -129,8 +129,9 @@ class ScannerViewModel : ViewModel() {
                 }
             }
 
-            // Fetch and cache related resources in background
-            uuidsToPreload.forEach { uuid ->
+            // Fetch and cache related resources in background.
+            // Deduplicate and exclude self to prevent redundant/looping fetches.
+            uuidsToPreload.filter { it != resource.uniqueId }.distinct().forEach { uuid ->
                 // Only fetch if not already cached
                 if (CacheManager.getResource(uuid) == null) {
                     launch {
@@ -138,8 +139,8 @@ class ScannerViewModel : ViewModel() {
                             when (val result = repository.fetchResourceByUuid(uuid)) {
                                 is ResourceResult.Success -> {
                                     CacheManager.cacheResource(uuid, result.resource)
-                                    // Also preload thumbnails for datasets
-                                    if (result.resource is Dataset) {
+                                    // Preload thumbnails only if not already cached
+                                    if (result.resource is Dataset && CacheManager.getThumbnails(uuid) == null) {
                                         val thumbnails = repository.fetchThumbnails(uuid)
                                         CacheManager.cacheThumbnails(uuid, thumbnails)
                                     }
@@ -181,13 +182,33 @@ class ScannerViewModel : ViewModel() {
     fun refreshResource(uuid: String) {
         viewModelScope.launch {
             val trimmedUuid = uuid.trim()
-
-            // Clear cache for this specific resource
             CacheManager.clearResource(trimmedUuid)
             CacheManager.clearThumbnail(trimmedUuid)
 
-            // Fetch fresh data
-            fetchResource(trimmedUuid)
+            val current = _uiState.value
+            if (current is UiState.Success && current.resource.uniqueId != trimmedUuid) {
+                // Refreshing a sibling — preserve the primary resource so that
+                // resource.uniqueId stays equal to mfid and the loading overlay
+                // never gets stuck. Only update the cache; ResourceDetailScreen
+                // will re-fetch into loadedResources via siblingReloadTrigger.
+                _uiState.value = current.copy(isRefreshing = true)
+                try {
+                    when (val result = repository.fetchResourceByUuid(trimmedUuid)) {
+                        is ResourceResult.Success -> {
+                            CacheManager.cacheResource(trimmedUuid, result.resource)
+                            if (result.resource is Dataset) {
+                                val thumbnails = repository.fetchThumbnails(trimmedUuid)
+                                CacheManager.cacheThumbnails(trimmedUuid, thumbnails)
+                            }
+                        }
+                        else -> {}
+                    }
+                } catch (_: Exception) {}
+                _uiState.value = current.copy(isRefreshing = false)
+            } else {
+                // Refreshing the primary resource — normal flow
+                fetchResource(trimmedUuid)
+            }
         }
     }
 }

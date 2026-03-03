@@ -25,9 +25,16 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,8 +44,11 @@ import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
@@ -46,9 +56,11 @@ import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.rotate
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -79,7 +91,7 @@ import crucible.lens.data.model.DatasetReference
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.SampleReference
 import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
-import crucible.lens.ui.common.LoadingMessage
+import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.QrCodeDialog
 import crucible.lens.ui.common.QrCodeDialogWithNavigation
 import crucible.lens.ui.common.ScrollToTopButton
@@ -99,7 +111,7 @@ fun ResourceDetailScreen(
     onNavigateToProject: (String) -> Unit,
     onSearch: () -> Unit = {},
     onHome: () -> Unit,
-    onRefresh: () -> Unit,
+    onRefresh: (uuid: String) -> Unit,
     onNavigateToSibling: (uuid: String) -> Unit = onNavigateToResource,
     onSaveToHistory: (uuid: String, name: String) -> Unit = { _, _ -> },
     darkTheme: Boolean,
@@ -112,7 +124,14 @@ fun ResourceDetailScreen(
 
     // Cache for loaded resources with full metadata and relationships
     val loadedResources = remember { mutableStateMapOf<String, CrucibleResource>() }
-    val loadedThumbnails = remember { mutableStateMapOf<String, List<String>>() }
+    // Pre-seed only when thumbnails is non-empty. An empty list from the ViewModel means
+    // either the fetch failed or the thumbnail cache expired — in both cases we want the
+    // LaunchedEffect to retry. Only skip the fetch when we already have real images.
+    val loadedThumbnails = remember {
+        mutableStateMapOf<String, List<String>>().also { map ->
+            if (resource is Dataset && thumbnails.isNotEmpty()) map[resource.uniqueId] = thumbnails
+        }
+    }
     val loadedRelationships = remember { mutableStateMapOf<String, Boolean>() } // Track which have relationships loaded
 
     // Sibling navigation: same type within the same project
@@ -126,8 +145,8 @@ fun ResourceDetailScreen(
                     CacheManager.getProjectSamples(projectId)
                         ?.filter { it.sampleType == resource.sampleType }
                         ?.sortedBy { it.internalId ?: Int.MAX_VALUE }
-                        ?: emptyList()
-                } else emptyList()
+                        ?: listOf(resource) // seed immediately so pager shows before siblings load
+                } else listOf(resource)
             } else emptyList()
         )
     }
@@ -139,29 +158,40 @@ fun ResourceDetailScreen(
                     CacheManager.getProjectDatasets(projectId)
                         ?.filter { it.measurement == resource.measurement }
                         ?.sortedBy { it.internalId ?: Int.MAX_VALUE }
-                        ?: emptyList()
-                } else emptyList()
+                        ?: listOf(resource) // seed immediately so pager shows before siblings load
+                } else listOf(resource)
             } else emptyList()
         )
     }
-    // Initialize current resource immediately (fast for QR scanning)
-    LaunchedEffect(resource) {
-        // Store current resource first for instant display
-        loadedResources[resource.uniqueId] = resource
-    }
+    // True once the full sibling list has been resolved (cache hit or batch load done).
+    // Stays false while the list is just the 1-item seed, so the counter shows "-- / --".
+    var siblingsResolved by remember(resource) { mutableStateOf(false) }
 
     // Batch load all project resources in background (for sibling navigation)
     LaunchedEffect(resource) {
+        // Always seed with the authoritative incoming resource (handles post-refresh updates where
+        // the ViewModel has a fresh version but loadedResources still holds a stale one).
+        loadedResources[resource.uniqueId] = resource
+        // Clear stale thumbnails so the fresh ones from the ViewModel are displayed after refresh.
+        loadedThumbnails.remove(resource.uniqueId)
+
         when (resource) {
             is Sample -> {
-                val projectId = resource.projectId ?: return@LaunchedEffect
+                val projectId = resource.projectId
+                if (projectId == null) { siblingsResolved = true; return@LaunchedEffect }
                 fun List<Sample>.filterAndSort() = filter { it.sampleType == resource.sampleType }
                     .sortedBy { it.internalId ?: Int.MAX_VALUE }
                 val cached = CacheManager.getProjectSamples(projectId)
                 if (cached != null) {
-                    // Use cache immediately - no blocking
+                    // Use cache immediately - no blocking.
+                    // Prefer individually-cached versions (fetched with relationships) over
+                    // project-list versions (which have no parent/child/dataset links).
                     sameTypeSamples = cached.filterAndSort()
-                    cached.forEach { loadedResources[it.uniqueId] = it }
+                    cached.forEach { s ->
+                        val rich = CacheManager.getResource(s.uniqueId) as? Sample
+                        loadedResources[s.uniqueId] = rich ?: s
+                    }
+                    siblingsResolved = true
                 } else {
                     // Batch load in background - doesn't block initial display
                     launch(Dispatchers.IO) {
@@ -170,24 +200,41 @@ fun ResourceDetailScreen(
                             if (response.isSuccessful) {
                                 val all = response.body() ?: emptyList()
                                 CacheManager.cacheProjectSamples(projectId, all)
-                                sameTypeSamples = all.filterAndSort()
-                                all.forEach { loadedResources[it.uniqueId] = it }
+                                val filtered = all.filterAndSort()
+                                val richMap = all.associate { s ->
+                                    s.uniqueId to ((CacheManager.getResource(s.uniqueId) as? Sample) ?: s)
+                                }
+                                withContext(Dispatchers.Main) {
+                                    sameTypeSamples = filtered
+                                    richMap.forEach { (uuid, res) -> loadedResources[uuid] = res }
+                                    siblingsResolved = true
+                                }
+                            } else {
+                                withContext(Dispatchers.Main) { siblingsResolved = true }
                             }
                         } catch (e: Exception) {
                             Log.e("ResourceDetail", "Failed to batch load samples", e)
+                            withContext(Dispatchers.Main) { siblingsResolved = true }
                         }
                     }
                 }
             }
             is Dataset -> {
-                val projectId = resource.projectId ?: return@LaunchedEffect
+                val projectId = resource.projectId
+                if (projectId == null) { siblingsResolved = true; return@LaunchedEffect }
                 fun List<Dataset>.filterAndSort() = filter { it.measurement == resource.measurement }
                     .sortedBy { it.internalId ?: Int.MAX_VALUE }
                 val cached = CacheManager.getProjectDatasets(projectId)
                 if (cached != null) {
-                    // Use cache immediately - no blocking
+                    // Use cache immediately - no blocking.
+                    // Prefer individually-cached versions (fetched with metadata + relationships)
+                    // over project-list versions (fetched with includeMetadata=false).
                     sameTypeDatasets = cached.filterAndSort()
-                    cached.forEach { loadedResources[it.uniqueId] = it }
+                    cached.forEach { dataset ->
+                        val rich = CacheManager.getResource(dataset.uniqueId) as? Dataset
+                        loadedResources[dataset.uniqueId] = rich ?: dataset
+                    }
+                    siblingsResolved = true
                 } else {
                     // Batch load in background with metadata - doesn't block initial display
                     launch(Dispatchers.IO) {
@@ -196,11 +243,21 @@ fun ResourceDetailScreen(
                             if (response.isSuccessful) {
                                 val all = response.body() ?: emptyList()
                                 CacheManager.cacheProjectDatasets(projectId, all)
-                                sameTypeDatasets = all.filterAndSort()
-                                all.forEach { loadedResources[it.uniqueId] = it }
+                                val filtered = all.filterAndSort()
+                                val richMap = all.associate { dataset ->
+                                    dataset.uniqueId to ((CacheManager.getResource(dataset.uniqueId) as? Dataset) ?: dataset)
+                                }
+                                withContext(Dispatchers.Main) {
+                                    sameTypeDatasets = filtered
+                                    richMap.forEach { (uuid, res) -> loadedResources[uuid] = res }
+                                    siblingsResolved = true
+                                }
+                            } else {
+                                withContext(Dispatchers.Main) { siblingsResolved = true }
                             }
                         } catch (e: Exception) {
                             Log.e("ResourceDetail", "Failed to batch load datasets", e)
+                            withContext(Dispatchers.Main) { siblingsResolved = true }
                         }
                     }
                 }
@@ -248,26 +305,23 @@ fun ResourceDetailScreen(
         }
     }
 
-    // Lazy load relationships for ~10 neighbors (current ± 5)
+    // Incremented when a sibling PTR completes, forces lazy-load effects to re-run
+    var siblingReloadTrigger by remember { mutableStateOf(0) }
+
+    // Lazy load relationships for ~20 neighbors (current ± 10)
     // Thumbnails loaded separately with more conservative strategy
-    LaunchedEffect(pagerState.currentPage, siblingList) {
+    LaunchedEffect(pagerState.currentPage, siblingList, siblingReloadTrigger) {
         if (siblingList.isEmpty()) return@LaunchedEffect
 
         val currentPage = pagerState.currentPage
-        val relationshipRange = 5 // Load relationships for current ± 5 pages
+        val relationshipRange = 10 // Load relationships for current ± 10 pages
 
-        // Build list of pages to load relationships (current ± 5)
+        // Build list of pages to load in expanding order: 0, +1, -1, +2, -2, ...
         val pagesToLoad = mutableListOf<Int>()
-        pagesToLoad.add(currentPage) // Current page (priority)
-
-        // Add neighbors in expanding order: +1, -1, +2, -2, +3, -3, etc.
+        pagesToLoad.add(currentPage)
         for (offset in 1..relationshipRange) {
-            if (currentPage + offset in siblingList.indices) {
-                pagesToLoad.add(currentPage + offset)
-            }
-            if (currentPage - offset in siblingList.indices) {
-                pagesToLoad.add(currentPage - offset)
-            }
+            if (currentPage + offset in siblingList.indices) pagesToLoad.add(currentPage + offset)
+            if (currentPage - offset in siblingList.indices) pagesToLoad.add(currentPage - offset)
         }
 
         // Load relationships (but NOT thumbnails yet) for pages in the window
@@ -310,27 +364,37 @@ fun ResourceDetailScreen(
                                     ?.sortedBy { it.uniqueId }
                                     ?: emptyList()
 
-                                loadedResources[uuid] = enrichedSample
-                                loadedRelationships[uuid] = true
+                                withContext(Dispatchers.Main) {
+                                    loadedResources[uuid] = enrichedSample
+                                    loadedRelationships[uuid] = true
+                                }
                             }
                         }
                         is Dataset -> {
-                            // Load relationships and linked samples (NOT thumbnails)
+                            // Load relationships, linked samples, and scientific metadata
                             coroutineScope {
                                 val parentsDeferred = async { ApiClient.service.getParentDatasets(uuid) }
                                 val childrenDeferred = async { ApiClient.service.getChildDatasets(uuid) }
                                 val samplesDeferred = async { ApiClient.service.getDatasetSamples(uuid) }
+                                val metadataDeferred = async {
+                                    if (baseResource.scientificMetadata == null)
+                                        ApiClient.service.getScientificMetadata(uuid)
+                                    else null
+                                }
 
                                 val parentsResp = parentsDeferred.await()
                                 val childrenResp = childrenDeferred.await()
                                 val samplesResp = samplesDeferred.await()
+                                val metadataResp = metadataDeferred.await()
 
                                 var enrichedDataset = baseResource.copy(
                                     samples = samplesResp.body()
                                         ?.map { SampleReference(it.uniqueId, it.name) }
                                         ?.distinctBy { it.uniqueId }
                                         ?.sortedBy { it.uniqueId }
-                                        ?: baseResource.samples
+                                        ?: baseResource.samples,
+                                    scientificMetadata = metadataResp?.body()
+                                        ?: baseResource.scientificMetadata
                                 )
                                 enrichedDataset.parentDatasets = parentsResp.body()
                                     ?.map { DatasetReference(it.uniqueId, it.name, it.measurement) }
@@ -343,8 +407,10 @@ fun ResourceDetailScreen(
                                     ?.sortedBy { it.uniqueId }
                                     ?: emptyList()
 
-                                loadedResources[uuid] = enrichedDataset
-                                loadedRelationships[uuid] = true
+                                withContext(Dispatchers.Main) {
+                                    loadedResources[uuid] = enrichedDataset
+                                    loadedRelationships[uuid] = true
+                                }
                             }
                         }
                     }
@@ -355,7 +421,7 @@ fun ResourceDetailScreen(
         }
 
         // Clean up resources far from current page (keep memory usage bounded)
-        launch(Dispatchers.IO) {
+        launch {
             val cleanupThreshold = 20 // Keep loaded data within ± 20 pages
             val keysToRemove = loadedRelationships.keys.filter { uuid ->
                 val index = siblingList.indexOfFirst { it.uniqueId == uuid }
@@ -363,28 +429,21 @@ fun ResourceDetailScreen(
             }
             keysToRemove.forEach { uuid ->
                 loadedRelationships.remove(uuid)
-                // Keep base resource but remove thumbnails to save memory
-                if (uuid != resource.uniqueId) {
-                    loadedThumbnails.remove(uuid)
-                }
+                loadedResources.remove(uuid)
+                loadedThumbnails.remove(uuid)
             }
         }
     }
 
-    // Separate effect: Load thumbnails ONLY for current ± 1 pages (much more conservative)
+    // Separate effect: Load thumbnails for current ± 2 pages
     // Thumbnails are heavy (large base64 strings + decoded bitmaps)
-    LaunchedEffect(pagerState.currentPage, siblingList) {
+    LaunchedEffect(pagerState.currentPage, siblingList, siblingReloadTrigger) {
         if (siblingList.isEmpty()) return@LaunchedEffect
 
         val currentPage = pagerState.currentPage
-        val thumbnailRange = 1 // Only load thumbnails for current ± 1 pages
 
-        // Pages that should have thumbnails loaded
-        val thumbnailPages = listOf(
-            currentPage,
-            currentPage - 1,
-            currentPage + 1
-        ).filter { it in siblingList.indices }
+        // Pages that should have thumbnails loaded (current ± 2)
+        val thumbnailPages = (-2..2).map { currentPage + it }.filter { it in siblingList.indices }
 
         // Load thumbnails for these pages
         launch(Dispatchers.IO) {
@@ -395,27 +454,35 @@ fun ResourceDetailScreen(
                 // Skip if already loaded or not a dataset
                 if (loadedThumbnails.containsKey(uuid) || pageResource !is Dataset) return@forEach
 
+                // Prefer the ViewModel-cached thumbnails over a fresh API call
+                val cached = CacheManager.getThumbnails(uuid)
+                if (cached != null) {
+                    withContext(Dispatchers.Main) { loadedThumbnails[uuid] = cached }
+                    return@forEach
+                }
+
                 try {
                     val thumbResp = ApiClient.service.getThumbnails(uuid)
-                    if (thumbResp.isSuccessful) {
-                        val thumbs = thumbResp.body()?.map { "data:image/png;base64,${it.thumbnailB64}" } ?: emptyList()
-                        if (thumbs.isNotEmpty()) {
-                            loadedThumbnails[uuid] = thumbs
-                        }
+                    val thumbs = if (thumbResp.isSuccessful) {
+                        thumbResp.body()?.map { "data:image/png;base64,${it.thumbnailB64}" } ?: emptyList()
+                    } else {
+                        emptyList()
                     }
+                    withContext(Dispatchers.Main) { loadedThumbnails[uuid] = thumbs }
                 } catch (e: Exception) {
                     Log.e("ResourceDetail", "Failed to load thumbnails for $uuid", e)
+                    withContext(Dispatchers.Main) { loadedThumbnails[uuid] = emptyList() }
                 }
             }
         }
 
-        // Aggressively clean up thumbnails for pages outside current ± 2 range
-        // This prevents memory bloat from large base64 strings
-        launch(Dispatchers.IO) {
-            val thumbnailCleanupThreshold = 2
+        // Clean up thumbnails outside current ± 3 range to prevent memory bloat
+        launch {
+            val thumbnailCleanupThreshold = 3
             val thumbnailKeysToRemove = loadedThumbnails.keys.filter { uuid ->
+                if (uuid == resource.uniqueId) return@filter false
                 val index = siblingList.indexOfFirst { it.uniqueId == uuid }
-                index >= 0 && abs(index - currentPage) > thumbnailCleanupThreshold && uuid != resource.uniqueId
+                index >= 0 && abs(index - currentPage) > thumbnailCleanupThreshold
             }
             thumbnailKeysToRemove.forEach { uuid ->
                 loadedThumbnails.remove(uuid)
@@ -423,22 +490,40 @@ fun ResourceDetailScreen(
         }
     }
 
-    // Prev/next siblings for button navigation
-    val prevSibling = if (siblingIndex > 0) siblingList.getOrNull(siblingIndex - 1) else null
-    val nextSibling = if (siblingIndex >= 0) siblingList.getOrNull(siblingIndex + 1) else null
-
     LaunchedEffect(resource.uniqueId) {
         onSaveToHistory(resource.uniqueId, resource.name)
     }
     val scope = rememberCoroutineScope()
 
     val pullRefreshState = rememberPullToRefreshState()
+    // True only when a sibling (not the primary resource) was pull-to-refreshed.
+    // Guards siblingReloadTrigger so it only fires on actual sibling PTRs.
+    var isSiblingRefreshPending by remember { mutableStateOf(false) }
 
     if (pullRefreshState.isRefreshing) {
-        LaunchedEffect(true) { onRefresh() }
+        LaunchedEffect(true) {
+            val currentUuid = siblingList.getOrNull(pagerState.currentPage)?.uniqueId
+                ?: resource.uniqueId
+            if (currentUuid != mfid) {
+                // Refreshing a sibling — clear stale local state so the pager
+                // picks up the fresh data once the ViewModel signals isRefreshing=false.
+                loadedResources.remove(currentUuid)
+                loadedRelationships.remove(currentUuid)
+                loadedThumbnails.remove(currentUuid)
+                isSiblingRefreshPending = true
+            }
+            onRefresh(currentUuid)
+        }
     }
     LaunchedEffect(isRefreshing) {
-        if (!isRefreshing) pullRefreshState.endRefresh()
+        if (!isRefreshing) {
+            pullRefreshState.endRefresh()
+            // Only re-trigger lazy loading when a sibling was actually refreshed
+            if (isSiblingRefreshPending) {
+                isSiblingRefreshPending = false
+                siblingReloadTrigger++
+            }
+        }
     }
 
     Scaffold(
@@ -495,11 +580,13 @@ fun ResourceDetailScreen(
                     beyondBoundsPageCount = 1, // Pre-render adjacent pages
                     userScrollEnabled = true
                 ) { pageIndex ->
-                    // Each page shows content for one sibling resource
+                    // Guard against stale pageIndex: sameTypeSamples can be updated by a
+                    // withContext(Main) write BEFORE Compose recomposes, so the pager may
+                    // still request a page that is now out of bounds.
+                    if (pageIndex >= siblingList.size) return@HorizontalPager
                     val pageResource = siblingList[pageIndex]
                     val isCurrentResource = pageResource.uniqueId == resource.uniqueId
 
-                    // Wrap in key() to ensure stable composition per page
                     key(pageResource.uniqueId) {
                         // Each page needs its own independent scroll state
                         val listState = rememberLazyListState()
@@ -512,45 +599,7 @@ fun ResourceDetailScreen(
                 enter = fadeIn(animationSpec = tween(durationMillis = 300)),
                 exit = fadeOut(animationSpec = tween(durationMillis = 250))
             ) {
-                val loadingMessage = LoadingMessage()
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                        Column(
-                            modifier = Modifier.padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(20.dp)
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(48.dp), strokeWidth = 4.dp)
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = "Loading Resource",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                AnimatedContent(
-                                    targetState = loadingMessage,
-                                    transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(500)) },
-                                    label = "loading message"
-                                ) { message ->
-                                    Text(
-                                        text = message,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+                LoadingContent(title = "Loading Resource")
             }
 
             // Show content: immediately when we have the resource data
@@ -563,11 +612,11 @@ fun ResourceDetailScreen(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp),
+                        .padding(16.dp)
+                        .graphicsLayer { translationY = pullRefreshState.verticalOffset },
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     item(key = "basic_info_$pageIndex") {
-                        // Calculate prev/next for THIS page, not the global resource
                         val hasPrev = pageIndex > 0
                         val hasNext = pageIndex < siblingList.size - 1
 
@@ -588,7 +637,8 @@ fun ResourceDetailScreen(
                                 }
                             } else null,
                             currentIndex = pageIndex,
-                            totalCount = siblingList.size
+                            totalCount = siblingList.size,
+                            siblingsResolved = siblingsResolved
                         )
                     }
 
@@ -704,82 +754,104 @@ fun ResourceDetailScreen(
                         }
                         if (!displayResource.samples.isNullOrEmpty()) {
                             item(key = "linked_samples_$pageIndex") {
-                                LinkedSamplesCard(
-                                    samples = displayResource.samples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
-                                    onNavigateToResource = onNavigateToResource,
-                                    initialExpanded = getCardState("linked_samples"),
-                                    onExpandChange = { onCardStateChange("linked_samples", it) }
-                                )
+                                Box(modifier = Modifier.animateItemPlacement().fillMaxWidth()) {
+                                    LinkedSamplesCard(
+                                        samples = displayResource.samples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
+                                        onNavigateToResource = onNavigateToResource,
+                                        initialExpanded = getCardState("linked_samples"),
+                                        onExpandChange = { onCardStateChange("linked_samples", it) }
+                                    )
+                                }
                             }
                         }
                         if (!displayResource.parentDatasets.isNullOrEmpty()) {
                             item(key = "parent_datasets_$pageIndex") {
-                                ParentDatasetsCard(
-                                    parents = displayResource.parentDatasets.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
-                                    onNavigateToResource = onNavigateToResource,
-                                    initialExpanded = getCardState("parent_datasets"),
-                                    onExpandChange = { onCardStateChange("parent_datasets", it) }
-                                )
+                                Box(modifier = Modifier.animateItemPlacement().fillMaxWidth()) {
+                                    ParentDatasetsCard(
+                                        parents = displayResource.parentDatasets.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
+                                        onNavigateToResource = onNavigateToResource,
+                                        initialExpanded = getCardState("parent_datasets"),
+                                        onExpandChange = { onCardStateChange("parent_datasets", it) }
+                                    )
+                                }
                             }
                         }
                         if (!displayResource.childDatasets.isNullOrEmpty()) {
                             item(key = "child_datasets_$pageIndex") {
-                                ChildDatasetsCard(
-                                    children = displayResource.childDatasets.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
-                                    onNavigateToResource = onNavigateToResource,
-                                    initialExpanded = getCardState("child_datasets"),
-                                    onExpandChange = { onCardStateChange("child_datasets", it) }
-                                )
+                                Box(modifier = Modifier.animateItemPlacement().fillMaxWidth()) {
+                                    ChildDatasetsCard(
+                                        children = displayResource.childDatasets.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
+                                        onNavigateToResource = onNavigateToResource,
+                                        initialExpanded = getCardState("child_datasets"),
+                                        onExpandChange = { onCardStateChange("child_datasets", it) }
+                                    )
+                                }
                             }
                         }
                         if (!displayResource.scientificMetadata.isNullOrEmpty()) {
                             item(key = "scientific_metadata_$pageIndex") {
-                                ScientificMetadataCard(
-                                    metadata = displayResource.scientificMetadata,
-                                    initialExpanded = getCardState("sci_meta_expanded"),
-                                    initialExpandAll = getCardState("sci_meta_expand_all"),
-                                    onExpandedChange = { onCardStateChange("sci_meta_expanded", it) },
-                                    onExpandAllChange = { onCardStateChange("sci_meta_expand_all", it) }
-                                )
+                                Box(modifier = Modifier.animateItemPlacement().fillMaxWidth()) {
+                                    ScientificMetadataCard(
+                                        metadata = displayResource.scientificMetadata,
+                                        initialExpanded = getCardState("sci_meta_expanded"),
+                                        initialExpandAll = getCardState("sci_meta_expand_all"),
+                                        onExpandedChange = { onCardStateChange("sci_meta_expanded", it) },
+                                        onExpandAllChange = { onCardStateChange("sci_meta_expand_all", it) }
+                                    )
+                                }
                             }
                         }
                         if (!displayResource.keywords.isNullOrEmpty()) {
-                            item(key = "keywords_dataset_$pageIndex") { KeywordsCard(displayResource.keywords) }
+                            item(key = "keywords_dataset_$pageIndex") {
+                                Box(modifier = Modifier.animateItemPlacement().fillMaxWidth()) {
+                                    KeywordsCard(displayResource.keywords)
+                                }
+                            }
                         }
                     }
                     is Sample -> {
                         if (!displayResource.parentSamples.isNullOrEmpty()) {
                             item(key = "parent_samples_$pageIndex") {
-                                ParentSamplesCard(
-                                    parents = displayResource.parentSamples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
-                                    onNavigateToResource = onNavigateToResource,
-                                    initialExpanded = getCardState("parent_samples"),
-                                    onExpandChange = { onCardStateChange("parent_samples", it) }
-                                )
+                                Box(modifier = Modifier.animateItemPlacement().fillMaxWidth()) {
+                                    ParentSamplesCard(
+                                        parents = displayResource.parentSamples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
+                                        onNavigateToResource = onNavigateToResource,
+                                        initialExpanded = getCardState("parent_samples"),
+                                        onExpandChange = { onCardStateChange("parent_samples", it) }
+                                    )
+                                }
                             }
                         }
                         if (!displayResource.childSamples.isNullOrEmpty()) {
                             item(key = "child_samples_$pageIndex") {
-                                ChildSamplesCard(
-                                    children = displayResource.childSamples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
-                                    onNavigateToResource = onNavigateToResource,
-                                    initialExpanded = getCardState("child_samples"),
-                                    onExpandChange = { onCardStateChange("child_samples", it) }
-                                )
+                                Box(modifier = Modifier.animateItemPlacement().fillMaxWidth()) {
+                                    ChildSamplesCard(
+                                        children = displayResource.childSamples.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
+                                        onNavigateToResource = onNavigateToResource,
+                                        initialExpanded = getCardState("child_samples"),
+                                        onExpandChange = { onCardStateChange("child_samples", it) }
+                                    )
+                                }
                             }
                         }
                         if (!displayResource.datasets.isNullOrEmpty()) {
                             item(key = "linked_datasets") {
-                                LinkedDatasetsCard(
-                                    datasets = displayResource.datasets.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
-                                    onNavigateToResource = onNavigateToResource,
-                                    initialExpanded = getCardState("linked_datasets"),
-                                    onExpandChange = { onCardStateChange("linked_datasets", it) }
-                                )
+                                Box(modifier = Modifier.animateItemPlacement().fillMaxWidth()) {
+                                    LinkedDatasetsCard(
+                                        datasets = displayResource.datasets.orEmpty().distinctBy { it.uniqueId }.sortedBy { it.uniqueId },
+                                        onNavigateToResource = onNavigateToResource,
+                                        initialExpanded = getCardState("linked_datasets"),
+                                        onExpandChange = { onCardStateChange("linked_datasets", it) }
+                                    )
+                                }
                             }
                         }
                         if (!displayResource.keywords.isNullOrEmpty()) {
-                            item(key = "keywords_sample_$pageIndex") { KeywordsCard(displayResource.keywords) }
+                            item(key = "keywords_sample_$pageIndex") {
+                                Box(modifier = Modifier.animateItemPlacement().fillMaxWidth()) {
+                                    KeywordsCard(displayResource.keywords)
+                                }
+                            }
                         }
                     }
                 }
@@ -833,27 +905,7 @@ fun ResourceDetailScreen(
                         enter = fadeIn(animationSpec = tween(durationMillis = 300)),
                         exit = fadeOut(animationSpec = tween(durationMillis = 200))
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                                Column(
-                                    modifier = Modifier.padding(32.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                                ) {
-                                    CircularProgressIndicator(modifier = Modifier.size(48.dp), strokeWidth = 4.dp)
-                                    Text(
-                                        text = "Loading Resource",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
+                        LoadingContent(title = "Loading Resource")
                     }
 
                     // Pull-to-refresh indicator
@@ -871,17 +923,13 @@ fun ResourceDetailScreen(
         if (siblingList.isNotEmpty() && siblingIndex >= 0) {
             QrCodeDialogWithNavigation(
                 resources = siblingList,
-                initialIndex = siblingIndex,
+                initialIndex = pagerState.currentPage,
                 onDismiss = { showQrDialog = false },
                 onPageChange = { pageIndex ->
-                    // Scroll the main pager to this page (like arrow buttons)
-                    scope.launch {
-                        pagerState.animateScrollToPage(pageIndex)
-                    }
+                    scope.launch { pagerState.animateScrollToPage(pageIndex) }
                 }
             )
         } else {
-            // Fallback to simple dialog if no siblings loaded
             QrCodeDialog(
                 mfid = resource.uniqueId,
                 name = resource.name,
@@ -923,15 +971,58 @@ private fun BasicInfoCard(
     onPrev: (() -> Unit)? = null,
     onNext: (() -> Unit)? = null,
     currentIndex: Int = -1,
-    totalCount: Int = 0
+    totalCount: Int = 0,
+    siblingsResolved: Boolean = true
 ) {
     Card(border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Always show navigation UI to prevent layout shift
+            // Name — full card width, not squeezed by chevrons
+            AnimatedContent(
+                targetState = resource.name,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith
+                        fadeOut(animationSpec = tween(durationMillis = 200))
+                },
+                label = "resource_name"
+            ) { name ->
+                val nameScrollState = rememberScrollState()
+                val showRightFade = nameScrollState.canScrollForward
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                        .drawWithContent {
+                            drawContent()
+                            if (showRightFade) {
+                                drawRect(
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(Color.Black, Color.Transparent),
+                                        startX = size.width * 0.75f,
+                                        endX = size.width
+                                    ),
+                                    blendMode = BlendMode.DstIn
+                                )
+                            }
+                        }
+                ) {
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip,
+                        modifier = Modifier.horizontalScroll(nameScrollState)
+                    )
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            // Navigation row — chevrons + counter only
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -940,7 +1031,7 @@ private fun BasicInfoCard(
                 IconButton(
                     onClick = { onPrev?.invoke() },
                     enabled = onPrev != null,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
                         Icons.Default.ChevronLeft,
@@ -949,52 +1040,29 @@ private fun BasicInfoCard(
                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
                     )
                 }
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    // Animated resource name
-                    AnimatedContent(
-                        targetState = resource.name,
-                        transitionSpec = {
-                            fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith
-                                fadeOut(animationSpec = tween(durationMillis = 200))
-                        },
-                        label = "resource_name"
-                    ) { name ->
-                        Text(
-                            text = name,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    // Animated counter - placeholder while loading, actual count when ready
-                    val counterText = when {
-                        currentIndex < 0 || totalCount == 0 -> "-- / --"
-                        else -> "${currentIndex + 1} / $totalCount"
-                    }
-                    AnimatedContent(
-                        targetState = counterText,
-                        transitionSpec = {
-                            fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith
-                                fadeOut(animationSpec = tween(durationMillis = 200))
-                        },
-                        label = "sibling_counter"
-                    ) { text ->
-                        Text(
-                            text = text,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                // Animated counter — placeholder while siblings are loading
+                val counterText = when {
+                    !siblingsResolved || currentIndex < 0 || totalCount == 0 -> "-- / --"
+                    else -> "${currentIndex + 1} / $totalCount"
+                }
+                AnimatedContent(
+                    targetState = counterText,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith
+                            fadeOut(animationSpec = tween(durationMillis = 200))
+                    },
+                    label = "sibling_counter"
+                ) { text ->
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 IconButton(
                     onClick = { onNext?.invoke() },
                     enabled = onNext != null,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
                         Icons.Default.ChevronRight,
@@ -1107,6 +1175,9 @@ private fun SampleDetailsCard(
     var advanced by remember { mutableStateOf(initialAdvanced) }
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
+            val projectId = sample.projectId
+
+            // Header: title + action icons (copy, open, share, QR)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1118,80 +1189,36 @@ private fun SampleDetailsCard(
                     fontWeight = FontWeight.Bold
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Row(
-                        modifier = Modifier
-                            .clickable { val new = !advanced; advanced = new; onAdvancedChange(new) }
-                            .padding(horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            if (advanced) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            if (advanced) "Basic" else "Advanced",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    IconButton(onClick = onShowQr, modifier = Modifier.size(36.dp)) {
-                        Icon(
-                            Icons.Default.QrCode,
-                            contentDescription = "Show QR Code",
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // MFID with copy button on left, share and open in browser on right
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Left side: MFID + Copy button
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Start
-                ) {
-                    Text(
-                        text = sample.uniqueId,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                     IconButton(
                         onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("MFID", sample.uniqueId))
                             Toast.makeText(context, "MFID copied to clipboard", Toast.LENGTH_SHORT).show()
                         },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(38.dp)
                     ) {
                         Icon(
                             Icons.Default.ContentCopy,
                             contentDescription = "Copy MFID",
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(22.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
-                }
-
-                // Right side: Share + Open in Browser
-                val projectId = sample.projectId
-                if (projectId != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        // Share button
+                    if (projectId != null) {
+                        IconButton(
+                            onClick = {
+                                val url = "$graphExplorerUrl/$projectId/sample-graph/${sample.uniqueId}"
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Public,
+                                contentDescription = "Open in Graph Explorer",
+                                modifier = Modifier.size(22.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         IconButton(
                             onClick = {
                                 val url = "$graphExplorerUrl/$projectId/sample-graph/${sample.uniqueId}"
@@ -1211,40 +1238,39 @@ private fun SampleDetailsCard(
                                 }
                                 context.startActivity(Intent.createChooser(shareIntent, "Share via"))
                             },
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
                                 Icons.Default.Share,
                                 contentDescription = "Share",
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        // Open in Graph Explorer button
-                        IconButton(
-                            onClick = {
-                                val url = "$graphExplorerUrl/$projectId/sample-graph/${sample.uniqueId}"
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Public,
-                                contentDescription = "Open in Graph Explorer",
-                                modifier = Modifier.size(18.dp),
+                                modifier = Modifier.size(22.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
+                    IconButton(onClick = onShowQr, modifier = Modifier.size(38.dp)) {
+                        Icon(
+                            Icons.Default.QrCode,
+                            contentDescription = "Show QR Code",
+                            modifier = Modifier.size(22.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
+
+            // MFID left-aligned below title
+            Text(
+                text = sample.uniqueId,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(modifier = Modifier.height(6.dp))
 
             // Basic fields
             InfoRow(icon = Icons.AutoMirrored.Filled.Notes, label = "Description", value = sample.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
             InfoRow(icon = Icons.Default.Category, label = "Type", value = sample.sampleType ?: "None")
-            val projectId = sample.projectId
             if (projectId != null) {
                 ClickableInfoRow(icon = Icons.Default.Folder, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })
             } else {
@@ -1253,18 +1279,50 @@ private fun SampleDetailsCard(
             InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = if (advanced) sample.createdAt ?: "None" else formatDateTime(sample.createdAt))
 
             // Advanced fields
-            if (advanced) {
-                if (sample.ownerOrcid != null) {
-                    ClickableInfoRow(
-                        icon = Icons.Default.Person,
-                        label = "Owner ORCID",
-                        value = sample.ownerOrcid,
-                        onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://orcid.org/${sample.ownerOrcid}")))
-                        }
+            AnimatedVisibility(
+                visible = advanced,
+                enter = expandVertically(animationSpec = tween(200)) + fadeIn(animationSpec = tween(200)),
+                exit = shrinkVertically(animationSpec = tween(200)) + fadeOut(animationSpec = tween(150))
+            ) {
+                Column {
+                    if (sample.ownerOrcid != null) {
+                        ClickableInfoRow(
+                            icon = Icons.Default.Person,
+                            label = "Owner ORCID",
+                            value = sample.ownerOrcid,
+                            onClick = {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://orcid.org/${sample.ownerOrcid}")))
+                            }
+                        )
+                    } else {
+                        InfoRow(icon = Icons.Default.Person, label = "Owner ORCID", value = "None")
+                    }
+                    InfoRow(icon = Icons.Default.Numbers, label = "Internal ID", value = sample.internalId?.toString() ?: "None")
+                }
+            }
+
+            // Advanced/Basic toggle at bottom right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clickable { val new = !advanced; advanced = new; onAdvancedChange(new) },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        if (advanced) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                } else {
-                    InfoRow(icon = Icons.Default.Person, label = "Owner ORCID", value = "None")
+                    Text(
+                        if (advanced) "Basic" else "Advanced",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
@@ -1287,6 +1345,9 @@ private fun DatasetDetailsCard(
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
+            val projectId = dataset.projectId
+
+            // Header: title + action icons (copy, open, share, QR)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1297,83 +1358,37 @@ private fun DatasetDetailsCard(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .clickable { val new = !advanced; advanced = new; onAdvancedChange(new) }
-                            .padding(horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            if (advanced) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            if (advanced) "Basic" else "Advanced",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    IconButton(onClick = onShowQr, modifier = Modifier.size(36.dp)) {
-                        Icon(
-                            Icons.Default.QrCode,
-                            contentDescription = "Show QR Code",
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // MFID with copy button on left, share and open in browser on right
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Left side: MFID + Copy button
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Start
-                ) {
-                    Text(
-                        text = dataset.uniqueId,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("MFID", dataset.uniqueId))
                             Toast.makeText(context, "MFID copied to clipboard", Toast.LENGTH_SHORT).show()
                         },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(38.dp)
                     ) {
                         Icon(
                             Icons.Default.ContentCopy,
                             contentDescription = "Copy MFID",
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(22.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
-                }
-
-                // Right side: Share + Open in Browser
-                val projectId = dataset.projectId
-                if (projectId != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        // Share button
+                    if (projectId != null) {
+                        IconButton(
+                            onClick = {
+                                val url = "$graphExplorerUrl/$projectId/dataset/${dataset.uniqueId}"
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Public,
+                                contentDescription = "Open in Graph Explorer",
+                                modifier = Modifier.size(22.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         IconButton(
                             onClick = {
                                 val url = "$graphExplorerUrl/$projectId/dataset/${dataset.uniqueId}"
@@ -1393,41 +1408,40 @@ private fun DatasetDetailsCard(
                                 }
                                 context.startActivity(Intent.createChooser(shareIntent, "Share via"))
                             },
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
                                 Icons.Default.Share,
                                 contentDescription = "Share",
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        // Open in Graph Explorer button
-                        IconButton(
-                            onClick = {
-                                val url = "$graphExplorerUrl/$projectId/dataset/${dataset.uniqueId}"
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Public,
-                                contentDescription = "Open in Graph Explorer",
-                                modifier = Modifier.size(18.dp),
+                                modifier = Modifier.size(22.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
+                    IconButton(onClick = onShowQr, modifier = Modifier.size(38.dp)) {
+                        Icon(
+                            Icons.Default.QrCode,
+                            contentDescription = "Show QR Code",
+                            modifier = Modifier.size(22.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
+
+            // MFID left-aligned below title
+            Text(
+                text = dataset.uniqueId,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(modifier = Modifier.height(6.dp))
 
             // Basic fields
             InfoRow(icon = Icons.AutoMirrored.Filled.Notes, label = "Description", value = dataset.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
             InfoRow(icon = Icons.Default.Science, label = "Measurement", value = dataset.measurement ?: "None")
             InfoRow(icon = Icons.Default.Build, label = "Instrument", value = dataset.instrumentName ?: "None")
-            val projectId = dataset.projectId
             if (projectId != null) {
                 ClickableInfoRow(icon = Icons.Default.Folder, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })
             } else {
@@ -1436,53 +1450,84 @@ private fun DatasetDetailsCard(
             InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = if (advanced) dataset.createdAt ?: "None" else formatDateTime(dataset.createdAt))
 
             // Advanced fields
-            if (advanced) {
-                InfoRow(
-                    icon = when (dataset.isPublic) {
-                        true  -> Icons.Default.Public
-                        false -> Icons.Default.Lock
-                        null  -> Icons.AutoMirrored.Filled.HelpOutline
-                    },
-                    label = "Visibility",
-                    value = when (dataset.isPublic) {
-                        true  -> "Public"
-                        false -> "Private"
-                        null  -> "None"
+            AnimatedVisibility(
+                visible = advanced,
+                enter = expandVertically(animationSpec = tween(200)) + fadeIn(animationSpec = tween(200)),
+                exit = shrinkVertically(animationSpec = tween(200)) + fadeOut(animationSpec = tween(150))
+            ) {
+                Column {
+                    InfoRow(
+                        icon = when (dataset.isPublic) {
+                            true  -> Icons.Default.Public
+                            false -> Icons.Default.Lock
+                            null  -> Icons.AutoMirrored.Filled.HelpOutline
+                        },
+                        label = "Visibility",
+                        value = when (dataset.isPublic) {
+                            true  -> "Public"
+                            false -> "Private"
+                            null  -> "None"
+                        }
+                    )
+                    InfoRow(icon = Icons.Default.Description, label = "Format", value = dataset.dataFormat ?: "None")
+                    InfoRow(icon = Icons.Default.Tag, label = "Instrument ID", value = dataset.instrumentId?.toString() ?: "None")
+                    InfoRow(icon = Icons.Default.PlayCircle, label = "Session", value = dataset.sessionName ?: "None")
+                    InfoRow(icon = Icons.Default.FolderOpen, label = "Source Folder", value = dataset.sourceFolder?.takeIf { it.isNotBlank() } ?: "None")
+                    InfoRow(icon = Icons.Default.AttachFile, label = "File", value = dataset.fileToUpload ?: "None")
+                    InfoRow(icon = Icons.Default.Storage, label = "Size", value = dataset.size?.let { formatFileSize(it) } ?: "None")
+                    if (dataset.jsonLink != null) {
+                        ClickableInfoRow(
+                            icon = Icons.Default.Link,
+                            label = "JSON Link",
+                            value = dataset.jsonLink,
+                            onClick = {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(dataset.jsonLink)))
+                            }
+                        )
+                    } else {
+                        InfoRow(icon = Icons.Default.Link, label = "JSON Link", value = "None")
                     }
-                )
-                InfoRow(icon = Icons.Default.Description, label = "Format", value = dataset.dataFormat ?: "None")
-                InfoRow(icon = Icons.Default.Tag, label = "Instrument ID", value = dataset.instrumentId?.toString() ?: "None")
-                InfoRow(icon = Icons.Default.PlayCircle, label = "Session", value = dataset.sessionName ?: "None")
-                InfoRow(icon = Icons.Default.FolderOpen, label = "Source Folder", value = dataset.sourceFolder?.takeIf { it.isNotBlank() } ?: "None")
-                InfoRow(icon = Icons.Default.AttachFile, label = "File", value = dataset.fileToUpload ?: "None")
-                InfoRow(icon = Icons.Default.Storage, label = "Size", value = dataset.size?.let { formatFileSize(it) } ?: "None")
-                if (dataset.jsonLink != null) {
-                    ClickableInfoRow(
-                        icon = Icons.Default.Link,
-                        label = "JSON Link",
-                        value = dataset.jsonLink,
-                        onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(dataset.jsonLink)))
-                        }
-                    )
-                } else {
-                    InfoRow(icon = Icons.Default.Link, label = "JSON Link", value = "None")
+                    if (dataset.ownerOrcid != null) {
+                        ClickableInfoRow(
+                            icon = Icons.Default.Person,
+                            label = "Owner ORCID",
+                            value = dataset.ownerOrcid,
+                            onClick = {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://orcid.org/${dataset.ownerOrcid}")))
+                            }
+                        )
+                    } else {
+                        InfoRow(icon = Icons.Default.Person, label = "Owner ORCID", value = "None")
+                    }
+                    InfoRow(icon = Icons.Default.AccountCircle, label = "Owner User ID", value = dataset.ownerUserId?.toString() ?: "None")
+                    InfoRow(icon = Icons.Default.Security, label = "SHA-256", value = dataset.sha256Hash ?: "None")
+                    InfoRow(icon = Icons.Default.Numbers, label = "Internal ID", value = dataset.internalId?.toString() ?: "None")
                 }
-                if (dataset.ownerOrcid != null) {
-                    ClickableInfoRow(
-                        icon = Icons.Default.Person,
-                        label = "Owner ORCID",
-                        value = dataset.ownerOrcid,
-                        onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://orcid.org/${dataset.ownerOrcid}")))
-                        }
+            }
+
+            // Advanced/Basic toggle at bottom right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clickable { val new = !advanced; advanced = new; onAdvancedChange(new) },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        if (advanced) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                } else {
-                    InfoRow(icon = Icons.Default.Person, label = "Owner ORCID", value = "None")
+                    Text(
+                        if (advanced) "Basic" else "Advanced",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
-                InfoRow(icon = Icons.Default.AccountCircle, label = "Owner User ID", value = dataset.ownerUserId?.toString() ?: "None")
-                InfoRow(icon = Icons.Default.Security, label = "SHA-256", value = dataset.sha256Hash ?: "None")
-                InfoRow(icon = Icons.Default.Numbers, label = "Internal ID", value = dataset.internalId?.toString() ?: "None")
             }
         }
     }
@@ -1506,7 +1551,7 @@ private fun ScientificMetadataCard(
     var expandAll by remember { mutableStateOf(initialExpandAll) }
 
     Card {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -1562,8 +1607,13 @@ private fun MetadataTree(data: Map<String, Any?>, indentLevel: Int, expandAll: B
             when (entryValue) {
                 is Map<*, *> -> {
                     var expanded by remember(expandAll) { mutableStateOf(expandAll) }
+                    val nodeRotation by animateFloatAsState(
+                        targetValue = if (expanded) 0f else -90f,
+                        animationSpec = tween(150),
+                        label = "node_expand_icon"
+                    )
 
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.fillMaxWidth().animateContentSize(tween(150))) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1573,9 +1623,9 @@ private fun MetadataTree(data: Map<String, Any?>, indentLevel: Int, expandAll: B
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                                imageVector = Icons.Default.ExpandMore,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(16.dp).rotate(nodeRotation),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.width(4.dp))
@@ -1589,7 +1639,8 @@ private fun MetadataTree(data: Map<String, Any?>, indentLevel: Int, expandAll: B
 
                         if (expanded) {
                             @Suppress("UNCHECKED_CAST")
-                            MetadataTree(entryValue as Map<String, Any?>, indentLevel + 1, expandAll)
+                            val nestedData = entryValue as Map<String, Any?>
+                            MetadataTree(nestedData, indentLevel + 1, expandAll)
                         }
                     }
                 }
@@ -1706,6 +1757,11 @@ private fun ParentDatasetsCard(
     onExpandChange: (Boolean) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(initialExpanded) }
+    val iconRotation by animateFloatAsState(
+        targetValue = if (expanded) 0f else -90f,
+        animationSpec = tween(200),
+        label = "expand_icon"
+    )
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1716,9 +1772,9 @@ private fun ParentDatasetsCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                    imageVector = Icons.Default.ExpandMore,
                     contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(20.dp).rotate(iconRotation),
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -1731,9 +1787,15 @@ private fun ParentDatasetsCard(
                 )
             }
 
-            if (expanded) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(tween(200)) + fadeIn(tween(200)),
+                exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+            ) {
+                Column(
+                    modifier = Modifier.padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     for (parent in parents) {
                         ResourceRow(
                             icon = Icons.Default.DataObject,
@@ -1756,6 +1818,11 @@ private fun ChildDatasetsCard(
     onExpandChange: (Boolean) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(initialExpanded) }
+    val iconRotation by animateFloatAsState(
+        targetValue = if (expanded) 0f else -90f,
+        animationSpec = tween(200),
+        label = "expand_icon"
+    )
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1766,9 +1833,9 @@ private fun ChildDatasetsCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                    imageVector = Icons.Default.ExpandMore,
                     contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(20.dp).rotate(iconRotation),
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -1781,9 +1848,15 @@ private fun ChildDatasetsCard(
                 )
             }
 
-            if (expanded) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(tween(200)) + fadeIn(tween(200)),
+                exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+            ) {
+                Column(
+                    modifier = Modifier.padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     for (child in children) {
                         ResourceRow(
                             icon = Icons.Default.DataObject,
@@ -1806,6 +1879,11 @@ private fun LinkedSamplesCard(
     onExpandChange: (Boolean) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(initialExpanded) }
+    val iconRotation by animateFloatAsState(
+        targetValue = if (expanded) 0f else -90f,
+        animationSpec = tween(200),
+        label = "expand_icon"
+    )
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1816,9 +1894,9 @@ private fun LinkedSamplesCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                    imageVector = Icons.Default.ExpandMore,
                     contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(20.dp).rotate(iconRotation),
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -1831,9 +1909,15 @@ private fun LinkedSamplesCard(
                 )
             }
 
-            if (expanded) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(tween(200)) + fadeIn(tween(200)),
+                exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+            ) {
+                Column(
+                    modifier = Modifier.padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     for (sample in samples) {
                         ResourceRow(
                             icon = Icons.Default.BubbleChart,
@@ -1855,6 +1939,11 @@ private fun LinkedDatasetsCard(
     onExpandChange: (Boolean) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(initialExpanded) }
+    val iconRotation by animateFloatAsState(
+        targetValue = if (expanded) 0f else -90f,
+        animationSpec = tween(200),
+        label = "expand_icon"
+    )
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1865,9 +1954,9 @@ private fun LinkedDatasetsCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                    imageVector = Icons.Default.ExpandMore,
                     contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(20.dp).rotate(iconRotation),
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -1880,9 +1969,15 @@ private fun LinkedDatasetsCard(
                 )
             }
 
-            if (expanded) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(tween(200)) + fadeIn(tween(200)),
+                exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+            ) {
+                Column(
+                    modifier = Modifier.padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     for (dataset in datasets) {
                         ResourceRow(
                             icon = Icons.Default.DataObject,
@@ -1905,6 +2000,11 @@ private fun ParentSamplesCard(
     onExpandChange: (Boolean) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(initialExpanded) }
+    val iconRotation by animateFloatAsState(
+        targetValue = if (expanded) 0f else -90f,
+        animationSpec = tween(200),
+        label = "expand_icon"
+    )
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1915,9 +2015,9 @@ private fun ParentSamplesCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                    imageVector = Icons.Default.ExpandMore,
                     contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(20.dp).rotate(iconRotation),
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -1930,9 +2030,15 @@ private fun ParentSamplesCard(
                 )
             }
 
-            if (expanded) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(tween(200)) + fadeIn(tween(200)),
+                exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+            ) {
+                Column(
+                    modifier = Modifier.padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     for (parent in parents) {
                         ResourceRow(
                             icon = Icons.Default.BubbleChart,
@@ -1954,6 +2060,11 @@ private fun ChildSamplesCard(
     onExpandChange: (Boolean) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(initialExpanded) }
+    val iconRotation by animateFloatAsState(
+        targetValue = if (expanded) 0f else -90f,
+        animationSpec = tween(200),
+        label = "expand_icon"
+    )
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1964,9 +2075,9 @@ private fun ChildSamplesCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                    imageVector = Icons.Default.ExpandMore,
                     contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(20.dp).rotate(iconRotation),
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -1979,9 +2090,15 @@ private fun ChildSamplesCard(
                 )
             }
 
-            if (expanded) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(tween(200)) + fadeIn(tween(200)),
+                exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+            ) {
+                Column(
+                    modifier = Modifier.padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     for (child in children) {
                         ResourceRow(
                             icon = Icons.Default.BubbleChart,
@@ -2207,7 +2324,7 @@ private fun ClickableInfoRow(
         Row(
             modifier = Modifier.weight(0.7f),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
                 text = value,

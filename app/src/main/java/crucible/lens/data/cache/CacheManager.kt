@@ -161,6 +161,36 @@ object CacheManager {
         return "Resources: ${resourceCache.size}, Thumbnails: ${thumbnailCache.size}, Projects: ${if (projectsCache != null) "cached" else "empty"}, Project Details: ${projectSamplesCache.size + projectDatasetsCache.size}"
     }
 
+    data class CacheStats(
+        val resourceCount: Int,
+        val thumbnailCount: Int,
+        val projectCount: Int,
+        val cachedSampleCount: Int,
+        val cachedDatasetCount: Int,
+        val estimatedSizeKB: Long
+    )
+
+    fun getDetailedStats(): CacheStats {
+        val cachedSampleCount = projectSamplesCache.values.sumOf { it.data.size }
+        val cachedDatasetCount = projectDatasetsCache.values.sumOf { it.data.size }
+        // Thumbnails are base64 strings — each char ~1 byte of actual data
+        val thumbnailSizeBytes = thumbnailCache.values.sumOf { cached ->
+            cached.data.sumOf { it.length.toLong() }
+        }
+        val estimatedSizeKB =
+            resourceCache.size * 3L +              // ~3 KB per resource (metadata + relationships)
+            thumbnailSizeBytes / 1024L +            // actual base64 thumbnail data
+            (cachedSampleCount + cachedDatasetCount).toLong() // ~1 KB each from project lists
+        return CacheStats(
+            resourceCount = resourceCache.size,
+            thumbnailCount = thumbnailCache.size,
+            projectCount = projectsCache?.data?.size ?: 0,
+            cachedSampleCount = cachedSampleCount,
+            cachedDatasetCount = cachedDatasetCount,
+            estimatedSizeKB = estimatedSizeKB
+        )
+    }
+
     // Age query methods (return null if not cached, otherwise age in minutes)
     fun getProjectsAgeMinutes(): Long? =
         projectsCache?.let { (System.currentTimeMillis() - it.timestamp) / 60000 }

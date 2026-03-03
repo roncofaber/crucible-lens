@@ -1,11 +1,16 @@
 package crucible.lens.ui.projects
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -14,6 +19,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -36,10 +42,16 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
@@ -47,8 +59,9 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
+import crucible.lens.ui.common.QrCodeDialog
 import crucible.lens.ui.common.LazyColumnScrollbar
-import crucible.lens.ui.common.LoadingMessage
+import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.UiConstants
 import crucible.lens.ui.common.openUrlInBrowser
@@ -82,8 +95,8 @@ fun ProjectDetailScreen(
     val pagerState = rememberPagerState(pageCount = { 2 })
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var fromCache by remember { mutableStateOf(false) }
+    var showQrDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     val mainScrollState = rememberScrollState()
     val samplesListState = rememberLazyListState()
     val datasetsListState = rememberLazyListState()
@@ -144,7 +157,7 @@ fun ProjectDetailScreen(
 
                 val (samplesResponse, datasetsResponse) = coroutineScope {
                     val s = async { ApiClient.service.getSamplesByProject(projectId) }
-                    val d = async { ApiClient.service.getDatasetsByProject(projectId, includeMetadata = false) }
+                    val d = async { ApiClient.service.getDatasetsByProject(projectId, includeMetadata = true) }
                     s.await() to d.await()
                 }
 
@@ -155,6 +168,13 @@ fun ProjectDetailScreen(
                     if (loadedSamples != null && loadedDatasets != null) {
                         CacheManager.cacheProjectSamples(projectId, loadedSamples)
                         CacheManager.cacheProjectDatasets(projectId, loadedDatasets)
+                        // Populate resource cache with metadata-rich versions for each dataset,
+                        // but only if a richer individually-fetched version isn't already there.
+                        loadedDatasets.forEach { dataset ->
+                            if (CacheManager.getResource(dataset.uniqueId) == null) {
+                                CacheManager.cacheResource(dataset.uniqueId, dataset)
+                            }
+                        }
                         samples = loadedSamples
                         datasets = loadedDatasets
                     } else {
@@ -198,6 +218,12 @@ fun ProjectDetailScreen(
             )
         }
     ) { padding ->
+        // Animate back to 0 when refresh starts so the header springs back up
+        val contentTranslation by animateFloatAsState(
+            targetValue = if (pullRefreshState.isRefreshing) 0f else pullRefreshState.verticalOffset,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+            label = "ptr_translation"
+        )
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -208,6 +234,7 @@ fun ProjectDetailScreen(
                 modifier = modifier
                     .fillMaxSize()
                     .verticalScroll(mainScrollState)
+                    .graphicsLayer { translationY = contentTranslation }
             ) {
             // Project header with integrated search
             ProjectHeader(
@@ -215,10 +242,10 @@ fun ProjectDetailScreen(
                 projectId = projectId,
                 searchQuery = searchQuery,
                 onSearchChange = { searchQuery = it },
-                fromCache = fromCache,
                 isPinned = isPinned,
                 onTogglePin = onTogglePin,
-                graphExplorerUrl = graphExplorerUrl
+                graphExplorerUrl = graphExplorerUrl,
+                onShowQr = { showQrDialog = true }
             )
 
             // Tabs
@@ -229,9 +256,9 @@ fun ProjectDetailScreen(
                         scope.launch {
                             pagerState.animateScrollToPage(
                                 page = 0,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMedium
+                                animationSpec = tween(
+                                    durationMillis = 350,
+                                    easing = FastOutSlowInEasing
                                 )
                             )
                             samplesListState.animateScrollToItem(0)
@@ -264,9 +291,9 @@ fun ProjectDetailScreen(
                         scope.launch {
                             pagerState.animateScrollToPage(
                                 page = 1,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMedium
+                                animationSpec = tween(
+                                    durationMillis = 350,
+                                    easing = FastOutSlowInEasing
                                 )
                             )
                             datasetsListState.animateScrollToItem(0)
@@ -297,56 +324,12 @@ fun ProjectDetailScreen(
 
             when {
                 isLoading -> {
-                    val loadingMessage = LoadingMessage()
-                    Box(
+                    LoadingContent(
+                        title = "Loading Project Data",
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Card(
-                            modifier = Modifier.padding(32.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(32.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(20.dp)
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(48.dp),
-                                    strokeWidth = 4.dp
-                                )
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Text(
-                                        text = "Loading Project Data",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    AnimatedContent(
-                                        targetState = loadingMessage,
-                                        transitionSpec = {
-                                            fadeIn(animationSpec = tween(500)) togetherWith
-                                                fadeOut(animationSpec = tween(500))
-                                        },
-                                        label = "loading message"
-                                    ) { message ->
-                                        Text(
-                                            text = message,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
+                            .weight(1f)
+                    )
                 }
                 error != null -> {
                     Box(
@@ -403,12 +386,16 @@ fun ProjectDetailScreen(
                                 samples = filteredSamples,
                                 isFiltered = searchQuery.isNotBlank(),
                                 listState = samplesListState,
+                                fromCache = fromCache,
+                                projectId = projectId,
                                 onSampleClick = onResourceClick
                             )
                             1 -> DatasetsList(
                                 datasets = filteredDatasets,
                                 isFiltered = searchQuery.isNotBlank(),
                                 listState = datasetsListState,
+                                fromCache = fromCache,
+                                projectId = projectId,
                                 onDatasetClick = onResourceClick
                             )
                         }
@@ -457,6 +444,14 @@ fun ProjectDetailScreen(
             loadProjectData(forceRefresh = true)
         }
     }
+
+    if (showQrDialog) {
+        QrCodeDialog(
+            mfid = projectId,
+            name = project?.projectName ?: projectId,
+            onDismiss = { showQrDialog = false }
+        )
+    }
 }
 
 @Composable
@@ -465,10 +460,10 @@ private fun ProjectHeader(
     projectId: String,
     searchQuery: String,
     onSearchChange: (String) -> Unit,
-    fromCache: Boolean = false,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
-    graphExplorerUrl: String
+    graphExplorerUrl: String,
+    onShowQr: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -480,45 +475,110 @@ private fun ProjectHeader(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Name row: folder icon + text (weight 1f) + pin button top-right
+            // Name row: folder + [name + pin] (weight 1f) | [copy, open, share, QR]
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Icon(
-                        Icons.Default.Folder,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            text = project?.projectName ?: projectId,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            Icons.Default.Folder,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp)
                         )
-                        project?.projectLeadEmail?.takeIf { it.isNotBlank() }?.let {
-                            Text(
-                                text = "Lead: $it",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                val nameScrollState = rememberScrollState()
+                                val showRightFade = nameScrollState.canScrollForward
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                                        .drawWithContent {
+                                            drawContent()
+                                            if (showRightFade) {
+                                                drawRect(
+                                                    brush = Brush.horizontalGradient(
+                                                        colors = listOf(Color.Black, Color.Transparent),
+                                                        startX = size.width * 0.75f,
+                                                        endX = size.width
+                                                    ),
+                                                    blendMode = BlendMode.DstIn
+                                                )
+                                            }
+                                        }
+                                ) {
+                                    Text(
+                                        text = project?.projectName ?: projectId,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Clip,
+                                        modifier = Modifier.horizontalScroll(nameScrollState)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = onTogglePin,
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                        contentDescription = if (isPinned) "Unpin" else "Pin",
+                                        tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            project?.projectLeadEmail?.takeIf { it.isNotBlank() }?.let {
+                                Text(
+                                    text = "Lead: $it",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
-                }
-                Column(horizontalAlignment = Alignment.End) {
+                    // Action icons: copy, open, share, QR — top-aligned, compact
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(0.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy((-6).dp)
                     ) {
-                        // Share button
+                        IconButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("Project ID", projectId))
+                                Toast.makeText(context, "Project ID copied to clipboard", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.ContentCopy,
+                                contentDescription = "Copy Project ID",
+                                modifier = Modifier.size(22.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(
+                            onClick = { openUrlInBrowser(context, "$graphExplorerUrl/$projectId") },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Public,
+                                contentDescription = "Open in Graph Explorer",
+                                modifier = Modifier.size(22.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         IconButton(
                             onClick = {
                                 val shareText = "Check out this project in Crucible: $graphExplorerUrl/$projectId"
@@ -530,55 +590,28 @@ private fun ProjectHeader(
                                 }
                                 context.startActivity(Intent.createChooser(shareIntent, "Share via"))
                             },
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
                                 Icons.Default.Share,
                                 contentDescription = "Share",
-                                modifier = Modifier.size(18.dp),
+                                modifier = Modifier.size(22.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
-
-                        // Open in browser button
                         IconButton(
-                            onClick = {
-                                openUrlInBrowser(context, "$graphExplorerUrl/$projectId")
-                            },
-                            modifier = Modifier.size(36.dp)
+                            onClick = onShowQr,
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
-                                Icons.Default.Public,
-                                contentDescription = "Open in Graph Explorer",
-                                modifier = Modifier.size(18.dp),
+                                Icons.Default.QrCode,
+                                contentDescription = "Show QR Code",
+                                modifier = Modifier.size(22.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
-
-                        // Pin button
-                        IconButton(
-                            onClick = onTogglePin,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                contentDescription = if (isPinned) "Unpin" else "Pin",
-                                tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                    val ageMin = if (fromCache) CacheManager.getProjectDataAgeMinutes(projectId) ?: 0 else 0
-                    if (fromCache) {
-                        Text(
-                            text = "Cached ${ageMin}m ago",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.End
-                        )
                     }
                 }
-            }
 
             // Description
             val description = project?.description
@@ -687,6 +720,8 @@ private fun SamplesList(
     samples: List<Sample>,
     isFiltered: Boolean,
     listState: LazyListState = rememberLazyListState(),
+    fromCache: Boolean = false,
+    projectId: String = "",
     onSampleClick: (String) -> Unit
 ) {
     // Track how many items to display for each group (for infinite scroll)
@@ -784,14 +819,35 @@ private fun SamplesList(
                                         )
                                     }
 
-                                    // Auto-load when button appears (infinite scroll effect)
-                                    LaunchedEffect(displayedCount) {
-                                        kotlinx.coroutines.delay(100)
-                                        displayedCounts[sampleType] = displayedCount + 80
+                                    // Auto-load when the user has scrolled to the bottom of this group
+                                    var isScrolledToEnd by remember(sampleType) { mutableStateOf(false) }
+                                    LaunchedEffect(listState, sampleType) {
+                                        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.key }
+                                            .collect { lastKey ->
+                                                isScrolledToEnd = (lastKey == "sample_group_$sampleType")
+                                            }
+                                    }
+                                    if (isScrolledToEnd) {
+                                        LaunchedEffect(displayedCount) {
+                                            kotlinx.coroutines.delay(300)
+                                            displayedCounts[sampleType] = displayedCount + 80
+                                        }
                                     }
                                 }
                             }
                         }
+                    }
+                }
+                if (fromCache) {
+                    val ageMin = CacheManager.getProjectDataAgeMinutes(projectId) ?: 0
+                    item(key = "cache_age") {
+                        Text(
+                            text = "Cached ${ageMin}m ago",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
                     }
                 }
             }
@@ -811,6 +867,8 @@ private fun DatasetsList(
     datasets: List<Dataset>,
     isFiltered: Boolean,
     listState: LazyListState = rememberLazyListState(),
+    fromCache: Boolean = false,
+    projectId: String = "",
     onDatasetClick: (String) -> Unit
 ) {
     // Track how many items to display for each group (for infinite scroll)
@@ -908,14 +966,35 @@ private fun DatasetsList(
                                         )
                                     }
 
-                                    // Auto-load when button appears (infinite scroll effect)
-                                    LaunchedEffect(displayedCount) {
-                                        kotlinx.coroutines.delay(100)
-                                        displayedCounts[measurement] = displayedCount + 80
+                                    // Auto-load when the user has scrolled to the bottom of this group
+                                    var isScrolledToEnd by remember(measurement) { mutableStateOf(false) }
+                                    LaunchedEffect(listState, measurement) {
+                                        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.key }
+                                            .collect { lastKey ->
+                                                isScrolledToEnd = (lastKey == "dataset_group_$measurement")
+                                            }
+                                    }
+                                    if (isScrolledToEnd) {
+                                        LaunchedEffect(displayedCount) {
+                                            kotlinx.coroutines.delay(300)
+                                            displayedCounts[measurement] = displayedCount + 80
+                                        }
                                     }
                                 }
                             }
                         }
+                    }
+                }
+                if (fromCache) {
+                    val ageMin = CacheManager.getProjectDataAgeMinutes(projectId) ?: 0
+                    item(key = "cache_age") {
+                        Text(
+                            text = "Cached ${ageMin}m ago",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
                     }
                 }
             }

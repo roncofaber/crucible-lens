@@ -21,6 +21,7 @@ import crucible.lens.ui.theme.CrucibleScannerTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 
 class MainActivity : ComponentActivity() {
     private lateinit var preferencesManager: PreferencesManager
@@ -30,8 +31,8 @@ class MainActivity : ComponentActivity() {
 
     private fun switchAppIcon(icon: String) {
         val packageManager = packageManager
-        val lightAlias = ComponentName(this, "crucible.lens.MainActivityLight")
-        val darkAlias = ComponentName(this, "crucible.lens.MainActivityDark")
+        val lightAlias = ComponentName(this, "$packageName.MainActivityLight")
+        val darkAlias = ComponentName(this, "$packageName.MainActivityDark")
 
         // Enable new icon first, then disable old one
         when (icon) {
@@ -75,10 +76,17 @@ class MainActivity : ComponentActivity() {
 
         preferencesManager = PreferencesManager(this)
 
-        // Load theme preferences synchronously to prevent flash on startup
+        // Load theme preferences synchronously to prevent flash on startup.
+        // Bounded by a 1s timeout so storage stalls can never cause an ANR.
         runBlocking {
-            initialThemeMode = preferencesManager.themeMode.first()
-            initialAccentColor = preferencesManager.accentColor.first()
+            try {
+                withTimeout(1_000L) {
+                    initialThemeMode = preferencesManager.themeMode.first()
+                    initialAccentColor = preferencesManager.accentColor.first()
+                }
+            } catch (_: Exception) {
+                // Fall back to defaults — theme may flash once on this rare path
+            }
         }
 
         val deepLinkUuid: String? = intent?.data?.pathSegments?.lastOrNull()?.takeIf { it.length > 8 }

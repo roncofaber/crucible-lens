@@ -15,11 +15,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.cache.CacheManager
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,14 +40,6 @@ fun ApiSettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var cacheInfo by remember { mutableStateOf<Pair<Long?, Int>?>(null) }
-
-    LaunchedEffect(Unit) {
-        val age = CacheManager.getProjectsAgeMinutes()
-        val projects = CacheManager.getProjects()
-        val count = projects?.size ?: 0
-        cacheInfo = age to count
-    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -196,78 +186,6 @@ fun ApiSettingsScreen(
                 supportingText = { Text("Web interface for viewing entity graphs", style = MaterialTheme.typography.bodySmall) }
             )
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-            Text("Cache", style = MaterialTheme.typography.titleLarge)
-            Text(
-                "Pre-loaded data for faster browsing",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            // Cache stats card
-            if (cacheInfo != null) {
-                val (age, count) = cacheInfo!!
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Storage,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Text(
-                                "Projects Cache",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                        if (age != null) {
-                            Text(
-                                "Cached ${age}m ago • $count projects",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else {
-                            Text(
-                                "No cached data",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-
-            OutlinedButton(
-                onClick = {
-                    CacheManager.clearAll()
-                    cacheInfo = null to 0
-                    scope.launch {
-                        snackbarHostState.showSnackbar(
-                            message = "Cache cleared",
-                            duration = SnackbarDuration.Short
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Clear All Cache")
-            }
         }
     }
 }
