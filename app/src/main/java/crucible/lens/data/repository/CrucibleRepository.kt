@@ -26,16 +26,24 @@ class CrucibleRepository {
 
     suspend fun fetchResourceByUuid(uuid: String): ResourceResult = withContext(Dispatchers.IO) {
         try {
-            // First, determine the resource type using the new /idtype endpoint
-            val typeResponse = api.getResourceType(uuid)
-            val typeBody = typeResponse.body()
+            // Check if we already know the resource type from cache
+            val cachedType = crucible.lens.data.cache.CacheManager.getResourceType(uuid)
 
-            if (!typeResponse.isSuccessful || typeBody == null) {
-                // Fallback to old method if idtype endpoint doesn't work
-                return@withContext fetchResourceByUuidFallback(uuid)
+            val resourceType = if (cachedType != null) {
+                // Use cached type to avoid API call
+                cachedType
+            } else {
+                // Determine the resource type using the /idtype endpoint
+                val typeResponse = api.getResourceType(uuid)
+                val typeBody = typeResponse.body()
+
+                if (!typeResponse.isSuccessful || typeBody == null) {
+                    // Fallback to old method if idtype endpoint doesn't work
+                    return@withContext fetchResourceByUuidFallback(uuid)
+                }
+
+                typeBody.objectType.lowercase()
             }
-
-            val resourceType = typeBody.objectType
 
             // Fetch the appropriate resource based on type
             when (resourceType.lowercase()) {
@@ -43,6 +51,9 @@ class CrucibleRepository {
                     val sampleResponse = api.getSample(uuid)
                     val sampleBody = sampleResponse.body()
                     if (sampleResponse.isSuccessful && sampleBody != null) {
+                        // Cache the type for future calls
+                        crucible.lens.data.cache.CacheManager.cacheResourceType(uuid, "sample")
+
                         val sample: Sample = coroutineScope {
                             val parentsDeferred = async { api.getParentSamples(uuid) }
                             val childrenDeferred = async { api.getChildSamples(uuid) }
@@ -70,12 +81,19 @@ class CrucibleRepository {
                             s
                         }
                         return@withContext ResourceResult.Success(sample)
+                    } else if (cachedType != null) {
+                        // Cached type was wrong, fall back to full check
+                        crucible.lens.data.cache.CacheManager.removeResourceType(uuid)
+                        return@withContext fetchResourceByUuidFallback(uuid)
                     }
                 }
                 "dataset" -> {
                     val datasetResponse = api.getDataset(uuid)
                     val datasetBody = datasetResponse.body()
                     if (datasetResponse.isSuccessful && datasetBody != null) {
+                        // Cache the type for future calls
+                        crucible.lens.data.cache.CacheManager.cacheResourceType(uuid, "dataset")
+
                         val dataset: Dataset = coroutineScope {
                             val metadataDeferred = async { api.getScientificMetadata(uuid) }
                             val parentsDeferred  = async { api.getParentDatasets(uuid) }
@@ -117,6 +135,10 @@ class CrucibleRepository {
                             d
                         }
                         return@withContext ResourceResult.Success(dataset)
+                    } else if (cachedType != null) {
+                        // Cached type was wrong, fall back to full check
+                        crucible.lens.data.cache.CacheManager.removeResourceType(uuid)
+                        return@withContext fetchResourceByUuidFallback(uuid)
                     }
                 }
             }
@@ -138,6 +160,8 @@ class CrucibleRepository {
             val sampleResponse = api.getSample(uuid)
             val sampleBody = sampleResponse.body()
             if (sampleResponse.isSuccessful && sampleBody != null) {
+                // Cache the type for future calls
+                crucible.lens.data.cache.CacheManager.cacheResourceType(uuid, "sample")
                 return ResourceResult.Success(sampleBody)
             }
 
@@ -145,6 +169,9 @@ class CrucibleRepository {
             val datasetResponse = api.getDataset(uuid)
             val datasetBody = datasetResponse.body()
             if (datasetResponse.isSuccessful && datasetBody != null) {
+                // Cache the type for future calls
+                crucible.lens.data.cache.CacheManager.cacheResourceType(uuid, "dataset")
+
                 // Try to fetch scientific metadata
                 val metadataResponse = api.getScientificMetadata(uuid)
                 val enrichedDataset = if (metadataResponse.isSuccessful) {

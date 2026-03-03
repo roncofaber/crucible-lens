@@ -24,4 +24,4 @@
 -keep class okhttp3.internal.publicsuffix.PublicSuffixDatabase { *; }
 
 # Keep data model classes used by Moshi/Retrofit
--keep class gov.lbl.crucible.scanner.data.model.** { *; }
+-keep class crucible.lens.data.model.** { *; }
