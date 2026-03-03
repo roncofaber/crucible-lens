@@ -55,12 +55,18 @@ fun SearchScreen(
 
         allProjects = projects
 
-        // Seed immediately from cache
+        // Seed immediately from cache.
+        // Prefer individually-cached rich versions (full metadata + relationships) over
+        // project-list versions, which may have been cached with includeMetadata=false.
         val samples = mutableListOf<Sample>()
         val datasets = mutableListOf<Dataset>()
         projects.forEach { project ->
-            CacheManager.getProjectSamples(project.projectId)?.let { samples.addAll(it) }
-            CacheManager.getProjectDatasets(project.projectId)?.let { datasets.addAll(it) }
+            CacheManager.getProjectSamples(project.projectId)?.forEach { s ->
+                samples.add((CacheManager.getResource(s.uniqueId) as? Sample) ?: s)
+            }
+            CacheManager.getProjectDatasets(project.projectId)?.forEach { d ->
+                datasets.add((CacheManager.getResource(d.uniqueId) as? Dataset) ?: d)
+            }
         }
         allSamples = samples.toList()
         allDatasets = datasets.toList()
@@ -82,8 +88,8 @@ fun SearchScreen(
                     val d = dr.body() ?: emptyList()
                     CacheManager.cacheProjectSamples(project.projectId, s)
                     CacheManager.cacheProjectDatasets(project.projectId, d)
-                    samples.addAll(s)
-                    datasets.addAll(d)
+                    samples.addAll(s.map { sample -> (CacheManager.getResource(sample.uniqueId) as? Sample) ?: sample })
+                    datasets.addAll(d.map { dataset -> (CacheManager.getResource(dataset.uniqueId) as? Dataset) ?: dataset })
                     allSamples = samples.toList()
                     allDatasets = datasets.toList()
                 }

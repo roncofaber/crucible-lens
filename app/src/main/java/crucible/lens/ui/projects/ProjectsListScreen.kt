@@ -37,6 +37,7 @@ import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
 import crucible.lens.ui.common.LazyColumnScrollbar
+import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.UiConstants
 import kotlinx.coroutines.launch
@@ -195,7 +196,6 @@ fun ProjectsListScreen(
                 return@LaunchedEffect
             }
             batch.forEach { project ->
-                val isArchived = project.projectId in archivedProjects
                 launch(kotlinx.coroutines.Dispatchers.IO) {
                     // Use already-cached data if available — no API call needed
                     val cachedSamples = CacheManager.getProjectSamples(project.projectId)
@@ -330,23 +330,12 @@ fun ProjectsListScreen(
 
                 when {
                     isLoading && persistentSummaries == null -> {
-                    // Loading with no cached data
-                    Column(
+                    LoadingContent(
+                        title = "Loading Projects",
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        CircularProgressIndicator()
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "Loading projects...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    )
                 }
                 error != null -> {
                     Card(

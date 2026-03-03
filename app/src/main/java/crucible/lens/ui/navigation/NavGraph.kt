@@ -16,7 +16,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.ui.home.HomeScreen
@@ -26,13 +25,14 @@ import crucible.lens.ui.search.SearchScreen
 import crucible.lens.ui.settings.SettingsScreen
 import crucible.lens.ui.settings.ApiSettingsScreen
 import crucible.lens.ui.settings.AppearanceSettingsScreen
+import crucible.lens.ui.settings.CacheSettingsScreen
 import crucible.lens.ui.settings.AboutSettingsScreen
 import crucible.lens.ui.viewmodel.ScannerViewModel
 import crucible.lens.ui.viewmodel.UiState
 import crucible.lens.ui.detail.ResourceDetailScreen
 import crucible.lens.ui.projects.ProjectsListScreen
 import crucible.lens.ui.projects.ProjectDetailScreen
-import crucible.lens.ui.common.LoadingMessage
+import crucible.lens.ui.common.LoadingContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -64,6 +64,7 @@ sealed class Screen(val route: String) {
     object Settings : Screen("settings")
     object SettingsApi : Screen("settings/api")
     object SettingsAppearance : Screen("settings/appearance")
+    object SettingsCache : Screen("settings/cache")
     object SettingsAbout : Screen("settings/about")
     object Projects : Screen("projects")
     object ProjectDetail : Screen("project/{projectId}") {
@@ -77,7 +78,7 @@ sealed class Screen(val route: String) {
 }
 
 
-@OptIn(ExperimentalAnimationApi::class)
+@OptIn(ExperimentalAnimationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun NavGraph(
     navController: NavHostController,
@@ -116,7 +117,7 @@ fun NavGraph(
         }
     }
 
-    LaunchedEffect(openScanner) {
+    LaunchedEffect(openScanner, apiKey) {
         if (openScanner && !apiKey.isNullOrBlank()) {
             navController.navigate(Screen.Scanner.route) {
                 launchSingleTop = true
@@ -273,6 +274,7 @@ fun NavGraph(
                 currentApiKey = apiKey,
                 onNavigateToApi = { navController.navigate(Screen.SettingsApi.route) },
                 onNavigateToAppearance = { navController.navigate(Screen.SettingsAppearance.route) },
+                onNavigateToCache = { navController.navigate(Screen.SettingsCache.route) },
                 onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },
                 onBack = { navController.popBackStack() },
                 onHome = {
@@ -335,6 +337,18 @@ fun NavGraph(
             )
         }
 
+        composable(Screen.SettingsCache.route) {
+            CacheSettingsScreen(
+                onBack = { navController.popBackStack() },
+                onHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = false }
+                    }
+                },
+                onSearch = { navController.navigate(Screen.Search.route) }
+            )
+        }
+
         composable(
             route = Screen.Detail.route,
             arguments = listOf(navArgument("mfid") { type = NavType.StringType })
@@ -356,6 +370,17 @@ fun NavGraph(
             ) {
                 AnimatedContent(
                     targetState = uiState,
+                    // All Success states share the same composable instance so that
+                    // isRefreshing changes recompose (not recreate) ResourceDetailScreen.
+                    // This preserves pullRefreshState so endRefresh() is called correctly.
+                    contentKey = { state ->
+                        when (state) {
+                            is UiState.Idle    -> "idle"
+                            is UiState.Loading -> "loading"
+                            is UiState.Success -> "success"
+                            is UiState.Error   -> "error"
+                        }
+                    },
                     transitionSpec = {
                         // All transitions fade smoothly to work with NavGraph slide
                         fadeIn(tween(220)) togetherWith fadeOut(tween(220))
@@ -373,71 +398,24 @@ fun NavGraph(
                         )
                     }
                     is UiState.Loading -> {
-                        // Gracefully fade in after delay so fast cache hits show nothing.
-                        // The NavGraph BoxWithConstraints background fills the gap invisibly.
-                        var showContent by remember { mutableStateOf(false) }
-                        LaunchedEffect(Unit) {
-                            delay(200L)
-                            showContent = true
-                        }
-                        val loadingMessage = LoadingMessage()
-
-                        // Fade in smoothly instead of popping in
-                        AnimatedVisibility(
-                            visible = showContent,
-                            enter = fadeIn(animationSpec = tween(durationMillis = 200))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.background),
-                                contentAlignment = Alignment.Center
-                            ) {
-                        Card(
-                                modifier = Modifier.padding(32.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                                )
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(32.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(48.dp),
-                                        strokeWidth = 4.dp
-                                    )
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Text(
-                                            text = "Loading Resource",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        AnimatedContent(
-                                            targetState = loadingMessage,
-                                            transitionSpec = {
-                                                fadeIn(animationSpec = tween(500)) togetherWith
-                                                    fadeOut(animationSpec = tween(500))
-                                            },
-                                            label = "loading message"
-                                        ) { message ->
-                                            Text(
-                                                text = message,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                                textAlign = TextAlign.Center
-                                            )
+                        Scaffold(
+                            topBar = {
+                                TopAppBar(
+                                    title = { Text("Loading...") },
+                                    navigationIcon = {
+                                        IconButton(onClick = { navController.popBackStack() }) {
+                                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                                         }
                                     }
-                                }
+                                )
                             }
+                        ) { padding ->
+                            LoadingContent(
+                                title = "Loading Resource",
+                                modifier = Modifier.padding(padding)
+                            )
                         }
-                    } // end AnimatedVisibility
-                }
+                    }
                 is UiState.Success -> {
                     // Save last visited resource and add to history
                     LaunchedEffect(state.resource) {
@@ -474,8 +452,8 @@ fun NavGraph(
                                 popUpTo(Screen.Home.route) { inclusive = false }
                             }
                         },
-                        onRefresh = {
-                            viewModel.refreshResource(mfid)
+                        onRefresh = { uuid ->
+                            viewModel.refreshResource(uuid)
                         },
                         getCardState = { key -> viewModel.getCardState(state.resource.uniqueId, key) },
                         onCardStateChange = { key, value -> viewModel.setCardState(state.resource.uniqueId, key, value) }

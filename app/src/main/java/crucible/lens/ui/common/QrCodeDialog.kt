@@ -12,13 +12,21 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.google.zxing.BarcodeFormat
@@ -33,11 +41,34 @@ fun QrCodeDialog(mfid: String, name: String, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                text = name,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            val scrollState = rememberScrollState()
+            val showFade = scrollState.canScrollForward
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                    .drawWithContent {
+                        drawContent()
+                        if (showFade) {
+                            drawRect(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(Color.Black, Color.Transparent),
+                                    startX = size.width * 0.75f,
+                                    endX = size.width
+                                ),
+                                blendMode = BlendMode.DstIn
+                            )
+                        }
+                    }
+            ) {
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    modifier = Modifier.horizontalScroll(scrollState)
+                )
+            }
         },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -108,13 +139,37 @@ fun QrCodeDialogWithNavigation(
                 }
 
                 // Current resource name
-                Text(
-                    text = resources.getOrNull(pagerState.currentPage)?.name ?: "",
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                )
+                key(pagerState.currentPage) {
+                    val scrollState = rememberScrollState()
+                    val showFade = scrollState.canScrollForward
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp)
+                            .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                            .drawWithContent {
+                                drawContent()
+                                if (showFade) {
+                                    drawRect(
+                                        brush = Brush.horizontalGradient(
+                                            colors = listOf(Color.Black, Color.Transparent),
+                                            startX = size.width * 0.75f,
+                                            endX = size.width
+                                        ),
+                                        blendMode = BlendMode.DstIn
+                                    )
+                                }
+                            }
+                    ) {
+                        Text(
+                            text = resources.getOrNull(pagerState.currentPage)?.name ?: "",
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip,
+                            modifier = Modifier.horizontalScroll(scrollState)
+                        )
+                    }
+                }
 
                 // Next indicator
                 if (pagerState.currentPage < resources.size - 1) {
