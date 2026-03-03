@@ -21,9 +21,9 @@ class PreferencesManager(private val context: Context) {
         private val GRAPH_EXPLORER_URL = stringPreferencesKey("graph_explorer_url")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
         private val ACCENT_COLOR = stringPreferencesKey("accent_color")
+        private val APP_ICON = stringPreferencesKey("app_icon")
         private val LAST_VISITED_RESOURCE = stringPreferencesKey("last_visited_resource")
         private val LAST_VISITED_RESOURCE_NAME = stringPreferencesKey("last_visited_resource_name")
-        private val SMOOTH_ANIMATIONS = stringPreferencesKey("smooth_animations")
         private val FLOATING_SCAN_BUTTON = stringPreferencesKey("floating_scan_button")
         private val PINNED_PROJECTS = stringPreferencesKey("pinned_projects")
         private val ARCHIVED_PROJECTS = stringPreferencesKey("archived_projects")
@@ -35,6 +35,8 @@ class PreferencesManager(private val context: Context) {
         const val THEME_MODE_LIGHT = "light"
         const val THEME_MODE_DARK = "dark"
         const val DEFAULT_ACCENT_COLOR = "blue"
+        const val APP_ICON_LIGHT = "light"
+        const val APP_ICON_DARK = "dark"
     }
 
     val apiKey: Flow<String?> = context.dataStore.data.map { preferences ->
@@ -57,16 +59,16 @@ class PreferencesManager(private val context: Context) {
         preferences[ACCENT_COLOR] ?: DEFAULT_ACCENT_COLOR
     }
 
+    val appIcon: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[APP_ICON] ?: APP_ICON_LIGHT
+    }
+
     val lastVisitedResource: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[LAST_VISITED_RESOURCE]
     }
 
     val lastVisitedResourceName: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[LAST_VISITED_RESOURCE_NAME]
-    }
-
-    val smoothAnimations: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[SMOOTH_ANIMATIONS]?.toBoolean() ?: true // Default to true
     }
 
     val floatingScanButton: Flow<Boolean> = context.dataStore.data.map { preferences ->
@@ -118,16 +120,16 @@ class PreferencesManager(private val context: Context) {
         }
     }
 
+    suspend fun saveAppIcon(icon: String) {
+        context.dataStore.edit { preferences ->
+            preferences[APP_ICON] = icon
+        }
+    }
+
     suspend fun saveLastVisitedResource(uuid: String, name: String) {
         context.dataStore.edit { preferences ->
             preferences[LAST_VISITED_RESOURCE] = uuid
             preferences[LAST_VISITED_RESOURCE_NAME] = name
-        }
-    }
-
-    suspend fun saveSmoothAnimations(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[SMOOTH_ANIMATIONS] = enabled.toString()
         }
     }
 

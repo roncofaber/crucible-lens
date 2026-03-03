@@ -19,6 +19,7 @@ object CacheManager {
         System.currentTimeMillis() - timestamp > CACHE_TTL
 
     private val resourceCache = ConcurrentHashMap<String, CachedItem<CrucibleResource>>()
+    private val resourceTypeCache = ConcurrentHashMap<String, String>() // UUID -> "sample" or "dataset"
     private val thumbnailCache = ConcurrentHashMap<String, CachedItem<List<String>>>()
     private var projectsCache: CachedItem<List<Project>>? = null
     private val projectSamplesCache = ConcurrentHashMap<String, CachedItem<List<Sample>>>()
@@ -32,16 +33,43 @@ object CacheManager {
             val oldestKey = resourceCache.entries
                 .minByOrNull { it.value.timestamp }
                 ?.key
-            oldestKey?.let { resourceCache.remove(it) }
+            oldestKey?.let {
+                resourceCache.remove(it)
+                resourceTypeCache.remove(it)
+            }
         }
 
         resourceCache[uuid] = CachedItem(resource, System.currentTimeMillis())
+
+        // Also cache the resource type to avoid type-check API calls
+        val type = when (resource) {
+            is Sample -> "sample"
+            is Dataset -> "dataset"
+        }
+        resourceTypeCache[uuid] = type
     }
 
     fun getResource(uuid: String): CrucibleResource? {
         val cached = resourceCache[uuid] ?: return null
-        if (cached.isExpired()) { resourceCache.remove(uuid); return null }
+        if (cached.isExpired()) {
+            resourceCache.remove(uuid)
+            resourceTypeCache.remove(uuid)
+            return null
+        }
         return cached.data
+    }
+
+    // Resource type caching
+    fun getResourceType(uuid: String): String? {
+        return resourceTypeCache[uuid]
+    }
+
+    fun cacheResourceType(uuid: String, type: String) {
+        resourceTypeCache[uuid] = type
+    }
+
+    fun removeResourceType(uuid: String) {
+        resourceTypeCache.remove(uuid)
     }
 
     // Thumbnail caching
@@ -69,6 +97,7 @@ object CacheManager {
     // Clear individual items
     fun clearResource(uuid: String) {
         resourceCache.remove(uuid)
+        resourceTypeCache.remove(uuid)
     }
 
     fun clearThumbnail(uuid: String) {
@@ -104,6 +133,7 @@ object CacheManager {
     // Clear all cache methods
     fun clearResourceCache() {
         resourceCache.clear()
+        resourceTypeCache.clear()
     }
 
     fun clearThumbnailCache() {
@@ -129,6 +159,36 @@ object CacheManager {
     // Stats for debugging
     fun getCacheStats(): String {
         return "Resources: ${resourceCache.size}, Thumbnails: ${thumbnailCache.size}, Projects: ${if (projectsCache != null) "cached" else "empty"}, Project Details: ${projectSamplesCache.size + projectDatasetsCache.size}"
+    }
+
+    data class CacheStats(
+        val resourceCount: Int,
+        val thumbnailCount: Int,
+        val projectCount: Int,
+        val cachedSampleCount: Int,
+        val cachedDatasetCount: Int,
+        val estimatedSizeKB: Long
+    )
+
+    fun getDetailedStats(): CacheStats {
+        val cachedSampleCount = projectSamplesCache.values.sumOf { it.data.size }
+        val cachedDatasetCount = projectDatasetsCache.values.sumOf { it.data.size }
+        // Thumbnails are base64 strings — each char ~1 byte of actual data
+        val thumbnailSizeBytes = thumbnailCache.values.sumOf { cached ->
+            cached.data.sumOf { it.length.toLong() }
+        }
+        val estimatedSizeKB =
+            resourceCache.size * 3L +              // ~3 KB per resource (metadata + relationships)
+            thumbnailSizeBytes / 1024L +            // actual base64 thumbnail data
+            (cachedSampleCount + cachedDatasetCount).toLong() // ~1 KB each from project lists
+        return CacheStats(
+            resourceCount = resourceCache.size,
+            thumbnailCount = thumbnailCache.size,
+            projectCount = projectsCache?.data?.size ?: 0,
+            cachedSampleCount = cachedSampleCount,
+            cachedDatasetCount = cachedDatasetCount,
+            estimatedSizeKB = estimatedSizeKB
+        )
     }
 
     // Age query methods (return null if not cached, otherwise age in minutes)

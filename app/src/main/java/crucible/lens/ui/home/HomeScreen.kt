@@ -7,6 +7,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -16,6 +18,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.Image
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -28,9 +36,12 @@ import crucible.lens.BuildConfig
 import crucible.lens.R
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.ui.common.allLoadingMessages
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     graphExplorerUrl: String,
@@ -56,6 +67,23 @@ fun HomeScreen(
     // Reactive projects list — drives the pinned section; updated when cache is populated
     var allProjects by remember { mutableStateOf(CacheManager.getProjects() ?: emptyList()) }
 
+    // Load from persistent cache immediately on startup
+    LaunchedEffect(Unit) {
+        val persistentData = PersistentProjectCache.loadProjectData(context)
+        if (persistentData != null && allProjects.isEmpty()) {
+            // Convert summaries to Project objects for immediate display
+            allProjects = persistentData.map {
+                crucible.lens.data.model.Project(
+                    projectId = it.projectId,
+                    projectName = it.projectName,
+                    description = it.description,
+                    createdAt = it.createdAt,
+                    projectLeadEmail = it.projectLeadEmail
+                )
+            }
+        }
+    }
+
     // Preload projects data in background if API key is available
     LaunchedEffect(apiKey) {
         if (apiKey.isNullOrBlank()) return@LaunchedEffect
@@ -75,6 +103,88 @@ fun HomeScreen(
                 // Silently fail — user can still load manually
             }
         }
+    }
+
+    // Background pre-loading of project counts (samples/datasets) - throttled to avoid slowing phone
+    // This automatically cancels when the user navigates away from this screen.
+    LaunchedEffect(allProjects, pinnedProjects) {
+        if (apiKey.isNullOrBlank() || allProjects.isEmpty()) return@LaunchedEffect
+
+        // Delay initial start to let UI settle
+        kotlinx.coroutines.delay(500)
+
+        // Prioritize: pinned projects first, then others
+        val prioritizedProjects = allProjects
+            .sortedByDescending { it.projectId in pinnedProjects }
+
+        // Track consecutive failures to stop on network errors (thread-safe for concurrent launches)
+        val consecutiveFailures = AtomicInteger(0)
+        val maxConsecutiveFailures = 5
+
+        // Throttle: process max 3 projects concurrently, with 150ms delay between batches
+        prioritizedProjects.chunked(3).forEach { batch ->
+            // Stop if we've had too many consecutive failures (likely network issue)
+            if (consecutiveFailures.get() >= maxConsecutiveFailures) {
+                return@LaunchedEffect
+            }
+            batch.forEach { project ->
+                launch(kotlinx.coroutines.Dispatchers.IO) {
+                    // Skip if already cached
+                    if (CacheManager.getProjectSamples(project.projectId) != null &&
+                        CacheManager.getProjectDatasets(project.projectId) != null) {
+                        return@launch
+                    }
+
+                    var hadError = false
+                    try {
+                        // Load samples (lightweight, always cache)
+                        val samplesResp = ApiClient.service.getSamplesByProject(project.projectId)
+                        if (samplesResp.isSuccessful) {
+                            consecutiveFailures.set(0) // Reset on success
+                            samplesResp.body()?.let { CacheManager.cacheProjectSamples(project.projectId, it) }
+                        }
+
+                        // Load datasets with metadata for search functionality and pre-warm cache
+                        val datasetsResp = ApiClient.service.getDatasetsByProject(project.projectId, includeMetadata = true)
+                        if (datasetsResp.isSuccessful) {
+                            consecutiveFailures.set(0) // Reset on success
+                            datasetsResp.body()?.let { CacheManager.cacheProjectDatasets(project.projectId, it) }
+                        }
+                    } catch (e: Exception) {
+                        // Track network/API failures
+                        hadError = true
+                    }
+
+                    // Increment failure counter (thread-safe increment)
+                    if (hadError) {
+                        consecutiveFailures.incrementAndGet()
+                    }
+                }
+            }
+            // Small delay between batches to avoid overwhelming the phone
+            kotlinx.coroutines.delay(150)
+        }
+
+        // After all batches complete, save to persistent cache
+        launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val samplesMap = mutableMapOf<String, List<crucible.lens.data.model.Sample>>()
+                    val datasetsMap = mutableMapOf<String, List<crucible.lens.data.model.Dataset>>()
+
+                    allProjects.forEach { project ->
+                        CacheManager.getProjectSamples(project.projectId)?.let {
+                            samplesMap[project.projectId] = it
+                        }
+                        CacheManager.getProjectDatasets(project.projectId)?.let {
+                            datasetsMap[project.projectId] = it
+                        }
+                    }
+
+                    PersistentProjectCache.saveProjectData(context, allProjects, samplesMap, datasetsMap)
+                } catch (e: Exception) {
+                    // Fail silently
+                }
+            }
     }
 
     Scaffold(
@@ -220,13 +330,30 @@ fun HomeScreen(
                         Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(text = "Last visited: ", style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
-                        Text(
-                            text = lastVisitedResourceName,
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                                .drawWithContent {
+                                    drawContent()
+                                    drawRect(
+                                        brush = Brush.horizontalGradient(
+                                            colors = listOf(Color.Black, Color.Transparent),
+                                            startX = size.width * 0.75f,
+                                            endX = size.width
+                                        ),
+                                        blendMode = BlendMode.DstIn
+                                    )
+                                }
+                        ) {
+                            Text(
+                                text = lastVisitedResourceName,
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
+                                modifier = Modifier.basicMarquee()
+                            )
+                        }
                     }
                 } else {
                     TextButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
@@ -311,42 +438,76 @@ fun HomeScreen(
                     )
                     Text("Pinned projects", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
-                repeat(3) { index ->
-                    val project = pinnedList.getOrNull(index)
-                    if (project != null) {
-                        Card(
-                            onClick = { onProjectClick(project.projectId) },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = project.projectName ?: project.projectId,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    } else {
-                        // Transparent placeholder — same height as a real card, invisible
-                        Box(
+                if (pinnedList.isEmpty()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 0.dp, vertical = 10.dp)
+                                .padding(vertical = 20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Text(
-                                text = " ",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0f)
+                            Icon(
+                                Icons.Default.Bookmark,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                                modifier = Modifier.size(26.dp)
                             )
+                            Text(
+                                "No pinned projects",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                            Text(
+                                "Tap the bookmark icon on a project to pin it here",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            )
+                        }
+                    }
+                } else {
+                    repeat(3) { index ->
+                        val project = pinnedList.getOrNull(index)
+                        if (project != null) {
+                            Card(
+                                onClick = { onProjectClick(project.projectId) },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = project.projectName ?: project.projectId,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        } else {
+                            // Transparent placeholder — same height as a real card, invisible
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 0.dp, vertical = 10.dp)
+                            ) {
+                                Text(
+                                    text = " ",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0f)
+                                )
+                            }
                         }
                     }
                 }
@@ -387,11 +548,11 @@ fun HomeScreen(
                         color = footerColor
                     )
                     Text(
-                        text = "@roncofaber",
+                        text = "Crucible Team",
                         style = footerStyle,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                         modifier = Modifier.clickable {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/roncofaber"))
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://crucible.lbl.gov/"))
                             context.startActivity(intent)
                         }
                     )

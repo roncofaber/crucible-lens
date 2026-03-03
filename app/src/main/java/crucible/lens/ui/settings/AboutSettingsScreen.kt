@@ -15,6 +15,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.decode.SvgDecoder
@@ -26,7 +28,8 @@ import crucible.lens.BuildConfig
 fun AboutSettingsScreen(
     isDarkTheme: Boolean,
     onBack: () -> Unit,
-    onHome: () -> Unit
+    onHome: () -> Unit,
+    onSearch: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -40,8 +43,27 @@ fun AboutSettingsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onHome) {
-                        Icon(Icons.Default.Home, contentDescription = "Home")
+                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
+                        IconButton(
+                            onClick = onSearch,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = "Search",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = onHome,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Home,
+                                contentDescription = "Home",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 }
             )
@@ -67,12 +89,15 @@ fun AboutSettingsScreen(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data("file:///android_asset/${if (isDarkTheme) "crucible_icon_dark.svg" else "crucible_icon_light.svg"}")
+                                .decoderFactory(SvgDecoder.Factory())
+                                .build(),
+                            contentDescription = "Crucible Lens",
+                            modifier = Modifier.size(28.dp)
                         )
                         Text(
                             text = "Crucible Lens",
@@ -90,41 +115,52 @@ fun AboutSettingsScreen(
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                     Text(
-                        text = "Scan QR codes to quickly access sample and dataset information from the Molecular Foundry's Crucible data system.",
+                        text = "A mobile companion app for the Molecular Foundry's Crucible data system at Lawrence Berkeley National Laboratory. Scan QR codes or use full-text search to explore scientific samples, datasets, and projects. Browse relationships between materials, view dataset thumbnails and metadata, navigate research projects with pinning and archiving, and seamlessly integrate with the Crucible Graph Explorer. Designed to bring nanoscience research data to your fingertips.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            // Developer Card
+            // Team Card
             Card {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Icon(
-                        Icons.Default.Group,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Column {
-                        Text(
-                            text = "Developed by",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Group,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "Crucible Development Team",
-                            style = MaterialTheme.typography.bodyLarge
+                            text = "Crucible Team",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                        Text(
-                            text = "Molecular Foundry, LBNL",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    // Team members
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        TeamMember(
+                            name = "Edward Barnard",
+                            role = "Molecular Foundry Data and Analytics Lead Scientist"
+                        )
+                        TeamMember(
+                            name = "Morgan Wall",
+                            role = "Scientific Software Engineer and Crucible Lead Developer"
+                        )
+                        TeamMember(
+                            name = "Fabrice Roncoroni",
+                            role = "Postdoctoral Researcher, Data Science and Computational Materials Science"
                         )
                     }
                 }
@@ -157,7 +193,7 @@ fun AboutSettingsScreen(
                     ) {
                         AsyncImage(
                             model = ImageRequest.Builder(context)
-                                .data("file:///android_asset/${if (isDarkTheme) "crucible_icon_dark.svg" else "crucible_icon_light.svg"}")
+                                .data("file:///android_asset/crucible_old.svg")
                                 .decoderFactory(SvgDecoder.Factory())
                                 .build(),
                             contentDescription = "Crucible",
@@ -179,7 +215,7 @@ fun AboutSettingsScreen(
             // App Source Code Card
             Card(
                 modifier = Modifier.clickable {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/roncofaber/nano-crucible-app")))
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/roncofaber/crucible-lens")))
                 }
             ) {
                 Row(
@@ -193,11 +229,18 @@ fun AboutSettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data("file:///android_asset/${if (isDarkTheme) "crucible_icon_dark.svg" else "crucible_icon_light.svg"}")
+                                .decoderFactory(SvgDecoder.Factory())
+                                .build(),
+                            contentDescription = "Crucible Lens",
+                            modifier = Modifier.size(26.dp)
+                        )
                         Column {
-                            Text("Crucible Lens (this app)", style = MaterialTheme.typography.bodyLarge)
+                            Text("Crucible Lens", style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                "github.com/roncofaber/nano-crucible-app",
+                                "github.com/roncofaber/crucible-lens",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -224,7 +267,7 @@ fun AboutSettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Code, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.DataObject, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Column {
                             Text("nano-crucible", style = MaterialTheme.typography.bodyLarge)
                             Text(
@@ -273,8 +316,58 @@ fun AboutSettingsScreen(
                 text = "Licensed under BSD-3-Clause",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                textAlign = TextAlign.Center
             )
+
+            // Developer credit
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Developed by ",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+                Text(
+                    text = "@roncofaber",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                    modifier = Modifier.clickable {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/roncofaber")))
+                    }
+                )
+                Text(
+                    text = " with the help of Claude Code",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun TeamMember(
+    name: String,
+    role: String
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = name,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = role,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

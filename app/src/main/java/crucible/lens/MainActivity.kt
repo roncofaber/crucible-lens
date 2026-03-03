@@ -1,29 +1,96 @@
 package crucible.lens
 
+import android.content.ComponentName
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.navigation.compose.rememberNavController
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.data.preferences.PreferencesManager
 import crucible.lens.ui.navigation.NavGraph
 import crucible.lens.ui.theme.CrucibleScannerTheme
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 
 class MainActivity : ComponentActivity() {
     private lateinit var preferencesManager: PreferencesManager
+    private var openScanner by mutableStateOf(false)
+    private var initialThemeMode by mutableStateOf(PreferencesManager.THEME_MODE_SYSTEM)
+    private var initialAccentColor by mutableStateOf(PreferencesManager.DEFAULT_ACCENT_COLOR)
+
+    private fun switchAppIcon(icon: String) {
+        val packageManager = packageManager
+        val lightAlias = ComponentName(this, "$packageName.MainActivityLight")
+        val darkAlias = ComponentName(this, "$packageName.MainActivityDark")
+
+        // Enable new icon first, then disable old one
+        when (icon) {
+            PreferencesManager.APP_ICON_LIGHT -> {
+                packageManager.setComponentEnabledSetting(
+                    lightAlias,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                packageManager.setComponentEnabledSetting(
+                    darkAlias,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+            }
+            PreferencesManager.APP_ICON_DARK -> {
+                packageManager.setComponentEnabledSetting(
+                    darkAlias,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                packageManager.setComponentEnabledSetting(
+                    lightAlias,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Handle new intents when activity is already running
+        if (intent.action == "crucible.lens.OPEN_SCANNER") {
+            openScanner = true
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         preferencesManager = PreferencesManager(this)
 
+        // Load theme preferences synchronously to prevent flash on startup.
+        // Bounded by a 1s timeout so storage stalls can never cause an ANR.
+        runBlocking {
+            try {
+                withTimeout(1_000L) {
+                    initialThemeMode = preferencesManager.themeMode.first()
+                    initialAccentColor = preferencesManager.accentColor.first()
+                }
+            } catch (_: Exception) {
+                // Fall back to defaults — theme may flash once on this rare path
+            }
+        }
+
         val deepLinkUuid: String? = intent?.data?.pathSegments?.lastOrNull()?.takeIf { it.length > 8 }
+        openScanner = intent?.action == "crucible.lens.OPEN_SCANNER"
 
         setContent {
             val navController = rememberNavController()
@@ -35,19 +102,19 @@ class MainActivity : ComponentActivity() {
                 initial = PreferencesManager.DEFAULT_GRAPH_EXPLORER_URL
             )
             val themeMode by preferencesManager.themeMode.collectAsState(
-                initial = PreferencesManager.THEME_MODE_SYSTEM
+                initial = initialThemeMode
             )
             val accentColor by preferencesManager.accentColor.collectAsState(
-                initial = PreferencesManager.DEFAULT_ACCENT_COLOR
+                initial = initialAccentColor
+            )
+            val appIcon by preferencesManager.appIcon.collectAsState(
+                initial = PreferencesManager.APP_ICON_LIGHT
             )
             val lastVisitedResource by preferencesManager.lastVisitedResource.collectAsState(
                 initial = null
             )
             val lastVisitedResourceName by preferencesManager.lastVisitedResourceName.collectAsState(
                 initial = null
-            )
-            val smoothAnimations by preferencesManager.smoothAnimations.collectAsState(
-                initial = true
             )
             val floatingScanButton by preferencesManager.floatingScanButton.collectAsState(
                 initial = true
@@ -90,12 +157,14 @@ class MainActivity : ComponentActivity() {
                     graphExplorerUrl = graphExplorerUrl,
                     themeMode = themeMode,
                     accentColor = accentColor,
+                    appIcon = appIcon,
                     darkTheme = darkTheme,
                     lastVisitedResource = lastVisitedResource,
                     lastVisitedResourceName = lastVisitedResourceName,
-                    smoothAnimations = smoothAnimations,
                     floatingScanButton = floatingScanButton,
                     deepLinkUuid = deepLinkUuid,
+                    openScanner = openScanner,
+                    onScannerOpened = { openScanner = false },
                     pinnedProjects = pinnedProjects,
                     resourceHistory = resourceHistory,
                     onHistoryAdd = { uuid, name ->
@@ -130,14 +199,15 @@ class MainActivity : ComponentActivity() {
                             preferencesManager.saveAccentColor(color)
                         }
                     },
+                    onAppIconSave = { icon ->
+                        scope.launch {
+                            preferencesManager.saveAppIcon(icon)
+                            switchAppIcon(icon)
+                        }
+                    },
                     onLastVisitedResourceSave = { uuid, name ->
                         scope.launch {
                             preferencesManager.saveLastVisitedResource(uuid, name)
-                        }
-                    },
-                    onSmoothAnimationsSave = { enabled ->
-                        scope.launch {
-                            preferencesManager.saveSmoothAnimations(enabled)
                         }
                     },
                     onFloatingScanButtonSave = { enabled ->
