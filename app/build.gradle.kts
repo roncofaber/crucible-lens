@@ -6,12 +6,12 @@ plugins {
 
 android {
     namespace = "crucible.lens"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "crucible.lens"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 2
         versionName = "0.2.0"
 
