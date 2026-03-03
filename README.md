@@ -22,7 +22,12 @@ Android app for browsing and scanning samples and datasets from the [Molecular F
 - Crucible API key — [get yours here](https://crucible.lbl.gov/api/v1/user_apikey)
 
 ## Setup
+### Simple installation
+1. Go to Releases
+2. Download the latest APK file
+3. Click on the file and follow instructions to install the app
 
+### Development version 
 1. Clone and open in Android Studio
 2. Build and install the APK
 3. Open the app → Settings → Enter your API key
