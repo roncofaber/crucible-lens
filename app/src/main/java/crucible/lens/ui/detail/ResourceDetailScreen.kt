@@ -656,8 +656,8 @@ fun ResourceDetailScreen(
                             darkTheme = darkTheme,
                             bannerColorInt = bannerColorInt,
                             onShowQr = { showQrDialog = true },
-                            initialAdvanced = getCardState("advanced"),
-                            onAdvancedChange = { onCardStateChange("advanced", it) }
+                            initialAdvanced = getCardState("advanced_${pageResource.uniqueId}"),
+                            onAdvancedChange = { onCardStateChange("advanced_${pageResource.uniqueId}", it) }
                         )
                     }
                     is Dataset -> item(key = "type_details_$pageIndex") {
@@ -668,8 +668,8 @@ fun ResourceDetailScreen(
                             darkTheme = darkTheme,
                             bannerColorInt = bannerColorInt,
                             onShowQr = { showQrDialog = true },
-                            initialAdvanced = getCardState("advanced"),
-                            onAdvancedChange = { onCardStateChange("advanced", it) }
+                            initialAdvanced = getCardState("advanced_${pageResource.uniqueId}"),
+                            onAdvancedChange = { onCardStateChange("advanced_${pageResource.uniqueId}", it) }
                         )
                     }
                 }
@@ -1297,6 +1297,8 @@ private fun SampleDetailsCard(
                     } else {
                         InfoRow(icon = Icons.Default.Person, label = "Owner ORCID", value = "None")
                     }
+                    InfoRow(icon = Icons.Default.Schedule, label = "Record Created", value = formatDateTime(sample.creationTime))
+                    InfoRow(icon = Icons.Default.Update, label = "Last Modified", value = formatDateTime(sample.modificationTime))
                     InfoRow(icon = Icons.Default.Numbers, label = "Internal ID", value = sample.internalId?.toString() ?: "None")
                 }
             }
@@ -1501,6 +1503,8 @@ private fun DatasetDetailsCard(
                     }
                     InfoRow(icon = Icons.Default.AccountCircle, label = "Owner User ID", value = dataset.ownerUserId?.toString() ?: "None")
                     InfoRow(icon = Icons.Default.Security, label = "SHA-256", value = dataset.sha256Hash ?: "None")
+                    InfoRow(icon = Icons.Default.Schedule, label = "Record Created", value = formatDateTime(dataset.creationTime))
+                    InfoRow(icon = Icons.Default.Update, label = "Last Modified", value = formatDateTime(dataset.modificationTime))
                     InfoRow(icon = Icons.Default.Numbers, label = "Internal ID", value = dataset.internalId?.toString() ?: "None")
                 }
             }
