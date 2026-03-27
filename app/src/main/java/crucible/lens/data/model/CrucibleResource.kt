@@ -21,6 +21,9 @@ data class Sample(
     @Json(name = "parent_samples") val parentSamples: List<SampleReference>? = null,
     @Json(name = "keywords") val keywords: List<String>? = null,
     @Json(name = "date_created") val createdAt: String? = null,
+    @Json(name = "owner_user_id") val ownerUserId: Int? = null,
+    @Json(name = "creation_time") val creationTime: String? = null,
+    @Json(name = "modification_time") val modificationTime: String? = null,
     @Json(name = "id") val internalId: Int? = null,
     var childSamples: List<SampleReference>? = null
 ) : CrucibleResource()
@@ -38,7 +41,7 @@ data class Dataset(
     @Json(name = "samples") val samples: List<SampleReference>? = null,
     @Json(name = "scientific_metadata") val scientificMetadata: Map<String, Any?>? = null,
     @Json(name = "keywords") val keywords: List<String>? = null,
-    @Json(name = "creation_time") val createdAt: String? = null,
+    @Json(name = "timestamp") val createdAt: String? = null,
     @Json(name = "public") val isPublic: Boolean? = null,
     @Json(name = "source_folder") val sourceFolder: String? = null,
     @Json(name = "instrument_id") val instrumentId: Int? = null,
@@ -49,6 +52,8 @@ data class Dataset(
     @Json(name = "size") val size: Long? = null,
     @Json(name = "owner_user_id") val ownerUserId: Int? = null,
     @Json(name = "sha256_hash_file_to_upload") val sha256Hash: String? = null,
+    @Json(name = "creation_time") val creationTime: String? = null,
+    @Json(name = "modification_time") val modificationTime: String? = null,
     var parentDatasets: List<DatasetReference>? = null,
     var childDatasets: List<DatasetReference>? = null
 ) : CrucibleResource()
@@ -57,7 +62,8 @@ data class Dataset(
 data class DatasetReference(
     @Json(name = "unique_id") val uniqueId: String,
     @Json(name = "dataset_name") val datasetName: String? = null,
-    @Json(name = "measurement") val measurement: String? = null
+    @Json(name = "measurement") val measurement: String? = null,
+    @Json(name = "id") val internalId: Int? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -74,8 +80,11 @@ data class Thumbnail(
 
 @JsonClass(generateAdapter = true)
 data class ResourceType(
-    @Json(name = "object_type") val objectType: String
-)
+    @Json(name = "resource_type") val objectType: String? = null,
+    @Json(name = "object_type") val objectTypeLegacy: String? = null
+) {
+    val resolvedType: String? get() = objectType ?: objectTypeLegacy
+}
 
 @JsonClass(generateAdapter = true)
 data class Project(

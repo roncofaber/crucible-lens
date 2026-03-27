@@ -42,7 +42,7 @@ class CrucibleRepository {
                     return@withContext fetchResourceByUuidFallback(uuid)
                 }
 
-                typeBody.objectType.lowercase()
+                typeBody.resolvedType?.lowercase() ?: return@withContext fetchResourceByUuidFallback(uuid)
             }
 
             // Fetch the appropriate resource based on type
