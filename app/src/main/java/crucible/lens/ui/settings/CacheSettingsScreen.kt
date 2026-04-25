@@ -12,7 +12,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.cache.PersistentThumbnailCache
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -22,6 +24,7 @@ fun CacheSettingsScreen(
     onHome: () -> Unit,
     onSearch: () -> Unit
 ) {
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var cacheAge by remember { mutableStateOf<Long?>(null) }
@@ -149,6 +152,7 @@ fun CacheSettingsScreen(
             OutlinedButton(
                 onClick = {
                     CacheManager.clearAll()
+                    PersistentThumbnailCache.clear(context)
                     cacheAge = null
                     cacheStats = CacheManager.getDetailedStats()
                     scope.launch {

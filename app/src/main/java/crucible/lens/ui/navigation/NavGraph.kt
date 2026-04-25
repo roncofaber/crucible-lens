@@ -24,6 +24,7 @@ import crucible.lens.ui.scanner.QRScannerScreen
 import crucible.lens.ui.search.SearchScreen
 import crucible.lens.ui.settings.SettingsScreen
 import crucible.lens.ui.settings.ApiSettingsScreen
+import crucible.lens.ui.settings.OrcidLoginScreen
 import crucible.lens.ui.settings.AppearanceSettingsScreen
 import crucible.lens.ui.settings.CacheSettingsScreen
 import crucible.lens.ui.settings.AboutSettingsScreen
@@ -32,7 +33,14 @@ import crucible.lens.ui.viewmodel.UiState
 import crucible.lens.ui.detail.ResourceDetailScreen
 import crucible.lens.ui.projects.ProjectsListScreen
 import crucible.lens.ui.projects.ProjectDetailScreen
+import crucible.lens.ui.instruments.InstrumentListScreen
+import crucible.lens.ui.instruments.InstrumentDetailScreen
 import crucible.lens.ui.common.LoadingContent
+import crucible.lens.data.model.Dataset
+import crucible.lens.data.model.Sample
+import crucible.lens.data.util.DuplicateHolder
+import crucible.lens.ui.create.CreateSampleScreen
+import crucible.lens.ui.create.CreateDatasetScreen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -70,11 +78,25 @@ sealed class Screen(val route: String) {
     object ProjectDetail : Screen("project/{projectId}") {
         fun createRoute(projectId: String) = "project/$projectId"
     }
-    object Detail : Screen("detail/{mfid}") {
-        fun createRoute(mfid: String) = "detail/${Uri.encode(mfid)}"
+    object Detail : Screen("detail/{mfid}?groupBy={groupBy}") {
+        fun createRoute(mfid: String, groupBy: String? = null) =
+            "detail/${Uri.encode(mfid)}?groupBy=${groupBy ?: ""}"
     }
     object History : Screen("history")
     object Search : Screen("search")
+    object OrcidLogin : Screen("orcid-login")
+    object CreateSample : Screen("create-sample?projectId={projectId}") {
+        fun createRoute(projectId: String? = null) =
+            if (projectId != null) "create-sample?projectId=${Uri.encode(projectId)}" else "create-sample?projectId="
+    }
+    object CreateDataset : Screen("create-dataset?projectId={projectId}") {
+        fun createRoute(projectId: String? = null) =
+            if (projectId != null) "create-dataset?projectId=${Uri.encode(projectId)}" else "create-dataset?projectId="
+    }
+    object Instruments : Screen("instruments")
+    object InstrumentDetail : Screen("instrument/{instrumentId}") {
+        fun createRoute(id: String) = "instrument/${Uri.encode(id)}"
+    }
 }
 
 
@@ -239,6 +261,13 @@ fun NavGraph(
                         navController.navigate(Screen.Projects.route)
                     }
                 },
+                onBrowseInstruments = {
+                    if (apiKey.isNullOrBlank()) {
+                        navController.navigate(Screen.Settings.route)
+                    } else {
+                        navController.navigate(Screen.Instruments.route)
+                    }
+                },
                 onSettingsClick = {
                     navController.navigate(Screen.Settings.route)
                 },
@@ -251,6 +280,12 @@ fun NavGraph(
                 pinnedProjects = pinnedProjects,
                 onProjectClick = { projectId ->
                     navController.navigate(Screen.ProjectDetail.createRoute(projectId))
+                },
+                onCreateSample = {
+                    navController.navigate(Screen.CreateSample.createRoute())
+                },
+                onCreateDataset = {
+                    navController.navigate(Screen.CreateDataset.createRoute())
                 }
             )
         }
@@ -294,6 +329,7 @@ fun NavGraph(
                 onApiKeySave = onApiKeySave,
                 onApiBaseUrlSave = onApiBaseUrlSave,
                 onGraphExplorerUrlSave = onGraphExplorerUrlSave,
+                onSignIn = { navController.navigate(Screen.OrcidLogin.route) },
                 onBack = { navController.popBackStack() },
                 onHome = {
                     navController.navigate(Screen.Home.route) {
@@ -301,6 +337,19 @@ fun NavGraph(
                     }
                 },
                 onSearch = { navController.navigate(Screen.Search.route) }
+            )
+        }
+
+        composable(Screen.OrcidLogin.route) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            OrcidLoginScreen(
+                loginUrl = "${apiBaseUrl}user_apikey",
+                onBack = { navController.popBackStack() },
+                onKeyFound = { key ->
+                    onApiKeySave(key)
+                    android.widget.Toast.makeText(context, "API key saved", android.widget.Toast.LENGTH_SHORT).show()
+                    navController.popBackStack()
+                }
             )
         }
 
@@ -351,10 +400,14 @@ fun NavGraph(
 
         composable(
             route = Screen.Detail.route,
-            arguments = listOf(navArgument("mfid") { type = NavType.StringType })
+            arguments = listOf(
+                navArgument("mfid") { type = NavType.StringType },
+                navArgument("groupBy") { type = NavType.StringType; nullable = true; defaultValue = null }
+            )
             // Uses all default transitions - even sibling navigation
         ) { backStackEntry ->
             val mfid = backStackEntry.arguments?.getString("mfid") ?: ""
+            val siblingGroupBy = backStackEntry.arguments?.getString("groupBy")?.takeIf { it.isNotBlank() }
 
             LaunchedEffect(mfid) {
                 viewModel.fetchResource(mfid)
@@ -429,7 +482,7 @@ fun NavGraph(
                         mfid = mfid,
                         isRefreshing = state.isRefreshing,
                         graphExplorerUrl = graphExplorerUrl,
-                        darkTheme = darkTheme,
+                        siblingGroupBy = siblingGroupBy,
                         onSaveToHistory = { uuid, name ->
                             onLastVisitedResourceSave(uuid, name)
                             onHistoryAdd(uuid, name)
@@ -443,8 +496,11 @@ fun NavGraph(
                         onNavigateToProject = { projectId ->
                             navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                         },
-                        onNavigateToSibling = { siblingMfid ->
-                            navController.navigate(Screen.Detail.createRoute(siblingMfid))
+                        onNavigateToInstrument = { instrumentId ->
+                            navController.navigate(Screen.InstrumentDetail.createRoute(instrumentId))
+                        },
+                        onNavigateToSibling = { siblingMfid, groupBy ->
+                            navController.navigate(Screen.Detail.createRoute(siblingMfid, groupBy))
                         },
                         onSearch = { navController.navigate(Screen.Search.route) },
                         onHome = {
@@ -456,7 +512,34 @@ fun NavGraph(
                             viewModel.refreshResource(uuid)
                         },
                         getCardState = { key -> viewModel.getCardState(state.resource.uniqueId, key) },
-                        onCardStateChange = { key, value -> viewModel.setCardState(state.resource.uniqueId, key, value) }
+                        onCardStateChange = { key, value -> viewModel.setCardState(state.resource.uniqueId, key, value) },
+                        recentHistory = resourceHistory,
+                        onDuplicate = { resource ->
+                            when (resource) {
+                                is Sample -> {
+                                    DuplicateHolder.putSample(DuplicateHolder.SamplePrefill(
+                                        name = resource.name,
+                                        type = resource.sampleType,
+                                        description = resource.description,
+                                        timestamp = resource.sampleTimestamp,
+                                        projectId = resource.projectId
+                                    ))
+                                    navController.navigate(Screen.CreateSample.createRoute())
+                                }
+                                is Dataset -> {
+                                    DuplicateHolder.putDataset(DuplicateHolder.DatasetPrefill(
+                                        name = resource.name,
+                                        measurement = resource.measurement,
+                                        instrumentName = resource.instrumentName,
+                                        dataFormat = resource.dataFormat,
+                                        sessionName = resource.sessionName,
+                                        timestamp = resource.timestamp,
+                                        projectId = resource.projectId
+                                    ))
+                                    navController.navigate(Screen.CreateDataset.createRoute())
+                                }
+                            }
+                        }
                     )
                 }
                 is UiState.Error -> {
@@ -582,12 +665,83 @@ fun NavGraph(
                     }
                 },
                 onSearch = { navController.navigate(Screen.Search.route) },
-                onResourceClick = { mfid ->
-                    navController.navigate(Screen.Detail.createRoute(mfid))
+                onResourceClick = { mfid, groupBy ->
+                    navController.navigate(Screen.Detail.createRoute(mfid, groupBy))
                 },
                 isPinned = projectId in pinnedProjects,
                 onTogglePin = { onTogglePinnedProject(projectId) },
-                isArchived = projectId in archivedProjects
+                isArchived = projectId in archivedProjects,
+                onCreateSample = {
+                    navController.navigate(Screen.CreateSample.createRoute(projectId))
+                },
+                onCreateDataset = {
+                    navController.navigate(Screen.CreateDataset.createRoute(projectId))
+                }
+            )
+        }
+
+        composable(Screen.Instruments.route) {
+            InstrumentListScreen(
+                onBack = { navController.popBackStack() },
+                onHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = false }
+                    }
+                },
+                onSearch = { navController.navigate(Screen.Search.route) },
+                onInstrumentClick = { id ->
+                    navController.navigate(Screen.InstrumentDetail.createRoute(id))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.InstrumentDetail.route,
+            arguments = listOf(navArgument("instrumentId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val instrumentId = backStackEntry.arguments?.getString("instrumentId") ?: ""
+            InstrumentDetailScreen(
+                instrumentId = instrumentId,
+                onBack = { navController.popBackStack() },
+                onHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = false }
+                    }
+                },
+                onSearch = { navController.navigate(Screen.Search.route) },
+                onDatasetClick = { mfid ->
+                    navController.navigate(Screen.Detail.createRoute(mfid))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.CreateSample.route,
+            arguments = listOf(navArgument("projectId") { type = NavType.StringType; defaultValue = "" })
+        ) { backStackEntry ->
+            val projectId = backStackEntry.arguments?.getString("projectId")?.ifBlank { null }
+            CreateSampleScreen(
+                initialProjectId = projectId,
+                onBack = { navController.popBackStack() },
+                onCreated = { uuid ->
+                    navController.popBackStack()
+                    navController.navigate(Screen.Detail.createRoute(uuid))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.CreateDataset.route,
+            arguments = listOf(navArgument("projectId") { type = NavType.StringType; defaultValue = "" })
+        ) { backStackEntry ->
+            val projectId = backStackEntry.arguments?.getString("projectId")?.ifBlank { null }
+            CreateDatasetScreen(
+                initialProjectId = projectId,
+                onBack = { navController.popBackStack() },
+                onCreated = { uuid ->
+                    navController.popBackStack()
+                    navController.navigate(Screen.Detail.createRoute(uuid))
+                }
             )
         }
 

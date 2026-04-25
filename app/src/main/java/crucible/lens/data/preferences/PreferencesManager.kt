@@ -28,8 +28,14 @@ class PreferencesManager(private val context: Context) {
         private val PINNED_PROJECTS = stringPreferencesKey("pinned_projects")
         private val ARCHIVED_PROJECTS = stringPreferencesKey("archived_projects")
         private val RESOURCE_HISTORY = stringPreferencesKey("resource_history")
+        private val SAMPLE_GROUP_BY = stringPreferencesKey("sample_group_by")
+        private val DATASET_GROUP_BY = stringPreferencesKey("dataset_group_by")
+        private val DEFAULT_PROJECT_TAB = stringPreferencesKey("default_project_tab")
 
-        const val DEFAULT_API_BASE_URL = "https://crucible.lbl.gov/api/v1/"
+        const val PROJECT_TAB_SAMPLES = "SAMPLES"
+        const val PROJECT_TAB_DATASETS = "DATASETS"
+
+        const val DEFAULT_API_BASE_URL = "https://crucible.lbl.gov/api/v2/"
         const val DEFAULT_GRAPH_EXPLORER_URL = "https://crucible-graph-explorer-776258882599.us-central1.run.app"
         const val THEME_MODE_SYSTEM = "system"
         const val THEME_MODE_LIGHT = "light"
@@ -81,6 +87,18 @@ class PreferencesManager(private val context: Context) {
 
     val archivedProjects: Flow<Set<String>> = context.dataStore.data.map { prefs ->
         prefs[ARCHIVED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+    }
+
+    val sampleGroupBy: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[SAMPLE_GROUP_BY] ?: "TYPE"
+    }
+
+    val datasetGroupBy: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[DATASET_GROUP_BY] ?: "MEASUREMENT"
+    }
+
+    val defaultProjectTab: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[DEFAULT_PROJECT_TAB] ?: PROJECT_TAB_SAMPLES
     }
 
     val resourceHistory: Flow<List<HistoryItem>> = context.dataStore.data.map { prefs ->
@@ -159,6 +177,18 @@ class PreferencesManager(private val context: Context) {
             if (id in current) current.remove(id) else current.add(id)
             prefs[ARCHIVED_PROJECTS] = current.joinToString(",")
         }
+    }
+
+    suspend fun saveSampleGroupBy(value: String) {
+        context.dataStore.edit { prefs -> prefs[SAMPLE_GROUP_BY] = value }
+    }
+
+    suspend fun saveDatasetGroupBy(value: String) {
+        context.dataStore.edit { prefs -> prefs[DATASET_GROUP_BY] = value }
+    }
+
+    suspend fun saveDefaultProjectTab(tab: String) {
+        context.dataStore.edit { prefs -> prefs[DEFAULT_PROJECT_TAB] = tab }
     }
 
     suspend fun addToHistory(uuid: String, name: String) {

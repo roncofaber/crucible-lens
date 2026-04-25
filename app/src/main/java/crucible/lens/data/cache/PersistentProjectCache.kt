@@ -63,10 +63,10 @@ object PersistentProjectCache {
 
                 ProjectSummary(
                     projectId = project.projectId,
-                    projectName = project.projectName,
-                    description = project.description,
-                    projectLeadEmail = project.projectLeadEmail,
-                    createdAt = project.createdAt,
+                    projectName = project.title,
+                    description = null,
+                    projectLeadEmail = project.lead?.email,
+                    createdAt = null,
                     sampleCount = samples.size,
                     datasetCount = datasets.size,
                     sampleTypes = samples.mapNotNull { it.sampleType }.distinct().sorted(),

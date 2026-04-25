@@ -19,8 +19,11 @@ import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
+import crucible.lens.data.model.MetadataSearchResult
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
+import crucible.lens.ui.common.OfflineBanner
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,6 +42,12 @@ fun SearchScreen(
     var isLoading by remember { mutableStateOf(false) }
     var loadedCount by remember { mutableStateOf(0) }
     var totalCount by remember { mutableStateOf(0) }
+    var metadataResults by remember { mutableStateOf<List<MetadataSearchResult>?>(null) }
+    var isMetadataSearching by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    // Clear server results when query changes
+    LaunchedEffect(query) { metadataResults = null }
 
     LaunchedEffect(Unit) {
         if (apiKey.isNullOrBlank()) return@LaunchedEffect
@@ -112,6 +121,10 @@ fun SearchScreen(
         if (query.isBlank()) emptyList()
         else allDatasets.filter { it.matchesSearch(query) }
     }
+    val mfidCandidate = remember(query) {
+        val q = query.trim()
+        if (q.length >= 10 && q.all { c -> c.isLowerCase() || c.isDigit() }) q else null
+    }
 
     Scaffold(
         topBar = {
@@ -167,6 +180,7 @@ fun SearchScreen(
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
                 }
+                OfflineBanner()
             }
         }
     ) { padding ->
@@ -191,16 +205,77 @@ fun SearchScreen(
                     title = "Start typing",
                     subtitle = "Search across ${allProjects.size} projects, ${allSamples.size} samples, and ${allDatasets.size} datasets"
                 )
-                filteredProjects.isEmpty() && filteredSamples.isEmpty() && filteredDatasets.isEmpty() -> EmptyState(
-                    icon = Icons.Default.SearchOff,
-                    title = "No results",
-                    subtitle = "Try a different search term"
-                )
+                filteredProjects.isEmpty() && filteredSamples.isEmpty() && filteredDatasets.isEmpty() -> {
+                    if (mfidCandidate != null) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            DirectLookupCard(mfidCandidate) { onResourceClick(it) }
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        isMetadataSearching = true
+                                        metadataResults = try {
+                                            val resp = ApiClient.service.searchScientificMetadata(query.trim())
+                                            if (resp.isSuccessful) resp.body() else emptyList()
+                                        } catch (_: Exception) { emptyList() }
+                                        isMetadataSearching = false
+                                    }
+                                },
+                                enabled = !isMetadataSearching,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (isMetadataSearching) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                } else {
+                                    Icon(Icons.Default.ManageSearch, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                Text("Search metadata on server")
+                            }
+                            if (!metadataResults.isNullOrEmpty()) {
+                                Text(
+                                    "Server Metadata (${metadataResults!!.size})",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                metadataResults!!.forEach { result ->
+                                    val cachedDataset = CacheManager.getResource(result.datasetMfid) as? Dataset
+                                    val displayName = cachedDataset?.name ?: result.datasetMfid
+                                    val snippet = result.scientificMetadata
+                                        ?.entries?.take(2)
+                                        ?.joinToString(" · ") { (k, v) -> "$k: $v" }
+                                    SearchResultCard(
+                                        name = displayName,
+                                        uuid = result.datasetMfid,
+                                        type = "Dataset",
+                                        subtitle = snippet,
+                                        onClick = { onResourceClick(result.datasetMfid) }
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        EmptyState(
+                            icon = Icons.Default.SearchOff,
+                            title = "No results",
+                            subtitle = "Try a different search term"
+                        )
+                    }
+                }
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    if (mfidCandidate != null) {
+                        item { DirectLookupCard(mfidCandidate) { onResourceClick(it) } }
+                    }
                     if (filteredProjects.isNotEmpty()) {
                         item {
                             Text(
@@ -210,9 +285,9 @@ fun SearchScreen(
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
-                        items(filteredProjects) { project ->
+                        items(filteredProjects, key = { it.projectId }) { project ->
                             SearchResultCard(
-                                name = project.projectName ?: project.projectId,
+                                name = project.title ?: project.projectId,
                                 uuid = project.projectId,
                                 type = "Project",
                                 onClick = { onProjectClick(project.projectId) }
@@ -228,7 +303,7 @@ fun SearchScreen(
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
-                        items(filteredSamples) { sample ->
+                        items(filteredSamples, key = { it.uniqueId }) { sample ->
                             SearchResultCard(
                                 name = sample.name,
                                 uuid = sample.uniqueId,
@@ -246,12 +321,64 @@ fun SearchScreen(
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
-                        items(filteredDatasets) { dataset ->
+                        items(filteredDatasets, key = { it.uniqueId }) { dataset ->
                             SearchResultCard(
                                 name = dataset.name,
                                 uuid = dataset.uniqueId,
                                 type = "Dataset",
                                 onClick = { onResourceClick(dataset.uniqueId) }
+                            )
+                        }
+                    }
+
+                    // ── Server metadata search ────────────────────────────────
+                    item {
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    isMetadataSearching = true
+                                    metadataResults = try {
+                                        val resp = ApiClient.service.searchScientificMetadata(query.trim())
+                                        if (resp.isSuccessful) resp.body() else emptyList()
+                                    } catch (_: Exception) { emptyList() }
+                                    isMetadataSearching = false
+                                }
+                            },
+                            enabled = !isMetadataSearching,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (isMetadataSearching) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                            } else {
+                                Icon(Icons.Default.ManageSearch, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Text("Search metadata on server")
+                        }
+                    }
+
+                    if (!metadataResults.isNullOrEmpty()) {
+                        item {
+                            Text(
+                                "Server Metadata (${metadataResults!!.size})",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        items(metadataResults!!, key = { it.datasetMfid }) { result ->
+                            val cachedDataset = CacheManager.getResource(result.datasetMfid) as? Dataset
+                            val displayName = cachedDataset?.name ?: result.datasetMfid
+                            val snippet = result.scientificMetadata
+                                ?.entries?.take(2)
+                                ?.joinToString(" · ") { (k, v) -> "$k: $v" }
+                            SearchResultCard(
+                                name = displayName,
+                                uuid = result.datasetMfid,
+                                type = "Dataset",
+                                subtitle = snippet,
+                                onClick = { onResourceClick(result.datasetMfid) }
                             )
                         }
                     }
@@ -290,7 +417,13 @@ private fun EmptyState(icon: androidx.compose.ui.graphics.vector.ImageVector, ti
 }
 
 @Composable
-private fun SearchResultCard(name: String, uuid: String, type: String, onClick: () -> Unit) {
+private fun SearchResultCard(
+    name: String,
+    uuid: String,
+    type: String,
+    subtitle: String? = null,
+    onClick: () -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -321,6 +454,14 @@ private fun SearchResultCard(name: String, uuid: String, type: String, onClick: 
                     modifier = Modifier.height(28.dp)
                 )
             }
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2
+                )
+            }
             Text(
                 text = uuid,
                 style = MaterialTheme.typography.labelSmall,
@@ -331,13 +472,52 @@ private fun SearchResultCard(name: String, uuid: String, type: String, onClick: 
     }
 }
 
+@Composable
+private fun DirectLookupCard(mfid: String, onClick: (String) -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick(mfid) },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.OpenInNew,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    "Open resource directly",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    mfid,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                )
+            }
+        }
+    }
+}
+
 private fun Project.matchesSearch(query: String): Boolean {
     val q = query.lowercase()
-    return (projectName?.lowercase()?.contains(q) == true) ||
+    return (title?.lowercase()?.contains(q) == true) ||
         projectId.lowercase().contains(q) ||
-        (description?.lowercase()?.contains(q) == true) ||
-        (projectLeadEmail?.lowercase()?.contains(q) == true) ||
-        (createdAt?.lowercase()?.contains(q) == true)
+        (organization?.lowercase()?.contains(q) == true) ||
+        (lead?.email?.lowercase()?.contains(q) == true) ||
+        (status?.lowercase()?.contains(q) == true)
 }
 
 private fun Sample.matchesSearch(query: String): Boolean {
@@ -347,7 +527,6 @@ private fun Sample.matchesSearch(query: String): Boolean {
         (projectId?.lowercase()?.contains(q) == true) ||
         uniqueId.lowercase().contains(q) ||
         (createdAt?.lowercase()?.contains(q) == true) ||
-        (internalId?.toString()?.contains(q) == true) ||
         (ownerOrcid?.lowercase()?.contains(q) == true) ||
         (keywords?.any { it.lowercase().contains(q) } == true)
 }
@@ -357,17 +536,14 @@ private fun Dataset.matchesSearch(query: String): Boolean {
     return name.lowercase().contains(q) ||
         (measurement?.lowercase()?.contains(q) == true) ||
         (instrumentName?.lowercase()?.contains(q) == true) ||
-        (instrumentId?.toString()?.contains(q) == true) ||
         (sessionName?.lowercase()?.contains(q) == true) ||
         (projectId?.lowercase()?.contains(q) == true) ||
         uniqueId.lowercase().contains(q) ||
         (createdAt?.lowercase()?.contains(q) == true) ||
-        (internalId?.toString()?.contains(q) == true) ||
         (dataFormat?.lowercase()?.contains(q) == true) ||
         (ownerOrcid?.lowercase()?.contains(q) == true) ||
         (sourceFolder?.lowercase()?.contains(q) == true) ||
         (fileToUpload?.lowercase()?.contains(q) == true) ||
-        (jsonLink?.lowercase()?.contains(q) == true) ||
         (sha256Hash?.lowercase()?.contains(q) == true) ||
         (keywords?.any { it.lowercase().contains(q) } == true) ||
         (scientificMetadata?.containsQuery(q) == true)

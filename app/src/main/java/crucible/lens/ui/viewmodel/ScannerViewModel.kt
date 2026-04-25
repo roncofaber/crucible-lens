@@ -1,10 +1,12 @@
 package crucible.lens.ui.viewmodel
 
+import android.app.Application
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshots.SnapshotStateMap
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.cache.PersistentThumbnailCache
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
@@ -22,8 +24,9 @@ sealed class UiState {
     data class Error(val message: String) : UiState()
 }
 
-class ScannerViewModel : ViewModel() {
+class ScannerViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = CrucibleRepository()
+    private val ctx = application.applicationContext
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -38,26 +41,39 @@ class ScannerViewModel : ViewModel() {
         resourceCardState.getOrPut(resourceId) { mutableStateMapOf() }[key] = value
     }
 
+    // ── Thumbnail helpers (L1 memory → L2 disk → network) ────────────────────
+
+    private fun getThumbnails(uuid: String): List<String>? =
+        CacheManager.getThumbnails(uuid)
+            ?: PersistentThumbnailCache.load(ctx, uuid)?.also { CacheManager.cacheThumbnails(uuid, it) }
+
+    private suspend fun fetchAndCacheThumbnails(uuid: String): List<String> {
+        val fetched = repository.fetchThumbnails(uuid)
+        CacheManager.cacheThumbnails(uuid, fetched)
+        PersistentThumbnailCache.save(ctx, uuid, fetched)
+        return fetched
+    }
+
+    private fun evictThumbnails(uuid: String) {
+        CacheManager.clearThumbnail(uuid)
+        PersistentThumbnailCache.clear(ctx, uuid)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
     fun fetchResource(uuid: String) {
         viewModelScope.launch {
             val trimmedUuid = uuid.trim()
 
-            // Check cache first — emit Success immediately without Loading state
             val cachedResource = CacheManager.getResource(trimmedUuid)
-            val cachedThumbnails = CacheManager.getThumbnails(trimmedUuid)
+            val cachedThumbnails = getThumbnails(trimmedUuid)
 
             if (cachedResource != null) {
-                _uiState.value = UiState.Success(
-                    cachedResource,
-                    cachedThumbnails ?: emptyList()
-                )
-                // Preload related resources in background
+                _uiState.value = UiState.Success(cachedResource, cachedThumbnails ?: emptyList())
                 preloadRelatedResources(cachedResource)
                 return@launch
             }
 
-            // Not cached — stay in Success (isRefreshing=true) if we already have something
-            // to show, so the TopAppBar never disappears. Only go to Loading from scratch.
             val current = _uiState.value
             _uiState.value = if (current is UiState.Success) current.copy(isRefreshing = true)
                              else UiState.Loading
@@ -65,100 +81,48 @@ class ScannerViewModel : ViewModel() {
             when (val result = repository.fetchResourceByUuid(trimmedUuid)) {
                 is ResourceResult.Success -> {
                     val resource = result.resource
-
-                    // Cache the resource
                     CacheManager.cacheResource(trimmedUuid, resource)
 
-                    // Fetch thumbnails if it's a dataset
                     val thumbnails = if (resource is Dataset) {
-                        val fetched = repository.fetchThumbnails(resource.uniqueId)
-                        // Cache thumbnails
-                        CacheManager.cacheThumbnails(resource.uniqueId, fetched)
-                        fetched
-                    } else {
-                        emptyList()
-                    }
+                        getThumbnails(resource.uniqueId) ?: fetchAndCacheThumbnails(resource.uniqueId)
+                    } else emptyList()
 
                     _uiState.value = UiState.Success(resource, thumbnails)
-
-                    // Preload related resources in background
                     preloadRelatedResources(resource)
                 }
-                is ResourceResult.Error -> {
-                    _uiState.value = UiState.Error(result.message)
-                }
-                is ResourceResult.Loading -> {
-                    // Already in loading state
-                }
+                is ResourceResult.Error -> _uiState.value = UiState.Error(result.message)
+                is ResourceResult.Loading -> {}
             }
         }
     }
 
     private fun preloadRelatedResources(resource: CrucibleResource) {
         viewModelScope.launch {
-            val uuidsToPreload = mutableListOf<String>()
-
-            when (resource) {
-                is Sample -> {
-                    // Preload parent samples
-                    resource.parentSamples?.forEach { parent ->
-                        uuidsToPreload.add(parent.uniqueId)
-                    }
-                    // Preload child samples
-                    resource.childSamples?.forEach { child ->
-                        uuidsToPreload.add(child.uniqueId)
-                    }
-                    // Preload linked datasets
-                    resource.datasets?.forEach { dataset ->
-                        uuidsToPreload.add(dataset.uniqueId)
-                    }
-                }
-                is Dataset -> {
-                    // Preload parent datasets
-                    resource.parentDatasets?.forEach { parent ->
-                        uuidsToPreload.add(parent.uniqueId)
-                    }
-                    // Preload child datasets
-                    resource.childDatasets?.forEach { child ->
-                        uuidsToPreload.add(child.uniqueId)
-                    }
-                    // Preload linked samples
-                    resource.samples?.forEach { sample ->
-                        uuidsToPreload.add(sample.uniqueId)
-                    }
-                }
+            val uuidsToPreload = when (resource) {
+                is Sample -> resource.links?.map { it.uniqueId } ?: emptyList()
+                is Dataset -> resource.links?.map { it.uniqueId } ?: emptyList()
             }
 
-            // Fetch and cache related resources in background.
-            // Deduplicate and exclude self to prevent redundant/looping fetches.
             uuidsToPreload.filter { it != resource.uniqueId }.distinct().forEach { uuid ->
-                // Only fetch if not already cached
                 if (CacheManager.getResource(uuid) == null) {
                     launch {
                         try {
                             when (val result = repository.fetchResourceByUuid(uuid)) {
                                 is ResourceResult.Success -> {
                                     CacheManager.cacheResource(uuid, result.resource)
-                                    // Preload thumbnails only if not already cached
-                                    if (result.resource is Dataset && CacheManager.getThumbnails(uuid) == null) {
-                                        val thumbnails = repository.fetchThumbnails(uuid)
-                                        CacheManager.cacheThumbnails(uuid, thumbnails)
+                                    if (result.resource is Dataset && getThumbnails(uuid) == null) {
+                                        fetchAndCacheThumbnails(uuid)
                                     }
                                 }
-                                else -> {
-                                    // Silently fail for background preloading
-                                }
+                                else -> {}
                             }
-                        } catch (e: Exception) {
-                            // Silently fail for background preloading
-                        }
+                        } catch (_: Exception) {}
                     }
                 }
             }
         }
     }
 
-    /** Fetches and caches a resource by UUID without touching [uiState]. Returns null on failure. */
     suspend fun ensureResourceCached(uuid: String): CrucibleResource? {
         val cached = CacheManager.getResource(uuid)
         if (cached != null) return cached
@@ -170,9 +134,7 @@ class ScannerViewModel : ViewModel() {
                 }
                 else -> null
             }
-        } catch (e: Exception) {
-            null
-        }
+        } catch (_: Exception) { null }
     }
 
     fun reset() {
@@ -183,30 +145,22 @@ class ScannerViewModel : ViewModel() {
         viewModelScope.launch {
             val trimmedUuid = uuid.trim()
             CacheManager.clearResource(trimmedUuid)
-            CacheManager.clearThumbnail(trimmedUuid)
+            evictThumbnails(trimmedUuid)
 
             val current = _uiState.value
             if (current is UiState.Success && current.resource.uniqueId != trimmedUuid) {
-                // Refreshing a sibling — preserve the primary resource so that
-                // resource.uniqueId stays equal to mfid and the loading overlay
-                // never gets stuck. Only update the cache; ResourceDetailScreen
-                // will re-fetch into loadedResources via siblingReloadTrigger.
                 _uiState.value = current.copy(isRefreshing = true)
                 try {
                     when (val result = repository.fetchResourceByUuid(trimmedUuid)) {
                         is ResourceResult.Success -> {
                             CacheManager.cacheResource(trimmedUuid, result.resource)
-                            if (result.resource is Dataset) {
-                                val thumbnails = repository.fetchThumbnails(trimmedUuid)
-                                CacheManager.cacheThumbnails(trimmedUuid, thumbnails)
-                            }
+                            if (result.resource is Dataset) fetchAndCacheThumbnails(trimmedUuid)
                         }
                         else -> {}
                     }
                 } catch (_: Exception) {}
                 _uiState.value = current.copy(isRefreshing = false)
             } else {
-                // Refreshing the primary resource — normal flow
                 fetchResource(trimmedUuid)
             }
         }

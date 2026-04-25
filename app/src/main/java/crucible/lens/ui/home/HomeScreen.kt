@@ -37,6 +37,7 @@ import crucible.lens.R
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.cache.PersistentProjectCache
+import crucible.lens.ui.common.OfflineBanner
 import crucible.lens.ui.common.allLoadingMessages
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.launch
@@ -52,11 +53,14 @@ fun HomeScreen(
     onScanClick: () -> Unit,
     onManualEntry: (String) -> Unit,
     onBrowseProjects: () -> Unit,
+    onBrowseInstruments: () -> Unit = {},
     onSettingsClick: () -> Unit,
     onHistory: () -> Unit = {},
     onSearch: () -> Unit = {},
     pinnedProjects: Set<String> = emptySet(),
     onProjectClick: (String) -> Unit = {},
+    onCreateSample: () -> Unit = {},
+    onCreateDataset: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showHelpDialog by remember { mutableStateOf(false) }
@@ -75,10 +79,7 @@ fun HomeScreen(
             allProjects = persistentData.map {
                 crucible.lens.data.model.Project(
                     projectId = it.projectId,
-                    projectName = it.projectName,
-                    description = it.description,
-                    createdAt = it.createdAt,
-                    projectLeadEmail = it.projectLeadEmail
+                    title = it.projectName
                 )
             }
         }
@@ -144,8 +145,8 @@ fun HomeScreen(
                             samplesResp.body()?.let { CacheManager.cacheProjectSamples(project.projectId, it) }
                         }
 
-                        // Load datasets with metadata for search functionality and pre-warm cache
-                        val datasetsResp = ApiClient.service.getDatasetsByProject(project.projectId, includeMetadata = true)
+                        // Load datasets for pre-warm cache
+                        val datasetsResp = ApiClient.service.getDatasetsByProject(project.projectId)
                         if (datasetsResp.isSuccessful) {
                             consecutiveFailures.set(0) // Reset on success
                             datasetsResp.body()?.let { CacheManager.cacheProjectDatasets(project.projectId, it) }
@@ -189,6 +190,7 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
+            Column {
             TopAppBar(
                 title = {
                     Text(
@@ -223,6 +225,8 @@ fun HomeScreen(
                     }
                 }
             )
+            OfflineBanner()
+            } // end topBar Column
         }
     ) { padding ->
         Column(
@@ -241,7 +245,7 @@ fun HomeScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-            // Crucible Logo Text
+            // Logo + tagline
             val taglines = remember {
                 listOf(
                     "Your mobile window into the Molecular Foundry's data ecosystem.",
@@ -266,42 +270,39 @@ fun HomeScreen(
             var tagline by remember { mutableStateOf(taglines[0]) }
             var lastTapTime by remember { mutableStateOf(0L) }
 
-            Image(
-                painter = painterResource(
-                    id = if (isDarkTheme) R.drawable.crucible_text_dark
-                         else R.drawable.crucible_text_light
-                ),
-                contentDescription = "Crucible",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .padding(top = 16.dp)
-                    .fillMaxWidth()
-                    .height(90.dp)
-                    .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        val now = System.currentTimeMillis()
-                        if (now - lastTapTime < 350L) {
-                            tagline = taglines.filter { it != tagline }.random()
-                            lastTapTime = 0L
-                        } else {
-                            lastTapTime = now
-                        }
-                    }
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(40.dp)
-                    .padding(horizontal = 8.dp),
-                contentAlignment = Alignment.Center
+                    .padding(top = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                Image(
+                    painter = painterResource(
+                        id = if (isDarkTheme) R.drawable.crucible_text_dark
+                             else R.drawable.crucible_text_light
+                    ),
+                    contentDescription = "Crucible",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp)
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            val now = System.currentTimeMillis()
+                            if (now - lastTapTime < 350L) {
+                                tagline = taglines.filter { it != tagline }.random()
+                                lastTapTime = 0L
+                            } else {
+                                lastTapTime = now
+                            }
+                        }
+                )
                 AnimatedContent(
                     targetState = tagline,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp),
                     transitionSpec = {
                         fadeIn(tween(durationMillis = 500, delayMillis = 200)) togetherWith
                             fadeOut(tween(durationMillis = 300))
@@ -310,118 +311,177 @@ fun HomeScreen(
                 ) { text ->
                     Text(
                         text = text,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        maxLines = 2,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
                     )
                 }
             }
 
-            // Last Visited Resource Button — always shown, tight against its dividers
-            Column(modifier = Modifier.fillMaxWidth()) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                if (lastVisitedResource != null && lastVisitedResourceName != null) {
-                    TextButton(
-                        onClick = { onManualEntry(lastVisitedResource) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Last visited: ", style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
-                                .drawWithContent {
-                                    drawContent()
-                                    drawRect(
-                                        brush = Brush.horizontalGradient(
-                                            colors = listOf(Color.Black, Color.Transparent),
-                                            startX = size.width * 0.75f,
-                                            endX = size.width
-                                        ),
-                                        blendMode = BlendMode.DstIn
-                                    )
-                                }
-                        ) {
-                            Text(
-                                text = lastVisitedResourceName,
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
-                                modifier = Modifier.basicMarquee()
-                            )
-                        }
-                    }
-                } else {
-                    TextButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "No recent resource", style = MaterialTheme.typography.labelMedium, maxLines = 1)
-                    }
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            }
-
-            // Search Button
-            OutlinedButton(
+            // Search pill
+            Surface(
                 onClick = onSearch,
-                modifier = Modifier
-                    .padding(top = 8.dp)
-                    .fillMaxWidth()
-                    .height(56.dp),
-                border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.primary
-                )
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                tonalElevation = 2.dp
             ) {
-                Icon(Icons.Default.Search, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Search", style = MaterialTheme.typography.titleMedium)
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        "Search samples, datasets...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
-            // Browse Projects + Scan QR Code side by side
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Button(
-                    onClick = onBrowseProjects,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(88.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    shape = MaterialTheme.shapes.medium
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            // Browse section
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Browse",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(32.dp))
-                        Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = onBrowseProjects,
+                        modifier = Modifier.weight(1f).height(52.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        shape = MaterialTheme.shapes.medium,
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text("Projects", style = MaterialTheme.typography.labelMedium)
                     }
-                }
-                Button(
-                    onClick = onScanClick,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(88.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(32.dp))
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Scan QR Code", style = MaterialTheme.typography.labelMedium)
+                    Button(
+                        onClick = onBrowseInstruments,
+                        modifier = Modifier.weight(1f).height(52.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        shape = MaterialTheme.shapes.medium,
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Icon(Icons.Default.Biotech, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Instruments", style = MaterialTheme.typography.labelMedium)
+                    }
+                    Button(
+                        onClick = onScanClick,
+                        modifier = Modifier.weight(1f).height(52.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        shape = MaterialTheme.shapes.medium,
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Scan QR", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
 
-            // Pinned Projects — always 3 slots to keep layout stable
+            // Create section
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Create",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onCreateSample,
+                        modifier = Modifier.weight(1f).height(52.dp),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("New Sample", style = MaterialTheme.typography.labelMedium)
+                    }
+                    OutlinedButton(
+                        onClick = onCreateDataset,
+                        modifier = Modifier.weight(1f).height(52.dp),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Icon(Icons.Default.Dataset, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("New Dataset", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+
+            // Last Visited section
+            if (lastVisitedResource != null && lastVisitedResourceName != null) {
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text("Last Visited", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                    Card(
+                        onClick = { onManualEntry(lastVisitedResource) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                                    .drawWithContent {
+                                        drawContent()
+                                        drawRect(
+                                            brush = Brush.horizontalGradient(
+                                                colors = listOf(Color.Black, Color.Transparent),
+                                                startX = size.width * 0.8f,
+                                                endX = size.width
+                                            ),
+                                            blendMode = BlendMode.DstIn
+                                        )
+                                    }
+                            ) {
+                                Text(
+                                    text = lastVisitedResourceName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
+                                    modifier = Modifier.basicMarquee()
+                                )
+                            }
+                            Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+
+            // Pinned Projects section
             val pinnedList = remember(pinnedProjects, allProjects) {
                 allProjects.filter { it.projectId in pinnedProjects }.take(3)
             }
@@ -430,84 +490,46 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(
-                        Icons.Default.Bookmark,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Text("Pinned projects", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text("Pinned", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
-                if (pinnedList.isEmpty()) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 20.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                if (pinnedList.isNotEmpty()) {
+                    pinnedList.forEach { project ->
+                        Card(
+                            onClick = { onProjectClick(project.projectId) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                         ) {
-                            Icon(
-                                Icons.Default.Bookmark,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-                                modifier = Modifier.size(26.dp)
-                            )
-                            Text(
-                                "No pinned projects",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            )
-                            Text(
-                                "Tap the bookmark icon on a project to pin it here",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = project.title ?: project.projectId,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                 } else {
-                    repeat(3) { index ->
-                        val project = pinnedList.getOrNull(index)
-                        if (project != null) {
-                            Card(
-                                onClick = { onProjectClick(project.projectId) },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = project.projectName ?: project.projectId,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        } else {
-                            // Transparent placeholder — same height as a real card, invisible
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 0.dp, vertical = 10.dp)
-                            ) {
-                                Text(
-                                    text = " ",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0f)
-                                )
-                            }
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(Icons.Default.Bookmark, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f), modifier = Modifier.size(26.dp))
+                            Text("No pinned projects", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                            Text("Tap the bookmark icon on a project to pin it here", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                         }
                     }
                 }
