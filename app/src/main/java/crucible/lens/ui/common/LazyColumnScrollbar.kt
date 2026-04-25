@@ -1,6 +1,7 @@
 package crucible.lens.ui.common
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -23,180 +24,112 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
-/**
- * Default values for LazyColumnScrollbar
- */
 object ScrollbarDefaults {
     val ThumbWidth = 4.dp
     val ContainerWidth = 16.dp
     val MinThumbHeight = 40.dp
-    const val ThumbAlphaActive = 1f
-    const val ThumbAlphaInactive = 0.3f
 }
 
 /**
- * A custom scrollbar for LazyColumn that properly handles dynamic content heights
- * including expanded/collapsed items.
- *
- * @param listState The LazyListState to observe and control
- * @param modifier Modifier to apply to the scrollbar container
- * @param thumbColor Color of the scrollbar thumb
- * @param thumbWidth Width of the scrollbar thumb
+ * Scrollbar for LazyColumn using item-index fractions instead of pixel-height estimation.
+ * This avoids thumb jumping when items expand/collapse or when item heights vary.
  */
 @Composable
 fun LazyColumnScrollbar(
     listState: LazyListState,
     modifier: Modifier = Modifier,
-    thumbColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+    thumbColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
     thumbWidth: Dp = ScrollbarDefaults.ThumbWidth
 ) {
     val density = LocalDensity.current
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
     var isDragging by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    val isActive = isDragging || listState.isScrollInProgress
     val thumbAlpha by animateFloatAsState(
-        targetValue = if (isDragging || listState.isScrollInProgress) {
-            ScrollbarDefaults.ThumbAlphaActive
-        } else {
-            ScrollbarDefaults.ThumbAlphaInactive
-        },
+        targetValue = if (isActive) 1f else 0f,
+        animationSpec = tween(durationMillis = if (isActive) 100 else 600),
         label = "scrollbar_alpha"
     )
-
-    // Persistent cache of all item sizes we've ever seen (survives scrolling)
-    val knownItemSizes = remember { mutableStateMapOf<Int, Int>() }
 
     Box(
         modifier = modifier
             .width(ScrollbarDefaults.ContainerWidth)
             .onGloballyPositioned { containerSize = it.size }
     ) {
-        // Force recomposition when list state changes
         val layoutInfo = listState.layoutInfo
-        val firstVisibleIndex = listState.firstVisibleItemIndex
-        val firstVisibleOffset = listState.firstVisibleItemScrollOffset
-
-        val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+        val totalItems = layoutInfo.totalItemsCount
         val visibleItems = layoutInfo.visibleItemsInfo
 
-        if (viewportHeight > 0 && containerSize.height > 0 && layoutInfo.totalItemsCount > 0 && visibleItems.isNotEmpty()) {
-            // Update our persistent cache with currently visible item sizes
-            visibleItems.forEach { itemInfo ->
-                knownItemSizes[itemInfo.index] = itemInfo.size
-            }
+        if (totalItems <= 0 || visibleItems.isEmpty() || containerSize.height <= 0) return@Box
 
-            // Calculate average from visible items for unknown items
-            val defaultItemHeight = visibleItems.sumOf { it.size } / visibleItems.size.toFloat()
+        // Fraction of content visible — used for thumb height.
+        // Index-based: stable regardless of item heights or expand/collapse state.
+        val visibleCount = visibleItems.size
+        val thumbHeightFraction = (visibleCount.toFloat() / totalItems).coerceIn(0.05f, 1f)
+        if (thumbHeightFraction >= 1f) return@Box
 
-            // Calculate total height using known sizes when available, fallback to average
-            val estimatedTotalHeight = remember(knownItemSizes.size, layoutInfo.totalItemsCount, defaultItemHeight) {
-                var height = 0f
-                for (i in 0 until layoutInfo.totalItemsCount) {
-                    height += knownItemSizes[i]?.toFloat() ?: defaultItemHeight
-                }
-                height
-            }
+        val thumbWidthPx = with(density) { thumbWidth.toPx() }
+        val minThumbPx = with(density) { ScrollbarDefaults.MinThumbHeight.toPx() }
+        val thumbHeightPx = (containerSize.height * thumbHeightFraction)
+            .coerceAtLeast(minThumbPx)
+            .coerceAtMost(containerSize.height.toFloat())
 
-            // Calculate current scroll position by summing items before first visible
-            val currentScrollY = remember(firstVisibleIndex, firstVisibleOffset, knownItemSizes.size, defaultItemHeight) {
-                var scrollY = 0f
-                for (i in 0 until firstVisibleIndex) {
-                    scrollY += knownItemSizes[i]?.toFloat() ?: defaultItemHeight
-                }
-                scrollY + firstVisibleOffset
-            }
+        val scrollableItems = (totalItems - visibleCount).coerceAtLeast(1)
 
-            // Thumb metrics
-            val contentToViewportRatio = (viewportHeight / estimatedTotalHeight).coerceIn(0.05f, 1f)
-            val thumbHeight = (containerSize.height * contentToViewportRatio).coerceIn(
-                with(density) { ScrollbarDefaults.MinThumbHeight.toPx() },
-                containerSize.height.toFloat()
-            )
+        // Detect stuck sticky headers: if there's a gap between the first and second visible
+        // item indices, items have scrolled off-screen behind a pinned header.
+        // In that case, use the second item's index so the thumb tracks within the group.
+        val sortedVisible = visibleItems.sortedBy { it.index }
+        val firstItem = sortedVisible.firstOrNull()
+        val secondItem = sortedVisible.drop(1).firstOrNull()
+        val isStuckStickyHeader = firstItem != null && secondItem != null &&
+                (secondItem.index - firstItem.index) > 1
+        val effectiveFirstIndex = if (isStuckStickyHeader) secondItem!!.index
+                                  else listState.firstVisibleItemIndex
 
-            val scrollRange = (estimatedTotalHeight - viewportHeight).coerceAtLeast(1f)
-            val scrollFraction = (currentScrollY / scrollRange).coerceIn(0f, 1f)
-            val thumbTop = scrollFraction * (containerSize.height - thumbHeight)
+        val scrollFraction = (effectiveFirstIndex.toFloat() / scrollableItems).coerceIn(0f, 1f)
+        val thumbTop = scrollFraction * (containerSize.height - thumbHeightPx)
 
-            // Only show scrollbar if content is scrollable
-            if (contentToViewportRatio < 1f) {
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .alpha(thumbAlpha)
-                        .pointerInput(estimatedTotalHeight) {
-                            var dragStartY = 0f
-                            var dragStartScrollOffset = 0f
-
-                            detectVerticalDragGestures(
-                                onDragStart = { offset ->
-                                    isDragging = true
-                                    dragStartY = offset.y
-                                    dragStartScrollOffset = currentScrollY
-
-                                    // Jump to tapped position if not on thumb
-                                    if (offset.y < thumbTop || offset.y > thumbTop + thumbHeight) {
-                                        val clickProgress = (offset.y / containerSize.height).coerceIn(0f, 1f)
-                                        val targetScroll = clickProgress * scrollRange
-
-                                        // Find which item index corresponds to this scroll position
-                                        var accumulatedHeight = 0f
-                                        var targetIndex = 0
-                                        for (i in 0 until layoutInfo.totalItemsCount) {
-                                            val itemHeight = knownItemSizes[i]?.toFloat() ?: defaultItemHeight
-                                            if (accumulatedHeight + itemHeight > targetScroll) {
-                                                targetIndex = i
-                                                break
-                                            }
-                                            accumulatedHeight += itemHeight
-                                        }
-                                        val targetOffset = (targetScroll - accumulatedHeight).toInt().coerceAtLeast(0)
-
-                                        scope.launch {
-                                            listState.scrollToItem(targetIndex, targetOffset)
-                                        }
-                                    }
-                                },
-                                onDragEnd = { isDragging = false },
-                                onDragCancel = { isDragging = false }
-                            ) { change, _ ->
-                                change.consume()
-
-                                // Calculate new scroll position based on drag
-                                val targetScroll = (dragStartScrollOffset + (change.position.y - dragStartY) / (containerSize.height - thumbHeight) * scrollRange)
-                                    .coerceIn(0f, scrollRange)
-
-                                // Find which item index corresponds to this scroll position
-                                var accumulatedHeight = 0f
-                                var targetIndex = 0
-                                for (i in 0 until layoutInfo.totalItemsCount) {
-                                    val itemHeight = knownItemSizes[i]?.toFloat() ?: defaultItemHeight
-                                    if (accumulatedHeight + itemHeight > targetScroll) {
-                                        targetIndex = i
-                                        break
-                                    }
-                                    accumulatedHeight += itemHeight
-                                }
-                                val targetOffset = (targetScroll - accumulatedHeight).toInt().coerceAtLeast(0)
-
-                                scope.launch {
-                                    listState.scrollToItem(targetIndex, targetOffset)
-                                }
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .alpha(thumbAlpha)
+                .pointerInput(scrollableItems) {
+                    detectVerticalDragGestures(
+                        onDragStart = { offset ->
+                            isDragging = true
+                            val fraction = (offset.y / containerSize.height).coerceIn(0f, 1f)
+                            scope.launch {
+                                listState.scrollToItem((fraction * scrollableItems).toInt())
                             }
+                        },
+                        onDragEnd = { isDragging = false },
+                        onDragCancel = { isDragging = false }
+                    ) { change, _ ->
+                        change.consume()
+                        val fraction = (change.position.y / containerSize.height).coerceIn(0f, 1f)
+                        scope.launch {
+                            listState.scrollToItem((fraction * scrollableItems).toInt())
                         }
-                ) {
-                    drawRoundRect(
-                        color = thumbColor,
-                        topLeft = Offset(size.width - with(density) { thumbWidth.toPx() }, thumbTop),
-                        size = Size(
-                            with(density) { thumbWidth.toPx() },
-                            thumbHeight
-                        ),
-                        cornerRadius = CornerRadius(
-                            with(density) { (thumbWidth / 2).toPx() }
-                        )
-                    )
+                    }
                 }
-            }
+        ) {
+            // Faint track
+            drawRoundRect(
+                color = thumbColor.copy(alpha = 0.15f),
+                topLeft = Offset(size.width - thumbWidthPx, 0f),
+                size = Size(thumbWidthPx, size.height),
+                cornerRadius = CornerRadius(thumbWidthPx / 2)
+            )
+            // Thumb
+            drawRoundRect(
+                color = thumbColor,
+                topLeft = Offset(size.width - thumbWidthPx, thumbTop),
+                size = Size(thumbWidthPx, thumbHeightPx),
+                cornerRadius = CornerRadius(thumbWidthPx / 2)
+            )
         }
     }
 }

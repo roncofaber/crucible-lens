@@ -4,11 +4,7 @@ import android.util.Log
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
-import crucible.lens.data.model.DatasetReference
 import crucible.lens.data.model.Sample
-import crucible.lens.data.model.SampleReference
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -51,38 +47,9 @@ class CrucibleRepository {
                     val sampleResponse = api.getSample(uuid)
                     val sampleBody = sampleResponse.body()
                     if (sampleResponse.isSuccessful && sampleBody != null) {
-                        // Cache the type for future calls
                         crucible.lens.data.cache.CacheManager.cacheResourceType(uuid, "sample")
-
-                        val sample: Sample = coroutineScope {
-                            val parentsDeferred = async { api.getParentSamples(uuid) }
-                            val childrenDeferred = async { api.getChildSamples(uuid) }
-
-                            val parentsResponse = parentsDeferred.await()
-                            val childrenResponse = childrenDeferred.await()
-
-                            var s: Sample = sampleBody
-                            val parentsBody = parentsResponse.body()
-                            if (parentsResponse.isSuccessful && parentsBody != null) {
-                                s = s.copy(
-                                    parentSamples = parentsBody
-                                        .map { SampleReference(it.uniqueId, it.name) }
-                                        .distinctBy { it.uniqueId }
-                                        .sortedBy { it.uniqueId }
-                                )
-                            }
-                            val childrenBody = childrenResponse.body()
-                            if (childrenResponse.isSuccessful && childrenBody != null) {
-                                s.childSamples = childrenBody
-                                    .map { SampleReference(it.uniqueId, it.name) }
-                                    .distinctBy { it.uniqueId }
-                                    .sortedBy { it.uniqueId }
-                            }
-                            s
-                        }
-                        return@withContext ResourceResult.Success(sample)
+                        return@withContext ResourceResult.Success(sampleBody)
                     } else if (cachedType != null) {
-                        // Cached type was wrong, fall back to full check
                         crucible.lens.data.cache.CacheManager.removeResourceType(uuid)
                         return@withContext fetchResourceByUuidFallback(uuid)
                     }
@@ -91,52 +58,9 @@ class CrucibleRepository {
                     val datasetResponse = api.getDataset(uuid)
                     val datasetBody = datasetResponse.body()
                     if (datasetResponse.isSuccessful && datasetBody != null) {
-                        // Cache the type for future calls
                         crucible.lens.data.cache.CacheManager.cacheResourceType(uuid, "dataset")
-
-                        val dataset: Dataset = coroutineScope {
-                            val metadataDeferred = async { api.getScientificMetadata(uuid) }
-                            val parentsDeferred  = async { api.getParentDatasets(uuid) }
-                            val childrenDeferred = async { api.getChildDatasets(uuid) }
-                            val samplesDeferred  = async { api.getDatasetSamples(uuid) }
-
-                            val metadataResponse = metadataDeferred.await()
-                            val parentsResponse  = parentsDeferred.await()
-                            val childrenResponse = childrenDeferred.await()
-                            val samplesResponse  = samplesDeferred.await()
-
-                            var d: Dataset = datasetBody
-                            if (metadataResponse.isSuccessful) {
-                                d = d.copy(scientificMetadata = metadataResponse.body())
-                            }
-                            val parentsBody = parentsResponse.body()
-                            if (parentsResponse.isSuccessful && parentsBody != null) {
-                                d.parentDatasets = parentsBody
-                                    .map { DatasetReference(it.uniqueId, it.name, it.measurement) }
-                                    .distinctBy { it.uniqueId }
-                                    .sortedBy { it.uniqueId }
-                            }
-                            val childrenBody = childrenResponse.body()
-                            if (childrenResponse.isSuccessful && childrenBody != null) {
-                                d.childDatasets = childrenBody
-                                    .map { DatasetReference(it.uniqueId, it.name, it.measurement) }
-                                    .distinctBy { it.uniqueId }
-                                    .sortedBy { it.uniqueId }
-                            }
-                            val samplesBody = samplesResponse.body()
-                            if (samplesResponse.isSuccessful && samplesBody != null) {
-                                d = d.copy(
-                                    samples = samplesBody
-                                        .map { SampleReference(it.uniqueId, it.name) }
-                                        .distinctBy { it.uniqueId }
-                                        .sortedBy { it.uniqueId }
-                                )
-                            }
-                            d
-                        }
-                        return@withContext ResourceResult.Success(dataset)
+                        return@withContext ResourceResult.Success(datasetBody)
                     } else if (cachedType != null) {
-                        // Cached type was wrong, fall back to full check
                         crucible.lens.data.cache.CacheManager.removeResourceType(uuid)
                         return@withContext fetchResourceByUuidFallback(uuid)
                     }
@@ -169,18 +93,8 @@ class CrucibleRepository {
             val datasetResponse = api.getDataset(uuid)
             val datasetBody = datasetResponse.body()
             if (datasetResponse.isSuccessful && datasetBody != null) {
-                // Cache the type for future calls
                 crucible.lens.data.cache.CacheManager.cacheResourceType(uuid, "dataset")
-
-                // Try to fetch scientific metadata
-                val metadataResponse = api.getScientificMetadata(uuid)
-                val enrichedDataset = if (metadataResponse.isSuccessful) {
-                    datasetBody.copy(scientificMetadata = metadataResponse.body())
-                } else {
-                    datasetBody
-                }
-
-                return ResourceResult.Success(enrichedDataset)
+                return ResourceResult.Success(datasetBody)
             }
 
             // Neither worked

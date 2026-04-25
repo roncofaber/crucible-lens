@@ -14,6 +14,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.navigation.compose.rememberNavController
 import crucible.lens.data.api.ApiClient
+import crucible.lens.data.network.ConnectivityObserver
 import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.data.preferences.PreferencesManager
 import crucible.lens.ui.navigation.NavGraph
@@ -75,6 +76,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         preferencesManager = PreferencesManager(this)
+        ConnectivityObserver.init(this)
 
         // Load theme preferences synchronously to prevent flash on startup.
         // Bounded by a 1s timeout so storage stalls can never cause an ANR.

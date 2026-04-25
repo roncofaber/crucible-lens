@@ -2,6 +2,7 @@ package crucible.lens.data.cache
 
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
+import crucible.lens.data.model.Instrument
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import java.util.concurrent.ConcurrentHashMap
@@ -22,6 +23,8 @@ object CacheManager {
     private val resourceTypeCache = ConcurrentHashMap<String, String>() // UUID -> "sample" or "dataset"
     private val thumbnailCache = ConcurrentHashMap<String, CachedItem<List<String>>>()
     private var projectsCache: CachedItem<List<Project>>? = null
+    private var instrumentsCache: CachedItem<List<Instrument>>? = null
+    private val instrumentDatasetsCache = ConcurrentHashMap<String, CachedItem<List<Dataset>>>()
     private val projectSamplesCache = ConcurrentHashMap<String, CachedItem<List<Sample>>>()
     private val projectDatasetsCache = ConcurrentHashMap<String, CachedItem<List<Dataset>>>()
 
@@ -94,6 +97,32 @@ object CacheManager {
         return cached.data
     }
 
+    // Instruments caching
+    fun cacheInstruments(instruments: List<Instrument>) {
+        instrumentsCache = CachedItem(instruments, System.currentTimeMillis())
+    }
+
+    fun getInstruments(): List<Instrument>? {
+        val cached = instrumentsCache ?: return null
+        if (cached.isExpired()) { instrumentsCache = null; return null }
+        return cached.data
+    }
+
+    fun cacheInstrumentDatasets(instrumentName: String, datasets: List<Dataset>) {
+        instrumentDatasetsCache[instrumentName] = CachedItem(datasets, System.currentTimeMillis())
+    }
+
+    fun getInstrumentDatasets(instrumentName: String): List<Dataset>? {
+        val cached = instrumentDatasetsCache[instrumentName] ?: return null
+        if (cached.isExpired()) { instrumentDatasetsCache.remove(instrumentName); return null }
+        return cached.data
+    }
+
+    fun clearInstrumentsCache() {
+        instrumentsCache = null
+        instrumentDatasetsCache.clear()
+    }
+
     // Clear individual items
     fun clearResource(uuid: String) {
         resourceCache.remove(uuid)
@@ -154,6 +183,7 @@ object CacheManager {
         clearThumbnailCache()
         clearProjectsCache()
         clearProjectDetailsCache()
+        clearInstrumentsCache()
     }
 
     // Stats for debugging

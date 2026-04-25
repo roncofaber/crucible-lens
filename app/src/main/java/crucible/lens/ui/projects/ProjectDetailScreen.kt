@@ -19,6 +19,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.clickable
@@ -27,7 +28,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -36,7 +36,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -63,12 +62,33 @@ import crucible.lens.ui.common.QrCodeDialog
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.ScrollToTopButton
-import crucible.lens.ui.common.UiConstants
 import crucible.lens.ui.common.openUrlInBrowser
 import androidx.compose.ui.graphics.SolidColor
+import crucible.lens.data.preferences.PreferencesManager
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+
+private enum class SampleGroupBy(val label: String) {
+    TYPE("Type"), DATE("Date"), OWNER("Owner")
+}
+
+private enum class DatasetGroupBy(val label: String) {
+    MEASUREMENT("Measurement"), INSTRUMENT("Instrument"),
+    DATE("Date"), FORMAT("Format"), SESSION("Session"), OWNER("Owner")
+}
+
+private fun ownerDisplayName(firstName: String?, lastName: String?) =
+    "${firstName?.firstOrNull()?.uppercaseChar() ?: '?'}. ${lastName ?: "Unknown"}"
+
+private fun dateGroupKey(raw: String?): String {
+    if (raw == null) return "No date"
+    val fmt = java.time.format.DateTimeFormatter.ofPattern("MMM yyyy")
+    return try { fmt.format(java.time.OffsetDateTime.parse(raw.trim())) }
+    catch (_: Exception) { try { fmt.format(java.time.LocalDateTime.parse(raw.trim())) }
+    catch (_: Exception) { "No date" } }
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -78,15 +98,20 @@ fun ProjectDetailScreen(
     onBack: () -> Unit,
     onHome: () -> Unit,
     onSearch: () -> Unit = {},
-    onResourceClick: (String) -> Unit,
+    onResourceClick: (uuid: String, groupBy: String) -> Unit,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
     isArchived: Boolean = false,
+    onCreateSample: () -> Unit = {},
+    onCreateDataset: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val project = remember(projectId) {
         CacheManager.getProjects()?.find { it.projectId == projectId }
     }
+
+    val context = LocalContext.current
+    val prefs = remember { PreferencesManager(context) }
 
     var samples by remember { mutableStateOf<List<Sample>?>(null) }
     var datasets by remember { mutableStateOf<List<Dataset>?>(null) }
@@ -94,24 +119,23 @@ fun ProjectDetailScreen(
     var error by remember { mutableStateOf<String?>(null) }
     val pagerState = rememberPagerState(pageCount = { 2 })
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var sampleGroupBy by remember { mutableStateOf(SampleGroupBy.TYPE) }
+    var datasetGroupBy by remember { mutableStateOf(DatasetGroupBy.MEASUREMENT) }
     var fromCache by remember { mutableStateOf(false) }
     var showQrDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val mainScrollState = rememberScrollState()
-    val samplesListState = rememberLazyListState()
-    val datasetsListState = rememberLazyListState()
-    val pullRefreshState = rememberPullToRefreshState()
 
-    // Show scroll-to-top when either tab is scrolled down
-    val showScrollToTop by remember {
-        derivedStateOf {
-            when (pagerState.currentPage) {
-                0 -> samplesListState.firstVisibleItemIndex > 0
-                1 -> datasetsListState.firstVisibleItemIndex > 0
-                else -> false
-            }
+    // Load persisted group-by choices and default tab on first composition
+    LaunchedEffect(Unit) {
+        sampleGroupBy = SampleGroupBy.valueOf(prefs.sampleGroupBy.first())
+        datasetGroupBy = DatasetGroupBy.valueOf(prefs.datasetGroupBy.first())
+        val tab = prefs.defaultProjectTab.first()
+        if (tab == crucible.lens.data.preferences.PreferencesManager.PROJECT_TAB_DATASETS) {
+            pagerState.scrollToPage(1)
         }
     }
+    val mainScrollState = rememberScrollState()
+    val pullRefreshState = rememberPullToRefreshState()
 
     val filteredSamples = remember(samples, searchQuery) {
         if (searchQuery.isBlank()) samples ?: emptyList()
@@ -206,12 +230,53 @@ fun ProjectDetailScreen(
                     }
                 },
                 actions = {
+                    val topBarContext = LocalContext.current
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
                         IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
                             Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
                         }
                         IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
                             Icon(Icons.Default.Home, contentDescription = "Home", modifier = Modifier.size(24.dp))
+                        }
+                        var topBarMenuExpanded by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { topBarMenuExpanded = true }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options", modifier = Modifier.size(24.dp))
+                            }
+                            DropdownMenu(expanded = topBarMenuExpanded, onDismissRequest = { topBarMenuExpanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("New Sample") },
+                                    leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+                                    onClick = { topBarMenuExpanded = false; onCreateSample() }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("New Dataset") },
+                                    leadingIcon = { Icon(Icons.Default.Dataset, contentDescription = null) },
+                                    onClick = { topBarMenuExpanded = false; onCreateDataset() }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Open in web") },
+                                    leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
+                                    onClick = {
+                                        topBarMenuExpanded = false
+                                        openUrlInBrowser(topBarContext, "$graphExplorerUrl/$projectId")
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Share") },
+                                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                                    onClick = {
+                                        topBarMenuExpanded = false
+                                        val shareIntent = Intent().apply {
+                                            action = Intent.ACTION_SEND
+                                            putExtra(Intent.EXTRA_TEXT, "$graphExplorerUrl/$projectId")
+                                            putExtra(Intent.EXTRA_SUBJECT, project?.title ?: projectId)
+                                            type = "text/plain"
+                                        }
+                                        topBarContext.startActivity(Intent.createChooser(shareIntent, "Share via"))
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -244,7 +309,6 @@ fun ProjectDetailScreen(
                 onSearchChange = { searchQuery = it },
                 isPinned = isPinned,
                 onTogglePin = onTogglePin,
-                graphExplorerUrl = graphExplorerUrl,
                 onShowQr = { showQrDialog = true }
             )
 
@@ -261,7 +325,6 @@ fun ProjectDetailScreen(
                                     easing = FastOutSlowInEasing
                                 )
                             )
-                            samplesListState.animateScrollToItem(0)
                         }
                     },
                     text = {
@@ -296,7 +359,6 @@ fun ProjectDetailScreen(
                                     easing = FastOutSlowInEasing
                                 )
                             )
-                            datasetsListState.animateScrollToItem(0)
                         }
                     },
                     text = {
@@ -320,6 +382,52 @@ fun ProjectDetailScreen(
                     },
                     icon = { Icon(Icons.Default.Dataset, contentDescription = null) }
                 )
+            }
+
+            // Group-by selector — switches with the active tab
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                var groupMenuExpanded by remember { mutableStateOf(false) }
+                Box {
+                    TextButton(
+                        onClick = { groupMenuExpanded = true },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        val label = if (pagerState.currentPage == 0) sampleGroupBy.label else datasetGroupBy.label
+                        Text("Group: $label", style = MaterialTheme.typography.labelSmall)
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(14.dp))
+                    }
+                    DropdownMenu(expanded = groupMenuExpanded, onDismissRequest = { groupMenuExpanded = false }) {
+                        if (pagerState.currentPage == 0) {
+                            SampleGroupBy.entries.forEach { opt ->
+                                DropdownMenuItem(
+                                    text = { Text(opt.label) },
+                                    onClick = {
+                                        sampleGroupBy = opt
+                                        groupMenuExpanded = false
+                                        scope.launch { prefs.saveSampleGroupBy(opt.name) }
+                                    }
+                                )
+                            }
+                        } else {
+                            DatasetGroupBy.entries.forEach { opt ->
+                                DropdownMenuItem(
+                                    text = { Text(opt.label) },
+                                    onClick = {
+                                        datasetGroupBy = opt
+                                        groupMenuExpanded = false
+                                        scope.launch { prefs.saveDatasetGroupBy(opt.name) }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             when {
@@ -385,18 +493,20 @@ fun ProjectDetailScreen(
                             0 -> SamplesList(
                                 samples = filteredSamples,
                                 isFiltered = searchQuery.isNotBlank(),
-                                listState = samplesListState,
                                 fromCache = fromCache,
                                 projectId = projectId,
-                                onSampleClick = onResourceClick
+                                graphExplorerUrl = graphExplorerUrl,
+                                groupBy = sampleGroupBy,
+                                onSampleClick = { uuid -> onResourceClick(uuid, sampleGroupBy.name) }
                             )
                             1 -> DatasetsList(
                                 datasets = filteredDatasets,
                                 isFiltered = searchQuery.isNotBlank(),
-                                listState = datasetsListState,
                                 fromCache = fromCache,
                                 projectId = projectId,
-                                onDatasetClick = onResourceClick
+                                graphExplorerUrl = graphExplorerUrl,
+                                groupBy = datasetGroupBy,
+                                onDatasetClick = { uuid -> onResourceClick(uuid, datasetGroupBy.name) }
                             )
                         }
                     }
@@ -412,21 +522,6 @@ fun ProjectDetailScreen(
                 visible = (pullRefreshState.isRefreshing || pullRefreshState.verticalOffset > 0f) && !isLoading
             )
 
-            // Scroll-to-top button (appears on both tabs when scrolled)
-            ScrollToTopButton(
-                visible = showScrollToTop,
-                onClick = {
-                    scope.launch {
-                        when (pagerState.currentPage) {
-                            0 -> samplesListState.animateScrollToItem(0)
-                            1 -> datasetsListState.animateScrollToItem(0)
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-            )
         }
     }
 
@@ -448,7 +543,7 @@ fun ProjectDetailScreen(
     if (showQrDialog) {
         QrCodeDialog(
             mfid = projectId,
-            name = project?.projectName ?: projectId,
+            name = project?.title ?: projectId,
             onDismiss = { showQrDialog = false }
         )
     }
@@ -462,7 +557,6 @@ private fun ProjectHeader(
     onSearchChange: (String) -> Unit,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
-    graphExplorerUrl: String,
     onShowQr: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -518,7 +612,7 @@ private fun ProjectHeader(
                                         }
                                 ) {
                                     Text(
-                                        text = project?.projectName ?: projectId,
+                                        text = project?.title ?: projectId,
                                         style = MaterialTheme.typography.titleLarge,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface,
@@ -539,16 +633,23 @@ private fun ProjectHeader(
                                     )
                                 }
                             }
-                            project?.projectLeadEmail?.takeIf { it.isNotBlank() }?.let {
+                            project?.lead?.let { lead ->
                                 Text(
-                                    text = "Lead: $it",
+                                    text = "Lead: ${ownerDisplayName(lead.firstName, lead.lastName)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            project?.organization?.takeIf { it.isNotBlank() }?.let {
+                                Text(
+                                    text = it,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                     }
-                    // Action icons: copy, open, share, QR — top-aligned, compact
+                    // Action icons: copy + QR (thumb zone)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy((-6).dp)
@@ -569,37 +670,6 @@ private fun ProjectHeader(
                             )
                         }
                         IconButton(
-                            onClick = { openUrlInBrowser(context, "$graphExplorerUrl/$projectId") },
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Public,
-                                contentDescription = "Open in Graph Explorer",
-                                modifier = Modifier.size(22.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        IconButton(
-                            onClick = {
-                                val shareText = "Check out this project in Crucible: $graphExplorerUrl/$projectId"
-                                val shareIntent = Intent().apply {
-                                    action = Intent.ACTION_SEND
-                                    putExtra(Intent.EXTRA_TEXT, shareText)
-                                    putExtra(Intent.EXTRA_SUBJECT, project?.projectName ?: projectId)
-                                    type = "text/plain"
-                                }
-                                context.startActivity(Intent.createChooser(shareIntent, "Share via"))
-                            },
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Share,
-                                contentDescription = "Share",
-                                modifier = Modifier.size(22.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        IconButton(
                             onClick = onShowQr,
                             modifier = Modifier.size(38.dp)
                         ) {
@@ -612,26 +682,6 @@ private fun ProjectHeader(
                         }
                     }
                 }
-
-            // Description
-            val description = project?.description
-            if (!description.isNullOrBlank()) {
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Creation date chip
-            project?.createdAt?.let { date ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StatChip(
-                        icon = Icons.Default.CalendarToday,
-                        label = date.take(10)
-                    )
-                }
-            }
 
             // Integrated search field
             Surface(
@@ -715,124 +765,113 @@ private fun StatChip(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SamplesList(
     samples: List<Sample>,
     isFiltered: Boolean,
-    listState: LazyListState = rememberLazyListState(),
     fromCache: Boolean = false,
     projectId: String = "",
+    graphExplorerUrl: String = "",
+    groupBy: SampleGroupBy = SampleGroupBy.TYPE,
     onSampleClick: (String) -> Unit
 ) {
-    // Track how many items to display for each group (for infinite scroll)
-    val displayedCounts = remember { mutableStateMapOf<String, Int>() }
+    val ownerNames = remember { mutableStateMapOf<String, String>() }
+    // Ready immediately if not grouping by owner, or if names were already fetched.
+    var ownerNamesReady by remember(groupBy) {
+        mutableStateOf(groupBy != SampleGroupBy.OWNER || ownerNames.isNotEmpty())
+    }
+    LaunchedEffect(groupBy, projectId) {
+        if (groupBy != SampleGroupBy.OWNER || ownerNames.isNotEmpty()) {
+            ownerNamesReady = true
+            return@LaunchedEffect
+        }
+        try {
+            val resp = ApiClient.service.getProjectUsers(projectId)
+            if (resp.isSuccessful) {
+                resp.body()?.forEach { u -> u.uniqueId?.let { id -> ownerNames[id] = ownerDisplayName(u.firstName, u.lastName) } }
+            }
+        } catch (_: Exception) { }
+        ownerNamesReady = true
+    }
     if (samples.isEmpty()) {
-        // Wrap in scrollable Box so pull-to-refresh works even with empty state
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-        ) {
+        Box(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            if (isFiltered) Icons.Default.SearchOff else Icons.Default.Science,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = if (isFiltered) "No Matching Samples" else "No Samples",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(if (isFiltered) Icons.Default.SearchOff else Icons.Default.Science, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(text = if (isFiltered) "No Matching Samples" else "No Samples", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
-                    Text(
-                        text = if (isFiltered) "No samples match your search." else "This project has no samples.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text(text = if (isFiltered) "No samples match your search." else "This project has no samples.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
+    } else if (!ownerNamesReady) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(32.dp))
+        }
     } else {
-        val groupedSamples = samples.groupBy { it.sampleType ?: "Unspecified Type" }
-            .entries.sortedBy { it.key.lowercase() }
+        val groupedSamples = remember(samples, groupBy, ownerNames.toMap()) {
+            samples.groupBy { s -> when (groupBy) {
+                SampleGroupBy.TYPE  -> s.sampleType ?: "No type"
+                SampleGroupBy.DATE  -> dateGroupKey(s.createdAt)
+                SampleGroupBy.OWNER -> s.ownerOrcid?.let { ownerNames[it] ?: it } ?: "Unknown owner"
+            } }.entries.sortedBy { it.key.lowercase() }
+        }
+        // Reset expanded state whenever the grouping changes
+        val expandedGroups = remember(groupBy) { mutableStateMapOf<String, Boolean>() }
+        val displayedCounts = remember(groupBy) { mutableStateMapOf<String, Int>() }
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+        val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                contentPadding = PaddingValues(bottom = 16.dp)
             ) {
-                groupedSamples.forEach { (sampleType, samplesInGroup) ->
-                    item(key = "sample_group_$sampleType") {
-                        val sortedSamples = remember(samplesInGroup) {
-                            samplesInGroup.sortedBy { it.internalId ?: Int.MAX_VALUE }
-                        }
-                        val displayedCount = displayedCounts[sampleType] ?: 50
-                        val hasMore = displayedCount < sortedSamples.size
+                groupedSamples.forEach { (groupKey, samplesInGroup) ->
+                    val expanded = expandedGroups[groupKey] == true
+                    val sortedSamples = samplesInGroup.sortedBy { it.uniqueId }
+                    val displayedCount = displayedCounts[groupKey] ?: 50
 
-                        CollapsibleGroup(
-                            title = sampleType,
+                    stickyHeader(key = "header_sample_$groupKey") {
+                        GroupStickyHeader(
+                            title = groupKey,
                             count = samplesInGroup.size,
                             icon = Icons.Default.Science,
-                            onCollapse = { displayedCounts[sampleType] = 50 }
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                sortedSamples.take(displayedCount).forEach { sample ->
-                                    ResourceCard(
-                                        title = sample.name,
-                                        subtitle = null,
-                                        uniqueId = sample.uniqueId,
-                                        icon = Icons.Default.Science,
-                                        onClick = { onSampleClick(sample.uniqueId) }
-                                    )
-                                }
+                            expanded = expanded,
+                            onToggle = { expandedGroups[groupKey] = !expanded }
+                        )
+                    }
 
-                                if (hasMore) {
-                                    val remainingCount = sortedSamples.size - displayedCount
-                                    val loadCount = minOf(50, remainingCount)
-
-                                    TextButton(
-                                        onClick = {
-                                            displayedCounts[sampleType] = displayedCount + 50
-                                        },
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(
-                                            "Load $loadCount more... ($remainingCount remaining)",
-                                            style = MaterialTheme.typography.labelMedium
-                                        )
-                                    }
-
-                                    // Auto-load when the user has scrolled to the bottom of this group
-                                    var isScrolledToEnd by remember(sampleType) { mutableStateOf(false) }
-                                    LaunchedEffect(listState, sampleType) {
-                                        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.key }
-                                            .collect { lastKey ->
-                                                isScrolledToEnd = (lastKey == "sample_group_$sampleType")
-                                            }
-                                    }
-                                    if (isScrolledToEnd) {
-                                        LaunchedEffect(displayedCount) {
-                                            kotlinx.coroutines.delay(300)
-                                            displayedCounts[sampleType] = displayedCount + 80
-                                        }
-                                    }
+                    if (expanded) {
+                        items(sortedSamples.take(displayedCount), key = { it.uniqueId }) { sample ->
+                            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                                ResourceCard(
+                                    title = sample.name,
+                                    subtitle = null,
+                                    uniqueId = sample.uniqueId,
+                                    icon = Icons.Default.Science,
+                                    graphExplorerUrl = graphExplorerUrl,
+                                    projectId = projectId,
+                                    resourceType = "sample",
+                                    onClick = { onSampleClick(sample.uniqueId) }
+                                )
+                            }
+                        }
+                        if (displayedCount < sortedSamples.size) {
+                            val remaining = sortedSamples.size - displayedCount
+                            item(key = "load_more_sample_$groupKey") {
+                                TextButton(
+                                    onClick = { displayedCounts[groupKey] = displayedCount + 50 },
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                                ) {
+                                    Text("Load ${minOf(50, remaining)} more… ($remaining remaining)", style = MaterialTheme.typography.labelMedium)
                                 }
                             }
                         }
@@ -845,141 +884,131 @@ private fun SamplesList(
                             text = "Cached ${ageMin}m ago",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                 }
             }
-            LazyColumnScrollbar(
-                listState = listState,
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 0.dp)
+            LazyColumnScrollbar(listState = listState, modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd))
+            ScrollToTopButton(
+                visible = showScrollToTop,
+                onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
             )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DatasetsList(
     datasets: List<Dataset>,
     isFiltered: Boolean,
-    listState: LazyListState = rememberLazyListState(),
     fromCache: Boolean = false,
     projectId: String = "",
+    graphExplorerUrl: String = "",
+    groupBy: DatasetGroupBy = DatasetGroupBy.MEASUREMENT,
     onDatasetClick: (String) -> Unit
 ) {
-    // Track how many items to display for each group (for infinite scroll)
-    val displayedCounts = remember { mutableStateMapOf<String, Int>() }
+    val ownerNames = remember { mutableStateMapOf<String, String>() }
+    var ownerNamesReady by remember(groupBy) {
+        mutableStateOf(groupBy != DatasetGroupBy.OWNER || ownerNames.isNotEmpty())
+    }
+    LaunchedEffect(groupBy, projectId) {
+        if (groupBy != DatasetGroupBy.OWNER || ownerNames.isNotEmpty()) {
+            ownerNamesReady = true
+            return@LaunchedEffect
+        }
+        try {
+            val resp = ApiClient.service.getProjectUsers(projectId)
+            if (resp.isSuccessful) {
+                resp.body()?.forEach { u -> u.uniqueId?.let { id -> ownerNames[id] = ownerDisplayName(u.firstName, u.lastName) } }
+            }
+        } catch (_: Exception) { }
+        ownerNamesReady = true
+    }
     if (datasets.isEmpty()) {
-        // Wrap in scrollable Box so pull-to-refresh works even with empty state
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-        ) {
+        Box(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            if (isFiltered) Icons.Default.SearchOff else Icons.Default.Dataset,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = if (isFiltered) "No Matching Datasets" else "No Datasets",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(if (isFiltered) Icons.Default.SearchOff else Icons.Default.Dataset, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(text = if (isFiltered) "No Matching Datasets" else "No Datasets", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
-                    Text(
-                        text = if (isFiltered) "No datasets match your search." else "This project has no datasets.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text(text = if (isFiltered) "No datasets match your search." else "This project has no datasets.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
+    } else if (!ownerNamesReady) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(32.dp))
+        }
     } else {
-        val groupedDatasets = datasets.groupBy { it.measurement ?: "Unspecified Measurement" }
-            .entries.sortedBy { it.key.lowercase() }
+        val groupedDatasets = remember(datasets, groupBy, ownerNames.toMap()) {
+            datasets.groupBy { d -> when (groupBy) {
+                DatasetGroupBy.MEASUREMENT -> d.measurement ?: "No measurement"
+                DatasetGroupBy.INSTRUMENT  -> d.instrumentName ?: "No instrument"
+                DatasetGroupBy.DATE        -> dateGroupKey(d.createdAt)
+                DatasetGroupBy.FORMAT      -> d.dataFormat ?: "No format"
+                DatasetGroupBy.SESSION     -> d.sessionName ?: "No session"
+                DatasetGroupBy.OWNER       -> d.ownerOrcid?.let { ownerNames[it] ?: it } ?: "Unknown owner"
+            } }.entries.sortedBy { it.key.lowercase() }
+        }
+        // Reset expanded/pagination state whenever grouping changes
+        val expandedGroups = remember(groupBy) { mutableStateMapOf<String, Boolean>() }
+        val displayedCounts = remember(groupBy) { mutableStateMapOf<String, Int>() }
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+        val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                contentPadding = PaddingValues(bottom = 16.dp)
             ) {
-                groupedDatasets.forEach { (measurement, datasetsInGroup) ->
-                    item(key = "dataset_group_$measurement") {
-                        val sortedDatasets = remember(datasetsInGroup) {
-                            datasetsInGroup.sortedBy { it.internalId ?: Int.MAX_VALUE }
-                        }
-                        val displayedCount = displayedCounts[measurement] ?: 50
-                        val hasMore = displayedCount < sortedDatasets.size
+                groupedDatasets.forEach { (groupKey, datasetsInGroup) ->
+                    val expanded = expandedGroups[groupKey] == true
+                    val sortedDatasets = datasetsInGroup.sortedBy { it.uniqueId }
+                    val displayedCount = displayedCounts[groupKey] ?: 50
 
-                        CollapsibleGroup(
-                            title = measurement,
+                    stickyHeader(key = "header_dataset_$groupKey") {
+                        GroupStickyHeader(
+                            title = groupKey,
                             count = datasetsInGroup.size,
                             icon = Icons.Default.Dataset,
-                            onCollapse = { displayedCounts[measurement] = 50 }
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                sortedDatasets.take(displayedCount).forEach { dataset ->
-                                    ResourceCard(
-                                        title = dataset.name,
-                                        subtitle = null,
-                                        uniqueId = dataset.uniqueId,
-                                        icon = Icons.Default.Dataset,
-                                        onClick = { onDatasetClick(dataset.uniqueId) }
-                                    )
-                                }
+                            expanded = expanded,
+                            onToggle = { expandedGroups[groupKey] = !expanded }
+                        )
+                    }
 
-                                if (hasMore) {
-                                    val remainingCount = sortedDatasets.size - displayedCount
-                                    val loadCount = minOf(50, remainingCount)
-
-                                    TextButton(
-                                        onClick = {
-                                            displayedCounts[measurement] = displayedCount + 50
-                                        },
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(
-                                            "Load $loadCount more... ($remainingCount remaining)",
-                                            style = MaterialTheme.typography.labelMedium
-                                        )
-                                    }
-
-                                    // Auto-load when the user has scrolled to the bottom of this group
-                                    var isScrolledToEnd by remember(measurement) { mutableStateOf(false) }
-                                    LaunchedEffect(listState, measurement) {
-                                        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.key }
-                                            .collect { lastKey ->
-                                                isScrolledToEnd = (lastKey == "dataset_group_$measurement")
-                                            }
-                                    }
-                                    if (isScrolledToEnd) {
-                                        LaunchedEffect(displayedCount) {
-                                            kotlinx.coroutines.delay(300)
-                                            displayedCounts[measurement] = displayedCount + 80
-                                        }
-                                    }
+                    if (expanded) {
+                        items(sortedDatasets.take(displayedCount), key = { it.uniqueId }) { dataset ->
+                            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                                ResourceCard(
+                                    title = dataset.name,
+                                    subtitle = null,
+                                    uniqueId = dataset.uniqueId,
+                                    icon = Icons.Default.Dataset,
+                                    graphExplorerUrl = graphExplorerUrl,
+                                    projectId = projectId,
+                                    resourceType = "dataset",
+                                    onClick = { onDatasetClick(dataset.uniqueId) }
+                                )
+                            }
+                        }
+                        if (displayedCount < sortedDatasets.size) {
+                            val remaining = sortedDatasets.size - displayedCount
+                            item(key = "load_more_dataset_$groupKey") {
+                                TextButton(
+                                    onClick = { displayedCounts[groupKey] = displayedCount + 50 },
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                                ) {
+                                    Text("Load ${minOf(50, remaining)} more… ($remaining remaining)", style = MaterialTheme.typography.labelMedium)
                                 }
                             }
                         }
@@ -992,116 +1021,102 @@ private fun DatasetsList(
                             text = "Cached ${ageMin}m ago",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                 }
             }
-            LazyColumnScrollbar(
-                listState = listState,
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 0.dp)
+            LazyColumnScrollbar(listState = listState, modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd))
+            ScrollToTopButton(
+                visible = showScrollToTop,
+                onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
             )
         }
     }
 }
 
 @Composable
-private fun CollapsibleGroup(
+private fun GroupStickyHeader(
     title: String,
     count: Int,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onCollapse: () -> Unit = {},
-    content: @Composable () -> Unit
+    expanded: Boolean,
+    onToggle: () -> Unit
 ) {
-    var expanded by rememberSaveable(key = title) { mutableStateOf(false) }
-
-    LaunchedEffect(expanded) {
-        if (!expanded) {
-            onCollapse()
-        }
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+    Surface(
+        color = MaterialTheme.colorScheme.background,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded }
-                    .padding(14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Surface(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    shape = MaterialTheme.shapes.small
                 ) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
+                    Text(
+                        text = "$count",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "$count item${if (count != 1) "s" else ""}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                Icon(
-                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            AnimatedVisibility(
-                visible = expanded,
-                enter = expandVertically(animationSpec = tween(150)) + fadeIn(animationSpec = tween(150)),
-                exit = shrinkVertically(animationSpec = tween(150)) + fadeOut(animationSpec = tween(150))
-            ) {
-                Column(
-                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp, top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    content()
                 }
             }
+            Icon(
+                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
         }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun ResourceCard(
     title: String,
     subtitle: String?,
     uniqueId: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
+    graphExplorerUrl: String = "",
+    projectId: String? = null,
+    resourceType: String = "sample",
     onClick: () -> Unit
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    val webUrl = if (projectId != null && graphExplorerUrl.isNotBlank()) {
+        if (resourceType == "dataset") "$graphExplorerUrl/$projectId/dataset/$uniqueId"
+        else "$graphExplorerUrl/$projectId/sample-graph/$uniqueId"
+    } else null
+
+    Box {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { menuExpanded = true }
+                ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1145,7 +1160,45 @@ private fun ResourceCard(
                 modifier = Modifier.size(20.dp)
             )
         }
-    }
+        } // end Card
+
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Copy ID") },
+                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                onClick = {
+                    menuExpanded = false
+                    val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+                    clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("MFID", uniqueId))
+                    android.widget.Toast.makeText(context, "ID copied", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            )
+            if (webUrl != null) {
+                DropdownMenuItem(
+                    text = { Text("Open in web") },
+                    leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
+                    onClick = {
+                        menuExpanded = false
+                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(webUrl)))
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Share") },
+                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                    onClick = {
+                        menuExpanded = false
+                        val intent = android.content.Intent().apply {
+                            action = android.content.Intent.ACTION_SEND
+                            putExtra(android.content.Intent.EXTRA_TEXT, webUrl)
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, title)
+                            type = "text/plain"
+                        }
+                        context.startActivity(android.content.Intent.createChooser(intent, "Share via"))
+                    }
+                )
+            }
+        }
+    } // end Box
 }
 
 private fun Sample.matchesSearch(query: String): Boolean {
@@ -1154,8 +1207,7 @@ private fun Sample.matchesSearch(query: String): Boolean {
         (sampleType?.lowercase()?.contains(q) == true) ||
         (projectId?.lowercase()?.contains(q) == true) ||
         uniqueId.lowercase().contains(q) ||
-        (createdAt?.lowercase()?.contains(q) == true) ||
-        (internalId?.toString()?.contains(q) == true)
+        (createdAt?.lowercase()?.contains(q) == true)
 }
 
 private fun Dataset.matchesSearch(query: String): Boolean {
@@ -1163,17 +1215,14 @@ private fun Dataset.matchesSearch(query: String): Boolean {
     return name.lowercase().contains(q) ||
         (measurement?.lowercase()?.contains(q) == true) ||
         (instrumentName?.lowercase()?.contains(q) == true) ||
-        (instrumentId?.toString()?.contains(q) == true) ||
         (sessionName?.lowercase()?.contains(q) == true) ||
         (projectId?.lowercase()?.contains(q) == true) ||
         uniqueId.lowercase().contains(q) ||
         (createdAt?.lowercase()?.contains(q) == true) ||
-        (internalId?.toString()?.contains(q) == true) ||
         (dataFormat?.lowercase()?.contains(q) == true) ||
         (ownerOrcid?.lowercase()?.contains(q) == true) ||
         (sourceFolder?.lowercase()?.contains(q) == true) ||
         (fileToUpload?.lowercase()?.contains(q) == true) ||
-        (jsonLink?.lowercase()?.contains(q) == true) ||
         (sha256Hash?.lowercase()?.contains(q) == true) ||
         (scientificMetadata?.matchesSearch(q) == true)
 }

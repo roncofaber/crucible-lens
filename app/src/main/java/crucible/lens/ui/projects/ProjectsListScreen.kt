@@ -38,6 +38,7 @@ import crucible.lens.data.model.Sample
 import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
+import crucible.lens.ui.common.OfflineBanner
 import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.UiConstants
 import kotlinx.coroutines.launch
@@ -267,6 +268,7 @@ fun ProjectsListScreen(
 
     Scaffold(
         topBar = {
+            Column {
             TopAppBar(
                 title = { Text("Projects") },
                 navigationIcon = {
@@ -296,9 +298,29 @@ fun ProjectsListScreen(
                                 modifier = Modifier.size(24.dp)
                             )
                         }
+                        var listMenuExpanded by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { listMenuExpanded = true }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options", modifier = Modifier.size(24.dp))
+                            }
+                            DropdownMenu(expanded = listMenuExpanded, onDismissRequest = { listMenuExpanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text(if (archivedExpanded) "Hide archived" else "Show archived") },
+                                    leadingIcon = {
+                                        Icon(
+                                            if (archivedExpanded) Icons.Default.VisibilityOff else Icons.Default.Inventory2,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    onClick = { archivedExpanded = !archivedExpanded; listMenuExpanded = false }
+                                )
+                            }
+                        }
                     }
                 }
             )
+            OfflineBanner()
+            } // end Column
         }
     ) { padding ->
         Box(
@@ -415,10 +437,7 @@ fun ProjectsListScreen(
                     val allProjects = projects ?: persistentSummaries?.map { summary ->
                         Project(
                             projectId = summary.projectId,
-                            projectName = summary.projectName,
-                            description = summary.description,
-                            createdAt = summary.createdAt,
-                            projectLeadEmail = summary.projectLeadEmail
+                            title = summary.projectName
                         )
                     } ?: emptyList()
 
@@ -428,10 +447,10 @@ fun ProjectsListScreen(
                     } else {
                         allProjects.filter { project ->
                             // Search in project properties
-                            val matchesProject = project.projectName?.contains(searchQuery, ignoreCase = true) == true ||
+                            val matchesProject = project.title?.contains(searchQuery, ignoreCase = true) == true ||
                                 project.projectId.contains(searchQuery, ignoreCase = true) ||
-                                project.description?.contains(searchQuery, ignoreCase = true) == true ||
-                                project.projectLeadEmail?.contains(searchQuery, ignoreCase = true) == true
+                                project.organization?.contains(searchQuery, ignoreCase = true) == true ||
+                                project.lead?.email?.contains(searchQuery, ignoreCase = true) == true
 
                             // Search in cached samples
                             val matchesSamples = CacheManager.getProjectSamples(project.projectId)
@@ -753,19 +772,12 @@ private fun ProjectCard(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = project.projectName ?: project.projectId,
+                    text = project.title ?: project.projectId,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
-                if (project.description != null) {
-                    Text(
-                        text = project.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
                 // Only show ID when it differs from the display name
-                if (project.projectName != null && project.projectName != project.projectId) {
+                if (project.title != null && project.title != project.projectId) {
                     Text(
                         text = "ID: ${project.projectId}",
                         style = MaterialTheme.typography.labelSmall,
@@ -868,7 +880,6 @@ private fun crucible.lens.data.model.Sample.matchesSearch(query: String): Boolea
         (projectId?.lowercase()?.contains(q) == true) ||
         uniqueId.lowercase().contains(q) ||
         (createdAt?.lowercase()?.contains(q) == true) ||
-        (internalId?.toString()?.contains(q) == true) ||
         (ownerOrcid?.lowercase()?.contains(q) == true) ||
         (keywords?.any { it.lowercase().contains(q) } == true)
 }
@@ -878,17 +889,14 @@ private fun crucible.lens.data.model.Dataset.matchesSearch(query: String): Boole
     return name.lowercase().contains(q) ||
         (measurement?.lowercase()?.contains(q) == true) ||
         (instrumentName?.lowercase()?.contains(q) == true) ||
-        (instrumentId?.toString()?.contains(q) == true) ||
         (sessionName?.lowercase()?.contains(q) == true) ||
         (projectId?.lowercase()?.contains(q) == true) ||
         uniqueId.lowercase().contains(q) ||
         (createdAt?.lowercase()?.contains(q) == true) ||
-        (internalId?.toString()?.contains(q) == true) ||
         (dataFormat?.lowercase()?.contains(q) == true) ||
         (ownerOrcid?.lowercase()?.contains(q) == true) ||
         (sourceFolder?.lowercase()?.contains(q) == true) ||
         (fileToUpload?.lowercase()?.contains(q) == true) ||
-        (jsonLink?.lowercase()?.contains(q) == true) ||
         (sha256Hash?.lowercase()?.contains(q) == true) ||
         (keywords?.any { it.lowercase().contains(q) } == true) ||
         (scientificMetadata?.containsQuery(q) == true)

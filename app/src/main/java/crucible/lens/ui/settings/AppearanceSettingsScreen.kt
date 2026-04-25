@@ -14,7 +14,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import crucible.lens.data.preferences.PreferencesManager
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,6 +40,14 @@ fun AppearanceSettingsScreen(
     var appIconInput          by remember { mutableStateOf(currentAppIcon) }
     var floatingScanButtonInput by remember { mutableStateOf(currentFloatingScanButton) }
     var showColorPicker       by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val prefs = remember { PreferencesManager(context) }
+    val scope = rememberCoroutineScope()
+    var defaultProjectTabInput by remember { mutableStateOf(PreferencesManager.PROJECT_TAB_SAMPLES) }
+    LaunchedEffect(Unit) {
+        defaultProjectTabInput = prefs.defaultProjectTab.first()
+    }
 
     Scaffold(
         topBar = {
@@ -247,6 +259,61 @@ fun AppearanceSettingsScreen(
                             onFloatingScanButtonSave(it)
                         }
                     )
+                }
+            }
+
+            // Default project tab
+            Card {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Text("Default project tab", style = MaterialTheme.typography.titleMedium)
+                    }
+                    Text(
+                        "Which tab opens first when browsing a project",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val chipColors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f),
+                        selectedLabelColor = MaterialTheme.colorScheme.secondary,
+                        selectedLeadingIconColor = MaterialTheme.colorScheme.secondary
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            PreferencesManager.PROJECT_TAB_SAMPLES to "Samples",
+                            PreferencesManager.PROJECT_TAB_DATASETS to "Datasets"
+                        ).forEach { (value, label) ->
+                            FilterChip(
+                                selected = defaultProjectTabInput == value,
+                                onClick = {
+                                    defaultProjectTabInput = value
+                                    scope.launch { prefs.saveDefaultProjectTab(value) }
+                                },
+                                label = { Text(label) },
+                                leadingIcon = if (defaultProjectTabInput == value) {
+                                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                } else null,
+                                modifier = Modifier.weight(1f),
+                                colors = chipColors,
+                                border = FilterChipDefaults.filterChipBorder(
+                                    borderColor = MaterialTheme.colorScheme.outline,
+                                    selectedBorderColor = MaterialTheme.colorScheme.secondary,
+                                    borderWidth = 1.dp,
+                                    selectedBorderWidth = 1.5.dp,
+                                    enabled = true,
+                                    selected = defaultProjectTabInput == value
+                                )
+                            )
+                        }
+                    }
                 }
             }
 

@@ -1,23 +1,21 @@
 package crucible.lens.ui.settings
 
-import android.content.Intent
-import android.net.Uri
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import crucible.lens.data.api.ApiClient
+import crucible.lens.data.model.UserLead
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -29,17 +27,45 @@ fun ApiSettingsScreen(
     onApiKeySave: (String) -> Unit,
     onApiBaseUrlSave: (String) -> Unit,
     onGraphExplorerUrlSave: (String) -> Unit,
+    onSignIn: () -> Unit = {},
     onBack: () -> Unit,
     onHome: () -> Unit,
     onSearch: () -> Unit
 ) {
     var apiKeyInput by remember { mutableStateOf(currentApiKey ?: "") }
+
+    // Sync field when key is set externally (e.g. after ORCID login)
+    LaunchedEffect(currentApiKey) {
+        if (!currentApiKey.isNullOrBlank()) apiKeyInput = currentApiKey
+    }
     var apiBaseUrlInput by remember { mutableStateOf(currentApiBaseUrl) }
     var graphExplorerUrlInput by remember { mutableStateOf(currentGraphExplorerUrl) }
     var isApiKeyVisible by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // Fetch account info whenever the saved key changes
+    var account by remember { mutableStateOf<UserLead?>(null) }
+    var accountLoading by remember { mutableStateOf(false) }
+    var accountError by remember { mutableStateOf(false) }
+    LaunchedEffect(currentApiKey) {
+        if (currentApiKey.isNullOrBlank()) {
+            account = null; accountError = false; return@LaunchedEffect
+        }
+        accountLoading = true; accountError = false
+        try {
+            val resp = ApiClient.service.getAccount()
+            if (resp.isSuccessful) {
+                val body = resp.body()?.userInfo
+                account = body; accountError = body == null
+            } else {
+                account = null; accountError = true
+            }
+        } catch (_: Exception) {
+            account = null; accountError = true
+        }
+        accountLoading = false
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -113,28 +139,17 @@ fun ApiSettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            // Get API key link
-            Card(
-                modifier = Modifier.fillMaxWidth().clickable {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://crucible.lbl.gov/api/v1/user_apikey"))
-                    context.startActivity(intent)
-                },
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            Button(
+                onClick = onSignIn,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                )
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.VpnKey, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                        Column {
-                            Text("Get Your API Key", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                            Text("crucible.lbl.gov/api/v1/user_apikey", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
-                        }
-                    }
-                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(20.dp))
-                }
+                Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Sign in with ORCID")
             }
 
             OutlinedTextField(
@@ -154,6 +169,86 @@ fun ApiSettingsScreen(
                 visualTransformation = if (isApiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 singleLine = true
             )
+
+            when {
+                accountLoading -> {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                    }
+                }
+                account != null -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.AccountCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    "${account!!.firstName ?: ""} ${account!!.lastName ?: ""}".trim(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                account!!.email?.let {
+                                    Text(
+                                        it,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                account!!.uniqueId?.let {
+                                    Text(
+                                        it,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                accountError -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Text(
+                                "Invalid or expired API key",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+            }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 

@@ -46,6 +46,7 @@ val allLoadingMessages = listOf(
         // Crucible
         "Digging through Crucible's storage.",
         "Checking if you really uploaded that dataset.",
+        "Fun fact: we wanted to call the repo Crucipy.",
 
         // Declan
         "Waiting for Declan to finish making the solution...",
