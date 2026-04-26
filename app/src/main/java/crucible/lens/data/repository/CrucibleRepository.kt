@@ -57,6 +57,7 @@ class CrucibleRepository {
                 "dataset" -> {
                     val datasetResponse = api.getDataset(uuid, includeMetadata = true)
                     val datasetBody = datasetResponse.body()
+                    Log.d(TAG, "Dataset $uuid — scientificMetadata: ${datasetBody?.scientificMetadata}")
                     if (datasetResponse.isSuccessful && datasetBody != null) {
                         crucible.lens.data.cache.CacheManager.cacheResourceType(uuid, "dataset")
                         return@withContext ResourceResult.Success(datasetBody)
@@ -92,6 +93,7 @@ class CrucibleRepository {
             // If not a sample, try dataset
             val datasetResponse = api.getDataset(uuid, includeMetadata = true)
             val datasetBody = datasetResponse.body()
+            Log.d(TAG, "Fallback dataset $uuid — scientificMetadata: ${datasetBody?.scientificMetadata}")
             if (datasetResponse.isSuccessful && datasetBody != null) {
                 crucible.lens.data.cache.CacheManager.cacheResourceType(uuid, "dataset")
                 return ResourceResult.Success(datasetBody)
