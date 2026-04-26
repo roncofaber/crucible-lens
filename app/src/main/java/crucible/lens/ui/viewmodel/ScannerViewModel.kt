@@ -15,6 +15,7 @@ import crucible.lens.data.repository.ResourceResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 sealed class UiState {
@@ -23,6 +24,8 @@ sealed class UiState {
     data class Success(val resource: CrucibleResource, val thumbnails: List<String> = emptyList(), val isRefreshing: Boolean = false) : UiState()
     data class Error(val message: String) : UiState()
 }
+
+private const val MAX_CARD_STATE_ENTRIES = 50
 
 class ScannerViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = CrucibleRepository()
@@ -33,11 +36,18 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
 
     /** Persists expanded/collapsed state of detail screen cards across navigation. */
     private val resourceCardState = mutableStateMapOf<String, SnapshotStateMap<String, Boolean>>()
+    private val resourceCardStateOrder = ArrayDeque<String>()
 
     fun getCardState(resourceId: String, key: String): Boolean =
         resourceCardState[resourceId]?.get(key) ?: false
 
     fun setCardState(resourceId: String, key: String, value: Boolean) {
+        if (!resourceCardState.containsKey(resourceId)) {
+            resourceCardStateOrder.addLast(resourceId)
+            if (resourceCardStateOrder.size > MAX_CARD_STATE_ENTRIES) {
+                resourceCardState.remove(resourceCardStateOrder.removeFirst())
+            }
+        }
         resourceCardState.getOrPut(resourceId) { mutableStateMapOf() }[key] = value
     }
 
@@ -148,18 +158,22 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
             evictThumbnails(trimmedUuid)
 
             val current = _uiState.value
-            if (current is UiState.Success && current.resource.uniqueId != trimmedUuid) {
-                _uiState.value = current.copy(isRefreshing = true)
+            if (current is UiState.Success && current.resource.uniqueId == trimmedUuid) {
+                _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = true) else it }
                 try {
                     when (val result = repository.fetchResourceByUuid(trimmedUuid)) {
                         is ResourceResult.Success -> {
+                            val thumbnails = if (result.resource is Dataset)
+                                fetchAndCacheThumbnails(trimmedUuid) else emptyList()
                             CacheManager.cacheResource(trimmedUuid, result.resource)
-                            if (result.resource is Dataset) fetchAndCacheThumbnails(trimmedUuid)
+                            _uiState.value = UiState.Success(result.resource, thumbnails)
                         }
-                        else -> {}
+                        is ResourceResult.Error -> _uiState.value = UiState.Error(result.message)
+                        else -> _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = false) else it }
                     }
-                } catch (_: Exception) {}
-                _uiState.value = current.copy(isRefreshing = false)
+                } catch (_: Exception) {
+                    _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = false) else it }
+                }
             } else {
                 fetchResource(trimmedUuid)
             }
