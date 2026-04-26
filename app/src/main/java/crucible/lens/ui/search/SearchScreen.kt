@@ -26,9 +26,9 @@ import crucible.lens.data.model.Sample
 import crucible.lens.data.util.fetchProjectData
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.OfflineBanner
+import kotlinx.coroutines.launch
 
 private const val TAG = "SearchScreen"
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
