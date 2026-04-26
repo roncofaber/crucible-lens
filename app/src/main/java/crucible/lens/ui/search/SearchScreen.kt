@@ -24,6 +24,7 @@ import crucible.lens.data.model.MetadataSearchResult
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.data.util.fetchProjectData
+import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.OfflineBanner
 
 private const val TAG = "SearchScreen"
@@ -511,39 +512,3 @@ private fun DirectLookupCard(mfid: String, onClick: (String) -> Unit) {
     }
 }
 
-private fun Project.matchesSearch(query: String): Boolean {
-    val q = query.lowercase()
-    return (title?.lowercase()?.contains(q) == true) ||
-        projectId.lowercase().contains(q) ||
-        (organization?.lowercase()?.contains(q) == true) ||
-        (lead?.email?.lowercase()?.contains(q) == true) ||
-        (status?.lowercase()?.contains(q) == true)
-}
-
-private fun Sample.matchesSearch(query: String): Boolean {
-    val q = query.lowercase()
-    return name.lowercase().contains(q) ||
-        (sampleType?.lowercase()?.contains(q) == true) ||
-        (projectId?.lowercase()?.contains(q) == true) ||
-        uniqueId.lowercase().contains(q) ||
-        (createdAt?.lowercase()?.contains(q) == true) ||
-        (ownerOrcid?.lowercase()?.contains(q) == true) ||
-        (keywords?.any { it.lowercase().contains(q) } == true)
-}
-
-private fun Dataset.matchesSearch(query: String): Boolean {
-    val q = query.lowercase()
-    return name.lowercase().contains(q) ||
-        (measurement?.lowercase()?.contains(q) == true) ||
-        (instrumentName?.lowercase()?.contains(q) == true) ||
-        (sessionName?.lowercase()?.contains(q) == true) ||
-        (projectId?.lowercase()?.contains(q) == true) ||
-        uniqueId.lowercase().contains(q) ||
-        (timestamp?.lowercase()?.contains(q) == true) ||
-        (dataFormat?.lowercase()?.contains(q) == true) ||
-        (ownerOrcid?.lowercase()?.contains(q) == true) ||
-        (sourceFolder?.lowercase()?.contains(q) == true) ||
-        (fileToUpload?.lowercase()?.contains(q) == true) ||
-        (sha256Hash?.lowercase()?.contains(q) == true) ||
-        (keywords?.any { it.lowercase().contains(q) } == true)
-}

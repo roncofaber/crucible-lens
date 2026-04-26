@@ -29,6 +29,7 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.data.util.fetchProjectData
+import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.scanner.QRCodeScannerView
 import kotlinx.coroutines.launch
 
@@ -92,10 +93,8 @@ fun LinkResourceSheet(
     val searchResults = remember(input, projectResources) {
         if (input.length < 3) emptyList()
         else {
-            val q = input.trim().lowercase()
-            projectResources.filter { r ->
-                r.name.contains(q, ignoreCase = true) || r.uniqueId.contains(q, ignoreCase = true)
-            }.take(6)
+            val q = input.trim()
+            projectResources.filter { r -> r.matchesSearch(q) }.take(6)
         }
     }
 
