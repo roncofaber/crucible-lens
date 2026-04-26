@@ -229,8 +229,7 @@ fun ProjectsListScreen(
                     }
 
                     val datasetCount = try {
-                        // Load with metadata for search functionality
-                        val resp = ApiClient.service.getDatasetsByProject(project.projectId, includeMetadata = true)
+                        val resp = ApiClient.service.getDatasetsByProject(project.projectId)
                         if (resp.isSuccessful) {
                             consecutiveFailures.set(0) // Reset on success
                             resp.body()?.also { CacheManager.cacheProjectDatasets(project.projectId, it) }?.size
