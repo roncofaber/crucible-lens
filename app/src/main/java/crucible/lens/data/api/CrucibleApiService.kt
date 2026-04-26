@@ -46,6 +46,11 @@ interface CrucibleApiService {
         @Query("include_metadata") includeMetadata: Boolean = false
     ): Response<Dataset>
 
+    @GET("datasets/{uuid}/scientific_metadata")
+    suspend fun getDatasetScientificMetadata(
+        @Path("uuid") uuid: String
+    ): Response<Map<String, Any?>>
+
     @GET("datasets/{uuid}/thumbnails")
     suspend fun getThumbnails(@Path("uuid") uuid: String): Response<List<Thumbnail>>
 

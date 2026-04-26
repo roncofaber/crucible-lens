@@ -76,6 +76,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
@@ -508,7 +510,13 @@ fun ResourceDetailScreen(
                 try {
                     val enriched: CrucibleResource? = when (pageResource) {
                         is Sample -> ApiClient.service.getSample(uuid).body()
-                        is Dataset -> ApiClient.service.getDataset(uuid, includeMetadata = true).body()
+                        is Dataset -> kotlinx.coroutines.coroutineScope {
+                            val dsDeferred   = async { ApiClient.service.getDataset(uuid, includeMetadata = true) }
+                            val metaDeferred = async { try { ApiClient.service.getDatasetScientificMetadata(uuid) } catch (_: Exception) { null } }
+                            val ds   = dsDeferred.await().body()
+                            val meta = metaDeferred.await()?.takeIf { it.isSuccessful }?.body()
+                            if (ds != null && !meta.isNullOrEmpty()) ds.copy(scientificMetadata = meta) else ds
+                        }
                     }
                     withContext(Dispatchers.Main) {
                         enrichedUuids.add(uuid)

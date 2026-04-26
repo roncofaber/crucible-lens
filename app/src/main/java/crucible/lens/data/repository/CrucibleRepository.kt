@@ -6,6 +6,8 @@ import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.io.IOException
 
@@ -26,22 +28,18 @@ class CrucibleRepository {
             val cachedType = crucible.lens.data.cache.CacheManager.getResourceType(uuid)
 
             val resourceType = if (cachedType != null) {
-                // Use cached type to avoid API call
                 cachedType
             } else {
-                // Determine the resource type using the /idtype endpoint
                 val typeResponse = api.getResourceType(uuid)
                 val typeBody = typeResponse.body()
 
                 if (!typeResponse.isSuccessful || typeBody == null) {
-                    // Fallback to old method if idtype endpoint doesn't work
                     return@withContext fetchResourceByUuidFallback(uuid)
                 }
 
                 typeBody.resolvedType?.lowercase() ?: return@withContext fetchResourceByUuidFallback(uuid)
             }
 
-            // Fetch the appropriate resource based on type
             when (resourceType.lowercase()) {
                 "sample" -> {
                     val sampleResponse = api.getSample(uuid)
@@ -55,12 +53,10 @@ class CrucibleRepository {
                     }
                 }
                 "dataset" -> {
-                    val datasetResponse = api.getDataset(uuid, includeMetadata = true)
-                    val datasetBody = datasetResponse.body()
-                    Log.d(TAG, "Dataset $uuid — scientificMetadata: ${datasetBody?.scientificMetadata}")
-                    if (datasetResponse.isSuccessful && datasetBody != null) {
+                    val dataset = fetchDatasetWithMetadata(uuid)
+                    if (dataset != null) {
                         crucible.lens.data.cache.CacheManager.cacheResourceType(uuid, "dataset")
-                        return@withContext ResourceResult.Success(datasetBody)
+                        return@withContext ResourceResult.Success(dataset)
                     } else if (cachedType != null) {
                         crucible.lens.data.cache.CacheManager.removeResourceType(uuid)
                         return@withContext fetchResourceByUuidFallback(uuid)
@@ -78,28 +74,21 @@ class CrucibleRepository {
         }
     }
 
-    // Fallback method using the old approach (try both endpoints)
     private suspend fun fetchResourceByUuidFallback(uuid: String): ResourceResult {
         try {
-            // Try sample first
             val sampleResponse = api.getSample(uuid)
             val sampleBody = sampleResponse.body()
             if (sampleResponse.isSuccessful && sampleBody != null) {
-                // Cache the type for future calls
                 crucible.lens.data.cache.CacheManager.cacheResourceType(uuid, "sample")
                 return ResourceResult.Success(sampleBody)
             }
 
-            // If not a sample, try dataset
-            val datasetResponse = api.getDataset(uuid, includeMetadata = true)
-            val datasetBody = datasetResponse.body()
-            Log.d(TAG, "Fallback dataset $uuid — scientificMetadata: ${datasetBody?.scientificMetadata}")
-            if (datasetResponse.isSuccessful && datasetBody != null) {
+            val dataset = fetchDatasetWithMetadata(uuid)
+            if (dataset != null) {
                 crucible.lens.data.cache.CacheManager.cacheResourceType(uuid, "dataset")
-                return ResourceResult.Success(datasetBody)
+                return ResourceResult.Success(dataset)
             }
 
-            // Neither worked
             return ResourceResult.Error("Resource not found: $uuid")
         } catch (e: IOException) {
             Log.e(TAG, "Network error in fallback fetch for $uuid", e)
@@ -108,6 +97,19 @@ class CrucibleRepository {
             Log.e(TAG, "Unexpected error in fallback fetch for $uuid", e)
             return ResourceResult.Error(e.message ?: "Unknown error occurred")
         }
+    }
+
+    // Fetch dataset and its scientific metadata in parallel, then merge.
+    private suspend fun fetchDatasetWithMetadata(uuid: String): Dataset? = coroutineScope {
+        val datasetDeferred = async { api.getDataset(uuid, includeMetadata = true) }
+        val metaDeferred    = async {
+            try { api.getDatasetScientificMetadata(uuid) }
+            catch (e: Exception) { null }
+        }
+        val datasetResponse = datasetDeferred.await()
+        val dataset = datasetResponse.body() ?: return@coroutineScope null
+        val meta = metaDeferred.await()?.takeIf { it.isSuccessful }?.body()
+        if (!meta.isNullOrEmpty()) dataset.copy(scientificMetadata = meta) else dataset
     }
 
     suspend fun fetchThumbnails(datasetUuid: String): List<String> = withContext(Dispatchers.IO) {
