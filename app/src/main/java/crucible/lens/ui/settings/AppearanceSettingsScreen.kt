@@ -203,7 +203,7 @@ fun AppearanceSettingsScreen(
                             tint = MaterialTheme.colorScheme.tertiary
                         )
                         Text(
-                            "Changing the icon will restart the app",
+                            "Icon change applies on next app launch",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.tertiary
                         )
