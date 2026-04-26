@@ -43,7 +43,7 @@ interface CrucibleApiService {
     suspend fun getDataset(
         @Path("uuid") uuid: String,
         @Query("include_links") includeLinks: Boolean = true,
-        @Query("include_metadata") includeMetadata: Boolean = false
+        @Query("include_metadata") includeMetadata: Boolean? = null
     ): Response<Dataset>
 
     @GET("datasets/{uuid}/scientific_metadata")
@@ -78,7 +78,6 @@ interface CrucibleApiService {
     @GET("datasets")
     suspend fun getDatasetsByProject(
         @Query("project_id") projectId: String,
-        @Query("include_metadata") includeMetadata: Boolean = false,
         @Query("limit") limit: Int = 100000
     ): Response<List<Dataset>>
 
