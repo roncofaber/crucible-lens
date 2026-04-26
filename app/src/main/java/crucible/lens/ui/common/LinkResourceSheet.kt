@@ -94,7 +94,12 @@ fun LinkResourceSheet(
         if (input.length < 3) emptyList()
         else {
             val q = input.trim()
-            projectResources.filter { r -> r.matchesSearch(q) }.take(6)
+            projectResources.filter { r ->
+                when (r) {
+                    is Sample -> r.matchesSearch(q)
+                    is Dataset -> r.matchesSearch(q)
+                }
+            }.take(6)
         }
     }
 
@@ -194,7 +199,7 @@ fun LinkResourceSheet(
                 // ── Search results from project ───────────────────────────────
                 if (searchResults.isNotEmpty() && resolvedUuid == null) {
                     val projectNames = remember {
-                        CacheManager.getProjects()?.associate { it.uniqueId to it.name } ?: emptyMap()
+                        CacheManager.getProjects()?.associate { it.projectId to (it.title ?: it.projectId) } ?: emptyMap<String, String>()
                     }
                     Text("Results", style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
