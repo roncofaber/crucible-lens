@@ -162,6 +162,9 @@ fun ResourceDetailScreen(
 
     // Cache for loaded resources with full metadata and relationships
     val loadedResources = remember { mutableStateMapOf<String, CrucibleResource>() }
+    // Tracks UUIDs that have been fetched with full metadata (links + scientificMetadata).
+    // Checked on the main thread to avoid SnapshotStateMap reads from IO dispatchers.
+    val enrichedUuids = remember { mutableSetOf<String>() }
     // Pre-seed only when thumbnails is non-empty. An empty list from the ViewModel means
     // either the fetch failed or the thumbnail cache expired — in both cases we want the
     // LaunchedEffect to retry. Only skip the fetch when we already have real images.
@@ -189,6 +192,7 @@ fun ResourceDetailScreen(
         // Always seed with the authoritative incoming resource (handles post-refresh updates where
         // the ViewModel has a fresh version but loadedResources still holds a stale one).
         loadedResources[resource.uniqueId] = resource
+        enrichedUuids.add(resource.uniqueId)
         // Clear stale thumbnails so the fresh ones from the ViewModel are displayed after refresh.
         loadedThumbnails.remove(resource.uniqueId)
 
@@ -206,7 +210,7 @@ fun ResourceDetailScreen(
                 if (cached != null) {
                     val filtered = cached.filterAndSort()
                     val sorted = if (filtered.any { it.uniqueId == resource.uniqueId }) filtered else (filtered + resource).sortedBy { it.uniqueId }
-                    cached.forEach { s -> val rich = CacheManager.getResource(s.uniqueId) as? Sample; if (rich != null) loadedResources[s.uniqueId] = rich }
+                    cached.forEach { s -> val rich = CacheManager.getResource(s.uniqueId) as? Sample; if (rich != null) { enrichedUuids.add(s.uniqueId); loadedResources[s.uniqueId] = rich } }
                     sameTypeSamples = sorted
                     siblingsResolved = true
                 } else {
@@ -258,7 +262,7 @@ fun ResourceDetailScreen(
                 if (cached != null) {
                     val filtered = cached.filterAndSort()
                     val sorted = if (filtered.any { it.uniqueId == resource.uniqueId }) filtered else (filtered + resource).sortedBy { it.uniqueId }
-                    cached.forEach { d -> val rich = CacheManager.getResource(d.uniqueId) as? Dataset; if (rich != null) loadedResources[d.uniqueId] = rich }
+                    cached.forEach { d -> val rich = CacheManager.getResource(d.uniqueId) as? Dataset; if (rich != null) { enrichedUuids.add(d.uniqueId); loadedResources[d.uniqueId] = rich } }
                     sameTypeDatasets = sorted
                     siblingsResolved = true
                 } else {
@@ -463,24 +467,42 @@ fun ResourceDetailScreen(
             if (currentPage - offset in siblingList.indices) pagesToLoad.add(currentPage - offset)
         }
 
+        // Filter pages that still need enrichment — check on main thread (safe for SnapshotStateMap)
+        val toEnrich = pagesToLoad.filter { pageIndex ->
+            val uuid = siblingList[pageIndex].uniqueId
+            if (uuid in enrichedUuids) return@filter false
+            val existing = loadedResources[uuid]
+            when (existing) {
+                is Sample  -> existing.links == null
+                is Dataset -> existing.links == null
+                else       -> true
+            }
+        }
+
         // Load relationships (but NOT thumbnails yet) for pages in the window
         launch(Dispatchers.IO) {
-            pagesToLoad.forEachIndexed { index, pageIndex ->
+            toEnrich.forEachIndexed { index, pageIndex ->
                 val pageResource = siblingList[pageIndex]
                 val uuid = pageResource.uniqueId
-
-                // Skip only if already enriched (links != null means the full fetch ran)
-                val existing = loadedResources[uuid]
-                val isEnriched = when (existing) {
-                    is Sample  -> existing.links != null
-                    is Dataset -> existing.links != null
-                    else       -> false
-                }
-                if (isEnriched) return@forEachIndexed
 
                 // Add small delay between loads (except first few)
                 if (index > 2) {
                     kotlinx.coroutines.delay(150)
+                }
+
+                // Use individual resource cache if already enriched from a prior navigation
+                val cached = CacheManager.getResource(uuid)
+                if (cached != null && when (cached) {
+                        is Sample  -> cached.links != null
+                        is Dataset -> cached.links != null
+                        else       -> false
+                    }
+                ) {
+                    withContext(Dispatchers.Main) {
+                        enrichedUuids.add(uuid)
+                        loadedResources[uuid] = cached
+                    }
+                    return@forEachIndexed
                 }
 
                 try {
@@ -489,6 +511,7 @@ fun ResourceDetailScreen(
                         is Dataset -> ApiClient.service.getDataset(uuid, includeMetadata = true).body()
                     }
                     withContext(Dispatchers.Main) {
+                        enrichedUuids.add(uuid)
                         if (enriched != null) {
                             loadedResources[uuid] = enriched
                             CacheManager.cacheResource(uuid, enriched)
@@ -512,6 +535,7 @@ fun ResourceDetailScreen(
             keysToRemove.forEach { uuid ->
                 loadedResources.remove(uuid)
                 loadedThumbnails.remove(uuid)
+                enrichedUuids.remove(uuid)
             }
         }
     }
@@ -595,6 +619,7 @@ fun ResourceDetailScreen(
                 // picks up the fresh data once the ViewModel signals isRefreshing=false.
                 loadedResources.remove(currentUuid)
                 loadedThumbnails.remove(currentUuid)
+                enrichedUuids.remove(currentUuid)
                 isSiblingRefreshPending = true
             }
             onRefresh(currentUuid)
