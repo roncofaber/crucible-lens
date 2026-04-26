@@ -55,7 +55,7 @@ class CrucibleRepository {
                     }
                 }
                 "dataset" -> {
-                    val datasetResponse = api.getDataset(uuid)
+                    val datasetResponse = api.getDataset(uuid, includeMetadata = true)
                     val datasetBody = datasetResponse.body()
                     if (datasetResponse.isSuccessful && datasetBody != null) {
                         crucible.lens.data.cache.CacheManager.cacheResourceType(uuid, "dataset")
@@ -90,7 +90,7 @@ class CrucibleRepository {
             }
 
             // If not a sample, try dataset
-            val datasetResponse = api.getDataset(uuid)
+            val datasetResponse = api.getDataset(uuid, includeMetadata = true)
             val datasetBody = datasetResponse.body()
             if (datasetResponse.isSuccessful && datasetBody != null) {
                 crucible.lens.data.cache.CacheManager.cacheResourceType(uuid, "dataset")
