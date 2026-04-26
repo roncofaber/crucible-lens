@@ -97,7 +97,7 @@ private fun SampleEditFields(
     var name by remember { mutableStateOf(resource.name) }
     var type by remember { mutableStateOf(resource.sampleType ?: "") }
     var description by remember { mutableStateOf(resource.description ?: "") }
-    var timestamp by remember { mutableStateOf(resource.sampleTimestamp ?: "") }
+    var timestamp by remember { mutableStateOf(resource.timestamp ?: "") }
     var selectedProjectId by remember { mutableStateOf(resource.projectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
