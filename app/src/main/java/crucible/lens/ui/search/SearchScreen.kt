@@ -64,9 +64,7 @@ fun SearchScreen(
 
         allProjects = projects
 
-        // Seed immediately from cache.
-        // Prefer individually-cached rich versions (full metadata + relationships) over
-        // project-list versions, which may have been cached with includeMetadata=false.
+        // Seed immediately from cache, preferring individually-cached rich versions.
         val samples = mutableListOf<Sample>()
         val datasets = mutableListOf<Dataset>()
         projects.forEach { project ->
@@ -91,7 +89,7 @@ fun SearchScreen(
         uncached.forEach { project ->
             try {
                 val sr = ApiClient.service.getSamplesByProject(project.projectId)
-                val dr = ApiClient.service.getDatasetsByProject(project.projectId, includeMetadata = true)
+                val dr = ApiClient.service.getDatasetsByProject(project.projectId)
                 if (sr.isSuccessful && dr.isSuccessful) {
                     val s = sr.body() ?: emptyList()
                     val d = dr.body() ?: emptyList()
@@ -545,20 +543,5 @@ private fun Dataset.matchesSearch(query: String): Boolean {
         (sourceFolder?.lowercase()?.contains(q) == true) ||
         (fileToUpload?.lowercase()?.contains(q) == true) ||
         (sha256Hash?.lowercase()?.contains(q) == true) ||
-        (keywords?.any { it.lowercase().contains(q) } == true) ||
-        (scientificMetadata?.containsQuery(q) == true)
-}
-
-private fun Map<String, Any?>.containsQuery(q: String): Boolean =
-    entries.any { (key, value) -> key.lowercase().contains(q) || value.matchesQuery(q) }
-
-private fun Any?.matchesQuery(q: String): Boolean = when (this) {
-    null -> false
-    is String -> lowercase().contains(q)
-    is Number -> toString().contains(q)
-    is Map<*, *> -> entries.any { (k, v) ->
-        k.toString().lowercase().contains(q) || v.matchesQuery(q)
-    }
-    is List<*> -> any { it.matchesQuery(q) }
-    else -> toString().lowercase().contains(q)
+        (keywords?.any { it.lowercase().contains(q) } == true)
 }

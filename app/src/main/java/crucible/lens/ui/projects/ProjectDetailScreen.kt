@@ -181,7 +181,7 @@ fun ProjectDetailScreen(
 
                 val (samplesResponse, datasetsResponse) = coroutineScope {
                     val s = async { ApiClient.service.getSamplesByProject(projectId) }
-                    val d = async { ApiClient.service.getDatasetsByProject(projectId, includeMetadata = true) }
+                    val d = async { ApiClient.service.getDatasetsByProject(projectId) }
                     s.await() to d.await()
                 }
 
