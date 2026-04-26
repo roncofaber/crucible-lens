@@ -198,12 +198,11 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 HomeLogo(isDarkTheme = isDarkTheme)
-                HomeSearchPill(onClick = onSearch)
+                HomeSearchPill(onClick = onSearch, onScan = onScanClick)
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 HomeBrowseSection(
                     onBrowseProjects = onBrowseProjects,
-                    onBrowseInstruments = onBrowseInstruments,
-                    onScanClick = onScanClick
+                    onBrowseInstruments = onBrowseInstruments
                 )
                 HomeCreateSection(onCreateSample = onCreateSample, onCreateDataset = onCreateDataset)
                 if (lastVisitedResource != null && lastVisitedResourceName != null) {
@@ -302,7 +301,7 @@ private fun HomeLogo(isDarkTheme: Boolean) {
 }
 
 @Composable
-private fun HomeSearchPill(onClick: () -> Unit) {
+private fun HomeSearchPill(onClick: () -> Unit, onScan: () -> Unit) {
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -311,12 +310,14 @@ private fun HomeSearchPill(onClick: () -> Unit) {
         tonalElevation = 2.dp
     ) {
         Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxSize().padding(start = 16.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-            Text("Search samples, datasets...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Search samples, datasets...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f).padding(start = 12.dp))
+            IconButton(onClick = onScan) {
+                Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan QR", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            }
         }
     }
 }
@@ -324,8 +325,7 @@ private fun HomeSearchPill(onClick: () -> Unit) {
 @Composable
 private fun HomeBrowseSection(
     onBrowseProjects: () -> Unit,
-    onBrowseInstruments: () -> Unit,
-    onScanClick: () -> Unit
+    onBrowseInstruments: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Browse", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
@@ -351,17 +351,6 @@ private fun HomeBrowseSection(
                 Icon(Icons.Default.Biotech, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Instruments", style = MaterialTheme.typography.labelMedium)
-            }
-            Button(
-                onClick = onScanClick,
-                modifier = Modifier.weight(1f).height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                shape = MaterialTheme.shapes.medium,
-                contentPadding = PaddingValues(horizontal = 8.dp)
-            ) {
-                Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Scan QR", style = MaterialTheme.typography.labelMedium)
             }
         }
     }

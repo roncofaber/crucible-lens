@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import crucible.lens.data.api.ApiClient
+import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
@@ -43,8 +44,9 @@ fun LinkResourceSheet(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var uuidInput by remember { mutableStateOf("") }
+    var input by remember { mutableStateOf("") }
     var resolvedType by remember { mutableStateOf<String?>(null) }
+    var resolvedUuid by remember { mutableStateOf<String?>(null) }
     var isResolving by remember { mutableStateOf(false) }
     var isLinking by remember { mutableStateOf(false) }
     var direction by remember { mutableStateOf(Direction.THEY_ARE_CHILD) }
@@ -65,18 +67,54 @@ fun LinkResourceSheet(
         is Sample -> "sample"
         is Dataset -> "dataset"
     }
-    val isSameType = resolvedType == currentType
 
-    // Resolve target type whenever UUID changes to a plausible length
-    LaunchedEffect(uuidInput) {
-        if (uuidInput.length < 10) { resolvedType = null; return@LaunchedEffect }
+    // Load project resources for name search
+    val projectId = when (resource) {
+        is Sample -> resource.projectId
+        is Dataset -> resource.projectId
+    }
+    var projectResources by remember { mutableStateOf<List<CrucibleResource>>(emptyList()) }
+    LaunchedEffect(projectId) {
+        if (projectId == null) return@LaunchedEffect
+        val samples = CacheManager.getProjectSamples(projectId)
+            ?: try { ApiClient.service.getSamplesByProject(projectId).body() } catch (_: Exception) { null }
+            ?: emptyList()
+        val datasets = CacheManager.getProjectDatasets(projectId)
+            ?: try { ApiClient.service.getDatasetsByProject(projectId).body() } catch (_: Exception) { null }
+            ?: emptyList()
+        projectResources = (samples + datasets).filter { it.uniqueId != resource.uniqueId }
+    }
+
+    // Name/UUID search results from project pool
+    val searchResults = remember(input, projectResources) {
+        if (input.length < 3) emptyList()
+        else {
+            val q = input.trim().lowercase()
+            projectResources.filter { r ->
+                r.name.contains(q, ignoreCase = true) || r.uniqueId.contains(q, ignoreCase = true)
+            }.take(6)
+        }
+    }
+
+    // UUID resolve for direct UUID input (no spaces, long enough)
+    LaunchedEffect(input) {
+        val trimmed = input.trim()
+        if (trimmed.length < 10 || trimmed.contains(' ')) {
+            if (resolvedUuid == null) resolvedType = null
+            return@LaunchedEffect
+        }
         isResolving = true
         resolvedType = try {
-            val resp = ApiClient.service.getResourceType(uuidInput.trim())
-            if (resp.isSuccessful) resp.body()?.resolvedType?.lowercase() else null
+            val resp = ApiClient.service.getResourceType(trimmed)
+            if (resp.isSuccessful) {
+                resolvedUuid = trimmed
+                resp.body()?.resolvedType?.lowercase()
+            } else null
         } catch (_: Exception) { null }
         isResolving = false
     }
+
+    val isSameType = resolvedType == currentType
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -105,7 +143,9 @@ fun LinkResourceSheet(
                         QRCodeScannerView(
                             modifier = Modifier.fillMaxSize(),
                             onCodeScanned = { code ->
-                                uuidInput = code
+                                input = code
+                                resolvedUuid = null
+                                resolvedType = null
                                 scanning = false
                             }
                         )
@@ -118,20 +158,29 @@ fun LinkResourceSheet(
                     }
                 }
 
-                // ── UUID input ────────────────────────────────────────────────
+                // ── Search / UUID input ───────────────────────────────────────
                 OutlinedTextField(
-                    value = uuidInput,
-                    onValueChange = { uuidInput = it },
-                    label = { Text("Resource ID") },
+                    value = input,
+                    onValueChange = {
+                        input = it
+                        resolvedUuid = null
+                        resolvedType = null
+                    },
+                    label = { Text("Search by name or paste UUID") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
-                        if (isResolving) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        } else if (uuidInput.isNotBlank()) {
-                            IconButton(onClick = { uuidInput = ""; resolvedType = null }) {
+                        when {
+                            isResolving -> CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            input.isNotBlank() -> IconButton(onClick = { input = ""; resolvedUuid = null; resolvedType = null }) {
                                 Icon(Icons.Default.Clear, contentDescription = "Clear")
+                            }
+                            else -> IconButton(onClick = {
+                                if (hasCameraPermission) scanning = true
+                                else permissionLauncher.launch(Manifest.permission.CAMERA)
+                            }) {
+                                Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan QR")
                             }
                         }
                     },
@@ -140,18 +189,47 @@ fun LinkResourceSheet(
                     }
                 )
 
-                // ── Scan button ───────────────────────────────────────────────
-                if (!scanning) {
-                    OutlinedButton(
-                        onClick = {
-                            if (hasCameraPermission) scanning = true
-                            else permissionLauncher.launch(Manifest.permission.CAMERA)
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Scan QR Code")
+                // ── Search results from project ───────────────────────────────
+                if (searchResults.isNotEmpty() && resolvedUuid == null) {
+                    Text("In this project", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    searchResults.forEach { result ->
+                        val resultType = when (result) {
+                            is Sample -> "sample"
+                            is Dataset -> "dataset"
+                        }
+                        val resultIcon = when (result) {
+                            is Sample -> Icons.Default.Science
+                            is Dataset -> Icons.Default.Dataset
+                        }
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = MaterialTheme.shapes.small,
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                input = result.uniqueId
+                                resolvedUuid = result.uniqueId
+                                resolvedType = resultType
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(resultIcon, contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(result.name, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                    Text(result.uniqueId, style = MaterialTheme.typography.labelSmall,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1)
+                                }
+                                Text(resultType, style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                     }
                 }
 
@@ -163,7 +241,7 @@ fun LinkResourceSheet(
                     ) {
                         OutlinedTextField(
                             value = if (direction == Direction.THEY_ARE_PARENT)
-                                "They are my parent" else "They are my child",
+                                "Linked $currentType is parent" else "This $currentType is parent",
                             onValueChange = {},
                             readOnly = true,
                             label = { Text("Relationship direction") },
@@ -176,18 +254,18 @@ fun LinkResourceSheet(
                             onDismissRequest = { directionExpanded = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("They are my parent") },
+                                text = { Text("Linked $currentType is parent") },
                                 onClick = { direction = Direction.THEY_ARE_PARENT; directionExpanded = false }
                             )
                             DropdownMenuItem(
-                                text = { Text("They are my child") },
+                                text = { Text("This $currentType is parent") },
                                 onClick = { direction = Direction.THEY_ARE_CHILD; directionExpanded = false }
                             )
                         }
                     }
                 }
 
-                // ── Link summary ──────────────────────────────────────────────
+                // ── Link summary (cross-type) ─────────────────────────────────
                 if (resolvedType != null && !isSameType) {
                     val desc = buildLinkDescription(currentType, resolvedType!!)
                     if (desc != null) {
@@ -207,35 +285,38 @@ fun LinkResourceSheet(
                 }
 
                 // ── Recent suggestions ────────────────────────────────────────
-                val recent = remember(recentHistory) {
-                    recentHistory.filter { it.uuid != resource.uniqueId }.take(3)
-                }
-                if (recent.isNotEmpty()) {
-                    Text("Recent", style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    recent.forEach { item ->
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            shape = MaterialTheme.shapes.small,
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                uuidInput = item.uuid
-                            }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                if (searchResults.isEmpty()) {
+                    val recent = remember(recentHistory) {
+                        recentHistory.filter { it.uuid != resource.uniqueId }.take(3)
+                    }
+                    if (recent.isNotEmpty()) {
+                        Text("Recent", style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        recent.forEach { item ->
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = MaterialTheme.shapes.small,
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    input = item.uuid
+                                    resolvedUuid = null
+                                    resolvedType = null
+                                }
                             ) {
-                                Icon(Icons.Default.History, contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(item.name, style = MaterialTheme.typography.bodySmall,
-                                        maxLines = 1)
-                                    Text(item.uuid, style = MaterialTheme.typography.labelSmall,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1)
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.History, contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(item.name, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                        Text(item.uuid, style = MaterialTheme.typography.labelSmall,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1)
+                                    }
                                 }
                             }
                         }
@@ -248,7 +329,7 @@ fun LinkResourceSheet(
                         scope.launch {
                             isLinking = true
                             try {
-                                val targetUuid = uuidInput.trim()
+                                val targetUuid = (resolvedUuid ?: input).trim()
                                 val targetType = resolvedType ?: run {
                                     snackbarHostState.showSnackbar("Could not resolve resource type")
                                     return@launch
@@ -266,7 +347,7 @@ fun LinkResourceSheet(
                             }
                         }
                     },
-                    enabled = uuidInput.isNotBlank() && resolvedType != null && !isLinking,
+                    enabled = resolvedType != null && !isLinking,
                     modifier = Modifier.fillMaxWidth().height(52.dp)
                 ) {
                     if (isLinking) {
