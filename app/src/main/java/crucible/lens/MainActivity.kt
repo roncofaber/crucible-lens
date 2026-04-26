@@ -20,6 +20,7 @@ import crucible.lens.data.preferences.PreferencesManager
 import crucible.lens.ui.navigation.NavGraph
 import crucible.lens.ui.theme.CrucibleScannerTheme
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
