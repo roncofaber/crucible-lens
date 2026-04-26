@@ -471,7 +471,12 @@ fun ResourceDetailScreen(
 
                 // Skip only if already enriched (links != null means the full fetch ran)
                 val existing = loadedResources[uuid]
-                if (existing != null && existing.links != null) return@forEachIndexed
+                val isEnriched = when (existing) {
+                    is Sample  -> existing.links != null
+                    is Dataset -> existing.links != null
+                    else       -> false
+                }
+                if (isEnriched) return@forEachIndexed
 
                 // Add small delay between loads (except first few)
                 if (index > 2) {
