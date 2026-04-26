@@ -19,9 +19,11 @@ import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.data.preferences.PreferencesManager
 import crucible.lens.ui.navigation.NavGraph
 import crucible.lens.ui.theme.CrucibleScannerTheme
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 class MainActivity : ComponentActivity() {
@@ -73,22 +75,23 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
 
         preferencesManager = PreferencesManager(this)
         ConnectivityObserver.init(this)
 
-        // Load theme preferences synchronously to prevent flash on startup.
-        // Bounded by a 1s timeout so storage stalls can never cause an ANR.
-        runBlocking {
+        var preferencesReady by mutableStateOf(false)
+        splashScreen.setKeepOnScreenCondition { !preferencesReady }
+
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
-                withTimeout(1_000L) {
+                withTimeout(2_000L) {
                     initialThemeMode = preferencesManager.themeMode.first()
                     initialAccentColor = preferencesManager.accentColor.first()
                 }
-            } catch (_: Exception) {
-                // Fall back to defaults — theme may flash once on this rare path
-            }
+            } catch (_: Exception) { }
+            withContext(Dispatchers.Main) { preferencesReady = true }
         }
 
         val deepLinkUuid: String? = intent?.data?.pathSegments?.lastOrNull()?.takeIf { it.length > 8 }
