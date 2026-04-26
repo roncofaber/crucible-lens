@@ -21,14 +21,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import android.util.Log
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.data.preferences.HistoryItem
+import crucible.lens.data.util.fetchProjectData
 import crucible.lens.ui.scanner.QRCodeScannerView
 import kotlinx.coroutines.launch
+
+private const val TAG = "LinkResourceSheet"
 
 private enum class Direction { THEY_ARE_PARENT, THEY_ARE_CHILD }
 
@@ -76,13 +80,12 @@ fun LinkResourceSheet(
     var projectResources by remember { mutableStateOf<List<CrucibleResource>>(emptyList()) }
     LaunchedEffect(projectId) {
         if (projectId == null) return@LaunchedEffect
-        val samples = CacheManager.getProjectSamples(projectId)
-            ?: try { ApiClient.service.getSamplesByProject(projectId).body() } catch (_: Exception) { null }
-            ?: emptyList()
-        val datasets = CacheManager.getProjectDatasets(projectId)
-            ?: try { ApiClient.service.getDatasetsByProject(projectId).body() } catch (_: Exception) { null }
-            ?: emptyList()
-        projectResources = (samples + datasets).filter { it.uniqueId != resource.uniqueId }
+        try {
+            val (samples, datasets) = fetchProjectData(projectId)
+            projectResources = (samples + datasets).filter { it.uniqueId != resource.uniqueId }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load project resources for $projectId", e)
+        }
     }
 
     // Name/UUID search results from project pool
@@ -191,7 +194,10 @@ fun LinkResourceSheet(
 
                 // ── Search results from project ───────────────────────────────
                 if (searchResults.isNotEmpty() && resolvedUuid == null) {
-                    Text("In this project", style = MaterialTheme.typography.labelMedium,
+                    val projectNames = remember {
+                        CacheManager.getProjects()?.associate { it.uniqueId to it.name } ?: emptyMap()
+                    }
+                    Text("Results", style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     searchResults.forEach { result ->
                         val resultType = when (result) {
@@ -202,6 +208,11 @@ fun LinkResourceSheet(
                             is Sample -> Icons.Default.Science
                             is Dataset -> Icons.Default.Dataset
                         }
+                        val resultProjectId = when (result) {
+                            is Sample -> result.projectId
+                            is Dataset -> result.projectId
+                        }
+                        val projectName = resultProjectId?.let { projectNames[it] }
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = MaterialTheme.shapes.small,
@@ -221,7 +232,8 @@ fun LinkResourceSheet(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(result.name, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                                    Text(result.uniqueId, style = MaterialTheme.typography.labelSmall,
+                                    val subtitle = listOfNotNull(projectName, result.uniqueId).joinToString(" · ")
+                                    Text(subtitle, style = MaterialTheme.typography.labelSmall,
                                         fontFamily = FontFamily.Monospace,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1)

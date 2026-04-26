@@ -34,16 +34,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import android.util.Log
 import crucible.lens.BuildConfig
 import crucible.lens.R
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.data.model.Project
+import crucible.lens.data.util.fetchProjectData
 import crucible.lens.ui.common.OfflineBanner
 import crucible.lens.ui.common.allLoadingMessages
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.launch
+
+private const val TAG = "HomeScreen"
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -96,7 +100,9 @@ fun HomeScreen(
                         allProjects = projects
                     }
                 }
-            } catch (e: Exception) { }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load projects", e)
+            }
         }
     }
 
@@ -112,25 +118,13 @@ fun HomeScreen(
             if (consecutiveFailures.get() >= maxConsecutiveFailures) return@LaunchedEffect
             batch.forEach { project ->
                 launch(kotlinx.coroutines.Dispatchers.IO) {
-                    if (CacheManager.getProjectSamples(project.projectId) != null &&
-                        CacheManager.getProjectDatasets(project.projectId) != null) return@launch
-
-                    var hadError = false
                     try {
-                        val samplesResp = ApiClient.service.getSamplesByProject(project.projectId)
-                        if (samplesResp.isSuccessful) {
-                            consecutiveFailures.set(0)
-                            samplesResp.body()?.let { CacheManager.cacheProjectSamples(project.projectId, it) }
-                        }
-                        val datasetsResp = ApiClient.service.getDatasetsByProject(project.projectId)
-                        if (datasetsResp.isSuccessful) {
-                            consecutiveFailures.set(0)
-                            datasetsResp.body()?.let { CacheManager.cacheProjectDatasets(project.projectId, it) }
-                        }
+                        fetchProjectData(project.projectId)
+                        consecutiveFailures.set(0)
                     } catch (e: Exception) {
-                        hadError = true
+                        Log.e(TAG, "Failed to prefetch project ${project.projectId}", e)
+                        consecutiveFailures.incrementAndGet()
                     }
-                    if (hadError) consecutiveFailures.incrementAndGet()
                 }
             }
             kotlinx.coroutines.delay(150)
@@ -145,7 +139,9 @@ fun HomeScreen(
                     CacheManager.getProjectDatasets(project.projectId)?.let { datasetsMap[project.projectId] = it }
                 }
                 PersistentProjectCache.saveProjectData(context, allProjects, samplesMap, datasetsMap)
-            } catch (e: Exception) { }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save project cache to disk", e)
+            }
         }
     }
 

@@ -16,13 +16,17 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import android.util.Log
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.MetadataSearchResult
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
+import crucible.lens.data.util.fetchProjectData
 import crucible.lens.ui.common.OfflineBanner
+
+private const val TAG = "SearchScreen"
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,7 +62,10 @@ fun SearchScreen(
             ?: try {
                 val r = ApiClient.service.getProjects()
                 if (r.isSuccessful) r.body()?.also { CacheManager.cacheProjects(it) } else null
-            } catch (e: Exception) { null }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load projects", e)
+                null
+            }
 
         if (projects == null) { isLoading = false; return@LaunchedEffect }
 
@@ -88,19 +95,14 @@ fun SearchScreen(
 
         uncached.forEach { project ->
             try {
-                val sr = ApiClient.service.getSamplesByProject(project.projectId)
-                val dr = ApiClient.service.getDatasetsByProject(project.projectId)
-                if (sr.isSuccessful && dr.isSuccessful) {
-                    val s = sr.body() ?: emptyList()
-                    val d = dr.body() ?: emptyList()
-                    CacheManager.cacheProjectSamples(project.projectId, s)
-                    CacheManager.cacheProjectDatasets(project.projectId, d)
-                    samples.addAll(s.map { sample -> (CacheManager.getResource(sample.uniqueId) as? Sample) ?: sample })
-                    datasets.addAll(d.map { dataset -> (CacheManager.getResource(dataset.uniqueId) as? Dataset) ?: dataset })
-                    allSamples = samples.toList()
-                    allDatasets = datasets.toList()
-                }
-            } catch (e: Exception) { }
+                val (s, d) = fetchProjectData(project.projectId)
+                samples.addAll(s.map { (CacheManager.getResource(it.uniqueId) as? Sample) ?: it })
+                datasets.addAll(d.map { (CacheManager.getResource(it.uniqueId) as? Dataset) ?: it })
+                allSamples = samples.toList()
+                allDatasets = datasets.toList()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to fetch project ${project.projectId}", e)
+            }
             loadedCount++
         }
 
