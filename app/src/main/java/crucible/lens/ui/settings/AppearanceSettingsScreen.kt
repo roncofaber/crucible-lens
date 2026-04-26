@@ -40,6 +40,7 @@ fun AppearanceSettingsScreen(
     var appIconInput          by remember { mutableStateOf(currentAppIcon) }
     var floatingScanButtonInput by remember { mutableStateOf(currentFloatingScanButton) }
     var showColorPicker       by remember { mutableStateOf(false) }
+    var pendingIconChange     by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
     val prefs = remember { PreferencesManager(context) }
@@ -171,8 +172,7 @@ fun AppearanceSettingsScreen(
                             FilterChip(
                                 selected = appIconInput == value,
                                 onClick = {
-                                    appIconInput = value
-                                    onAppIconSave(value)
+                                    if (appIconInput != value) pendingIconChange = value
                                 },
                                 label = { Text(label) },
                                 leadingIcon = if (appIconInput == value) {
@@ -203,7 +203,7 @@ fun AppearanceSettingsScreen(
                             tint = MaterialTheme.colorScheme.tertiary
                         )
                         Text(
-                            "Icon change applies on next app launch",
+                            "Changing the icon will restart the app",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.tertiary
                         )
@@ -336,6 +336,27 @@ fun AppearanceSettingsScreen(
                 Text("Reset to Defaults")
             }
         }
+    }
+
+    // Icon change confirmation
+    if (pendingIconChange != null) {
+        AlertDialog(
+            onDismissRequest = { pendingIconChange = null },
+            icon = { Icon(Icons.Default.Apps, contentDescription = null) },
+            title = { Text("Change App Icon") },
+            text = { Text("The app will restart to apply the new icon.") },
+            confirmButton = {
+                Button(onClick = {
+                    val icon = pendingIconChange!!
+                    appIconInput = icon
+                    onAppIconSave(icon)
+                    pendingIconChange = null
+                }) { Text("Restart") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingIconChange = null }) { Text("Cancel") }
+            }
+        )
     }
 
     // Color picker
