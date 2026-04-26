@@ -228,6 +228,7 @@ fun HomeScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HomeLogo(isDarkTheme: Boolean) {
     val taglines = remember {
@@ -393,6 +394,7 @@ private fun HomeCreateSection(onCreateSample: () -> Unit, onCreateDataset: () ->
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HomeLastVisited(uuid: String, name: String, onClick: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
