@@ -328,25 +328,29 @@ private fun HomeBrowseSection(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = onBrowseProjects,
-                modifier = Modifier.weight(1f).height(52.dp),
+                modifier = Modifier.weight(1f).height(72.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = MaterialTheme.shapes.medium,
-                contentPadding = PaddingValues(horizontal = 8.dp)
+                contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Projects", style = MaterialTheme.typography.labelMedium)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Projects", style = MaterialTheme.typography.labelMedium)
+                }
             }
             Button(
                 onClick = onBrowseInstruments,
-                modifier = Modifier.weight(1f).height(52.dp),
+                modifier = Modifier.weight(1f).height(72.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = MaterialTheme.shapes.medium,
-                contentPadding = PaddingValues(horizontal = 8.dp)
+                contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                Icon(Icons.Default.Biotech, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Instruments", style = MaterialTheme.typography.labelMedium)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.Biotech, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Instruments", style = MaterialTheme.typography.labelMedium)
+                }
             }
         }
     }

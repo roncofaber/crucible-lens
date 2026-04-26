@@ -42,6 +42,12 @@ fun AppearanceSettingsScreen(
     var showColorPicker       by remember { mutableStateOf(false) }
     var pendingIconChange     by remember { mutableStateOf<String?>(null) }
 
+    // Keep local inputs in sync with props (handles navigation-back and external changes)
+    LaunchedEffect(currentThemeMode)        { themeModeInput        = currentThemeMode }
+    LaunchedEffect(currentAccentColor)      { accentColorInput      = currentAccentColor }
+    LaunchedEffect(currentAppIcon)          { appIconInput          = currentAppIcon }
+    LaunchedEffect(currentFloatingScanButton) { floatingScanButtonInput = currentFloatingScanButton }
+
     val context = LocalContext.current
     val prefs = remember { PreferencesManager(context) }
     val scope = rememberCoroutineScope()
