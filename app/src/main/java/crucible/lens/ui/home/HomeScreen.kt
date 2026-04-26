@@ -540,6 +540,8 @@ private fun HelpDialog(onDismiss: () -> Unit, onSettings: () -> Unit) {
                     "Search across all cached samples and datasets by name, type, keywords, metadata, and more. Available from the home screen and from any browse or detail screen.")
                 HelpSection(Icons.Default.Folder, "Browse Projects",
                     "Explore all projects and their contents. Tap the bookmark icon to pin favorites — they appear on the home screen for quick access. Swipe a project left to archive it.")
+                HelpSection(Icons.Default.Biotech, "Browse Instruments",
+                    "View all registered instruments at the Molecular Foundry. Tap an instrument to see its details and the datasets collected with it.")
                 HelpSection(Icons.Default.History, "History",
                     "The clock icon (top right) shows recently viewed resources so you can jump back to them instantly.")
                 HelpSection(Icons.Default.Info, "Resource Details",
