@@ -15,6 +15,15 @@ data class CachedItem<T>(
 object CacheManager {
     private const val CACHE_TTL = 10 * 60 * 1000L // 10 minutes
     private const val MAX_RESOURCE_CACHE_SIZE = 50
+    private const val MAX_THUMBNAIL_CACHE_SIZE = 20
+    private const val MAX_PROJECT_DETAIL_CACHE_SIZE = 30
+    private const val MAX_INSTRUMENT_DATASETS_CACHE_SIZE = 15
+
+    private fun <V : CachedItem<*>> ConcurrentHashMap<String, V>.evictOldestIfOver(limit: Int) {
+        if (size >= limit) {
+            entries.minByOrNull { it.value.timestamp }?.key?.let { remove(it) }
+        }
+    }
 
     private fun <T> CachedItem<T>.isExpired() =
         System.currentTimeMillis() - timestamp > CACHE_TTL
@@ -77,6 +86,7 @@ object CacheManager {
 
     // Thumbnail caching
     fun cacheThumbnails(uuid: String, thumbnails: List<String>) {
+        thumbnailCache.evictOldestIfOver(MAX_THUMBNAIL_CACHE_SIZE)
         thumbnailCache[uuid] = CachedItem(thumbnails, System.currentTimeMillis())
     }
 
@@ -109,6 +119,7 @@ object CacheManager {
     }
 
     fun cacheInstrumentDatasets(instrumentName: String, datasets: List<Dataset>) {
+        instrumentDatasetsCache.evictOldestIfOver(MAX_INSTRUMENT_DATASETS_CACHE_SIZE)
         instrumentDatasetsCache[instrumentName] = CachedItem(datasets, System.currentTimeMillis())
     }
 
@@ -135,6 +146,7 @@ object CacheManager {
 
     // Project detail caching (samples and datasets per project)
     fun cacheProjectSamples(projectId: String, samples: List<Sample>) {
+        projectSamplesCache.evictOldestIfOver(MAX_PROJECT_DETAIL_CACHE_SIZE)
         projectSamplesCache[projectId] = CachedItem(samples, System.currentTimeMillis())
     }
 
@@ -145,6 +157,7 @@ object CacheManager {
     }
 
     fun cacheProjectDatasets(projectId: String, datasets: List<Dataset>) {
+        projectDatasetsCache.evictOldestIfOver(MAX_PROJECT_DETAIL_CACHE_SIZE)
         projectDatasetsCache[projectId] = CachedItem(datasets, System.currentTimeMillis())
     }
 
