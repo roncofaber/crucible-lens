@@ -4,9 +4,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -48,6 +45,8 @@ import crucible.lens.ui.common.QrCodeDialog
 import crucible.lens.ui.common.ScrollToTopButton
 import kotlinx.coroutines.launch
 
+private enum class DatasetSortOrder { NEWEST, OLDEST, NAME }
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun InstrumentDetailScreen(
@@ -63,6 +62,7 @@ fun InstrumentDetailScreen(
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var sortOrder by remember { mutableStateOf(DatasetSortOrder.NEWEST) }
     var showQrDialog by remember { mutableStateOf(false) }
     var fromCache by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -70,10 +70,14 @@ fun InstrumentDetailScreen(
     val scope = rememberCoroutineScope()
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
-    val filteredDatasets = remember(datasets, searchQuery) {
+    val filteredDatasets = remember(datasets, searchQuery, sortOrder) {
         val list = datasets ?: emptyList()
-        if (searchQuery.isBlank()) list
-        else list.filter { it.matchesSearch(searchQuery) }
+        val filtered = if (searchQuery.isBlank()) list else list.filter { it.matchesSearch(searchQuery) }
+        when (sortOrder) {
+            DatasetSortOrder.NEWEST -> filtered.sortedByDescending { it.timestamp }
+            DatasetSortOrder.OLDEST -> filtered.sortedBy { it.timestamp }
+            DatasetSortOrder.NAME   -> filtered.sortedBy { it.name.lowercase() }
+        }
     }
 
     fun loadData(forceRefresh: Boolean = false) {
@@ -144,12 +148,6 @@ fun InstrumentDetailScreen(
         }
     }
 
-    val contentTranslation by animateFloatAsState(
-        targetValue = if (pullRefreshState.isRefreshing) 0f else pullRefreshState.verticalOffset,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-        label = "ptr_translation"
-    )
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -178,11 +176,7 @@ fun InstrumentDetailScreen(
                 .padding(padding)
                 .nestedScroll(pullRefreshState.nestedScrollConnection)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { translationY = contentTranslation }
-            ) {
+            Column(modifier = Modifier.fillMaxSize()) {
                 // Header
                 instrument?.let { instr ->
                     InstrumentHeader(
@@ -218,6 +212,31 @@ fun InstrumentDetailScreen(
                         if (searchQuery.isNotEmpty()) {
                             Icon(Icons.Default.Clear, contentDescription = "Clear", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp).clickable { searchQuery = "" })
                         }
+                    }
+                }
+
+                // Sort chips
+                Row(
+                    modifier = Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    DatasetSortOrder.entries.forEach { order ->
+                        FilterChip(
+                            selected = sortOrder == order,
+                            onClick = { sortOrder = order },
+                            label = {
+                                Text(when (order) {
+                                    DatasetSortOrder.NEWEST -> "Newest"
+                                    DatasetSortOrder.OLDEST -> "Oldest"
+                                    DatasetSortOrder.NAME   -> "Name A→Z"
+                                }, style = MaterialTheme.typography.labelSmall)
+                            },
+                            leadingIcon = if (sortOrder == order) {
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
+                            } else null
+                        )
                     }
                 }
 

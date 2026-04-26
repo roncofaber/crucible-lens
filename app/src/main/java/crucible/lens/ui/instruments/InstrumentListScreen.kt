@@ -1,8 +1,5 @@
 package crucible.lens.ui.instruments
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -87,12 +84,6 @@ fun InstrumentListScreen(
     }
 
     LaunchedEffect(Unit) { loadInstruments() }
-
-    val contentTranslation by animateFloatAsState(
-        targetValue = if (pullRefreshState.isRefreshing) 0f else pullRefreshState.verticalOffset,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-        label = "ptr_translation"
-    )
 
     if (pullRefreshState.isRefreshing && !isLoading) {
         LaunchedEffect(Unit) {
