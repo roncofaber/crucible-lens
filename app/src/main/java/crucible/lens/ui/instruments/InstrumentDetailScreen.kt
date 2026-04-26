@@ -3,6 +3,7 @@ package crucible.lens.ui.instruments
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -64,7 +65,9 @@ fun InstrumentDetailScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var sortOrder by remember { mutableStateOf(DatasetSortOrder.NEWEST) }
     var showQrDialog by remember { mutableStateOf(false) }
+    var overflowMenuExpanded by remember { mutableStateOf(false) }
     var fromCache by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     val listState = rememberLazyListState()
     val pullRefreshState = rememberPullToRefreshState()
     val scope = rememberCoroutineScope()
@@ -137,10 +140,6 @@ fun InstrumentDetailScreen(
 
     LaunchedEffect(instrumentId) { loadData() }
 
-    LaunchedEffect(isLoading) {
-        if (isLoading) pullRefreshState.startRefresh() else pullRefreshState.endRefresh()
-    }
-
     if (pullRefreshState.isRefreshing && !isLoading) {
         LaunchedEffect(Unit) {
             instrument?.instrumentName?.let { CacheManager.clearInstrumentsCache() }
@@ -158,12 +157,52 @@ fun InstrumentDetailScreen(
                     }
                 },
                 actions = {
-                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy((-4).dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
                             Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
                         }
                         IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
                             Icon(Icons.Default.Home, contentDescription = "Home", modifier = Modifier.size(24.dp))
+                        }
+                        Box {
+                            IconButton(
+                                onClick = { overflowMenuExpanded = true },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(24.dp))
+                            }
+                            DropdownMenu(
+                                expanded = overflowMenuExpanded,
+                                onDismissRequest = { overflowMenuExpanded = false }
+                            ) {
+                                instrument?.let { instr ->
+                                    DropdownMenuItem(
+                                        text = { Text("Share") },
+                                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                                        onClick = {
+                                            overflowMenuExpanded = false
+                                            val text = "${instr.instrumentName ?: instr.uniqueId}\nID: ${instr.uniqueId}"
+                                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(Intent.EXTRA_TEXT, text)
+                                            }
+                                            context.startActivity(Intent.createChooser(intent, "Share Instrument"))
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Refresh") },
+                                        leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                        onClick = {
+                                            overflowMenuExpanded = false
+                                            CacheManager.clearInstrumentsCache()
+                                            loadData(forceRefresh = true)
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -319,7 +358,7 @@ fun InstrumentDetailScreen(
             AnimatedPullToRefreshIndicator(
                 state = pullRefreshState,
                 modifier = Modifier.align(Alignment.TopCenter),
-                visible = (pullRefreshState.isRefreshing || pullRefreshState.verticalOffset > 0f) && !isLoading
+                visible = pullRefreshState.isRefreshing || pullRefreshState.verticalOffset > 0f
             )
         }
     }

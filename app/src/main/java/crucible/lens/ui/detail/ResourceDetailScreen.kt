@@ -469,8 +469,9 @@ fun ResourceDetailScreen(
                 val pageResource = siblingList[pageIndex]
                 val uuid = pageResource.uniqueId
 
-                // Skip if already fully loaded
-                if (loadedResources.containsKey(uuid)) return@forEachIndexed
+                // Skip only if already enriched (links != null means the full fetch ran)
+                val existing = loadedResources[uuid]
+                if (existing != null && existing.links != null) return@forEachIndexed
 
                 // Add small delay between loads (except first few)
                 if (index > 2) {
@@ -611,7 +612,7 @@ fun ResourceDetailScreen(
             TopAppBar(
                 title = {
                     Text(
-                        currentDisplayResource.name,
+                        if (resource is Sample) "Sample" else "Dataset",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
