@@ -892,7 +892,7 @@ private fun crucible.lens.data.model.Dataset.matchesSearch(query: String): Boole
         (sessionName?.lowercase()?.contains(q) == true) ||
         (projectId?.lowercase()?.contains(q) == true) ||
         uniqueId.lowercase().contains(q) ||
-        (createdAt?.lowercase()?.contains(q) == true) ||
+        (timestamp?.lowercase()?.contains(q) == true) ||
         (dataFormat?.lowercase()?.contains(q) == true) ||
         (ownerOrcid?.lowercase()?.contains(q) == true) ||
         (sourceFolder?.lowercase()?.contains(q) == true) ||
