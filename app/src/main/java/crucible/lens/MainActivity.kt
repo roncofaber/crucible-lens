@@ -32,7 +32,6 @@ class MainActivity : ComponentActivity() {
     private var openScanner by mutableStateOf(false)
     private var initialThemeMode by mutableStateOf(PreferencesManager.THEME_MODE_SYSTEM)
     private var initialAccentColor by mutableStateOf(PreferencesManager.DEFAULT_ACCENT_COLOR)
-    private var pendingAppIcon: String? = null
 
     private fun switchAppIcon(icon: String) {
         val packageManager = packageManager
@@ -66,12 +65,6 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-    }
-
-    override fun onPause() {
-        super.onPause()
-        pendingAppIcon?.let { switchAppIcon(it) }
-        pendingAppIcon = null
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -213,9 +206,9 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onAppIconSave = { icon ->
-                        pendingAppIcon = icon
                         scope.launch {
                             preferencesManager.saveAppIcon(icon)
+                            switchAppIcon(icon)
                         }
                     },
                     onLastVisitedResourceSave = { uuid, name ->
