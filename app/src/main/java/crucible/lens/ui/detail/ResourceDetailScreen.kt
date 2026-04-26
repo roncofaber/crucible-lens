@@ -197,7 +197,7 @@ fun ResourceDetailScreen(
                 val projectId = resource.projectId
                 if (projectId == null) { siblingsResolved = true; return@LaunchedEffect }
                 fun List<Sample>.filterAndSort() = filter { s -> when (siblingGroupBy) {
-                    "DATE"  -> dateGroupKey(s.createdAt) == dateGroupKey(resource.createdAt)
+                    "DATE"  -> dateGroupKey(s.timestamp) == dateGroupKey(resource.timestamp)
                     "OWNER" -> s.ownerOrcid == resource.ownerOrcid
                     else    -> s.sampleType == resource.sampleType
                 } }.sortedBy { it.uniqueId }
@@ -213,7 +213,7 @@ fun ResourceDetailScreen(
                     // Fetch only matching siblings from the server
                     launch {
                         try {
-                            val bounds = if (siblingGroupBy == "DATE") monthBounds(resource.createdAt) else null
+                            val bounds = if (siblingGroupBy == "DATE") monthBounds(resource.timestamp) else null
                             val resp = withContext(Dispatchers.IO) {
                                 ApiClient.service.getFilteredSamples(
                                     projectId = projectId,
@@ -247,7 +247,7 @@ fun ResourceDetailScreen(
                 if (projectId == null) { siblingsResolved = true; return@LaunchedEffect }
                 fun List<Dataset>.filterAndSort() = filter { d -> when (siblingGroupBy) {
                     "INSTRUMENT" -> d.instrumentName == resource.instrumentName
-                    "DATE"       -> dateGroupKey(d.createdAt) == dateGroupKey(resource.createdAt)
+                    "DATE"       -> dateGroupKey(d.timestamp) == dateGroupKey(resource.timestamp)
                     "FORMAT"     -> d.dataFormat == resource.dataFormat
                     "SESSION"    -> d.sessionName == resource.sessionName
                     "OWNER"      -> d.ownerOrcid == resource.ownerOrcid
@@ -265,7 +265,7 @@ fun ResourceDetailScreen(
                     // Fetch only matching siblings from the server
                     launch {
                         try {
-                            val bounds = if (siblingGroupBy == "DATE") monthBounds(resource.createdAt) else null
+                            val bounds = if (siblingGroupBy == "DATE") monthBounds(resource.timestamp) else null
                             val resp = withContext(Dispatchers.IO) {
                                 ApiClient.service.getFilteredDatasets(
                                     projectId = projectId,
@@ -309,7 +309,7 @@ fun ResourceDetailScreen(
                 is Sample -> {
                     val projectId = resource.projectId ?: run { siblingsResolved = true; return }
                     fun List<Sample>.filterAndSort() = filter { s -> when (groupBy) {
-                        "DATE"  -> dateGroupKey(s.createdAt) == dateGroupKey(resource.createdAt)
+                        "DATE"  -> dateGroupKey(s.timestamp) == dateGroupKey(resource.timestamp)
                         "OWNER" -> s.ownerOrcid == resource.ownerOrcid
                         else    -> s.sampleType == resource.sampleType
                     } }.sortedBy { it.uniqueId }
@@ -321,7 +321,7 @@ fun ResourceDetailScreen(
                         sameTypeSamples = sorted
                         siblingsResolved = true
                     } else {
-                        val bounds = if (groupBy == "DATE") monthBounds(resource.createdAt) else null
+                        val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
                         val resp = withContext(Dispatchers.IO) {
                             ApiClient.service.getFilteredSamples(
                                 projectId = projectId,
@@ -343,7 +343,7 @@ fun ResourceDetailScreen(
                     val projectId = resource.projectId ?: run { siblingsResolved = true; return }
                     fun List<Dataset>.filterAndSort() = filter { d -> when (groupBy) {
                         "INSTRUMENT" -> d.instrumentName == resource.instrumentName
-                        "DATE"       -> dateGroupKey(d.createdAt) == dateGroupKey(resource.createdAt)
+                        "DATE"       -> dateGroupKey(d.timestamp) == dateGroupKey(resource.timestamp)
                         "FORMAT"     -> d.dataFormat == resource.dataFormat
                         "SESSION"    -> d.sessionName == resource.sessionName
                         "OWNER"      -> d.ownerOrcid == resource.ownerOrcid
@@ -357,7 +357,7 @@ fun ResourceDetailScreen(
                         sameTypeDatasets = sorted
                         siblingsResolved = true
                     } else {
-                        val bounds = if (groupBy == "DATE") monthBounds(resource.createdAt) else null
+                        val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
                         val resp = withContext(Dispatchers.IO) {
                             ApiClient.service.getFilteredDatasets(
                                 projectId = projectId,
@@ -1533,7 +1533,7 @@ private fun SampleDetailsCard(
             } else {
                 InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
             }
-            InfoRow(icon = Icons.Default.Schedule, label = "Timestamp", value = formatDateTime(sample.sampleTimestamp))
+            InfoRow(icon = Icons.Default.Schedule, label = "Timestamp", value = formatDateTime(sample.timestamp))
             InfoRow(icon = Icons.AutoMirrored.Filled.Notes, label = "Description", value = sample.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
 
             // Advanced fields
@@ -1551,9 +1551,8 @@ private fun SampleDetailsCard(
                     } else {
                         InfoRow(icon = Icons.Default.Person, label = "Owner ORCID", value = "None")
                     }
-                    InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = formatDateTime(sample.createdAt))
-                    InfoRow(icon = Icons.Default.Schedule, label = "Record Created", value = formatDateTime(sample.creationTime))
-                    InfoRow(icon = Icons.Default.Update, label = "Last Modified", value = formatDateTime(sample.modificationTime))
+                    InfoRow(icon = Icons.Default.Schedule, label = "Created at", value = formatDateTime(sample.creationTime))
+                    InfoRow(icon = Icons.Default.Update, label = "Modified at", value = formatDateTime(sample.modificationTime))
                     InfoRow(icon = Icons.Default.Numbers, label = "Internal ID", value = sample.internalId?.toString() ?: "None")
                 }
             }
@@ -1704,7 +1703,7 @@ private fun DatasetDetailsCard(
             } else {
                 InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
             }
-            InfoRow(icon = Icons.Default.Schedule, label = "Timestamp", value = formatDateTime(dataset.createdAt))
+            InfoRow(icon = Icons.Default.Schedule, label = "Timestamp", value = formatDateTime(dataset.timestamp))
 
             // Advanced fields
             if (advanced) {
@@ -1739,9 +1738,8 @@ private fun DatasetDetailsCard(
                     InfoRow(icon = Icons.Default.Storage, label = "Size", value = dataset.size?.let { formatFileSize(it) } ?: "None")
                     InfoRow(icon = Icons.Default.FolderOpen, label = "Source Folder", value = dataset.sourceFolder?.takeIf { it.isNotBlank() } ?: "None")
                     InfoRow(icon = Icons.Default.Security, label = "SHA-256", value = dataset.sha256Hash ?: "None")
-                    InfoRow(icon = Icons.Default.Schedule, label = "Record Created", value = formatDateTime(dataset.creationTime))
-                    InfoRow(icon = Icons.Default.Update, label = "Last Modified", value = formatDateTime(dataset.modificationTime))
-                    InfoRow(icon = Icons.Default.Numbers, label = "Internal ID", value = dataset.internalId?.toString() ?: "None")
+                    InfoRow(icon = Icons.Default.Schedule, label = "Created at", value = formatDateTime(dataset.creationTime))
+                    InfoRow(icon = Icons.Default.Update, label = "Modified at", value = formatDateTime(dataset.modificationTime))
                 }
             }
 

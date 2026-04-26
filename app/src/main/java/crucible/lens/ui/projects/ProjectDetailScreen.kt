@@ -817,7 +817,7 @@ private fun SamplesList(
         val groupedSamples = remember(samples, groupBy, ownerNames.toMap()) {
             samples.groupBy { s -> when (groupBy) {
                 SampleGroupBy.TYPE  -> s.sampleType ?: "No type"
-                SampleGroupBy.DATE  -> dateGroupKey(s.createdAt)
+                SampleGroupBy.DATE  -> dateGroupKey(s.timestamp)
                 SampleGroupBy.OWNER -> s.ownerOrcid?.let { ownerNames[it] ?: it } ?: "Unknown owner"
             } }.entries.sortedBy { it.key.lowercase() }
         }
@@ -952,7 +952,7 @@ private fun DatasetsList(
             datasets.groupBy { d -> when (groupBy) {
                 DatasetGroupBy.MEASUREMENT -> d.measurement ?: "No measurement"
                 DatasetGroupBy.INSTRUMENT  -> d.instrumentName ?: "No instrument"
-                DatasetGroupBy.DATE        -> dateGroupKey(d.createdAt)
+                DatasetGroupBy.DATE        -> dateGroupKey(d.timestamp)
                 DatasetGroupBy.FORMAT      -> d.dataFormat ?: "No format"
                 DatasetGroupBy.SESSION     -> d.sessionName ?: "No session"
                 DatasetGroupBy.OWNER       -> d.ownerOrcid?.let { ownerNames[it] ?: it } ?: "Unknown owner"

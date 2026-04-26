@@ -521,7 +521,7 @@ fun NavGraph(
                                         name = resource.name,
                                         type = resource.sampleType,
                                         description = resource.description,
-                                        timestamp = resource.sampleTimestamp,
+                                        timestamp = resource.timestamp,
                                         projectId = resource.projectId
                                     ))
                                     navController.navigate(Screen.CreateSample.createRoute())
