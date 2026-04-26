@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
     private var openScanner by mutableStateOf(false)
     private var initialThemeMode by mutableStateOf(PreferencesManager.THEME_MODE_SYSTEM)
     private var initialAccentColor by mutableStateOf(PreferencesManager.DEFAULT_ACCENT_COLOR)
-    private var initialAppIcon = PreferencesManager.APP_ICON_LIGHT
+    private var pendingAppIcon: String? = null
 
     private fun switchAppIcon(icon: String) {
         val packageManager = packageManager
@@ -68,6 +68,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        pendingAppIcon?.let { switchAppIcon(it) }
+        pendingAppIcon = null
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // Handle new intents when activity is already running
@@ -91,13 +97,9 @@ class MainActivity : ComponentActivity() {
                 withTimeout(2_000L) {
                     initialThemeMode = preferencesManager.themeMode.first()
                     initialAccentColor = preferencesManager.accentColor.first()
-                    initialAppIcon = preferencesManager.appIcon.first()
                 }
             } catch (_: Exception) { }
-            withContext(Dispatchers.Main) {
-                switchAppIcon(initialAppIcon)
-                preferencesReady = true
-            }
+            withContext(Dispatchers.Main) { preferencesReady = true }
         }
 
         val deepLinkUuid: String? = intent?.data?.pathSegments?.lastOrNull()?.takeIf { it.length > 8 }
@@ -211,6 +213,7 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onAppIconSave = { icon ->
+                        pendingAppIcon = icon
                         scope.launch {
                             preferencesManager.saveAppIcon(icon)
                         }
