@@ -27,8 +27,7 @@ data class Sample(
     @Json(name = "id") val internalId: Int? = null,
     @Json(name = "resource_type") val resourceType: String? = null,
     @Json(name = "deletion_request") val deletionRequest: Map<String, Any?>? = null,
-    @Json(name = "links") val links: List<ResourceLink>? = null,
-    var childSamples: List<SampleReference>? = null
+    @Json(name = "links") val links: List<ResourceLink>? = null
 ) : CrucibleResource()
 
 @JsonClass(generateAdapter = true)
@@ -55,9 +54,7 @@ data class Dataset(
     @Json(name = "sha256_hash_file_to_upload") val sha256Hash: String? = null,
     @Json(name = "resource_type") val resourceType: String? = null,
     @Json(name = "deletion_request") val deletionRequest: Map<String, Any?>? = null,
-    @Json(name = "links") val links: List<ResourceLink>? = null,
-    var parentDatasets: List<DatasetReference>? = null,
-    var childDatasets: List<DatasetReference>? = null
+    @Json(name = "links") val links: List<ResourceLink>? = null
 ) : CrucibleResource()
 
 @JsonClass(generateAdapter = true)
