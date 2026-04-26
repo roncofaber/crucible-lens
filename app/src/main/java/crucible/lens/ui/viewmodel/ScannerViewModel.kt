@@ -12,6 +12,7 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.repository.ResourceResult
+import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +27,7 @@ sealed class UiState {
 }
 
 private const val MAX_CARD_STATE_ENTRIES = 50
+private const val TAG = "ScannerViewModel"
 
 class ScannerViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = CrucibleRepository()
@@ -126,7 +128,9 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                                 }
                                 else -> {}
                             }
-                        } catch (_: Exception) {}
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to preload resource $uuid", e)
+                        }
                     }
                 }
             }
@@ -144,7 +148,10 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                 }
                 else -> null
             }
-        } catch (_: Exception) { null }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to ensure resource cached: $uuid", e)
+            null
+        }
     }
 
     fun reset() {
