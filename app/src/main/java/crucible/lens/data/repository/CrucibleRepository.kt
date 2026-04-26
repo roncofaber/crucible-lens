@@ -19,6 +19,13 @@ sealed class ResourceResult {
     object Loading : ResourceResult()
 }
 
+private fun httpError(code: Int): ResourceResult.Error = when (code) {
+    401, 403 -> ResourceResult.Error("Access denied (HTTP $code) — check your API key")
+    404      -> ResourceResult.Error("Resource not found")
+    in 500..599 -> ResourceResult.Error("Server error (HTTP $code) — try again later")
+    else        -> ResourceResult.Error("Request failed (HTTP $code)")
+}
+
 class CrucibleRepository {
     private val api = ApiClient.service
 
@@ -50,6 +57,8 @@ class CrucibleRepository {
                     } else if (cachedType != null) {
                         crucible.lens.data.cache.CacheManager.removeResourceType(uuid)
                         return@withContext fetchResourceByUuidFallback(uuid)
+                    } else {
+                        return@withContext httpError(sampleResponse.code())
                     }
                 }
                 "dataset" -> {
@@ -64,7 +73,7 @@ class CrucibleRepository {
                 }
             }
 
-            ResourceResult.Error("Resource not found: $uuid")
+            httpError(404)
         } catch (e: IOException) {
             Log.e(TAG, "Network error fetching resource $uuid", e)
             ResourceResult.Error("Network error: check your connection")
@@ -89,7 +98,7 @@ class CrucibleRepository {
                 return ResourceResult.Success(dataset)
             }
 
-            return ResourceResult.Error("Resource not found: $uuid")
+            return httpError(sampleResponse.code())
         } catch (e: IOException) {
             Log.e(TAG, "Network error in fallback fetch for $uuid", e)
             return ResourceResult.Error("Network error: check your connection")
