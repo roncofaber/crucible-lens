@@ -28,6 +28,8 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import crucible.lens.data.util.fetchProjectData
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.FilterSheet
+import crucible.lens.ui.common.SearchFilters
 import kotlinx.coroutines.launch
 
 private const val TAG = "SearchScreen"
@@ -53,10 +55,48 @@ fun SearchScreen(
     var totalCount by remember { mutableStateOf(0) }
     var metadataResults by remember { mutableStateOf<List<MetadataSearchResult>?>(null) }
     var isMetadataSearching by remember { mutableStateOf(false) }
+    var activeFilters by remember { mutableStateOf(SearchFilters()) }
+    var filterResults by remember { mutableStateOf<Pair<List<Sample>, List<Dataset>>?>(null) }
+    var isFilterLoading by remember { mutableStateOf(false) }
+    var showFilterSheet by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     // Clear server results when query changes
     LaunchedEffect(query) { metadataResults = null }
+
+    // Apply server-side filters whenever activeFilters changes
+    LaunchedEffect(activeFilters) {
+        if (!activeFilters.isActive) { filterResults = null; return@LaunchedEffect }
+        isFilterLoading = true
+        try {
+            val after = activeFilters.createdAfter.ifBlank { null }
+            val before = activeFilters.createdBefore.ifBlank { null }
+            val projectId = activeFilters.projectId.ifBlank { null }
+            val ownerOrcid = activeFilters.ownerOrcid.ifBlank { null }
+            val samples = ApiClient.service.getFilteredSamples(
+                projectId = projectId,
+                sampleType = activeFilters.sampleType.ifBlank { null },
+                ownerOrcid = ownerOrcid,
+                creationTimeGte = after,
+                creationTimeLte = before
+            ).body() ?: emptyList()
+            val datasets = ApiClient.service.getFilteredDatasets(
+                projectId = projectId,
+                measurement = activeFilters.measurement.ifBlank { null },
+                instrumentName = activeFilters.instrumentName.ifBlank { null },
+                dataFormat = activeFilters.dataFormat.ifBlank { null },
+                sessionName = activeFilters.sessionName.ifBlank { null },
+                ownerOrcid = ownerOrcid,
+                creationTimeGte = after,
+                creationTimeLte = before
+            ).body() ?: emptyList()
+            filterResults = samples to datasets
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to apply filters", e)
+            filterResults = null
+        }
+        isFilterLoading = false
+    }
 
     LaunchedEffect(Unit) {
         if (apiKey.isNullOrBlank()) return@LaunchedEffect
@@ -115,18 +155,21 @@ fun SearchScreen(
     }
 
     val mineActive = showMineOnly && userOrcid != null
-    val filteredProjects = remember(allProjects, query) {
-        if (query.isBlank()) emptyList()
+    val filtersActive = activeFilters.isActive
+    val baseSamples = filterResults?.first ?: allSamples
+    val baseDatasets = filterResults?.second ?: allDatasets
+    val filteredProjects = remember(allProjects, query, filtersActive) {
+        if (query.isBlank() || filtersActive) emptyList()
         else allProjects.filter { it.matchesSearch(query) }
     }
-    val filteredSamples = remember(allSamples, query, mineActive, userOrcid) {
-        val base = if (mineActive) allSamples.filter { it.ownerOrcid == userOrcid } else allSamples
-        if (query.isBlank()) { if (mineActive) base else emptyList() }
+    val filteredSamples = remember(baseSamples, query, mineActive, userOrcid, filtersActive) {
+        val base = if (mineActive) baseSamples.filter { it.ownerOrcid == userOrcid } else baseSamples
+        if (query.isBlank()) { if (mineActive || filtersActive) base else emptyList() }
         else base.filter { it.matchesSearch(query) }
     }
-    val filteredDatasets = remember(allDatasets, query, mineActive, userOrcid) {
-        val base = if (mineActive) allDatasets.filter { it.ownerOrcid == userOrcid } else allDatasets
-        if (query.isBlank()) { if (mineActive) base else emptyList() }
+    val filteredDatasets = remember(baseDatasets, query, mineActive, userOrcid, filtersActive) {
+        val base = if (mineActive) baseDatasets.filter { it.ownerOrcid == userOrcid } else baseDatasets
+        if (query.isBlank()) { if (mineActive || filtersActive) base else emptyList() }
         else base.filter { it.matchesSearch(query) }
     }
     val mfidCandidate = remember(query) {
@@ -173,6 +216,16 @@ fun SearchScreen(
                         }
                     },
                     actions = {
+                        BadgedBox(
+                            badge = {
+                                if (activeFilters.isActive)
+                                    Badge { Text(activeFilters.activeCount.toString()) }
+                            }
+                        ) {
+                            IconButton(onClick = { showFilterSheet = true }) {
+                                Icon(Icons.Default.FilterAlt, contentDescription = "Filters")
+                            }
+                        }
                         IconButton(onClick = onHome) {
                             Icon(Icons.Default.Home, contentDescription = "Home")
                         }
@@ -188,19 +241,31 @@ fun SearchScreen(
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
                 }
-                if (userOrcid != null) {
+                if (userOrcid != null || activeFilters.isActive || isFilterLoading) {
                     androidx.compose.foundation.layout.Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
                     ) {
-                        FilterChip(
-                            selected = showMineOnly,
-                            onClick = { showMineOnly = !showMineOnly },
-                            label = { Text("Mine") },
-                            leadingIcon = if (showMineOnly) {
-                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                            } else null
-                        )
+                        if (userOrcid != null) {
+                            FilterChip(
+                                selected = showMineOnly,
+                                onClick = { showMineOnly = !showMineOnly },
+                                label = { Text("Mine") },
+                                leadingIcon = if (showMineOnly) {
+                                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                } else null
+                            )
+                        }
+                        if (isFilterLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp).align(androidx.compose.ui.Alignment.CenterVertically), strokeWidth = 2.dp)
+                        } else if (activeFilters.isActive) {
+                            FilterChip(
+                                selected = true,
+                                onClick = { activeFilters = SearchFilters(); filterResults = null },
+                                label = { Text("${activeFilters.activeCount} filter${if (activeFilters.activeCount > 1) "s" else ""} · Clear") },
+                                leadingIcon = { Icon(Icons.Default.FilterAlt, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                            )
+                        }
                     }
                 }
             }
@@ -407,6 +472,14 @@ fun SearchScreen(
                 }
             }
         }
+    }
+
+    if (showFilterSheet) {
+        FilterSheet(
+            filters = activeFilters,
+            onApply = { activeFilters = it },
+            onDismiss = { showFilterSheet = false }
+        )
     }
 }
 
