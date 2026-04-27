@@ -285,21 +285,30 @@ fun CreateDatasetScreen(
 
                             // 2. Upload photo as thumbnail if captured
                             val capturedUri = photoUri
+                            var thumbnailFailed = false
                             if (capturedUri != null) {
                                 val b64 = withContext(Dispatchers.IO) {
                                     encodePhotoToBase64(context, capturedUri)
                                 }
                                 if (b64 != null) {
-                                    ApiClient.service.addThumbnail(
-                                        newUuid,
-                                        ThumbnailCreateRequest(
-                                            thumbnailName = "photo.jpg",
-                                            thumbnailB64str = b64
+                                    val thumbResp = withContext(Dispatchers.IO) {
+                                        ApiClient.service.addThumbnail(
+                                            newUuid,
+                                            ThumbnailCreateRequest(
+                                                thumbnailName = "photo.jpg",
+                                                thumbnailB64str = b64
+                                            )
                                         )
-                                    )
+                                    }
+                                    if (!thumbResp.isSuccessful) thumbnailFailed = true
+                                } else {
+                                    thumbnailFailed = true
                                 }
                             }
 
+                            if (thumbnailFailed) {
+                                snackbarHostState.showSnackbar("Dataset created, but thumbnail could not be attached")
+                            }
                             onCreated(newUuid)
                         } catch (e: Exception) {
                             snackbarHostState.showSnackbar("Network error: ${e.message}")
