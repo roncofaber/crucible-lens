@@ -52,6 +52,7 @@ fun LinkResourceSheet(
     var input by remember { mutableStateOf("") }
     var resolvedType by remember { mutableStateOf<String?>(null) }
     var resolvedUuid by remember { mutableStateOf<String?>(null) }
+    var selectedResource by remember { mutableStateOf<CrucibleResource?>(null) }
     var isResolving by remember { mutableStateOf(false) }
     var isLinking by remember { mutableStateOf(false) }
     var direction by remember { mutableStateOf(Direction.THEY_ARE_CHILD) }
@@ -115,13 +116,22 @@ fun LinkResourceSheet(
             val resp = ApiClient.service.getResourceType(trimmed)
             if (resp.isSuccessful) {
                 resolvedUuid = trimmed
-                resp.body()?.resolvedType?.lowercase()
+                val type = resp.body()?.resolvedType?.lowercase()
+                // Try to populate selectedResource from cache or project pool
+                if (type != null) {
+                    selectedResource = CacheManager.getResource(trimmed)
+                        ?: projectResources.find { it.uniqueId == trimmed }
+                }
+                type
             } else null
         } catch (_: Exception) { null }
         isResolving = false
     }
 
     val isSameType = resolvedType == currentType
+    val projectNames = remember {
+        CacheManager.getProjects()?.associate { it.projectId to (it.title ?: it.projectId) } ?: emptyMap<String, String>()
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -137,6 +147,50 @@ fun LinkResourceSheet(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text("Link Resource", style = MaterialTheme.typography.titleLarge)
+
+                // ── Selected resource card ────────────────────────────────────
+                if (selectedResource != null) {
+                    val sel = selectedResource!!
+                    val selType = resolvedType ?: ""
+                    val selProjectId = when (sel) {
+                        is Sample -> sel.projectId
+                        is Dataset -> sel.projectId
+                    }
+                    val selProjectName = selProjectId?.let { projectNames[it] }
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                if (sel is Sample) Icons.Default.Science else Icons.Default.Dataset,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(sel.name, style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                val sub = listOfNotNull(selProjectName, selType.replaceFirstChar { it.uppercase() }).joinToString(" · ")
+                                if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
+                            }
+                            IconButton(onClick = {
+                                selectedResource = null; input = ""; resolvedUuid = null; resolvedType = null
+                            }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "Deselect",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                        }
+                    }
+                }
 
                 // ── QR scanner inline ─────────────────────────────────────────
                 if (scanning) {
@@ -166,12 +220,13 @@ fun LinkResourceSheet(
                 }
 
                 // ── Search / UUID input ───────────────────────────────────────
-                OutlinedTextField(
+                if (selectedResource == null) OutlinedTextField(
                     value = input,
                     onValueChange = {
                         input = it
                         resolvedUuid = null
                         resolvedType = null
+                        selectedResource = null
                     },
                     label = { Text("Search by name or paste UUID") },
                     modifier = Modifier.fillMaxWidth(),
@@ -198,9 +253,6 @@ fun LinkResourceSheet(
 
                 // ── Search results from project ───────────────────────────────
                 if (searchResults.isNotEmpty() && resolvedUuid == null) {
-                    val projectNames = remember {
-                        CacheManager.getProjects()?.associate { it.projectId to (it.title ?: it.projectId) } ?: emptyMap<String, String>()
-                    }
                     Text("Results", style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     searchResults.forEach { result ->
@@ -224,6 +276,7 @@ fun LinkResourceSheet(
                                 input = result.uniqueId
                                 resolvedUuid = result.uniqueId
                                 resolvedType = resultType
+                                selectedResource = result
                             }
                         ) {
                             Row(
