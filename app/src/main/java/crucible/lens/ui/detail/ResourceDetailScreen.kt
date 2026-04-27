@@ -618,6 +618,7 @@ fun ResourceDetailScreen(
         onSaveToHistory(resource.uniqueId, resource.name)
     }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     // Shared upload logic for both gallery pick and camera capture
     suspend fun uploadThumbnail(uri: Uri, datasetUuid: String) {
@@ -701,7 +702,6 @@ fun ResourceDetailScreen(
         }
     }
 
-    val context = LocalContext.current
     AppScaffold(
         topBar = {
             TopAppBar(
