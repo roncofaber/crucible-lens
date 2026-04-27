@@ -636,8 +636,10 @@ fun ResourceDetailScreen(
                     val thumbs = thumbResp.body()?.map { "data:image/png;base64,${it.thumbnailB64}" } ?: emptyList()
                     loadedThumbnails[datasetUuid] = thumbs
                     CacheManager.cacheThumbnails(datasetUuid, thumbs)
+                    Toast.makeText(context, "Thumbnail uploaded", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "Uploaded — pull to refresh to view", Toast.LENGTH_SHORT).show()
                 }
-                Toast.makeText(context, "Thumbnail uploaded", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(context, "Upload failed (${resp.code()})", Toast.LENGTH_SHORT).show()
             }
