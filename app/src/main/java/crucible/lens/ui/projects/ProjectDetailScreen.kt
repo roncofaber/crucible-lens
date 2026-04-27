@@ -57,6 +57,7 @@ import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
+import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
 import crucible.lens.ui.common.QrCodeDialog
 import crucible.lens.ui.common.LazyColumnScrollbar
@@ -300,7 +301,7 @@ fun ProjectDetailScreen(
         loadProjectData()
     }
 
-    Scaffold(
+    AppScaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Project") },

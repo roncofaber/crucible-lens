@@ -42,7 +42,7 @@ import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.data.model.Project
 import crucible.lens.data.util.fetchProjectData
-import crucible.lens.ui.common.OfflineBanner
+import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.allLoadingMessages
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.launch
@@ -149,7 +149,7 @@ fun HomeScreen(
         allProjects.filter { it.projectId in pinnedProjects }.take(3)
     }
 
-    Scaffold(
+    AppScaffold(
         topBar = {
             Column {
                 TopAppBar(
@@ -174,7 +174,6 @@ fun HomeScreen(
                         IconButton(onClick = onSettingsClick) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
                     }
                 )
-                OfflineBanner()
             }
         }
     ) { padding ->

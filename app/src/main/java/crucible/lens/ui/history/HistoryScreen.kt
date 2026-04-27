@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.preferences.HistoryItem
+import crucible.lens.ui.common.AppScaffold
 import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -27,7 +28,7 @@ fun HistoryScreen(
     onItemClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Scaffold(
+    AppScaffold(
         topBar = {
             TopAppBar(
                 title = { Text("History") },

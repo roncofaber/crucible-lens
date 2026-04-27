@@ -27,7 +27,7 @@ import androidx.compose.material.icons.automirrored.filled.ManageSearch
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import crucible.lens.data.util.fetchProjectData
 import crucible.lens.data.util.matchesSearch
-import crucible.lens.ui.common.OfflineBanner
+import crucible.lens.ui.common.AppScaffold
 import kotlinx.coroutines.launch
 
 private const val TAG = "SearchScreen"
@@ -129,7 +129,7 @@ fun SearchScreen(
         if (q.length >= 10 && q.all { c -> c.isLowerCase() || c.isDigit() }) q else null
     }
 
-    Scaffold(
+    AppScaffold(
         topBar = {
             Column {
                 TopAppBar(
@@ -183,7 +183,6 @@ fun SearchScreen(
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
                 }
-                OfflineBanner()
             }
         }
     ) { padding ->
