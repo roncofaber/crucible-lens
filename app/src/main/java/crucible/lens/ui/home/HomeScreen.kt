@@ -171,10 +171,6 @@ fun HomeScreen(
                         )
                     },
                     actions = {
-                        IconButton(onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(graphExplorerUrl)))
-                        }) { Icon(Icons.Default.Language, contentDescription = "Open Web Explorer") }
-                        IconButton(onClick = onHistory) { Icon(Icons.Default.History, contentDescription = "History") }
                         IconButton(onClick = { showHelpDialog = true }) { Icon(Icons.AutoMirrored.Filled.Help, contentDescription = "Help") }
                         IconButton(onClick = onSettingsClick) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
                     }
@@ -210,7 +206,8 @@ fun HomeScreen(
                     HomeLastVisited(
                         uuid = lastVisitedResource,
                         name = lastVisitedResourceName,
-                        onClick = { onManualEntry(lastVisitedResource) }
+                        onClick = { onManualEntry(lastVisitedResource) },
+                        onHistory = onHistory
                     )
                 }
                 HomePinnedProjects(
@@ -395,11 +392,25 @@ private fun HomeCreateSection(onCreateSample: () -> Unit, onCreateDataset: () ->
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun HomeLastVisited(uuid: String, name: String, onClick: () -> Unit) {
+private fun HomeLastVisited(uuid: String, name: String, onClick: () -> Unit, onHistory: () -> Unit = {}) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-            Text("Last Visited", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                Text("Last Visited", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            }
+            Row(
+                modifier = Modifier.clickable(onClick = onHistory),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text("See all", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Default.ChevronRight, contentDescription = "History", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+            }
         }
         Card(
             onClick = onClick,
