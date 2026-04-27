@@ -113,6 +113,7 @@ class MainActivity : ComponentActivity() {
             val accentColor by preferencesManager.accentColor.collectAsState(
                 initial = initialAccentColor
             )
+            val useDynamicColor by preferencesManager.useDynamicColor.collectAsState(initial = false)
             val appIcon by preferencesManager.appIcon.collectAsState(
                 initial = PreferencesManager.APP_ICON_LIGHT
             )
@@ -154,7 +155,7 @@ class MainActivity : ComponentActivity() {
 
             CrucibleScannerTheme(
                 darkTheme = darkTheme,
-                dynamicColor = false, // Disable dynamic colors to use custom accent colors
+                dynamicColor = useDynamicColor,
                 accentColor = accentColor
             ) {
 
@@ -165,6 +166,7 @@ class MainActivity : ComponentActivity() {
                     graphExplorerUrl = graphExplorerUrl,
                     themeMode = themeMode,
                     accentColor = accentColor,
+                    useDynamicColor = useDynamicColor,
                     appIcon = appIcon,
                     darkTheme = darkTheme,
                     lastVisitedResource = lastVisitedResource,
@@ -203,9 +205,10 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onAccentColorSave = { color ->
-                        scope.launch {
-                            preferencesManager.saveAccentColor(color)
-                        }
+                        scope.launch { preferencesManager.saveAccentColor(color) }
+                    },
+                    onUseDynamicColorSave = { enabled ->
+                        scope.launch { preferencesManager.saveUseDynamicColor(enabled) }
                     },
                     onAppIconSave = { icon ->
                         scope.launch {

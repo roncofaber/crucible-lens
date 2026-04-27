@@ -48,7 +48,6 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -109,6 +108,7 @@ fun NavGraph(
     graphExplorerUrl: String,
     themeMode: String,
     accentColor: String,
+    useDynamicColor: Boolean = false,
     appIcon: String,
     darkTheme: Boolean,
     lastVisitedResource: String?,
@@ -125,6 +125,7 @@ fun NavGraph(
     onGraphExplorerUrlSave: (String) -> Unit,
     onThemeModeSave: (String) -> Unit,
     onAccentColorSave: (String) -> Unit,
+    onUseDynamicColorSave: (Boolean) -> Unit = {},
     onAppIconSave: (String) -> Unit,
     onLastVisitedResourceSave: (String, String) -> Unit,
     onFloatingScanButtonSave: (Boolean) -> Unit,
@@ -303,7 +304,7 @@ fun NavGraph(
             QRScannerScreen(
                 onQRCodeScanned = { code ->
                     // If the scanned code is a URL (e.g. a graph-explorer share link),
-                    // extract the last path segment as the UUID. Otherwise use as-is.
+                    // extract the last path segment as the UUID. Otherwise, use as-is.
                     val uuid = runCatching {
                         val parsed = Uri.parse(code)
                         if (parsed.scheme != null) parsed.lastPathSegment ?: code else code
@@ -370,8 +371,10 @@ fun NavGraph(
                 currentAccentColor = accentColor,
                 currentAppIcon = appIcon,
                 currentFloatingScanButton = floatingScanButton,
+                currentUseDynamicColor = useDynamicColor,
                 onThemeModeSave = onThemeModeSave,
                 onAccentColorSave = onAccentColorSave,
+                onUseDynamicColorSave = onUseDynamicColorSave,
                 onAppIconSave = onAppIconSave,
                 onFloatingScanButtonSave = onFloatingScanButtonSave,
                 onBack = { navController.popBackStack() },
