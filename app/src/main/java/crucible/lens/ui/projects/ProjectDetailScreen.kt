@@ -850,8 +850,7 @@ private fun SamplesList(
         val scope = rememberCoroutineScope()
         val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
-        Column(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.weight(1f)) {
+        Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
@@ -893,30 +892,25 @@ private fun SamplesList(
                     }
                 }
             }
+                if (fromCache) {
+                    val ageMin = CacheManager.getProjectDataAgeMinutes(projectId) ?: 0
+                    item(key = "cache_age") {
+                        Text(
+                            text = "Cached ${ageMin}m ago",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            }
             LazyColumnScrollbar(listState = listState, modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd))
             ScrollToTopButton(
                 visible = showScrollToTop,
                 onClick = { scope.launch { listState.animateScrollToItem(0) } },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
             )
-        }
-        if (fromCache) {
-            val ageMin by produceState<Long?>(null, projectId) {
-                while (true) {
-                    value = CacheManager.getProjectDataAgeMinutes(projectId)
-                    kotlinx.coroutines.delay(60_000L)
-                }
-            }
-            if (ageMin != null) {
-                Text(
-                    text = "Cached ${ageMin}m ago",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-            }
-        }
         }
     }
 }
@@ -957,8 +951,7 @@ private fun DatasetsList(
         val scope = rememberCoroutineScope()
         val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
-        Column(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.weight(1f)) {
+        Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
@@ -1000,30 +993,25 @@ private fun DatasetsList(
                     }
                 }
             }
+                if (fromCache) {
+                    val ageMin = CacheManager.getProjectDataAgeMinutes(projectId) ?: 0
+                    item(key = "cache_age") {
+                        Text(
+                            text = "Cached ${ageMin}m ago",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            }
             LazyColumnScrollbar(listState = listState, modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd))
             ScrollToTopButton(
                 visible = showScrollToTop,
                 onClick = { scope.launch { listState.animateScrollToItem(0) } },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
             )
-        }
-        if (fromCache) {
-            val ageMin by produceState<Long?>(null, projectId) {
-                while (true) {
-                    value = CacheManager.getProjectDataAgeMinutes(projectId)
-                    kotlinx.coroutines.delay(60_000L)
-                }
-            }
-            if (ageMin != null) {
-                Text(
-                    text = "Cached ${ageMin}m ago",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-            }
-        }
         }
     }
 }

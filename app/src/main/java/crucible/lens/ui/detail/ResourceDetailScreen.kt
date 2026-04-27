@@ -1136,27 +1136,20 @@ fun ResourceDetailScreen(
                     }
                 }
 
+                val ageMin = CacheManager.getResourceAgeMinutes(resource.uniqueId)
+                if (ageMin != null) {
+                    item(key = "cache_age") {
+                        Text(
+                            text = "Cached ${ageMin}m ago",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
                 } // end LazyColumn items
             } // end LazyColumn
-
-                        // Cache age — anchored to bottom, above scroll button
-                        val ageMin by produceState<Long?>(null, resource.uniqueId) {
-                            while (true) {
-                                value = CacheManager.getResourceAgeMinutes(resource.uniqueId)
-                                kotlinx.coroutines.delay(60_000L)
-                            }
-                        }
-                        if (ageMin != null) {
-                            Text(
-                                text = "Cached ${ageMin}m ago",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .padding(bottom = 56.dp),
-                                textAlign = TextAlign.Center
-                            )
-                        }
 
                         // Pull-to-refresh indicator with spring animation
                         AnimatedPullToRefreshIndicator(
