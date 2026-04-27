@@ -59,7 +59,7 @@ import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
-import crucible.lens.ui.common.QrCodeDialog
+
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.ScrollToTopButton
@@ -203,7 +203,6 @@ fun ProjectDetailScreen(
     var sampleGroupBy by remember { mutableStateOf(SampleGroupBy.TYPE) }
     var datasetGroupBy by remember { mutableStateOf(DatasetGroupBy.MEASUREMENT) }
     var fromCache by remember { mutableStateOf(false) }
-    var showQrDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     // Load persisted group-by choices and default tab on first composition
@@ -390,10 +389,12 @@ fun ProjectDetailScreen(
                 onSearchChange = { searchQuery = it },
                 isPinned = isPinned,
                 onTogglePin = onTogglePin,
-                onShowQr = { showQrDialog = true }
+
             )
 
-            // Tabs
+            // Tabs + group-by overlay
+            var groupMenuExpanded by remember { mutableStateOf(false) }
+            Box {
             TabRow(selectedTabIndex = pagerState.currentPage) {
                 Tab(
                     selected = pagerState.currentPage == 0,
@@ -464,46 +465,30 @@ fun ProjectDetailScreen(
                     icon = { Icon(Icons.Default.Dataset, contentDescription = null) }
                 )
             }
-
-            // Group-by selector — switches with the active tab
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                var groupMenuExpanded by remember { mutableStateOf(false) }
-                Box {
-                    TextButton(
+                // Group-by button overlaid at end of tab row
+                Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) {
+                    val label = if (pagerState.currentPage == 0) sampleGroupBy.label else datasetGroupBy.label
+                    IconButton(
                         onClick = { groupMenuExpanded = true },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        modifier = Modifier.size(36.dp)
                     ) {
-                        Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        val label = if (pagerState.currentPage == 0) sampleGroupBy.label else datasetGroupBy.label
-                        Text("Group: $label", style = MaterialTheme.typography.labelSmall)
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Icon(Icons.Default.Tune, contentDescription = "Group by $label", modifier = Modifier.size(18.dp))
                     }
                     DropdownMenu(expanded = groupMenuExpanded, onDismissRequest = { groupMenuExpanded = false }) {
                         if (pagerState.currentPage == 0) {
                             SampleGroupBy.entries.forEach { opt ->
                                 DropdownMenuItem(
                                     text = { Text(opt.label) },
-                                    onClick = {
-                                        sampleGroupBy = opt
-                                        groupMenuExpanded = false
-                                        scope.launch { prefs.saveSampleGroupBy(opt.name) }
-                                    }
+                                    leadingIcon = if (opt == sampleGroupBy) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                                    onClick = { sampleGroupBy = opt; groupMenuExpanded = false; scope.launch { prefs.saveSampleGroupBy(opt.name) } }
                                 )
                             }
                         } else {
                             DatasetGroupBy.entries.forEach { opt ->
                                 DropdownMenuItem(
                                     text = { Text(opt.label) },
-                                    onClick = {
-                                        datasetGroupBy = opt
-                                        groupMenuExpanded = false
-                                        scope.launch { prefs.saveDatasetGroupBy(opt.name) }
-                                    }
+                                    leadingIcon = if (opt == datasetGroupBy) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                                    onClick = { datasetGroupBy = opt; groupMenuExpanded = false; scope.launch { prefs.saveDatasetGroupBy(opt.name) } }
                                 )
                             }
                         }
@@ -621,13 +606,6 @@ fun ProjectDetailScreen(
         }
     }
 
-    if (showQrDialog) {
-        QrCodeDialog(
-            mfid = projectId,
-            name = project?.title ?: projectId,
-            onDismiss = { showQrDialog = false }
-        )
-    }
 }
 
 @Composable
@@ -638,7 +616,6 @@ private fun ProjectHeader(
     onSearchChange: (String) -> Unit,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
-    onShowQr: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -714,52 +691,33 @@ private fun ProjectHeader(
                                     )
                                 }
                             }
-                            project?.lead?.let { lead ->
-                                Text(
-                                    text = "Lead: ${ownerDisplayName(lead.firstName, lead.lastName)}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            val lead = project?.lead
+                            val org = project?.organization?.takeIf { it.isNotBlank() }
+                            if (lead != null || org != null) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (lead != null) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(ownerDisplayName(lead.firstName, lead.lastName), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
+                                    if (org != null) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.Business, contentDescription = null, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(org, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
+                                }
                             }
-                            project?.organization?.takeIf { it.isNotBlank() }?.let {
-                                Text(
-                                    text = it,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                    // Action icons: copy + QR (thumb zone)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy((-6).dp)
-                    ) {
-                        IconButton(
-                            onClick = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("Project ID", projectId))
-                                Toast.makeText(context, "Project ID copied to clipboard", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.ContentCopy,
-                                contentDescription = "Copy Project ID",
-                                modifier = Modifier.size(22.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        IconButton(
-                            onClick = onShowQr,
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.QrCode,
-                                contentDescription = "Show QR Code",
-                                modifier = Modifier.size(22.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
                         }
                     }
                 }
@@ -891,7 +849,6 @@ private fun SamplesList(
                         }
                     }
                 }
-            }
                 if (fromCache) {
                     val ageMin = CacheManager.getProjectDataAgeMinutes(projectId) ?: 0
                     item(key = "cache_age") {
@@ -992,7 +949,6 @@ private fun DatasetsList(
                         }
                     }
                 }
-            }
                 if (fromCache) {
                     val ageMin = CacheManager.getProjectDataAgeMinutes(projectId) ?: 0
                     item(key = "cache_age") {
