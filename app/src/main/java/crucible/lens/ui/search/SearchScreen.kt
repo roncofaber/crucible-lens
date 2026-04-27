@@ -23,6 +23,8 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.MetadataSearchResult
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
+import androidx.compose.material.icons.automirrored.filled.ManageSearch
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import crucible.lens.data.util.fetchProjectData
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.OfflineBanner
@@ -233,7 +235,7 @@ fun SearchScreen(
                                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                                     Spacer(modifier = Modifier.width(8.dp))
                                 } else {
-                                    Icon(Icons.Default.ManageSearch, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.AutoMirrored.Filled.ManageSearch, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
                                 }
                                 Text("Search metadata on server")
@@ -352,7 +354,7 @@ fun SearchScreen(
                                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                                 Spacer(modifier = Modifier.width(8.dp))
                             } else {
-                                Icon(Icons.Default.ManageSearch, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.AutoMirrored.Filled.ManageSearch, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                             }
                             Text("Search metadata on server")
@@ -489,7 +491,7 @@ private fun DirectLookupCard(mfid: String, onClick: (String) -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                Icons.Default.OpenInNew,
+                Icons.AutoMirrored.Filled.OpenInNew,
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.onPrimaryContainer
