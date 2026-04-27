@@ -1,22 +1,15 @@
 package crucible.lens.ui.projects
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
-import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -140,7 +133,7 @@ private fun EmptyListCard(
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.LoadMoreItem(
+private fun androidx.compose.foundation.lazy.LazyListScope.loadMoreItem(
     keyPrefix: String,
     groupKey: String,
     displayed: Int,
@@ -210,7 +203,7 @@ fun ProjectDetailScreen(
         sampleGroupBy = SampleGroupBy.valueOf(prefs.sampleGroupBy.first())
         datasetGroupBy = DatasetGroupBy.valueOf(prefs.datasetGroupBy.first())
         val tab = prefs.defaultProjectTab.first()
-        if (tab == crucible.lens.data.preferences.PreferencesManager.PROJECT_TAB_DATASETS) {
+        if (tab == PreferencesManager.PROJECT_TAB_DATASETS) {
             pagerState.scrollToPage(1)
         }
     }
@@ -594,7 +587,6 @@ private fun ProjectHeader(
     onSampleGroupByChange: (SampleGroupBy) -> Unit = {},
     onDatasetGroupByChange: (DatasetGroupBy) -> Unit = {},
 ) {
-    val context = LocalContext.current
     var groupMenuExpanded by remember { mutableStateOf(false) }
 
     Surface(
@@ -781,7 +773,7 @@ private fun SamplesList(
     if (samples.isEmpty()) {
         EmptyListCard(resourceName = "Samples", defaultIcon = Icons.Default.Science, isFiltered = isFiltered)
     } else if (!ownerNamesReady) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(32.dp))
         }
     } else {
@@ -835,7 +827,7 @@ private fun SamplesList(
                                 )
                             }
                         }
-                        LoadMoreItem("sample", groupKey, displayedCount, sortedSamples.size) {
+                        loadMoreItem("sample", groupKey, displayedCount, sortedSamples.size) {
                             displayedCounts[groupKey] = displayedCount + 50
                         }
                     }
@@ -878,7 +870,7 @@ private fun DatasetsList(
     if (datasets.isEmpty()) {
         EmptyListCard(resourceName = "Datasets", defaultIcon = Icons.Default.Dataset, isFiltered = isFiltered)
     } else if (!ownerNamesReady) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(32.dp))
         }
     } else {
@@ -935,7 +927,7 @@ private fun DatasetsList(
                                 )
                             }
                         }
-                        LoadMoreItem("dataset", groupKey, displayedCount, sortedDatasets.size) {
+                        loadMoreItem("dataset", groupKey, displayedCount, sortedDatasets.size) {
                             displayedCounts[groupKey] = displayedCount + 50
                         }
                     }
@@ -1025,7 +1017,7 @@ private fun ResourceCard(
     resourceType: String = "sample",
     onClick: () -> Unit
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
 
     val webUrl = if (projectId != null && graphExplorerUrl.isNotBlank()) {
@@ -1105,7 +1097,7 @@ private fun ResourceCard(
                     leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
                     onClick = {
                         menuExpanded = false
-                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(webUrl)))
+                        context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(webUrl)))
                     }
                 )
                 DropdownMenuItem(
@@ -1113,13 +1105,13 @@ private fun ResourceCard(
                     leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                     onClick = {
                         menuExpanded = false
-                        val intent = android.content.Intent().apply {
-                            action = android.content.Intent.ACTION_SEND
-                            putExtra(android.content.Intent.EXTRA_TEXT, webUrl)
-                            putExtra(android.content.Intent.EXTRA_SUBJECT, title)
+                        val intent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            putExtra(Intent.EXTRA_TEXT, webUrl)
+                            putExtra(Intent.EXTRA_SUBJECT, title)
                             type = "text/plain"
                         }
-                        context.startActivity(android.content.Intent.createChooser(intent, "Share via"))
+                        context.startActivity(Intent.createChooser(intent, "Share via"))
                     }
                 )
             }
