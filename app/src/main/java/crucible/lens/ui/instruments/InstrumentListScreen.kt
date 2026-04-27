@@ -36,6 +36,7 @@ fun InstrumentListScreen(
     onHome: () -> Unit,
     onSearch: () -> Unit = {},
     onInstrumentClick: (String) -> Unit,
+    pinnedInstruments: Set<String> = emptySet(),
     modifier: Modifier = Modifier
 ) {
     var instruments by remember { mutableStateOf<List<Instrument>?>(null) }
@@ -196,7 +197,7 @@ fun InstrumentListScreen(
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 items(filteredInstruments, key = { it.uniqueId }) { instrument ->
-                                    InstrumentCard(instrument = instrument, onClick = { onInstrumentClick(instrument.uniqueId) })
+                                    InstrumentCard(instrument = instrument, isPinned = instrument.uniqueId in pinnedInstruments, onClick = { onInstrumentClick(instrument.uniqueId) })
                                 }
                             }
                             LazyColumnScrollbar(listState = listState, modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd))
@@ -226,6 +227,7 @@ fun InstrumentListScreen(
 @Composable
 private fun InstrumentCard(
     instrument: Instrument,
+    isPinned: Boolean = false,
     onClick: () -> Unit
 ) {
     Card(
@@ -256,6 +258,9 @@ private fun InstrumentCard(
                 if (!instrument.location.isNullOrBlank()) {
                     Text(text = instrument.location, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+            }
+            if (isPinned) {
+                Icon(Icons.Default.Bookmark, contentDescription = "Pinned", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
             }
             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
         }
