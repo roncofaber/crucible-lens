@@ -31,6 +31,7 @@ class PreferencesManager(private val context: Context) {
         private val SAMPLE_GROUP_BY = stringPreferencesKey("sample_group_by")
         private val DATASET_GROUP_BY = stringPreferencesKey("dataset_group_by")
         private val DEFAULT_PROJECT_TAB = stringPreferencesKey("default_project_tab")
+        private val USER_ORCID = stringPreferencesKey("user_orcid")
 
         const val PROJECT_TAB_SAMPLES = "SAMPLES"
         const val PROJECT_TAB_DATASETS = "DATASETS"
@@ -99,6 +100,10 @@ class PreferencesManager(private val context: Context) {
 
     val defaultProjectTab: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[DEFAULT_PROJECT_TAB] ?: PROJECT_TAB_SAMPLES
+    }
+
+    val userOrcid: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[USER_ORCID]
     }
 
     val resourceHistory: Flow<List<HistoryItem>> = context.dataStore.data.map { prefs ->
@@ -189,6 +194,13 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun saveDefaultProjectTab(tab: String) {
         context.dataStore.edit { prefs -> prefs[DEFAULT_PROJECT_TAB] = tab }
+    }
+
+    suspend fun saveUserOrcid(orcid: String?) {
+        context.dataStore.edit { preferences ->
+            if (orcid != null) preferences[USER_ORCID] = orcid
+            else preferences.remove(USER_ORCID)
+        }
     }
 
     suspend fun addToHistory(uuid: String, name: String) {

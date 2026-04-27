@@ -36,6 +36,7 @@ private const val TAG = "SearchScreen"
 @Composable
 fun SearchScreen(
     apiKey: String?,
+    userOrcid: String? = null,
     onBack: () -> Unit,
     onHome: () -> Unit,
     onResourceClick: (String) -> Unit,
@@ -43,6 +44,7 @@ fun SearchScreen(
     modifier: Modifier = Modifier
 ) {
     var query by remember { mutableStateOf("") }
+    var showMineOnly by remember { mutableStateOf(false) }
     var allProjects by remember { mutableStateOf<List<Project>>(emptyList()) }
     var allSamples by remember { mutableStateOf<List<Sample>>(emptyList()) }
     var allDatasets by remember { mutableStateOf<List<Dataset>>(emptyList()) }
@@ -112,17 +114,20 @@ fun SearchScreen(
         isLoading = false
     }
 
+    val mineActive = showMineOnly && userOrcid != null
     val filteredProjects = remember(allProjects, query) {
         if (query.isBlank()) emptyList()
         else allProjects.filter { it.matchesSearch(query) }
     }
-    val filteredSamples = remember(allSamples, query) {
-        if (query.isBlank()) emptyList()
-        else allSamples.filter { it.matchesSearch(query) }
+    val filteredSamples = remember(allSamples, query, mineActive, userOrcid) {
+        val base = if (mineActive) allSamples.filter { it.ownerOrcid == userOrcid } else allSamples
+        if (query.isBlank()) { if (mineActive) base else emptyList() }
+        else base.filter { it.matchesSearch(query) }
     }
-    val filteredDatasets = remember(allDatasets, query) {
-        if (query.isBlank()) emptyList()
-        else allDatasets.filter { it.matchesSearch(query) }
+    val filteredDatasets = remember(allDatasets, query, mineActive, userOrcid) {
+        val base = if (mineActive) allDatasets.filter { it.ownerOrcid == userOrcid } else allDatasets
+        if (query.isBlank()) { if (mineActive) base else emptyList() }
+        else base.filter { it.matchesSearch(query) }
     }
     val mfidCandidate = remember(query) {
         val q = query.trim()
@@ -181,6 +186,21 @@ fun SearchScreen(
                         )
                     } else {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                }
+                if (userOrcid != null) {
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = showMineOnly,
+                            onClick = { showMineOnly = !showMineOnly },
+                            label = { Text("Mine") },
+                            leadingIcon = if (showMineOnly) {
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                            } else null
+                        )
                     }
                 }
             }

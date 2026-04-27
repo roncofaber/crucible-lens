@@ -134,6 +134,7 @@ class MainActivity : ComponentActivity() {
             val resourceHistory by preferencesManager.resourceHistory.collectAsState(
                 initial = emptyList()
             )
+            val userOrcid by preferencesManager.userOrcid.collectAsState(initial = null)
             val scope = rememberCoroutineScope()
 
             // Set API key and base URL in client when they change
@@ -231,6 +232,10 @@ class MainActivity : ComponentActivity() {
                         scope.launch {
                             preferencesManager.toggleArchivedProject(id)
                         }
+                    },
+                    userOrcid = userOrcid,
+                    onUserOrcidSave = { orcid ->
+                        scope.launch { preferencesManager.saveUserOrcid(orcid) }
                     }
                 )
             }
