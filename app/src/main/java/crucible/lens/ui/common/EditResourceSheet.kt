@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -282,7 +283,7 @@ private fun DatasetEditFields(
         label = { Text("Data Type") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
-        leadingIcon = { Icon(Icons.Default.Label, contentDescription = null) }
+        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) }
     )
     OutlinedTextField(
         value = metadataText,

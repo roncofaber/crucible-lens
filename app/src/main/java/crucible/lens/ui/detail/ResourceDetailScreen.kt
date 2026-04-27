@@ -55,6 +55,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.automirrored.filled.Notes
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -497,7 +498,6 @@ fun ResourceDetailScreen(
                 if (cached != null && when (cached) {
                         is Sample  -> cached.links != null
                         is Dataset -> cached.links != null
-                        else       -> false
                     }
                 ) {
                     withContext(Dispatchers.Main) {
@@ -1773,7 +1773,7 @@ private fun DatasetDetailsCard(
                         }
                     )
                     InfoRow(icon = Icons.Default.Description, label = "Format", value = dataset.dataFormat ?: "None")
-                    InfoRow(icon = Icons.Default.Label, label = "Data Type", value = dataset.dataType ?: "None")
+                    InfoRow(icon = Icons.AutoMirrored.Filled.Label, label = "Data Type", value = dataset.dataType ?: "None")
                     InfoRow(icon = Icons.Default.Storage, label = "Size", value = dataset.size?.let { formatFileSize(it) } ?: "None")
                     InfoRow(icon = Icons.Default.FolderOpen, label = "Source Folder", value = dataset.sourceFolder?.takeIf { it.isNotBlank() } ?: "None")
                     InfoRow(icon = Icons.Default.Security, label = "SHA-256", value = dataset.sha256Hash ?: "None")
