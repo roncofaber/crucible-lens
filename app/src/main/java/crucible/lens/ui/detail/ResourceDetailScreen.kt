@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
@@ -618,45 +619,55 @@ fun ResourceDetailScreen(
     }
     val scope = rememberCoroutineScope()
 
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    // Shared upload logic for both gallery pick and camera capture
+    suspend fun uploadThumbnail(uri: Uri, datasetUuid: String) {
+        isUploadingThumbnail = true
+        try {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            if (bytes == null) {
+                Toast.makeText(context, "Could not read image", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+            val resp = withContext(Dispatchers.IO) {
+                ApiClient.service.addThumbnail(
+                    datasetUuid,
+                    ThumbnailCreateRequest(
+                        thumbnailName = "thumbnail_${System.currentTimeMillis()}.png",
+                        thumbnailB64str = base64
+                    )
+                )
+            }
+            if (resp.isSuccessful) {
+                CacheManager.clearThumbnail(datasetUuid)
+                val thumbResp = withContext(Dispatchers.IO) { ApiClient.service.getThumbnails(datasetUuid) }
+                if (thumbResp.isSuccessful) {
+                    val thumbs = thumbResp.body()?.map { "data:image/png;base64,${it.thumbnailB64}" } ?: emptyList()
+                    loadedThumbnails[datasetUuid] = thumbs
+                    CacheManager.cacheThumbnails(datasetUuid, thumbs)
+                }
+                Toast.makeText(context, "Thumbnail uploaded", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Upload failed (${resp.code()})", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+        } finally {
+            isUploadingThumbnail = false
+        }
+    }
+
+    val galleryPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         val dataset = currentDisplayResource as? Dataset ?: return@rememberLauncherForActivityResult
         if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            isUploadingThumbnail = true
-            try {
-                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                if (bytes == null) {
-                    Toast.makeText(context, "Could not read image", Toast.LENGTH_SHORT).show()
-                    return@launch
-                }
-                val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
-                val resp = withContext(Dispatchers.IO) {
-                    ApiClient.service.addThumbnail(
-                        dataset.uniqueId,
-                        ThumbnailCreateRequest(
-                            thumbnailName = "thumbnail_${System.currentTimeMillis()}.png",
-                            thumbnailB64str = base64
-                        )
-                    )
-                }
-                if (resp.isSuccessful) {
-                    CacheManager.clearThumbnail(dataset.uniqueId)
-                    val thumbResp = withContext(Dispatchers.IO) { ApiClient.service.getThumbnails(dataset.uniqueId) }
-                    if (thumbResp.isSuccessful) {
-                        val thumbs = thumbResp.body()?.map { "data:image/png;base64,${it.thumbnailB64}" } ?: emptyList()
-                        loadedThumbnails[dataset.uniqueId] = thumbs
-                        CacheManager.cacheThumbnails(dataset.uniqueId, thumbs)
-                    }
-                    Toast.makeText(context, "Thumbnail uploaded", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(context, "Upload failed (${resp.code()})", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-            } finally {
-                isUploadingThumbnail = false
-            }
-        }
+        scope.launch { uploadThumbnail(uri, dataset.uniqueId) }
+    }
+
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    val cameraPicker = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val dataset = currentDisplayResource as? Dataset ?: return@rememberLauncherForActivityResult
+        val uri = cameraUri ?: return@rememberLauncherForActivityResult
+        if (success) scope.launch { uploadThumbnail(uri, dataset.uniqueId) }
     }
 
     val pullRefreshState = rememberPullToRefreshState()
@@ -740,7 +751,7 @@ fun ResourceDetailScreen(
                                 )
                                 if (currentDisplayResource is Dataset) {
                                     DropdownMenuItem(
-                                        text = { Text(if (isUploadingThumbnail) "Uploading…" else "Add thumbnail") },
+                                        text = { Text(if (isUploadingThumbnail) "Uploading…" else "Photo from gallery") },
                                         leadingIcon = {
                                             if (isUploadingThumbnail)
                                                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -748,7 +759,24 @@ fun ResourceDetailScreen(
                                                 Icon(Icons.Default.AddPhotoAlternate, contentDescription = null)
                                         },
                                         enabled = !isUploadingThumbnail,
-                                        onClick = { overflowMenuExpanded = false; imagePicker.launch("image/*") }
+                                        onClick = { overflowMenuExpanded = false; galleryPicker.launch("image/*") }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(if (isUploadingThumbnail) "Uploading…" else "Take photo") },
+                                        leadingIcon = {
+                                            if (isUploadingThumbnail)
+                                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                            else
+                                                Icon(Icons.Default.CameraAlt, contentDescription = null)
+                                        },
+                                        enabled = !isUploadingThumbnail,
+                                        onClick = {
+                                            overflowMenuExpanded = false
+                                            val tmpFile = java.io.File.createTempFile("thumb_", ".jpg", context.cacheDir)
+                                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", tmpFile)
+                                            cameraUri = uri
+                                            cameraPicker.launch(uri)
+                                        }
                                     )
                                 }
                                 DropdownMenuItem(
