@@ -171,14 +171,6 @@ fun InstrumentDetailScreen(
                         horizontalArrangement = Arrangement.spacedBy((-4).dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = onTogglePin, modifier = Modifier.size(40.dp)) {
-                            Icon(
-                                if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                contentDescription = if (isPinned) "Unpin" else "Pin",
-                                tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
                         IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
                             Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
                         }
@@ -241,35 +233,36 @@ fun InstrumentDetailScreen(
             ) {
                 // Header
                 instrument?.let { instr ->
-                    InstrumentHeader(instrument = instr)
+                    InstrumentHeader(instrument = instr, isPinned = isPinned, onTogglePin = onTogglePin)
                 }
 
-                // Search bar
+                // Filter bar
                 Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    modifier = Modifier.fillMaxWidth()
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                         Box(modifier = Modifier.weight(1f)) {
                             if (searchQuery.isEmpty()) {
-                                Text("Filter datasets…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                                Text("Filter datasets…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                             }
                             BasicTextField(
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                textStyle = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface),
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
                                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                                 singleLine = true
                             )
                         }
                         if (searchQuery.isNotEmpty()) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp).clickable { searchQuery = "" })
+                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp).clickable { searchQuery = "" })
                         }
                     }
                 }
@@ -378,7 +371,11 @@ fun InstrumentDetailScreen(
 }
 
 @Composable
-private fun InstrumentHeader(instrument: Instrument) {
+private fun InstrumentHeader(
+    instrument: Instrument,
+    isPinned: Boolean = false,
+    onTogglePin: () -> Unit = {}
+) {
     Surface(
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
         modifier = Modifier.fillMaxWidth()
@@ -388,9 +385,14 @@ private fun InstrumentHeader(instrument: Instrument) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+            Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.weight(1f)
             ) {
                 Icon(Icons.Default.Biotech, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -418,6 +420,15 @@ private fun InstrumentHeader(instrument: Instrument) {
                             modifier = Modifier.horizontalScroll(nameScrollState)
                         )
                     }
+                }
+            }
+                IconButton(onClick = onTogglePin, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = if (isPinned) "Unpin" else "Pin",
+                        tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
             val type = instrument.instrumentType?.takeIf { it.isNotBlank() }
@@ -463,12 +474,11 @@ private fun DatasetCard(
             ) {
                 Icon(Icons.Default.Dataset, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(text = dataset.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
-                    val subtitle = listOfNotNull(dataset.measurement, dataset.sessionName).joinToString(" · ")
+                    Text(text = dataset.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val subtitle = listOfNotNull(dataset.projectId, dataset.sessionName).joinToString(" · ")
                     if (subtitle.isNotBlank()) {
-                        Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Text(text = dataset.uniqueId, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
             }
