@@ -2,7 +2,6 @@ package crucible.lens.ui.instruments
 
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.core.Spring
@@ -54,13 +53,13 @@ private enum class DatasetSortOrder { NEWEST, OLDEST, NAME }
 @Composable
 fun InstrumentDetailScreen(
     instrumentId: String,
-    isPinned: Boolean = false,
-    onTogglePin: () -> Unit = {},
     onBack: () -> Unit,
     onHome: () -> Unit,
-    onSearch: () -> Unit = {},
     onDatasetClick: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isPinned: Boolean = false,
+    onTogglePin: () -> Unit = {},
+    onSearch: () -> Unit = {}
 ) {
     var instrument by remember { mutableStateOf<Instrument?>(null) }
     var datasets by remember { mutableStateOf<List<Dataset>?>(null) }

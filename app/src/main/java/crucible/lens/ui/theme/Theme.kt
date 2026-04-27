@@ -13,6 +13,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.core.graphics.toColorInt
 import androidx.core.view.WindowCompat
 
 private val onPrimaryDark  = Color(0xFF1C1B1F)
@@ -152,7 +153,7 @@ fun CrucibleScannerTheme(
         }
         accentColor.startsWith("#") -> {
             val c = try {
-                Color(android.graphics.Color.parseColor(accentColor))
+                Color(accentColor.toColorInt())
             } catch (_: Exception) {
                 Color(0xFF1976D2)
             }

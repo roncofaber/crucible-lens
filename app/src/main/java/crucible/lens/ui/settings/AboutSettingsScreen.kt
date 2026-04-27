@@ -1,7 +1,6 @@
 package crucible.lens.ui.settings
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -18,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
@@ -177,7 +177,7 @@ fun AboutSettingsScreen(
             // Crucible Website Card
             Card(
                 modifier = Modifier.clickable {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://crucible.lbl.gov/")))
+                    context.startActivity(Intent(Intent.ACTION_VIEW, "https://crucible.lbl.gov/".toUri()))
                 }
             ) {
                 Row(
@@ -215,7 +215,7 @@ fun AboutSettingsScreen(
             // App Source Code Card
             Card(
                 modifier = Modifier.clickable {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/roncofaber/crucible-lens")))
+                    context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/roncofaber/crucible-lens".toUri()))
                 }
             ) {
                 Row(
@@ -253,7 +253,7 @@ fun AboutSettingsScreen(
             // Python Client Card
             Card(
                 modifier = Modifier.clickable {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MolecularFoundryCrucible/nano-crucible")))
+                    context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/MolecularFoundryCrucible/nano-crucible".toUri()))
                 }
             ) {
                 Row(
@@ -284,7 +284,7 @@ fun AboutSettingsScreen(
             // Molecular Foundry Card
             Card(
                 modifier = Modifier.clickable {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://foundry.lbl.gov/")))
+                    context.startActivity(Intent(Intent.ACTION_VIEW, "https://foundry.lbl.gov/".toUri()))
                 }
             ) {
                 Row(
@@ -340,7 +340,7 @@ fun AboutSettingsScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                     modifier = Modifier.clickable {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/roncofaber")))
+                        context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/roncofaber".toUri()))
                     }
                 )
                 Text(

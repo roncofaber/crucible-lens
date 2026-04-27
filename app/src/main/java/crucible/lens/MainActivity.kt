@@ -15,7 +15,6 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.compose.rememberNavController
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.network.ConnectivityObserver
-import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.data.preferences.PreferencesManager
 import crucible.lens.ui.navigation.NavGraph
 import crucible.lens.ui.theme.CrucibleScannerTheme

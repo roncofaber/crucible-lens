@@ -31,7 +31,6 @@ private const val TAG = "ScannerViewModel"
 
 class ScannerViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = CrucibleRepository()
-    private val ctx = application.applicationContext
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -57,18 +56,18 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
 
     private fun getThumbnails(uuid: String): List<String>? =
         CacheManager.getThumbnails(uuid)
-            ?: PersistentThumbnailCache.load(ctx, uuid)?.also { CacheManager.cacheThumbnails(uuid, it) }
+            ?: PersistentThumbnailCache.load(getApplication(), uuid)?.also { CacheManager.cacheThumbnails(uuid, it) }
 
     private suspend fun fetchAndCacheThumbnails(uuid: String): List<String> {
         val fetched = repository.fetchThumbnails(uuid)
         CacheManager.cacheThumbnails(uuid, fetched)
-        PersistentThumbnailCache.save(ctx, uuid, fetched)
+        PersistentThumbnailCache.save(getApplication(), uuid, fetched)
         return fetched
     }
 
     private fun evictThumbnails(uuid: String) {
         CacheManager.clearThumbnail(uuid)
-        PersistentThumbnailCache.clear(ctx, uuid)
+        PersistentThumbnailCache.clear(getApplication(), uuid)
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -134,23 +133,6 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
             }
-        }
-    }
-
-    suspend fun ensureResourceCached(uuid: String): CrucibleResource? {
-        val cached = CacheManager.getResource(uuid)
-        if (cached != null) return cached
-        return try {
-            when (val result = repository.fetchResourceByUuid(uuid)) {
-                is ResourceResult.Success -> {
-                    CacheManager.cacheResource(uuid, result.resource)
-                    result.resource
-                }
-                else -> null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to ensure resource cached: $uuid", e)
-            null
         }
     }
 

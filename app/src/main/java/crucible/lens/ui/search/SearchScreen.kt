@@ -38,12 +38,12 @@ private const val TAG = "SearchScreen"
 @Composable
 fun SearchScreen(
     apiKey: String?,
-    userOrcid: String? = null,
     onBack: () -> Unit,
     onHome: () -> Unit,
     onResourceClick: (String) -> Unit,
     onProjectClick: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    userOrcid: String? = null
 ) {
     var query by remember { mutableStateOf("") }
     var showMineOnly by remember { mutableStateOf(false) }
@@ -51,8 +51,8 @@ fun SearchScreen(
     var allSamples by remember { mutableStateOf<List<Sample>>(emptyList()) }
     var allDatasets by remember { mutableStateOf<List<Dataset>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
-    var loadedCount by remember { mutableStateOf(0) }
-    var totalCount by remember { mutableStateOf(0) }
+    var loadedCount by remember { mutableIntStateOf(0) }
+    var totalCount by remember { mutableIntStateOf(0) }
     var metadataResults by remember { mutableStateOf<List<MetadataSearchResult>?>(null) }
     var isMetadataSearching by remember { mutableStateOf(false) }
     var activeFilters by remember { mutableStateOf(SearchFilters()) }
@@ -242,9 +242,9 @@ fun SearchScreen(
                     }
                 }
                 if (userOrcid != null || activeFilters.isActive || isFilterLoading) {
-                    androidx.compose.foundation.layout.Row(
+                    Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         if (userOrcid != null) {
                             FilterChip(
@@ -257,11 +257,11 @@ fun SearchScreen(
                             )
                         }
                         if (isFilterLoading) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp).align(androidx.compose.ui.Alignment.CenterVertically), strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp).align(Alignment.CenterVertically), strokeWidth = 2.dp)
                         } else if (activeFilters.isActive) {
                             FilterChip(
                                 selected = true,
-                                onClick = { activeFilters = SearchFilters(); filterResults = null },
+                                onClick = { activeFilters = SearchFilters() },
                                 label = { Text("${activeFilters.activeCount} filter${if (activeFilters.activeCount > 1) "s" else ""} · Clear") },
                                 leadingIcon = { Icon(Icons.Default.FilterAlt, contentDescription = null, modifier = Modifier.size(16.dp)) }
                             )

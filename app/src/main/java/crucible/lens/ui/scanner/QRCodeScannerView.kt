@@ -50,7 +50,7 @@ fun QRCodeScannerView(
                 // COMPATIBLE forces TextureView instead of SurfaceView.
                 // SurfaceView renders in a separate system layer that ignores
                 // Compose clipping, causing it to bleed through bottom sheets.
-                implementationMode = androidx.camera.view.PreviewView.ImplementationMode.COMPATIBLE
+                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
             }
 
             cameraProviderFuture.addListener({

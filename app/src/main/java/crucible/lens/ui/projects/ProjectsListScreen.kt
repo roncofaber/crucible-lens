@@ -3,7 +3,6 @@ package crucible.lens.ui.projects
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,14 +14,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,18 +32,17 @@ import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.data.cache.ProjectSummary
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
-import crucible.lens.data.model.Sample
 import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ScrollToTopButton
-import crucible.lens.ui.common.UiConstants
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ProjectsListScreen(
+    modifier: Modifier = Modifier,
     onBack: () -> Unit,
     onHome: () -> Unit,
     onSearch: () -> Unit,
@@ -56,7 +51,6 @@ fun ProjectsListScreen(
     onTogglePin: (String) -> Unit = {},
     archivedProjects: Set<String> = emptySet(),
     onToggleArchive: (String) -> Unit = {},
-    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var projects by remember { mutableStateOf<List<Project>?>(null) }
@@ -71,11 +65,11 @@ fun ProjectsListScreen(
     // Track which projects were manually unarchived (so we don't auto-archive them again)
     var manuallyUnarchived by remember { mutableStateOf<Set<String>>(emptySet()) }
     // Trigger for forcing background reload - increments on refresh
-    var reloadTrigger by remember { mutableStateOf(0) }
+    var reloadTrigger by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val pullRefreshState = rememberPullToRefreshState()
-    val showScrollToTop = listState.firstVisibleItemIndex > 0
+    val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
     // Load persistent cache immediately on startup for instant display
     LaunchedEffect(Unit) {
@@ -178,7 +172,7 @@ fun ProjectsListScreen(
         }
     }
 
-    // Pre-load and cache samples/datasets per project in background (also populates counts).
+    // Preload and cache samples/datasets per project in background (also populates counts).
     // Priority: pinned projects first, archived projects last (stage 2 skipped for archived).
     // This automatically cancels when the user navigates away from this screen.
     // Re-triggers when projects change OR when reloadTrigger increments (force refresh).
@@ -894,7 +888,7 @@ private fun crucible.lens.data.model.Sample.matchesSearch(query: String): Boolea
         (keywords?.any { it.lowercase().contains(q) } == true)
 }
 
-private fun crucible.lens.data.model.Dataset.matchesSearch(query: String): Boolean {
+private fun Dataset.matchesSearch(query: String): Boolean {
     val q = query.lowercase()
     return name.lowercase().contains(q) ||
         (measurement?.lowercase()?.contains(q) == true) ||
