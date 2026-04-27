@@ -131,6 +131,8 @@ fun NavGraph(
     onTogglePinnedProject: (String) -> Unit,
     archivedProjects: Set<String>,
     onToggleArchive: (String) -> Unit,
+    userOrcid: String? = null,
+    onUserOrcidSave: (String?) -> Unit = {},
     viewModel: ScannerViewModel = viewModel()
 ) {
     LaunchedEffect(deepLinkUuid) {
@@ -329,6 +331,7 @@ fun NavGraph(
                 onApiKeySave = onApiKeySave,
                 onApiBaseUrlSave = onApiBaseUrlSave,
                 onGraphExplorerUrlSave = onGraphExplorerUrlSave,
+                onUserOrcidSave = onUserOrcidSave,
                 onSignIn = { navController.navigate(Screen.OrcidLogin.route) },
                 onBack = { navController.popBackStack() },
                 onHome = {
@@ -764,6 +767,7 @@ fun NavGraph(
         composable(Screen.Search.route) {
             SearchScreen(
                 apiKey = apiKey,
+                userOrcid = userOrcid,
                 onBack = { navController.popBackStack() },
                 onHome = {
                     navController.navigate(Screen.Home.route) {

@@ -27,6 +27,7 @@ fun ApiSettingsScreen(
     onApiKeySave: (String) -> Unit,
     onApiBaseUrlSave: (String) -> Unit,
     onGraphExplorerUrlSave: (String) -> Unit,
+    onUserOrcidSave: (String?) -> Unit = {},
     onSignIn: () -> Unit = {},
     onBack: () -> Unit,
     onHome: () -> Unit,
@@ -58,6 +59,7 @@ fun ApiSettingsScreen(
             if (resp.isSuccessful) {
                 val body = resp.body()?.userInfo
                 account = body; accountError = body == null
+                onUserOrcidSave(body?.uniqueId)
             } else {
                 account = null; accountError = true
             }
