@@ -901,14 +901,21 @@ private fun SamplesList(
             )
         }
         if (fromCache) {
-            val ageMin = CacheManager.getProjectDataAgeMinutes(projectId) ?: 0
-            Text(
-                text = "Cached ${ageMin}m ago",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
+            val ageMin by produceState<Long?>(null, projectId) {
+                while (true) {
+                    value = CacheManager.getProjectDataAgeMinutes(projectId)
+                    kotlinx.coroutines.delay(60_000L)
+                }
+            }
+            if (ageMin != null) {
+                Text(
+                    text = "Cached ${ageMin}m ago",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
         }
         }
     }
@@ -1001,14 +1008,21 @@ private fun DatasetsList(
             )
         }
         if (fromCache) {
-            val ageMin = CacheManager.getProjectDataAgeMinutes(projectId) ?: 0
-            Text(
-                text = "Cached ${ageMin}m ago",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
+            val ageMin by produceState<Long?>(null, projectId) {
+                while (true) {
+                    value = CacheManager.getProjectDataAgeMinutes(projectId)
+                    kotlinx.coroutines.delay(60_000L)
+                }
+            }
+            if (ageMin != null) {
+                Text(
+                    text = "Cached ${ageMin}m ago",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
         }
         }
     }

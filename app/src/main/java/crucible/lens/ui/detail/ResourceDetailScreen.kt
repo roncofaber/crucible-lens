@@ -1139,7 +1139,12 @@ fun ResourceDetailScreen(
             } // end LazyColumn
 
                         // Cache age — anchored to bottom, above scroll button
-                        val ageMin = CacheManager.getResourceAgeMinutes(resource.uniqueId)
+                        val ageMin by produceState<Long?>(null, resource.uniqueId) {
+                            while (true) {
+                                value = CacheManager.getResourceAgeMinutes(resource.uniqueId)
+                                kotlinx.coroutines.delay(60_000L)
+                            }
+                        }
                         if (ageMin != null) {
                             Text(
                                 text = "Cached ${ageMin}m ago",
