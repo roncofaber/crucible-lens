@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.currentBackStackEntryAsState
 import android.net.Uri
+import android.widget.Toast
 import kotlin.math.roundToInt
 
 sealed class Screen(val route: String) {
@@ -359,7 +360,7 @@ fun NavGraph(
                 onBack = { navController.popBackStack() },
                 onKeyFound = { key ->
                     onApiKeySave(key)
-                    android.widget.Toast.makeText(context, "API key saved", android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "API key saved", Toast.LENGTH_SHORT).show()
                     navController.popBackStack()
                 }
             )

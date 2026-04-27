@@ -616,7 +616,7 @@ fun ResourceDetailScreen(
         try {
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             if (bytes == null) {
-                Toast.makeText(context, "Could not read image", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Could not read the image", Toast.LENGTH_SHORT).show()
                 return
             }
             val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
@@ -641,10 +641,10 @@ fun ResourceDetailScreen(
                     Toast.makeText(context, "Uploaded — pull to refresh to view", Toast.LENGTH_SHORT).show()
                 }
             } else {
-                Toast.makeText(context, "Upload failed (${resp.code()})", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Upload failed (${resp.code()}) — try again", Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
-            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Unexpected error — try again", Toast.LENGTH_SHORT).show()
         } finally {
             isUploadingThumbnail = false
         }
@@ -1579,7 +1579,7 @@ private fun SampleDetailsCard(
                         onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("MFID", sample.uniqueId))
-                            Toast.makeText(context, "MFID copied to clipboard", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "ID copied", Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.size(38.dp)
                     ) {
@@ -1727,7 +1727,7 @@ private fun DatasetDetailsCard(
                         onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("MFID", dataset.uniqueId))
-                            Toast.makeText(context, "MFID copied to clipboard", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "ID copied", Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.size(38.dp)
                     ) {

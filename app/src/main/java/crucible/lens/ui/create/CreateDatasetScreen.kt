@@ -270,13 +270,13 @@ fun CreateDatasetScreen(
                                 )
                             )
                             if (!createResp.isSuccessful) {
-                                snackbarHostState.showSnackbar("Failed to create dataset (${createResp.code()})")
+                                snackbarHostState.showSnackbar("Could not create dataset (${createResp.code()})")
                                 return@launch
                             }
                             val newDataset = createResp.body()
                             val newUuid = newDataset?.uniqueId
                                 ?: run {
-                                    snackbarHostState.showSnackbar("Created but no ID returned")
+                                    snackbarHostState.showSnackbar("Created — couldn't retrieve the ID")
                                     return@launch
                                 }
                             CacheManager.cacheResource(newUuid, newDataset)
@@ -311,7 +311,7 @@ fun CreateDatasetScreen(
                             }
                             onCreated(newUuid)
                         } catch (e: Exception) {
-                            snackbarHostState.showSnackbar("Network error: ${e.message}")
+                            snackbarHostState.showSnackbar("Connection error — check your network")
                         } finally {
                             isSaving = false
                         }

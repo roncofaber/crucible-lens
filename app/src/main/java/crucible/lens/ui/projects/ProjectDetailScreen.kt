@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
 import androidx.core.net.toUri
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
@@ -1082,7 +1083,7 @@ private fun ResourceCard(
                     menuExpanded = false
                     val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
                     clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("MFID", uniqueId))
-                    android.widget.Toast.makeText(context, "ID copied", android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "ID copied", Toast.LENGTH_SHORT).show()
                 }
             )
             if (webUrl != null) {
