@@ -38,7 +38,7 @@ import crucible.lens.data.model.Sample
 import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
-import crucible.lens.ui.common.OfflineBanner
+import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.UiConstants
 import kotlinx.coroutines.launch
@@ -265,7 +265,7 @@ fun ProjectsListScreen(
         saveToPersistentCache()
     }
 
-    Scaffold(
+    AppScaffold(
         topBar = {
             Column {
             TopAppBar(
@@ -318,7 +318,6 @@ fun ProjectsListScreen(
                     }
                 }
             )
-            OfflineBanner()
             } // end Column
         }
     ) { padding ->

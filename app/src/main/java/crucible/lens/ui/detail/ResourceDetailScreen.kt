@@ -91,6 +91,7 @@ import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.ResourceLink
 import crucible.lens.data.model.Sample
+import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.QrCodeDialog
@@ -645,7 +646,7 @@ fun ResourceDetailScreen(
     }
 
     val context = LocalContext.current
-    Scaffold(
+    AppScaffold(
         topBar = {
             TopAppBar(
                 title = {
