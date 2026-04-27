@@ -3,6 +3,7 @@ package crucible.lens.ui.create
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.core.graphics.scale
 import android.net.Uri
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -347,8 +348,7 @@ private fun encodePhotoToBase64(context: Context, uri: Uri): String? {
         val maxDim = 1024
         val scaled = if (original.width > maxDim || original.height > maxDim) {
             val ratio = minOf(maxDim.toFloat() / original.width, maxDim.toFloat() / original.height)
-            Bitmap.createScaledBitmap(
-                original,
+            original.scale(
                 (original.width * ratio).toInt(),
                 (original.height * ratio).toInt(),
                 true
