@@ -1973,7 +1973,7 @@ private fun formatValue(value: Any?): String {
         null -> "—"
         is Number -> {
             val num = value.toDouble()
-            if (num == num.toLong().toDouble()) {
+            if (num % 1.0 == 0.0) {
                 num.toLong().toString()
             } else {
                 "%.4f".format(num)
