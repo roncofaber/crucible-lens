@@ -66,6 +66,8 @@ fun HomeScreen(
     onSearch: () -> Unit = {},
     pinnedProjects: Set<String> = emptySet(),
     onProjectClick: (String) -> Unit = {},
+    pinnedInstruments: Set<String> = emptySet(),
+    onInstrumentClick: (String) -> Unit = {},
     onCreateSample: () -> Unit = {},
     onCreateDataset: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -146,7 +148,10 @@ fun HomeScreen(
     }
 
     val pinnedList = remember(pinnedProjects, allProjects) {
-        allProjects.filter { it.projectId in pinnedProjects }.take(3)
+        allProjects.filter { it.projectId in pinnedProjects }
+    }
+    val pinnedInstrumentList = remember(pinnedInstruments) {
+        CacheManager.getInstruments()?.filter { it.uniqueId in pinnedInstruments } ?: emptyList()
     }
 
     AppScaffold(
@@ -207,7 +212,12 @@ fun HomeScreen(
                         onClick = { onManualEntry(lastVisitedResource) }
                     )
                 }
-                HomePinnedProjects(pinnedList = pinnedList, onProjectClick = onProjectClick)
+                HomePinnedProjects(
+                    pinnedList = pinnedList,
+                    onProjectClick = onProjectClick,
+                    pinnedInstrumentList = pinnedInstrumentList,
+                    onInstrumentClick = onInstrumentClick
+                )
             }
 
             HomeFooter(graphExplorerUrl = graphExplorerUrl)
@@ -433,13 +443,19 @@ private fun HomeLastVisited(uuid: String, name: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun HomePinnedProjects(pinnedList: List<Project>, onProjectClick: (String) -> Unit) {
+private fun HomePinnedProjects(
+    pinnedList: List<crucible.lens.data.model.Project>,
+    onProjectClick: (String) -> Unit,
+    pinnedInstrumentList: List<crucible.lens.data.model.Instrument> = emptyList(),
+    onInstrumentClick: (String) -> Unit = {}
+) {
+    val hasAny = pinnedList.isNotEmpty() || pinnedInstrumentList.isNotEmpty()
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
             Text("Pinned", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         }
-        if (pinnedList.isNotEmpty()) {
+        if (hasAny) {
             pinnedList.forEach { project ->
                 Card(
                     onClick = { onProjectClick(project.projectId) },
@@ -449,10 +465,35 @@ private fun HomePinnedProjects(pinnedList: List<Project>, onProjectClick: (Strin
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                         Text(
                             text = project.title ?: project.projectId,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            pinnedInstrumentList.forEach { instrument ->
+                Card(
+                    onClick = { onInstrumentClick(instrument.uniqueId) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(Icons.Default.Biotech, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text(
+                            text = instrument.instrumentName ?: instrument.uniqueId,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
@@ -474,8 +515,8 @@ private fun HomePinnedProjects(pinnedList: List<Project>, onProjectClick: (Strin
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(Icons.Default.Bookmark, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f), modifier = Modifier.size(26.dp))
-                    Text("No pinned projects", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                    Text("Tap the bookmark icon on a project to pin it here", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                    Text("No pinned items", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                    Text("Bookmark a project or instrument to pin it here", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                 }
             }
         }
