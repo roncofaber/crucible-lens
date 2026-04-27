@@ -910,6 +910,7 @@ private fun SamplesList(
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         }
+        }
     }
 }
 
