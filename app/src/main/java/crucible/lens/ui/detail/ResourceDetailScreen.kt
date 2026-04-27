@@ -880,10 +880,11 @@ fun ResourceDetailScreen(
                 enter = fadeIn(animationSpec = tween(durationMillis = 200)),
                 exit = fadeOut(animationSpec = tween(durationMillis = 150))
             ) {
+                Column(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
-                        .fillMaxSize()
+                        .weight(1f)
                         .padding(16.dp)
                         .graphicsLayer { translationY = pullRefreshState.verticalOffset },
                     verticalArrangement = Arrangement.Top
@@ -1135,20 +1136,19 @@ fun ResourceDetailScreen(
                     }
                 }
 
-                val ageMin = CacheManager.getResourceAgeMinutes(resource.uniqueId)
-                if (ageMin != null) {
-                    item(key = "cache_age") {
-                        Text(
-                            text = "Cached ${ageMin}m ago",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
                 } // end LazyColumn items
             } // end LazyColumn
+                val ageMin = CacheManager.getResourceAgeMinutes(resource.uniqueId)
+                if (ageMin != null) {
+                    Text(
+                        text = "Cached ${ageMin}m ago",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+                } // end Column
 
                         // Pull-to-refresh indicator with spring animation
                         AnimatedPullToRefreshIndicator(
