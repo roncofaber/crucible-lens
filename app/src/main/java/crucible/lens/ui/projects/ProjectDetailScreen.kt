@@ -389,12 +389,14 @@ fun ProjectDetailScreen(
                 onSearchChange = { searchQuery = it },
                 isPinned = isPinned,
                 onTogglePin = onTogglePin,
-
+                currentPage = pagerState.currentPage,
+                sampleGroupBy = sampleGroupBy,
+                datasetGroupBy = datasetGroupBy,
+                onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) } },
+                onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) } },
             )
 
-            // Tabs + group-by overlay
-            var groupMenuExpanded by remember { mutableStateOf(false) }
-            Box {
+            // Tabs
             TabRow(selectedTabIndex = pagerState.currentPage) {
                 Tab(
                     selected = pagerState.currentPage == 0,
@@ -464,36 +466,6 @@ fun ProjectDetailScreen(
                     },
                     icon = { Icon(Icons.Default.Dataset, contentDescription = null) }
                 )
-            }
-                // Group-by button overlaid at end of tab row
-                Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) {
-                    val label = if (pagerState.currentPage == 0) sampleGroupBy.label else datasetGroupBy.label
-                    IconButton(
-                        onClick = { groupMenuExpanded = true },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(Icons.Default.Tune, contentDescription = "Group by $label", modifier = Modifier.size(18.dp))
-                    }
-                    DropdownMenu(expanded = groupMenuExpanded, onDismissRequest = { groupMenuExpanded = false }) {
-                        if (pagerState.currentPage == 0) {
-                            SampleGroupBy.entries.forEach { opt ->
-                                DropdownMenuItem(
-                                    text = { Text(opt.label) },
-                                    leadingIcon = if (opt == sampleGroupBy) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
-                                    onClick = { sampleGroupBy = opt; groupMenuExpanded = false; scope.launch { prefs.saveSampleGroupBy(opt.name) } }
-                                )
-                            }
-                        } else {
-                            DatasetGroupBy.entries.forEach { opt ->
-                                DropdownMenuItem(
-                                    text = { Text(opt.label) },
-                                    leadingIcon = if (opt == datasetGroupBy) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
-                                    onClick = { datasetGroupBy = opt; groupMenuExpanded = false; scope.launch { prefs.saveDatasetGroupBy(opt.name) } }
-                                )
-                            }
-                        }
-                    }
-                }
             }
 
             when {
@@ -616,8 +588,14 @@ private fun ProjectHeader(
     onSearchChange: (String) -> Unit,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
+    currentPage: Int = 0,
+    sampleGroupBy: SampleGroupBy = SampleGroupBy.TYPE,
+    datasetGroupBy: DatasetGroupBy = DatasetGroupBy.MEASUREMENT,
+    onSampleGroupByChange: (SampleGroupBy) -> Unit = {},
+    onDatasetGroupByChange: (DatasetGroupBy) -> Unit = {},
 ) {
     val context = LocalContext.current
+    var groupMenuExpanded by remember { mutableStateOf(false) }
 
     Surface(
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
@@ -767,6 +745,35 @@ private fun ProjectHeader(
                                 .size(18.dp)
                                 .clickable { onSearchChange("") }
                         )
+                    }
+                    Box {
+                        Icon(
+                            Icons.Default.Tune,
+                            contentDescription = "Group by",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clickable { groupMenuExpanded = true }
+                        )
+                        DropdownMenu(expanded = groupMenuExpanded, onDismissRequest = { groupMenuExpanded = false }) {
+                            if (currentPage == 0) {
+                                SampleGroupBy.entries.forEach { opt ->
+                                    DropdownMenuItem(
+                                        text = { Text(opt.label) },
+                                        leadingIcon = if (opt == sampleGroupBy) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                                        onClick = { onSampleGroupByChange(opt); groupMenuExpanded = false }
+                                    )
+                                }
+                            } else {
+                                DatasetGroupBy.entries.forEach { opt ->
+                                    DropdownMenuItem(
+                                        text = { Text(opt.label) },
+                                        leadingIcon = if (opt == datasetGroupBy) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                                        onClick = { onDatasetGroupByChange(opt); groupMenuExpanded = false }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
