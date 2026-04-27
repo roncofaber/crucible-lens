@@ -5,6 +5,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
@@ -91,6 +93,7 @@ import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.ResourceLink
 import crucible.lens.data.model.Sample
+import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
 import crucible.lens.ui.common.LoadingContent
@@ -431,6 +434,7 @@ fun ResourceDetailScreen(
     var showDeletionDialog by remember { mutableStateOf(false) }
     var pendingUnlink by remember { mutableStateOf<UnlinkRequest?>(null) }
     var overflowMenuExpanded by remember { mutableStateOf(false) }
+    var isUploadingThumbnail by remember { mutableStateOf(false) }
 
     // Track history continuously as user scrolls through pages
     LaunchedEffect(pagerState.currentPage, pagerState.targetPage) {
@@ -614,6 +618,47 @@ fun ResourceDetailScreen(
     }
     val scope = rememberCoroutineScope()
 
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        val dataset = currentDisplayResource as? Dataset ?: return@rememberLauncherForActivityResult
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            isUploadingThumbnail = true
+            try {
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                if (bytes == null) {
+                    Toast.makeText(context, "Could not read image", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                val resp = withContext(Dispatchers.IO) {
+                    ApiClient.service.addThumbnail(
+                        dataset.uniqueId,
+                        ThumbnailCreateRequest(
+                            thumbnailName = "thumbnail_${System.currentTimeMillis()}.png",
+                            thumbnailB64str = base64
+                        )
+                    )
+                }
+                if (resp.isSuccessful) {
+                    CacheManager.clearThumbnail(dataset.uniqueId)
+                    val thumbResp = withContext(Dispatchers.IO) { ApiClient.service.getThumbnails(dataset.uniqueId) }
+                    if (thumbResp.isSuccessful) {
+                        val thumbs = thumbResp.body()?.map { "data:image/png;base64,${it.thumbnailB64}" } ?: emptyList()
+                        loadedThumbnails[dataset.uniqueId] = thumbs
+                        CacheManager.cacheThumbnails(dataset.uniqueId, thumbs)
+                    }
+                    Toast.makeText(context, "Thumbnail uploaded", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "Upload failed (${resp.code()})", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            } finally {
+                isUploadingThumbnail = false
+            }
+        }
+    }
+
     val pullRefreshState = rememberPullToRefreshState()
     // True only when a sibling (not the primary resource) was pull-to-refreshed.
     // Guards siblingReloadTrigger so it only fires on actual sibling PTRs.
@@ -693,6 +738,19 @@ fun ResourceDetailScreen(
                                     leadingIcon = { Icon(Icons.Default.CopyAll, contentDescription = null) },
                                     onClick = { overflowMenuExpanded = false; onDuplicate(currentDisplayResource) }
                                 )
+                                if (currentDisplayResource is Dataset) {
+                                    DropdownMenuItem(
+                                        text = { Text(if (isUploadingThumbnail) "Uploading…" else "Add thumbnail") },
+                                        leadingIcon = {
+                                            if (isUploadingThumbnail)
+                                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                            else
+                                                Icon(Icons.Default.AddPhotoAlternate, contentDescription = null)
+                                        },
+                                        enabled = !isUploadingThumbnail,
+                                        onClick = { overflowMenuExpanded = false; imagePicker.launch("image/*") }
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = { Text("Link") },
                                     leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
