@@ -31,7 +31,7 @@ object PersistentThumbnailCache {
                 return null
             }
             val lines = f.readLines().filter { it.isNotBlank() }
-            if (lines.isEmpty()) null else lines
+            lines.ifEmpty { null }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load thumbnails for $uuid", e)
             null
@@ -47,6 +47,4 @@ object PersistentThumbnailCache {
         }
     }
 
-    fun sizeBytes(context: Context): Long =
-        dir(context).walkTopDown().filter { it.isFile }.sumOf { it.length() }
 }
