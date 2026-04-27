@@ -312,14 +312,6 @@ fun ProjectDetailScreen(
                 actions = {
                     val topBarContext = LocalContext.current
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        IconButton(onClick = onTogglePin, modifier = Modifier.size(40.dp)) {
-                            Icon(
-                                if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                contentDescription = if (isPinned) "Unpin" else "Pin",
-                                tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
                         IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
                             Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
                         }
@@ -695,6 +687,14 @@ private fun ProjectHeader(
                             }
                         }
                     }
+                    IconButton(onClick = onTogglePin, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            contentDescription = if (isPinned) "Unpin" else "Pin",
+                            tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
 
             // Search field + group-by
@@ -717,7 +717,7 @@ private fun ProjectHeader(
                         Box(modifier = Modifier.weight(1f)) {
                             if (searchQuery.isEmpty()) {
                                 Text(
-                                    text = "Search samples and datasets…",
+                                    text = "Filter samples and datasets…",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                 )
