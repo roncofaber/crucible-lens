@@ -29,6 +29,9 @@ import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.ui.common.AppScaffold
 import kotlin.math.abs
 
+private enum class HistorySortOrder { NEWEST, OLDEST }
+
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HistoryScreen(
@@ -37,9 +40,36 @@ fun HistoryScreen(
     onHome: () -> Unit,
     onSearch: () -> Unit,
     onItemClick: (String) -> Unit,
+    onClearHistory: () -> Unit = {},
     graphExplorerUrl: String = "",
     modifier: Modifier = Modifier
 ) {
+    var sortOrder by remember { mutableStateOf(HistorySortOrder.NEWEST) }
+    var overflowExpanded by remember { mutableStateOf(false) }
+    var showClearConfirm by remember { mutableStateOf(false) }
+
+    val sortedHistory = remember(history, sortOrder) {
+        if (sortOrder == HistorySortOrder.NEWEST) history else history.reversed()
+    }
+
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            icon = { Icon(Icons.Default.DeleteSweep, contentDescription = null) },
+            title = { Text("Clear history") },
+            text = { Text("Remove all ${history.size} items from your browsing history?") },
+            confirmButton = {
+                Button(
+                    onClick = { showClearConfirm = false; onClearHistory() },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Clear all") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+
     AppScaffold(
         topBar = {
             TopAppBar(
@@ -56,6 +86,29 @@ fun HistoryScreen(
                         }
                         IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
                             Icon(Icons.Default.Home, contentDescription = "Home", modifier = Modifier.size(24.dp))
+                        }
+                        Box {
+                            IconButton(onClick = { overflowExpanded = true }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(24.dp))
+                            }
+                            DropdownMenu(expanded = overflowExpanded, onDismissRequest = { overflowExpanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text(if (sortOrder == HistorySortOrder.NEWEST) "Show oldest first" else "Show newest first") },
+                                    leadingIcon = { Icon(Icons.Default.SwapVert, contentDescription = null) },
+                                    onClick = {
+                                        sortOrder = if (sortOrder == HistorySortOrder.NEWEST) HistorySortOrder.OLDEST else HistorySortOrder.NEWEST
+                                        overflowExpanded = false
+                                    }
+                                )
+                                if (history.isNotEmpty()) {
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text("Clear all history") },
+                                        leadingIcon = { Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                        onClick = { overflowExpanded = false; showClearConfirm = true }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -84,7 +137,7 @@ fun HistoryScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(history) { item ->
+                    items(sortedHistory, key = { it.uuid }) { item ->
                         HistoryCard(
                             item = item,
                             graphExplorerUrl = graphExplorerUrl,

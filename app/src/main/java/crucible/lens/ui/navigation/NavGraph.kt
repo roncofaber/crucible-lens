@@ -121,6 +121,7 @@ fun NavGraph(
     pinnedProjects: Set<String>,
     resourceHistory: List<HistoryItem>,
     onHistoryAdd: (String, String) -> Unit,
+    onClearHistory: () -> Unit = {},
     onApiKeySave: (String) -> Unit,
     onApiBaseUrlSave: (String) -> Unit,
     onGraphExplorerUrlSave: (String) -> Unit,
@@ -777,6 +778,7 @@ fun NavGraph(
                 onItemClick = { uuid ->
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 },
+                onClearHistory = onClearHistory,
                 graphExplorerUrl = graphExplorerUrl
             )
         }
