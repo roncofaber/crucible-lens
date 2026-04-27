@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.toColorInt
 import crucible.lens.data.preferences.PreferencesManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -27,18 +28,22 @@ fun AppearanceSettingsScreen(
     currentAccentColor: String,
     currentAppIcon: String,
     currentFloatingScanButton: Boolean,
+    currentUseDynamicColor: Boolean = false,
     onThemeModeSave: (String) -> Unit,
     onAccentColorSave: (String) -> Unit,
     onAppIconSave: (String) -> Unit,
     onFloatingScanButtonSave: (Boolean) -> Unit,
+    onUseDynamicColorSave: (Boolean) -> Unit = {},
     onBack: () -> Unit,
     onHome: () -> Unit,
     onSearch: () -> Unit
 ) {
+    val dynamicColorSupported = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
     var themeModeInput        by remember { mutableStateOf(currentThemeMode) }
     var accentColorInput      by remember { mutableStateOf(currentAccentColor) }
     var appIconInput          by remember { mutableStateOf(currentAppIcon) }
     var floatingScanButtonInput by remember { mutableStateOf(currentFloatingScanButton) }
+    var useDynamicColorInput  by remember { mutableStateOf(currentUseDynamicColor) }
     var showColorPicker       by remember { mutableStateOf(false) }
     var pendingIconChange     by remember { mutableStateOf<String?>(null) }
 
@@ -47,6 +52,7 @@ fun AppearanceSettingsScreen(
     LaunchedEffect(currentAccentColor)      { accentColorInput      = currentAccentColor }
     LaunchedEffect(currentAppIcon)          { appIconInput          = currentAppIcon }
     LaunchedEffect(currentFloatingScanButton) { floatingScanButtonInput = currentFloatingScanButton }
+    LaunchedEffect(currentUseDynamicColor)    { useDynamicColorInput    = currentUseDynamicColor }
 
     val context = LocalContext.current
     val prefs = remember { PreferencesManager(context) }
@@ -217,8 +223,38 @@ fun AppearanceSettingsScreen(
                 }
             }
 
-            // Accent Color
-            Card(modifier = Modifier.clickable { showColorPicker = true }) {
+            // Dynamic Color (Android 12+ only)
+            if (dynamicColorSupported) {
+                Card {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Colorize, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Column {
+                                Text("Dynamic Color", style = MaterialTheme.typography.titleMedium)
+                                Text("Follow system wallpaper colors", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Switch(
+                            checked = useDynamicColorInput,
+                            onCheckedChange = {
+                                useDynamicColorInput = it
+                                onUseDynamicColorSave(it)
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Accent Color — hidden when dynamic color is active
+            if (!useDynamicColorInput) Card(modifier = Modifier.clickable { showColorPicker = true }) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -238,7 +274,7 @@ fun AppearanceSettingsScreen(
                         Icon(Icons.Default.ChevronRight, contentDescription = "Choose color")
                     }
                 }
-            }
+            } // end if (!useDynamicColorInput)
 
             // Floating Scan Button
             Card {
@@ -327,6 +363,7 @@ fun AppearanceSettingsScreen(
             OutlinedButton(
                 onClick = {
                     themeModeInput = "system";       onThemeModeSave("system")
+                    useDynamicColorInput = false;    onUseDynamicColorSave(false)
                     appIconInput = "light";          onAppIconSave("light")
                     accentColorInput = "blue";       onAccentColorSave("blue")
                     floatingScanButtonInput = true;  onFloatingScanButtonSave(true)
@@ -467,7 +504,7 @@ private fun isValidHex(hex: String): Boolean =
 
 internal fun accentColorToColor(colorName: String): Color {
     if (colorName.startsWith("#") && colorName.length == 7) {
-        return try { Color(android.graphics.Color.parseColor(colorName)) } catch (e: Exception) { Color(0xFF1976D2) }
+        return try { Color(colorName.toColorInt()) } catch (e: Exception) { Color(0xFF1976D2) }
     }
     return when (colorName.lowercase()) {
         "blue"   -> Color(0xFF1976D2)

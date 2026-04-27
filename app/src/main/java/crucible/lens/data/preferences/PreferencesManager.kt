@@ -33,6 +33,7 @@ class PreferencesManager(private val context: Context) {
         private val DEFAULT_PROJECT_TAB = stringPreferencesKey("default_project_tab")
         private val USER_ORCID = stringPreferencesKey("user_orcid")
         private val PINNED_INSTRUMENTS = stringPreferencesKey("pinned_instruments")
+        private val USE_DYNAMIC_COLOR = stringPreferencesKey("use_dynamic_color")
 
         const val PROJECT_TAB_SAMPLES = "SAMPLES"
         const val PROJECT_TAB_DATASETS = "DATASETS"
@@ -101,6 +102,10 @@ class PreferencesManager(private val context: Context) {
 
     val defaultProjectTab: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[DEFAULT_PROJECT_TAB] ?: PROJECT_TAB_SAMPLES
+    }
+
+    val useDynamicColor: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[USE_DYNAMIC_COLOR]?.toBoolean() ?: false
     }
 
     val pinnedInstruments: Flow<Set<String>> = context.dataStore.data.map { prefs ->
@@ -201,6 +206,10 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun saveDefaultProjectTab(tab: String) {
         context.dataStore.edit { prefs -> prefs[DEFAULT_PROJECT_TAB] = tab }
+    }
+
+    suspend fun saveUseDynamicColor(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[USE_DYNAMIC_COLOR] = enabled.toString() }
     }
 
     suspend fun togglePinnedInstrument(id: String) {
