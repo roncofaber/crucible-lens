@@ -35,11 +35,23 @@ fun QRCodeScannerView(
     val haptic = LocalHapticFeedback.current
     val executor = remember { Executors.newSingleThreadExecutor() }
 
-    DisposableEffect(Unit) { onDispose { executor.shutdown() } }
+    DisposableEffect(Unit) {
+        onDispose {
+            executor.shutdown()
+            if (cameraProviderFuture.isDone) {
+                runCatching { cameraProviderFuture.get().unbindAll() }
+            }
+        }
+    }
 
     AndroidView(
         factory = { ctx ->
-            val previewView = PreviewView(ctx)
+            val previewView = PreviewView(ctx).apply {
+                // COMPATIBLE forces TextureView instead of SurfaceView.
+                // SurfaceView renders in a separate system layer that ignores
+                // Compose clipping, causing it to bleed through bottom sheets.
+                implementationMode = androidx.camera.view.PreviewView.ImplementationMode.COMPATIBLE
+            }
 
             cameraProviderFuture.addListener({
                 val provider = cameraProviderFuture.get()
