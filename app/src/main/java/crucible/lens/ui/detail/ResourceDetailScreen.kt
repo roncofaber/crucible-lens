@@ -880,11 +880,10 @@ fun ResourceDetailScreen(
                 enter = fadeIn(animationSpec = tween(durationMillis = 200)),
                 exit = fadeOut(animationSpec = tween(durationMillis = 150))
             ) {
-                Column(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxSize()
                         .padding(16.dp)
                         .graphicsLayer { translationY = pullRefreshState.verticalOffset },
                     verticalArrangement = Arrangement.Top
@@ -1138,17 +1137,20 @@ fun ResourceDetailScreen(
 
                 } // end LazyColumn items
             } // end LazyColumn
-                val ageMin = CacheManager.getResourceAgeMinutes(resource.uniqueId)
-                if (ageMin != null) {
-                    Text(
-                        text = "Cached ${ageMin}m ago",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                        textAlign = TextAlign.Center
-                    )
-                }
-                } // end Column
+
+                        // Cache age — anchored to bottom, above scroll button
+                        val ageMin = CacheManager.getResourceAgeMinutes(resource.uniqueId)
+                        if (ageMin != null) {
+                            Text(
+                                text = "Cached ${ageMin}m ago",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = 56.dp),
+                                textAlign = TextAlign.Center
+                            )
+                        }
 
                         // Pull-to-refresh indicator with spring animation
                         AnimatedPullToRefreshIndicator(
