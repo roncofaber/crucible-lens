@@ -334,7 +334,7 @@ private fun HomeBrowseSection(
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(28.dp))
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("Projects", style = MaterialTheme.typography.labelMedium)
                 }
@@ -347,7 +347,7 @@ private fun HomeBrowseSection(
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Biotech, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Biotech, contentDescription = null, modifier = Modifier.size(28.dp))
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("Instruments", style = MaterialTheme.typography.labelMedium)
                 }
