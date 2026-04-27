@@ -312,6 +312,14 @@ fun ProjectDetailScreen(
                 actions = {
                     val topBarContext = LocalContext.current
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
+                        IconButton(onClick = onTogglePin, modifier = Modifier.size(40.dp)) {
+                            Icon(
+                                if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                contentDescription = if (isPinned) "Unpin" else "Pin",
+                                tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                         IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
                             Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
                         }
@@ -657,17 +665,6 @@ private fun ProjectHeader(
                                         modifier = Modifier.horizontalScroll(nameScrollState)
                                     )
                                 }
-                                IconButton(
-                                    onClick = onTogglePin,
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(
-                                        if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                        contentDescription = if (isPinned) "Unpin" else "Pin",
-                                        tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
                             }
                             val lead = project?.lead
                             val org = project?.organization?.takeIf { it.isNotBlank() }
@@ -700,78 +697,65 @@ private fun ProjectHeader(
                     }
                 }
 
-            // Integrated search field
-            Surface(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth()
+            // Search field + group-by
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Surface(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Box(modifier = Modifier.weight(1f)) {
-                        if (searchQuery.isEmpty()) {
-                            Text(
-                                text = "Search samples and datasets…",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        Box(modifier = Modifier.weight(1f)) {
+                            if (searchQuery.isEmpty()) {
+                                Text(
+                                    text = "Search samples and datasets…",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                            }
+                            BasicTextField(
+                                value = searchQuery,
+                                onValueChange = onSearchChange,
+                                modifier = Modifier.fillMaxWidth(),
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                singleLine = true
                             )
                         }
-                        BasicTextField(
-                            value = searchQuery,
-                            onValueChange = onSearchChange,
-                            modifier = Modifier.fillMaxWidth(),
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                color = MaterialTheme.colorScheme.onSurface
-                            ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            singleLine = true
-                        )
+                        if (searchQuery.isNotEmpty()) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear search", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp).clickable { onSearchChange("") })
+                        }
                     }
-                    if (searchQuery.isNotEmpty()) {
-                        Icon(
-                            Icons.Default.Clear,
-                            contentDescription = "Clear search",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .size(18.dp)
-                                .clickable { onSearchChange("") }
-                        )
+                }
+                Box {
+                    IconButton(onClick = { groupMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Tune, contentDescription = "Group by", modifier = Modifier.size(20.dp))
                     }
-                    Box {
-                        Icon(
-                            Icons.Default.Tune,
-                            contentDescription = "Group by",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .size(18.dp)
-                                .clickable { groupMenuExpanded = true }
-                        )
-                        DropdownMenu(expanded = groupMenuExpanded, onDismissRequest = { groupMenuExpanded = false }) {
-                            if (currentPage == 0) {
-                                SampleGroupBy.entries.forEach { opt ->
-                                    DropdownMenuItem(
-                                        text = { Text(opt.label) },
-                                        leadingIcon = if (opt == sampleGroupBy) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
-                                        onClick = { onSampleGroupByChange(opt); groupMenuExpanded = false }
-                                    )
-                                }
-                            } else {
-                                DatasetGroupBy.entries.forEach { opt ->
-                                    DropdownMenuItem(
-                                        text = { Text(opt.label) },
-                                        leadingIcon = if (opt == datasetGroupBy) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
-                                        onClick = { onDatasetGroupByChange(opt); groupMenuExpanded = false }
-                                    )
-                                }
+                    DropdownMenu(expanded = groupMenuExpanded, onDismissRequest = { groupMenuExpanded = false }) {
+                        if (currentPage == 0) {
+                            SampleGroupBy.entries.forEach { opt ->
+                                DropdownMenuItem(
+                                    text = { Text(opt.label) },
+                                    leadingIcon = if (opt == sampleGroupBy) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                                    onClick = { onSampleGroupByChange(opt); groupMenuExpanded = false }
+                                )
+                            }
+                        } else {
+                            DatasetGroupBy.entries.forEach { opt ->
+                                DropdownMenuItem(
+                                    text = { Text(opt.label) },
+                                    leadingIcon = if (opt == datasetGroupBy) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                                    onClick = { onDatasetGroupByChange(opt); groupMenuExpanded = false }
+                                )
                             }
                         }
                     }

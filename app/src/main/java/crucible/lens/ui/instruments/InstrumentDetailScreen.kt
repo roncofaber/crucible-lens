@@ -44,7 +44,7 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Instrument
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
-import crucible.lens.ui.common.QrCodeDialog
+
 import crucible.lens.ui.common.ScrollToTopButton
 import kotlinx.coroutines.launch
 
@@ -68,7 +68,7 @@ fun InstrumentDetailScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var sortOrder by remember { mutableStateOf(DatasetSortOrder.NEWEST) }
-    var showQrDialog by remember { mutableStateOf(false) }
+
     var overflowMenuExpanded by remember { mutableStateOf(false) }
     var fromCache by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -241,10 +241,7 @@ fun InstrumentDetailScreen(
             ) {
                 // Header
                 instrument?.let { instr ->
-                    InstrumentHeader(
-                        instrument = instr,
-                        onShowQr = { showQrDialog = true }
-                    )
+                    InstrumentHeader(instrument = instr)
                 }
 
                 // Search bar
@@ -378,105 +375,65 @@ fun InstrumentDetailScreen(
         }
     }
 
-    if (showQrDialog) {
-        instrument?.let { instr ->
-            QrCodeDialog(
-                mfid = instr.uniqueId,
-                name = instr.instrumentName ?: instr.uniqueId,
-                onDismiss = { showQrDialog = false }
-            )
-        }
-    }
 }
 
 @Composable
-private fun InstrumentHeader(
-    instrument: Instrument,
-    onShowQr: () -> Unit
-) {
-    val context = LocalContext.current
-
+private fun InstrumentHeader(instrument: Instrument) {
     Surface(
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Biotech, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        val nameScrollState = rememberScrollState()
-                        val showFade = nameScrollState.canScrollForward
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.85f)
-                                .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
-                                .drawWithContent {
-                                    drawContent()
-                                    if (showFade) {
-                                        drawRect(
-                                            brush = Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = size.width * 0.75f, endX = size.width),
-                                            blendMode = BlendMode.DstIn
-                                        )
-                                    }
-                                }
-                        ) {
-                            Text(
-                                text = instrument.instrumentName ?: instrument.uniqueId,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Clip,
-                                modifier = Modifier.horizontalScroll(nameScrollState)
-                            )
-                        }
-                        if (!instrument.instrumentType.isNullOrBlank()) {
-                            Text(text = instrument.instrumentType, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((-6).dp)) {
-                    IconButton(
-                        onClick = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Instrument ID", instrument.uniqueId))
-                            Toast.makeText(context, "ID copied to clipboard", Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier.size(38.dp)
+                Icon(Icons.Default.Biotech, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    val nameScrollState = rememberScrollState()
+                    val showFade = nameScrollState.canScrollForward
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                            .drawWithContent {
+                                drawContent()
+                                if (showFade) drawRect(
+                                    brush = Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = size.width * 0.75f, endX = size.width),
+                                    blendMode = BlendMode.DstIn
+                                )
+                            }
                     ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy ID", modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
-                    }
-                    IconButton(onClick = onShowQr, modifier = Modifier.size(38.dp)) {
-                        Icon(Icons.Default.QrCode, contentDescription = "Show QR", modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text(
+                            text = instrument.instrumentName ?: instrument.uniqueId,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip,
+                            modifier = Modifier.horizontalScroll(nameScrollState)
+                        )
                     }
                 }
             }
-
-            // Metadata chips row
-            val chips = listOfNotNull(
-                instrument.manufacturer?.let { "Manufacturer" to it },
-                instrument.model?.let { "Model" to it },
-                instrument.owner?.let { "Owner" to it },
-                instrument.location?.let { "Location" to it }
-            )
-            if (chips.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    chips.forEach { (label, value) ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(text = "$label:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
-                            Text(text = value, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
+            val type = instrument.instrumentType?.takeIf { it.isNotBlank() }
+            val location = instrument.location?.takeIf { it.isNotBlank() }
+            if (type != null || location != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (type != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(type, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    if (location != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(location, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
