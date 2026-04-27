@@ -170,6 +170,7 @@ private fun dateGroupKey(raw: String?): String {
 fun ProjectDetailScreen(
     projectId: String,
     graphExplorerUrl: String,
+    modifier: Modifier = Modifier,
     onBack: () -> Unit,
     onHome: () -> Unit,
     onSearch: () -> Unit = {},
@@ -179,7 +180,6 @@ fun ProjectDetailScreen(
     isArchived: Boolean = false,
     onCreateSample: () -> Unit = {},
     onCreateDataset: () -> Unit = {},
-    modifier: Modifier = Modifier
 ) {
     val project = remember(projectId) {
         CacheManager.getProjects()?.find { it.projectId == projectId }
@@ -818,7 +818,7 @@ private fun SamplesList(
                             Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                                 ResourceCard(
                                     title = sample.name,
-                                    subtitle = null,
+
                                     uniqueId = sample.uniqueId,
                                     icon = Icons.Default.Science,
                                     graphExplorerUrl = graphExplorerUrl,
@@ -918,7 +918,7 @@ private fun DatasetsList(
                             Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                                 ResourceCard(
                                     title = dataset.name,
-                                    subtitle = null,
+
                                     uniqueId = dataset.uniqueId,
                                     icon = Icons.Default.Dataset,
                                     graphExplorerUrl = graphExplorerUrl,
@@ -1006,11 +1006,10 @@ private fun GroupStickyHeader(
     }
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ResourceCard(
     title: String,
-    subtitle: String?,
     uniqueId: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     graphExplorerUrl: String = "",
@@ -1059,13 +1058,7 @@ private fun ResourceCard(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary
                 )
-                if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+
                 Text(
                     text = uniqueId,
                     style = MaterialTheme.typography.labelSmall,
