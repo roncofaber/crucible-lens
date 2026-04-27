@@ -175,9 +175,11 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun togglePinnedProject(id: String) {
         context.dataStore.edit { prefs ->
-            val current = prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
-            if (id in current) current.remove(id) else if (current.size < 3) current.add(id)
-            prefs[PINNED_PROJECTS] = current.joinToString(",")
+            val projects = prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+            val instruments = prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+            if (id in projects) projects.remove(id)
+            else if (projects.size + instruments.size < 3) projects.add(id)
+            prefs[PINNED_PROJECTS] = projects.joinToString(",")
         }
     }
 
@@ -203,9 +205,11 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun togglePinnedInstrument(id: String) {
         context.dataStore.edit { prefs ->
-            val current = prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
-            if (id in current) current.remove(id) else current.add(id)
-            prefs[PINNED_INSTRUMENTS] = current.joinToString(",")
+            val instruments = prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+            val projects = prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+            if (id in instruments) instruments.remove(id)
+            else if (instruments.size + projects.size < 3) instruments.add(id)
+            prefs[PINNED_INSTRUMENTS] = instruments.joinToString(",")
         }
     }
 

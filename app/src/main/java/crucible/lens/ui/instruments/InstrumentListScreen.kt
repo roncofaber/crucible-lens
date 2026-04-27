@@ -37,6 +37,7 @@ fun InstrumentListScreen(
     onSearch: () -> Unit = {},
     onInstrumentClick: (String) -> Unit,
     pinnedInstruments: Set<String> = emptySet(),
+    onTogglePin: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var instruments by remember { mutableStateOf<List<Instrument>?>(null) }
@@ -197,7 +198,12 @@ fun InstrumentListScreen(
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 items(filteredInstruments, key = { it.uniqueId }) { instrument ->
-                                    InstrumentCard(instrument = instrument, isPinned = instrument.uniqueId in pinnedInstruments, onClick = { onInstrumentClick(instrument.uniqueId) })
+                                    InstrumentCard(
+                                        instrument = instrument,
+                                        isPinned = instrument.uniqueId in pinnedInstruments,
+                                        onTogglePin = { onTogglePin(instrument.uniqueId) },
+                                        onClick = { onInstrumentClick(instrument.uniqueId) }
+                                    )
                                 }
                             }
                             LazyColumnScrollbar(listState = listState, modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd))
@@ -228,6 +234,7 @@ fun InstrumentListScreen(
 private fun InstrumentCard(
     instrument: Instrument,
     isPinned: Boolean = false,
+    onTogglePin: () -> Unit = {},
     onClick: () -> Unit
 ) {
     Card(
@@ -236,22 +243,20 @@ private fun InstrumentCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(Icons.Default.Biotech, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Icon(Icons.Default.Biotech, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = instrument.instrumentName ?: instrument.uniqueId,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                val subtitle = listOfNotNull(instrument.instrumentType, instrument.manufacturer)
-                    .joinToString(" · ")
+                val subtitle = listOfNotNull(instrument.instrumentType, instrument.manufacturer).joinToString(" · ")
                 if (subtitle.isNotBlank()) {
                     Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -259,10 +264,17 @@ private fun InstrumentCard(
                     Text(text = instrument.location, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            if (isPinned) {
-                Icon(Icons.Default.Bookmark, contentDescription = "Pinned", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(-8.dp)) {
+                IconButton(onClick = onTogglePin, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = if (isPinned) "Unpin" else "Pin",
+                        tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
             }
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
         }
     }
 }
