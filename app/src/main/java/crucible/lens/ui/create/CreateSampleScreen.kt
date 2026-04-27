@@ -156,6 +156,8 @@ fun CreateSampleScreen(
                                 val uuid = sample?.uniqueId
                                 if (uuid != null) {
                                     CacheManager.cacheResource(uuid, sample)
+                                    // Invalidate project list so the new sample appears immediately
+                                    selectedProjectId?.let { CacheManager.clearProjectDetail(it) }
                                     onCreated(uuid)
                                 } else snackbarHostState.showSnackbar("Created but no ID returned")
                             } else {

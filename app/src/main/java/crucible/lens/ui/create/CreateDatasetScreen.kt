@@ -280,6 +280,8 @@ fun CreateDatasetScreen(
                                     return@launch
                                 }
                             CacheManager.cacheResource(newUuid, newDataset)
+                            // Invalidate project list so the new dataset appears immediately
+                            selectedProjectId?.let { CacheManager.clearProjectDetail(it) }
 
                             // 2. Upload photo as thumbnail if captured
                             val capturedUri = photoUri
