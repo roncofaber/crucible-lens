@@ -241,6 +241,12 @@ class MainActivity : ComponentActivity() {
                     userOrcid = userOrcid,
                     onUserOrcidSave = { orcid ->
                         scope.launch { preferencesManager.saveUserOrcid(orcid) }
+                    },
+                    onSignOut = {
+                        scope.launch {
+                            preferencesManager.clearApiKey()
+                            preferencesManager.saveUserOrcid(null)
+                        }
                     }
                 )
             }

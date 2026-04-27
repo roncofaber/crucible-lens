@@ -28,6 +28,7 @@ fun ApiSettingsScreen(
     onApiBaseUrlSave: (String) -> Unit,
     onGraphExplorerUrlSave: (String) -> Unit,
     onUserOrcidSave: (String?) -> Unit = {},
+    onSignOut: () -> Unit = {},
     onSignIn: () -> Unit = {},
     onBack: () -> Unit,
     onHome: () -> Unit,
@@ -199,7 +200,7 @@ fun ApiSettingsScreen(
                                 modifier = Modifier.size(48.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text(
                                     "${account!!.firstName ?: ""} ${account!!.lastName ?: ""}".trim(),
                                     style = MaterialTheme.typography.titleMedium,
@@ -220,6 +221,13 @@ fun ApiSettingsScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                     )
                                 }
+                            }
+                            IconButton(onClick = onSignOut) {
+                                Icon(
+                                    Icons.Default.Logout,
+                                    contentDescription = "Sign out",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
                             }
                         }
                     }
