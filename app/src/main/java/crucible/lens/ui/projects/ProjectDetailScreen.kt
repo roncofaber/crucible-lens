@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
@@ -1097,7 +1098,7 @@ private fun ResourceCard(
                     leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
                     onClick = {
                         menuExpanded = false
-                        context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(webUrl)))
+                        context.startActivity(Intent(Intent.ACTION_VIEW, webUrl.toUri()))
                     }
                 )
                 DropdownMenuItem(
