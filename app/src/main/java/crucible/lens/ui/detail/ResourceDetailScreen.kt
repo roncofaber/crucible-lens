@@ -436,6 +436,7 @@ fun ResourceDetailScreen(
     var pendingUnlink by remember { mutableStateOf<UnlinkRequest?>(null) }
     var overflowMenuExpanded by remember { mutableStateOf(false) }
     var isUploadingThumbnail by remember { mutableStateOf(false) }
+    var showThumbnailSourcePicker by remember { mutableStateOf(false) }
 
     // Track history continuously as user scrolls through pages
     LaunchedEffect(pagerState.currentPage, pagerState.targetPage) {
@@ -751,7 +752,7 @@ fun ResourceDetailScreen(
                                 )
                                 if (currentDisplayResource is Dataset) {
                                     DropdownMenuItem(
-                                        text = { Text(if (isUploadingThumbnail) "Uploading…" else "Photo from gallery") },
+                                        text = { Text(if (isUploadingThumbnail) "Uploading…" else "Add thumbnail") },
                                         leadingIcon = {
                                             if (isUploadingThumbnail)
                                                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -759,24 +760,7 @@ fun ResourceDetailScreen(
                                                 Icon(Icons.Default.AddPhotoAlternate, contentDescription = null)
                                         },
                                         enabled = !isUploadingThumbnail,
-                                        onClick = { overflowMenuExpanded = false; galleryPicker.launch("image/*") }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(if (isUploadingThumbnail) "Uploading…" else "Take photo") },
-                                        leadingIcon = {
-                                            if (isUploadingThumbnail)
-                                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                            else
-                                                Icon(Icons.Default.CameraAlt, contentDescription = null)
-                                        },
-                                        enabled = !isUploadingThumbnail,
-                                        onClick = {
-                                            overflowMenuExpanded = false
-                                            val tmpFile = java.io.File.createTempFile("thumb_", ".jpg", context.cacheDir)
-                                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", tmpFile)
-                                            cameraUri = uri
-                                            cameraPicker.launch(uri)
-                                        }
+                                        onClick = { overflowMenuExpanded = false; showThumbnailSourcePicker = true }
                                     )
                                 }
                                 DropdownMenuItem(
@@ -1260,6 +1244,46 @@ fun ResourceDetailScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showSiblingGroupDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+    if (showThumbnailSourcePicker) {
+        AlertDialog(
+            onDismissRequest = { showThumbnailSourcePicker = false },
+            icon = { Icon(Icons.Default.AddPhotoAlternate, contentDescription = null) },
+            title = { Text("Add Thumbnail") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            showThumbnailSourcePicker = false
+                            galleryPicker.launch("image/*")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Photo, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Choose from gallery")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showThumbnailSourcePicker = false
+                            val tmpFile = java.io.File.createTempFile("thumb_", ".jpg", context.cacheDir)
+                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", tmpFile)
+                            cameraUri = uri
+                            cameraPicker.launch(uri)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Take a photo")
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showThumbnailSourcePicker = false }) { Text("Cancel") }
             }
         )
     }
