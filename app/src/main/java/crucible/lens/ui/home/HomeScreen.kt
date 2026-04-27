@@ -1,7 +1,6 @@
 package crucible.lens.ui.home
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -34,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.core.net.toUri
 import android.util.Log
 import crucible.lens.BuildConfig
 import crucible.lens.R
@@ -57,6 +57,7 @@ fun HomeScreen(
     lastVisitedResource: String?,
     lastVisitedResourceName: String?,
     apiKey: String?,
+    modifier: Modifier = Modifier,
     onScanClick: () -> Unit,
     onManualEntry: (String) -> Unit,
     onBrowseProjects: () -> Unit,
@@ -70,11 +71,10 @@ fun HomeScreen(
     onInstrumentClick: (String) -> Unit = {},
     onCreateSample: () -> Unit = {},
     onCreateDataset: () -> Unit = {},
-    modifier: Modifier = Modifier
 ) {
     var showHelpDialog by remember { mutableStateOf(false) }
     var showEasterEggDialog by remember { mutableStateOf(false) }
-    var clickCount by remember { mutableStateOf(0) }
+    var clickCount by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
 
     var allProjects by remember { mutableStateOf(CacheManager.getProjects() ?: emptyList()) }
@@ -204,7 +204,6 @@ fun HomeScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 if (lastVisitedResource != null && lastVisitedResourceName != null) {
                     HomeLastVisited(
-                        uuid = lastVisitedResource,
                         name = lastVisitedResourceName,
                         onClick = { onManualEntry(lastVisitedResource) },
                         onHistory = onHistory
@@ -241,13 +240,11 @@ private fun HomeLogo(isDarkTheme: Boolean) {
             "The Molecular Foundry in your pocket — data only tho, the lab stays there.",
             "For when you need your sample data but left your laptop behind.",
             "Turning QR codes into knowledge, one scan at a time.",
-            "Making nanoscience slightly less paperwork-y.",
             "Data at your fingertips. Samples in the lab. Coffee in hand.",
             "Scan first, ask questions later...",
             "Where QR codes meet 'real' science.",
             "Bridging the gap between the glove box and the couch.",
             "Your lab notebook — fits in your pocket and won't absorb spills.",
-            "Because even nanomaterials deserve good metadata.",
             "Track samples, not sticky notes.",
             "Less clipboard, more science.",
             "Samples have stories. Crucible helps tell them.",
@@ -255,7 +252,7 @@ private fun HomeLogo(isDarkTheme: Boolean) {
         )
     }
     var tagline by remember { mutableStateOf(taglines[0]) }
-    var lastTapTime by remember { mutableStateOf(0L) }
+    var lastTapTime by remember { mutableLongStateOf(0L) }
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
@@ -392,7 +389,7 @@ private fun HomeCreateSection(onCreateSample: () -> Unit, onCreateDataset: () ->
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun HomeLastVisited(uuid: String, name: String, onClick: () -> Unit, onHistory: () -> Unit = {}) {
+private fun HomeLastVisited(name: String, onClick: () -> Unit, onHistory: () -> Unit = {}) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -456,7 +453,7 @@ private fun HomeLastVisited(uuid: String, name: String, onClick: () -> Unit, onH
 
 @Composable
 private fun HomePinnedProjects(
-    pinnedList: List<crucible.lens.data.model.Project>,
+    pinnedList: List<Project>,
     onProjectClick: (String) -> Unit,
     pinnedInstrumentList: List<crucible.lens.data.model.Instrument> = emptyList(),
     onInstrumentClick: (String) -> Unit = {}
@@ -544,7 +541,7 @@ private fun HomeFooter(graphExplorerUrl: String) {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         OutlinedButton(onClick = {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(graphExplorerUrl)))
+            context.startActivity(Intent(Intent.ACTION_VIEW, graphExplorerUrl.toUri()))
         }) {
             Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
@@ -559,7 +556,7 @@ private fun HomeFooter(graphExplorerUrl: String) {
                 style = footerStyle,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 modifier = Modifier.clickable {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://crucible.lbl.gov/")))
+                    context.startActivity(Intent(Intent.ACTION_VIEW, "https://crucible.lbl.gov/".toUri()))
                 }
             )
             Text(" • Molecular Foundry", style = footerStyle, color = footerColor)

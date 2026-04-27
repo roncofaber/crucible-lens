@@ -4,7 +4,6 @@ import android.util.Log
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
-import crucible.lens.data.model.Sample
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope

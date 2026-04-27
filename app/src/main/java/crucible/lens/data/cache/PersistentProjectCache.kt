@@ -126,21 +126,4 @@ object PersistentProjectCache {
         }
         Unit
     }
-
-    /**
-     * Get cache age in hours, or null if no cache exists
-     */
-    suspend fun getCacheAgeHours(context: Context): Long? = withContext(Dispatchers.IO) {
-        try {
-            val file = File(context.filesDir, CACHE_FILE)
-            if (!file.exists()) return@withContext null
-
-            val json = file.readText()
-            val cacheData = adapter.fromJson(json) ?: return@withContext null
-
-            (System.currentTimeMillis() - cacheData.cachedAt) / (60 * 60 * 1000)
-        } catch (e: Exception) {
-            null
-        }
-    }
 }

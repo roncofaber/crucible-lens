@@ -34,11 +34,11 @@ import kotlinx.coroutines.launch
 fun InstrumentListScreen(
     onBack: () -> Unit,
     onHome: () -> Unit,
-    onSearch: () -> Unit = {},
     onInstrumentClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    onSearch: () -> Unit = {},
     pinnedInstruments: Set<String> = emptySet(),
-    onTogglePin: (String) -> Unit = {},
-    modifier: Modifier = Modifier
+    onTogglePin: (String) -> Unit = {}
 ) {
     var instruments by remember { mutableStateOf<List<Instrument>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -265,7 +265,7 @@ private fun InstrumentCard(
                     Text(text = instrument.location, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(-8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
                 IconButton(onClick = onTogglePin, modifier = Modifier.size(36.dp)) {
                     Icon(
                         if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,

@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.core.net.toUri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
@@ -27,7 +28,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.draw.clip
@@ -39,13 +39,9 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import coil.compose.AsyncImage
-import coil.compose.AsyncImagePainter
-import coil.compose.rememberAsyncImagePainter
-import coil.request.ImageRequest
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -60,29 +56,24 @@ import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalConfiguration
 import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
@@ -102,8 +93,6 @@ import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.QrCodeDialog
 import crucible.lens.ui.common.QrCodeDialogWithNavigation
 import crucible.lens.ui.common.ScrollToTopButton
-import crucible.lens.ui.common.ShareCardGenerator
-import crucible.lens.ui.common.openUrlInBrowser
 
 private data class UnlinkRequest(val name: String, val action: suspend () -> Unit)
 
@@ -145,9 +134,10 @@ private fun dateGroupKey(raw: String?): String {
 fun ResourceDetailScreen(
     resource: CrucibleResource,
     thumbnails: List<String>,
+    graphExplorerUrl: String,
+    modifier: Modifier = Modifier,
     mfid: String = resource.uniqueId,
     isRefreshing: Boolean = false,
-    graphExplorerUrl: String,
     siblingGroupBy: String? = null,
     onBack: () -> Unit,
     onNavigateToResource: (String) -> Unit,
@@ -162,7 +152,6 @@ fun ResourceDetailScreen(
     onSaveToHistory: (uuid: String, name: String) -> Unit = { _, _ -> },
     getCardState: (key: String) -> Boolean = { false },
     onCardStateChange: (key: String, value: Boolean) -> Unit = { _, _ -> },
-    modifier: Modifier = Modifier
 ) {
     var showQrDialog by remember { mutableStateOf(false) }
     var showSiblingGroupDialog by remember { mutableStateOf(false) }
@@ -187,10 +176,10 @@ fun ResourceDetailScreen(
     // Samples grouped by sampleType, Datasets grouped by measurement
     // Initialize with cached data to avoid flash of "-- / --" when navigating
     var sameTypeSamples by remember(resource) {
-        mutableStateOf(if (resource is Sample) listOf<Sample>(resource) else emptyList())
+        mutableStateOf(if (resource is Sample) listOf(resource) else emptyList())
     }
     var sameTypeDatasets by remember(resource) {
-        mutableStateOf(if (resource is Dataset) listOf<Dataset>(resource) else emptyList())
+        mutableStateOf(if (resource is Dataset) listOf(resource) else emptyList())
     }
     // True once the full sibling list has been resolved (cache hit or batch load done).
     // Stays false while the list is just the 1-item seed, so the counter shows "-- / --".
@@ -460,7 +449,7 @@ fun ResourceDetailScreen(
     }
 
     // Incremented when a sibling PTR completes, forces lazy-load effects to re-run
-    var siblingReloadTrigger by remember { mutableStateOf(0) }
+    var siblingReloadTrigger by remember { mutableIntStateOf(0) }
 
     // Lazy load relationships for ~20 neighbors (current ± 10)
     // Thumbnails loaded separately with more conservative strategy
@@ -482,8 +471,7 @@ fun ResourceDetailScreen(
         val toEnrich = pagesToLoad.filter { pageIndex ->
             val uuid = siblingList[pageIndex].uniqueId
             if (uuid in enrichedUuids) return@filter false
-            val existing = loadedResources[uuid]
-            when (existing) {
+            when (val existing = loadedResources[uuid]) {
                 is Sample  -> existing.links == null
                 is Dataset -> existing.links == null
                 else       -> true
@@ -769,9 +757,9 @@ fun ResourceDetailScreen(
                                     leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
                                     onClick = { overflowMenuExpanded = false; showLinkSheet = true }
                                 )
-                                val deletionRequest = when (val r = currentDisplayResource) {
-                                    is Sample -> r.deletionRequest
-                                    is Dataset -> r.deletionRequest
+                                val deletionRequest = when (currentDisplayResource) {
+                                    is Sample -> currentDisplayResource.deletionRequest
+                                    is Dataset -> currentDisplayResource.deletionRequest
                                 }
                                 val deletionStatus = deletionRequest?.get("status") as? String
                                 DropdownMenuItem(
@@ -780,9 +768,9 @@ fun ResourceDetailScreen(
                                     enabled = deletionStatus == null,
                                     onClick = { overflowMenuExpanded = false; showDeletionDialog = true }
                                 )
-                                val projectId = when (val r = currentDisplayResource) {
-                                    is Sample -> r.projectId
-                                    is Dataset -> r.projectId
+                                val projectId = when (currentDisplayResource) {
+                                    is Sample -> currentDisplayResource.projectId
+                                    is Dataset -> currentDisplayResource.projectId
                                 }
                                 if (projectId != null && graphExplorerUrl.isNotBlank()) {
                                     val webUrl = when (currentDisplayResource) {
@@ -794,7 +782,7 @@ fun ResourceDetailScreen(
                                         leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
                                         onClick = {
                                             overflowMenuExpanded = false
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(webUrl)))
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, webUrl.toUri()))
                                         }
                                     )
                                     DropdownMenuItem(
@@ -813,11 +801,7 @@ fun ResourceDetailScreen(
                                     )
                                 }
                                 // Sibling grouping — only when resource belongs to a project
-                                val resourceProjectId = when (val r = currentDisplayResource) {
-                                    is Sample -> r.projectId
-                                    is Dataset -> r.projectId
-                                }
-                                if (resourceProjectId != null) {
+                                if (projectId != null) {
                                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                                     val groupLabel = siblingGroupLabel(activeSiblingGroupBy, currentDisplayResource)
                                     DropdownMenuItem(
@@ -858,7 +842,7 @@ fun ResourceDetailScreen(
                     key(pageResource.uniqueId) {
                         // Each page needs its own independent scroll state
                         val listState = rememberLazyListState()
-                        val showScrollToTop = listState.firstVisibleItemIndex > 0
+                        val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
                         // Scope card state to this page's resource so expanded/collapsed state
                         // doesn't leak across pages sharing the same callback origin.
                         val pageId = pageResource.uniqueId
@@ -1233,10 +1217,7 @@ fun ResourceDetailScreen(
                         ) {
                             RadioButton(
                                 selected = effectiveActive == value,
-                                onClick = {
-                                    activeSiblingGroupBy = value
-                                    showSiblingGroupDialog = false
-                                }
+                                onClick = null
                             )
                             Text(label, style = MaterialTheme.typography.bodyLarge)
                         }
@@ -1360,32 +1341,6 @@ fun ResourceDetailScreen(
                 mfid = resource.uniqueId,
                 name = resource.name,
                 onDismiss = { showQrDialog = false }
-            )
-        }
-    }
-}
-
-@Composable
-private fun ResourceTypeBadge(resource: CrucibleResource) {
-    val (icon, label, color) = when (resource) {
-        is Sample -> Triple(Icons.Default.Science, "Sample", MaterialTheme.colorScheme.primary)
-        is Dataset -> Triple(Icons.Default.DataObject, "Dataset", MaterialTheme.colorScheme.secondary)
-    }
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f))
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(icon, contentDescription = null, tint = color)
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                color = color,
-                fontWeight = FontWeight.Bold
             )
         }
     }
@@ -1551,7 +1506,7 @@ private fun ThumbnailsSection(thumbnails: List<String>) {
                             imageState = "loading"
                         },
                         onSuccess = {
-                            imageState = "success"
+                            imageState = null
                         },
                         onError = {
                             imageState = "error: ${it.result.throwable.message}"
@@ -1696,7 +1651,7 @@ private fun SampleDetailsCard(
                             label = "Owner ORCID",
                             value = sample.ownerOrcid,
                             onClick = {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://orcid.org/${sample.ownerOrcid}")))
+                                context.startActivity(Intent(Intent.ACTION_VIEW, "https://orcid.org/${sample.ownerOrcid}".toUri()))
                             }
                         )
                     } else {
@@ -1836,10 +1791,10 @@ private fun DatasetDetailsCard(
                     value = dataset.instrumentName,
                     onClick = {
                         instrumentScope.launch {
-                            val instruments = crucible.lens.data.cache.CacheManager.getInstruments()
+                            val instruments = CacheManager.getInstruments()
                                 ?: withContext(Dispatchers.IO) {
                                     ApiClient.service.getInstruments().body()
-                                        ?.also { crucible.lens.data.cache.CacheManager.cacheInstruments(it) }
+                                        ?.also { CacheManager.cacheInstruments(it) }
                                 }
                             val instrument = instruments?.find { it.instrumentName == dataset.instrumentName }
                             if (instrument != null) onInstrumentClick(instrument.uniqueId)
@@ -1865,7 +1820,7 @@ private fun DatasetDetailsCard(
                             label = "Owner ORCID",
                             value = dataset.ownerOrcid,
                             onClick = {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://orcid.org/${dataset.ownerOrcid}")))
+                                context.startActivity(Intent(Intent.ACTION_VIEW, "https://orcid.org/${dataset.ownerOrcid}".toUri()))
                             }
                         )
                     } else {
@@ -2589,7 +2544,7 @@ private fun DeletionRequestDialog(
                         isSubmitting = true
                         errorMsg = null
                         try {
-                            val resp = crucible.lens.data.api.ApiClient.service.requestDeletion(
+                            val resp = ApiClient.service.requestDeletion(
                                 resourceId = resource.uniqueId,
                                 reason = reason.trim().ifBlank { null }
                             )
@@ -2612,31 +2567,6 @@ private fun DeletionRequestDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
-}
-
-private fun formatRelativeTime(raw: String?): String {
-    if (raw == null) return "None"
-    val s = raw.trim()
-    val instant = try {
-        java.time.OffsetDateTime.parse(s).toInstant()
-    } catch (_: Exception) { try {
-        java.time.LocalDateTime.parse(s).toInstant(java.time.ZoneOffset.UTC)
-    } catch (_: Exception) { null } } ?: return formatDateTime(raw)
-
-    val diff = java.time.Duration.between(instant, java.time.Instant.now())
-    val abs  = kotlin.math.abs(diff.seconds)
-    val past = diff.seconds >= 0
-    val suffix = if (past) "ago" else "from now"
-
-    return when {
-        abs < 60              -> "just now"
-        abs < 3_600           -> "${abs / 60} min $suffix"
-        abs < 86_400          -> "${abs / 3_600} h $suffix"
-        abs < 7 * 86_400      -> "${abs / 86_400} day${if (abs / 86_400 != 1L) "s" else ""} $suffix"
-        abs < 30 * 86_400     -> "${abs / (7 * 86_400)} week${if (abs / (7 * 86_400) != 1L) "s" else ""} $suffix"
-        abs < 365 * 86_400    -> "${abs / (30 * 86_400)} month${if (abs / (30 * 86_400) != 1L) "s" else ""} $suffix"
-        else                  -> "${abs / (365 * 86_400)} year${if (abs / (365 * 86_400) != 1L) "s" else ""} $suffix"
-    }
 }
 
 private fun formatDateTime(raw: String?): String {
@@ -2672,59 +2602,6 @@ private fun formatFileSize(bytes: Long): String = when {
     bytes >= 1_048_576     -> "%.2f MB".format(bytes / 1_048_576.0)
     bytes >= 1_024         -> "%.1f KB".format(bytes / 1_024.0)
     else                   -> "$bytes B"
-}
-
-@Composable
-private fun CopyableInfoRow(
-    context: Context,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    value: String
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = "$label:",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall,
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        IconButton(
-            onClick = {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
-                Toast.makeText(context, "$label copied to clipboard", Toast.LENGTH_SHORT).show()
-            },
-            modifier = Modifier.size(32.dp)
-        ) {
-            Icon(
-                Icons.Default.ContentCopy,
-                contentDescription = "Copy $label",
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-        }
-    }
 }
 
 @Composable

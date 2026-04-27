@@ -199,11 +199,6 @@ object CacheManager {
         clearInstrumentsCache()
     }
 
-    // Stats for debugging
-    fun getCacheStats(): String {
-        return "Resources: ${resourceCache.size}, Thumbnails: ${thumbnailCache.size}, Projects: ${if (projectsCache != null) "cached" else "empty"}, Project Details: ${projectSamplesCache.size + projectDatasetsCache.size}"
-    }
-
     data class CacheStats(
         val resourceCount: Int,
         val thumbnailCount: Int,

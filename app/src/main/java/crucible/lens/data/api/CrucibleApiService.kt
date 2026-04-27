@@ -13,7 +13,6 @@ import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.model.AccountResponse
-import crucible.lens.data.model.UserLead
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE

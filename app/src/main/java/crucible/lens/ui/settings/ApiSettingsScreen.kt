@@ -6,6 +6,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -150,7 +152,7 @@ fun ApiSettingsScreen(
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             ) {
-                Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Filled.Login, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Sign in with ORCID")
             }
@@ -224,7 +226,7 @@ fun ApiSettingsScreen(
                             }
                             IconButton(onClick = onSignOut) {
                                 Icon(
-                                    Icons.Default.Logout,
+                                    Icons.AutoMirrored.Filled.Logout,
                                     contentDescription = "Sign out",
                                     tint = MaterialTheme.colorScheme.error
                                 )
