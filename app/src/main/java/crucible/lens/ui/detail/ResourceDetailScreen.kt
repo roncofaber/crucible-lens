@@ -94,7 +94,7 @@ import crucible.lens.ui.common.QrCodeDialog
 import crucible.lens.ui.common.QrCodeDialogWithNavigation
 import crucible.lens.ui.common.ScrollToTopButton
 
-private data class UnlinkRequest(val name: String, val action: suspend () -> Unit)
+private data class UnlinkRequest(val name: String, val otherUuid: String, val action: suspend () -> Unit)
 
 private fun monthBounds(raw: String?): Pair<String, String>? {
     if (raw == null) return null
@@ -961,7 +961,7 @@ fun ResourceDetailScreen(
                                         samples = displayResource.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "associated" }.sortedBy { it.uniqueId },
                                         onNavigateToResource = onNavigateToResource,
                                         onUnlink = { uuid, name ->
-                                            pendingUnlink = UnlinkRequest(name) {
+                                            pendingUnlink = UnlinkRequest(name, uuid) {
                                                 ApiClient.service.unlinkDatasetSample(displayResource.uniqueId, uuid)
                                             }
                                         },
@@ -982,7 +982,7 @@ fun ResourceDetailScreen(
                                         parents = displayResource.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "parent" }.sortedBy { it.uniqueId },
                                         onNavigateToResource = onNavigateToResource,
                                         onUnlink = { uuid, name ->
-                                            pendingUnlink = UnlinkRequest(name) {
+                                            pendingUnlink = UnlinkRequest(name, uuid) {
                                                 ApiClient.service.unlinkDatasets(uuid, displayResource.uniqueId)
                                             }
                                         },
@@ -1003,7 +1003,7 @@ fun ResourceDetailScreen(
                                         children = displayResource.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "child" }.sortedBy { it.uniqueId },
                                         onNavigateToResource = onNavigateToResource,
                                         onUnlink = { uuid, name ->
-                                            pendingUnlink = UnlinkRequest(name) {
+                                            pendingUnlink = UnlinkRequest(name, uuid) {
                                                 ApiClient.service.unlinkDatasets(displayResource.uniqueId, uuid)
                                             }
                                         },
@@ -1054,7 +1054,7 @@ fun ResourceDetailScreen(
                                         parents = displayResource.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "parent" }.sortedBy { it.uniqueId },
                                         onNavigateToResource = onNavigateToResource,
                                         onUnlink = { uuid, name ->
-                                            pendingUnlink = UnlinkRequest(name) {
+                                            pendingUnlink = UnlinkRequest(name, uuid) {
                                                 ApiClient.service.unlinkSamples(uuid, displayResource.uniqueId)
                                             }
                                         },
@@ -1075,7 +1075,7 @@ fun ResourceDetailScreen(
                                         children = displayResource.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "child" }.sortedBy { it.uniqueId },
                                         onNavigateToResource = onNavigateToResource,
                                         onUnlink = { uuid, name ->
-                                            pendingUnlink = UnlinkRequest(name) {
+                                            pendingUnlink = UnlinkRequest(name, uuid) {
                                                 ApiClient.service.unlinkSamples(displayResource.uniqueId, uuid)
                                             }
                                         },
@@ -1096,7 +1096,7 @@ fun ResourceDetailScreen(
                                         datasets = displayResource.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "associated" }.sortedBy { it.uniqueId },
                                         onNavigateToResource = onNavigateToResource,
                                         onUnlink = { uuid, name ->
-                                            pendingUnlink = UnlinkRequest(name) {
+                                            pendingUnlink = UnlinkRequest(name, uuid) {
                                                 ApiClient.service.unlinkDatasetSample(uuid, displayResource.uniqueId)
                                             }
                                         },
@@ -1305,6 +1305,8 @@ fun ResourceDetailScreen(
                             isUnlinking = true
                             try {
                                 req.action()
+                                // Evict both sides so neither shows stale links
+                                CacheManager.clearResource(req.otherUuid)
                                 pendingUnlink = null
                                 onRefresh(currentDisplayResource.uniqueId)
                             } catch (_: Exception) {
