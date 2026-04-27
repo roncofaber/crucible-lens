@@ -205,6 +205,7 @@ fun HomeScreen(
                     onBrowseInstruments = onBrowseInstruments
                 )
                 HomeCreateSection(onCreateSample = onCreateSample, onCreateDataset = onCreateDataset)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 if (lastVisitedResource != null && lastVisitedResourceName != null) {
                     HomeLastVisited(
                         uuid = lastVisitedResource,
