@@ -816,7 +816,6 @@ private fun ProjectHeader(
     }
 }
 
-@Composable
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SamplesList(
