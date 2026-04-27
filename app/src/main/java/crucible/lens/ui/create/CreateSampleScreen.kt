@@ -159,12 +159,12 @@ fun CreateSampleScreen(
                                     // Invalidate project list so the new sample appears immediately
                                     selectedProjectId?.let { CacheManager.clearProjectDetail(it) }
                                     onCreated(uuid)
-                                } else snackbarHostState.showSnackbar("Created but no ID returned")
+                                } else snackbarHostState.showSnackbar("Created — couldn't retrieve the ID")
                             } else {
-                                snackbarHostState.showSnackbar("Failed (${resp.code()})")
+                                snackbarHostState.showSnackbar("Save failed (${resp.code()})")
                             }
                         } catch (e: Exception) {
-                            snackbarHostState.showSnackbar("Network error: ${e.message}")
+                            snackbarHostState.showSnackbar("Connection error — check your network")
                         } finally {
                             isSaving = false
                         }

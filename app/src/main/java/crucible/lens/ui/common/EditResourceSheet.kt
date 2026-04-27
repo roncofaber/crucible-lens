@@ -181,7 +181,7 @@ private fun SampleEditFields(
                 }
                 else snackbarHostState.showSnackbar("Save failed (${resp.code()})")
             } catch (e: Exception) {
-                snackbarHostState.showSnackbar("Network error: ${e.message}")
+                snackbarHostState.showSnackbar("Connection error — check your network")
             } finally {
                 onSavingChange(false)
             }
@@ -319,7 +319,7 @@ private fun DatasetEditFields(
                 }
                 else snackbarHostState.showSnackbar("Save failed (${resp.code()})")
             } catch (e: Exception) {
-                snackbarHostState.showSnackbar("Network error: ${e.message}")
+                snackbarHostState.showSnackbar("Connection error — check your network")
             } finally {
                 onSavingChange(false)
             }

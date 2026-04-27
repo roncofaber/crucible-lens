@@ -400,7 +400,7 @@ fun LinkResourceSheet(
                             try {
                                 val targetUuid = (resolvedUuid ?: input).trim()
                                 val targetType = resolvedType ?: run {
-                                    snackbarHostState.showSnackbar("Could not resolve resource type")
+                                    snackbarHostState.showSnackbar("Couldn't identify resource type")
                                     return@launch
                                 }
                                 val ok = performLink(resource, currentType, targetUuid, targetType, direction)
@@ -410,7 +410,7 @@ fun LinkResourceSheet(
                                     snackbarHostState.showSnackbar("Link failed — check the ID and try again")
                                 }
                             } catch (e: Exception) {
-                                snackbarHostState.showSnackbar("Network error: ${e.message}")
+                                snackbarHostState.showSnackbar("Connection error — check your network")
                             } finally {
                                 isLinking = false
                             }
