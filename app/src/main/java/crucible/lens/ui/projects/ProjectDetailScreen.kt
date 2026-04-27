@@ -82,6 +82,86 @@ private enum class DatasetGroupBy(val label: String) {
 private fun ownerDisplayName(firstName: String?, lastName: String?) =
     "${firstName?.firstOrNull()?.uppercaseChar() ?: '?'}. ${lastName ?: "Unknown"}"
 
+@Composable
+private fun rememberOwnerNames(
+    isOwnerGroupBy: Boolean,
+    projectId: String
+): Pair<androidx.compose.runtime.snapshots.SnapshotStateMap<String, String>, Boolean> {
+    val ownerNames = remember { mutableStateMapOf<String, String>() }
+    var ownerNamesReady by remember(isOwnerGroupBy) {
+        mutableStateOf(!isOwnerGroupBy || ownerNames.isNotEmpty())
+    }
+    LaunchedEffect(isOwnerGroupBy, projectId) {
+        if (!isOwnerGroupBy || ownerNames.isNotEmpty()) { ownerNamesReady = true; return@LaunchedEffect }
+        try {
+            val resp = ApiClient.service.getProjectUsers(projectId)
+            if (resp.isSuccessful) {
+                resp.body()?.forEach { u -> u.uniqueId?.let { id -> ownerNames[id] = ownerDisplayName(u.firstName, u.lastName) } }
+            }
+        } catch (_: Exception) { }
+        ownerNamesReady = true
+    }
+    return ownerNames to ownerNamesReady
+}
+
+@Composable
+private fun EmptyListCard(
+    resourceName: String,
+    defaultIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    isFiltered: Boolean
+) {
+    Box(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(
+                        if (isFiltered) Icons.Default.SearchOff else defaultIcon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = if (isFiltered) "No Matching $resourceName" else "No $resourceName",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    text = if (isFiltered) "No ${resourceName.lowercase()} match your search."
+                           else "This project has no ${resourceName.lowercase()}.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.LoadMoreItem(
+    keyPrefix: String,
+    groupKey: String,
+    displayed: Int,
+    total: Int,
+    onLoadMore: () -> Unit
+) {
+    if (displayed < total) {
+        val remaining = total - displayed
+        item(key = "load_more_${keyPrefix}_$groupKey") {
+            TextButton(
+                onClick = onLoadMore,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    "Load ${minOf(50, remaining)} more… ($remaining remaining)",
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
+        }
+    }
+}
+
 private fun dateGroupKey(raw: String?): String {
     if (raw == null) return "No date"
     val fmt = java.time.format.DateTimeFormatter.ofPattern("MMM yyyy")
@@ -737,34 +817,6 @@ private fun ProjectHeader(
 }
 
 @Composable
-private fun StatChip(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-        shape = MaterialTheme.shapes.small
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                modifier = Modifier.size(12.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SamplesList(
@@ -776,39 +828,9 @@ private fun SamplesList(
     groupBy: SampleGroupBy = SampleGroupBy.TYPE,
     onSampleClick: (String) -> Unit
 ) {
-    val ownerNames = remember { mutableStateMapOf<String, String>() }
-    // Ready immediately if not grouping by owner, or if names were already fetched.
-    var ownerNamesReady by remember(groupBy) {
-        mutableStateOf(groupBy != SampleGroupBy.OWNER || ownerNames.isNotEmpty())
-    }
-    LaunchedEffect(groupBy, projectId) {
-        if (groupBy != SampleGroupBy.OWNER || ownerNames.isNotEmpty()) {
-            ownerNamesReady = true
-            return@LaunchedEffect
-        }
-        try {
-            val resp = ApiClient.service.getProjectUsers(projectId)
-            if (resp.isSuccessful) {
-                resp.body()?.forEach { u -> u.uniqueId?.let { id -> ownerNames[id] = ownerDisplayName(u.firstName, u.lastName) } }
-            }
-        } catch (_: Exception) { }
-        ownerNamesReady = true
-    }
+    val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == SampleGroupBy.OWNER, projectId)
     if (samples.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(if (isFiltered) Icons.Default.SearchOff else Icons.Default.Science, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(text = if (isFiltered) "No Matching Samples" else "No Samples", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    }
-                    Text(text = if (isFiltered) "No samples match your search." else "This project has no samples.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
+        EmptyListCard(resourceName = "Samples", defaultIcon = Icons.Default.Science, isFiltered = isFiltered)
     } else if (!ownerNamesReady) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(32.dp))
@@ -864,16 +886,8 @@ private fun SamplesList(
                                 )
                             }
                         }
-                        if (displayedCount < sortedSamples.size) {
-                            val remaining = sortedSamples.size - displayedCount
-                            item(key = "load_more_sample_$groupKey") {
-                                TextButton(
-                                    onClick = { displayedCounts[groupKey] = displayedCount + 50 },
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                                ) {
-                                    Text("Load ${minOf(50, remaining)} more… ($remaining remaining)", style = MaterialTheme.typography.labelMedium)
-                                }
-                            }
+                        LoadMoreItem("sample", groupKey, displayedCount, sortedSamples.size) {
+                            displayedCounts[groupKey] = displayedCount + 50
                         }
                     }
                 }
@@ -911,38 +925,9 @@ private fun DatasetsList(
     groupBy: DatasetGroupBy = DatasetGroupBy.MEASUREMENT,
     onDatasetClick: (String) -> Unit
 ) {
-    val ownerNames = remember { mutableStateMapOf<String, String>() }
-    var ownerNamesReady by remember(groupBy) {
-        mutableStateOf(groupBy != DatasetGroupBy.OWNER || ownerNames.isNotEmpty())
-    }
-    LaunchedEffect(groupBy, projectId) {
-        if (groupBy != DatasetGroupBy.OWNER || ownerNames.isNotEmpty()) {
-            ownerNamesReady = true
-            return@LaunchedEffect
-        }
-        try {
-            val resp = ApiClient.service.getProjectUsers(projectId)
-            if (resp.isSuccessful) {
-                resp.body()?.forEach { u -> u.uniqueId?.let { id -> ownerNames[id] = ownerDisplayName(u.firstName, u.lastName) } }
-            }
-        } catch (_: Exception) { }
-        ownerNamesReady = true
-    }
+    val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == DatasetGroupBy.OWNER, projectId)
     if (datasets.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(if (isFiltered) Icons.Default.SearchOff else Icons.Default.Dataset, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(text = if (isFiltered) "No Matching Datasets" else "No Datasets", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    }
-                    Text(text = if (isFiltered) "No datasets match your search." else "This project has no datasets.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
+        EmptyListCard(resourceName = "Datasets", defaultIcon = Icons.Default.Dataset, isFiltered = isFiltered)
     } else if (!ownerNamesReady) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(32.dp))
@@ -1001,16 +986,8 @@ private fun DatasetsList(
                                 )
                             }
                         }
-                        if (displayedCount < sortedDatasets.size) {
-                            val remaining = sortedDatasets.size - displayedCount
-                            item(key = "load_more_dataset_$groupKey") {
-                                TextButton(
-                                    onClick = { displayedCounts[groupKey] = displayedCount + 50 },
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                                ) {
-                                    Text("Load ${minOf(50, remaining)} more… ($remaining remaining)", style = MaterialTheme.typography.labelMedium)
-                                }
-                            }
+                        LoadMoreItem("dataset", groupKey, displayedCount, sortedDatasets.size) {
+                            displayedCounts[groupKey] = displayedCount + 50
                         }
                     }
                 }
