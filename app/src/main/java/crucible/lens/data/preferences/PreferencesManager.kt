@@ -229,6 +229,10 @@ class PreferencesManager(private val context: Context) {
         }
     }
 
+    suspend fun clearHistory() {
+        context.dataStore.edit { prefs -> prefs.remove(RESOURCE_HISTORY) }
+    }
+
     suspend fun addToHistory(uuid: String, name: String) {
         context.dataStore.edit { prefs ->
             val existing = prefs[RESOURCE_HISTORY]?.split(",")?.mapNotNull { entry ->

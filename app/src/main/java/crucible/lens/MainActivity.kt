@@ -177,9 +177,10 @@ class MainActivity : ComponentActivity() {
                     pinnedProjects = pinnedProjects,
                     resourceHistory = resourceHistory,
                     onHistoryAdd = { uuid, name ->
-                        scope.launch {
-                            preferencesManager.addToHistory(uuid, name)
-                        }
+                        scope.launch { preferencesManager.addToHistory(uuid, name) }
+                    },
+                    onClearHistory = {
+                        scope.launch { preferencesManager.clearHistory() }
                     },
                     onApiKeySave = { key ->
                         scope.launch {
