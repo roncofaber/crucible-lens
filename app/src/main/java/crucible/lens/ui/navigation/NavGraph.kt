@@ -776,7 +776,8 @@ fun NavGraph(
                 onSearch = { navController.navigate(Screen.Search.route) },
                 onItemClick = { uuid ->
                     navController.navigate(Screen.Detail.createRoute(uuid))
-                }
+                },
+                graphExplorerUrl = graphExplorerUrl
             )
         }
 

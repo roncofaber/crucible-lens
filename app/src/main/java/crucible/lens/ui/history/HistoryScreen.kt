@@ -1,6 +1,11 @@
 package crucible.lens.ui.history
 
-import androidx.compose.foundation.clickable
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
+import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -8,17 +13,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.model.Dataset
+import crucible.lens.data.model.Sample
 import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.ui.common.AppScaffold
 import kotlin.math.abs
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HistoryScreen(
     history: List<HistoryItem>,
@@ -26,6 +37,7 @@ fun HistoryScreen(
     onHome: () -> Unit,
     onSearch: () -> Unit,
     onItemClick: (String) -> Unit,
+    graphExplorerUrl: String = "",
     modifier: Modifier = Modifier
 ) {
     AppScaffold(
@@ -39,81 +51,43 @@ fun HistoryScreen(
                 },
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        IconButton(
-                            onClick = onSearch,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = "Search",
-                                modifier = Modifier.size(24.dp)
-                            )
+                        IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
+                            Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
                         }
-                        IconButton(
-                            onClick = onHome,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Home,
-                                contentDescription = "Home",
-                                modifier = Modifier.size(24.dp)
-                            )
+                        IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
+                            Icon(Icons.Default.Home, contentDescription = "Home", modifier = Modifier.size(24.dp))
                         }
                     }
                 }
             )
         }
     ) { padding ->
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
+        Box(modifier = modifier.fillMaxSize().padding(padding)) {
             if (history.isEmpty()) {
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp)
-                        .align(Alignment.Center),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                    modifier = Modifier.fillMaxWidth().padding(32.dp).align(Alignment.Center),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
+                        modifier = Modifier.fillMaxWidth().padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Icon(
-                            Icons.Default.HistoryToggleOff,
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            "No history yet",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            "Resources you view will appear here",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Icon(Icons.Default.HistoryToggleOff, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("No history yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Resources you view will appear here", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(history) { item ->
                         HistoryCard(
                             item = item,
+                            graphExplorerUrl = graphExplorerUrl,
                             onClick = { onItemClick(item.uuid) }
                         )
                     }
@@ -123,60 +97,118 @@ fun HistoryScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HistoryCard(
     item: HistoryItem,
+    graphExplorerUrl: String = "",
     onClick: () -> Unit
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+    val context = LocalContext.current
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    // Best-effort cache lookups for display enrichment
+    val cached = remember(item.uuid) { CacheManager.getResource(item.uuid) }
+    val resourceType = remember(item.uuid) { CacheManager.getResourceType(item.uuid) }
+    val projectId = remember(cached) {
+        when (cached) {
+            is Sample -> cached.projectId
+            is Dataset -> cached.projectId
+            else -> null
+        }
+    }
+    val projectName = remember(projectId) {
+        projectId?.let { pid ->
+            CacheManager.getProjects()?.find { it.projectId == pid }?.title ?: pid
+        }
+    }
+    val icon = when (resourceType) {
+        "sample" -> Icons.Default.Science
+        "dataset" -> Icons.Default.Dataset
+        else -> Icons.Default.History
+    }
+    val webUrl = if (projectId != null && graphExplorerUrl.isNotBlank()) {
+        if (resourceType == "dataset") "$graphExplorerUrl/$projectId/dataset/${item.uuid}"
+        else "$graphExplorerUrl/$projectId/sample-graph/${item.uuid}"
+    } else null
+
+    Box {
+        Card(
+            modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = { menuExpanded = true }),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Text(
-                text = item.name,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(item.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (projectName != null) {
+                        Text(projectName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(formatRelativeTime(item.timestamp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(item.uuid, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            }
+        }
+
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Copy ID") },
+                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                onClick = {
+                    menuExpanded = false
+                    val clipboard = context.getSystemService(ClipboardManager::class.java)
+                    clipboard?.setPrimaryClip(ClipData.newPlainText("ID", item.uuid))
+                    Toast.makeText(context, "ID copied", Toast.LENGTH_SHORT).show()
+                }
             )
-            Text(
-                text = item.uuid,
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = formatRelativeTime(item.timestamp),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (webUrl != null) {
+                DropdownMenuItem(
+                    text = { Text("Open in web") },
+                    leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
+                    onClick = {
+                        menuExpanded = false
+                        context.startActivity(Intent(Intent.ACTION_VIEW, webUrl.toUri()))
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Share") },
+                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                    onClick = {
+                        menuExpanded = false
+                        context.startActivity(
+                            Intent.createChooser(
+                                Intent().apply {
+                                    action = Intent.ACTION_SEND
+                                    putExtra(Intent.EXTRA_TEXT, webUrl)
+                                    putExtra(Intent.EXTRA_SUBJECT, item.name)
+                                    type = "text/plain"
+                                }, "Share via"
+                            )
+                        )
+                    }
+                )
+            }
         }
     }
 }
 
 private fun formatRelativeTime(timestamp: Long): String {
-    val now = System.currentTimeMillis()
-    val diffMs = abs(now - timestamp)
-    val diffSeconds = diffMs / 1000
-    val diffMinutes = diffSeconds / 60
+    val diffMs = abs(System.currentTimeMillis() - timestamp)
+    val diffMinutes = diffMs / 60000
     val diffHours = diffMinutes / 60
     val diffDays = diffHours / 24
-
     return when {
-        diffSeconds < 60 -> "Just now"
-        diffMinutes < 60 -> "$diffMinutes minute${if (diffMinutes > 1) "s" else ""} ago"
-        diffHours < 24 -> "$diffHours hour${if (diffHours > 1) "s" else ""} ago"
+        diffMinutes < 1 -> "Just now"
+        diffMinutes < 60 -> "$diffMinutes min ago"
+        diffHours < 24 -> "$diffHours hr ago"
         diffDays < 7 -> "$diffDays day${if (diffDays > 1) "s" else ""} ago"
-        else -> {
-            val diffWeeks = diffDays / 7
-            "$diffWeeks week${if (diffWeeks > 1) "s" else ""} ago"
-        }
+        else -> "${diffDays / 7} wk${if (diffDays / 7 > 1) "s" else ""} ago"
     }
 }
