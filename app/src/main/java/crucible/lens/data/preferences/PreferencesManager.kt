@@ -32,6 +32,7 @@ class PreferencesManager(private val context: Context) {
         private val DATASET_GROUP_BY = stringPreferencesKey("dataset_group_by")
         private val DEFAULT_PROJECT_TAB = stringPreferencesKey("default_project_tab")
         private val USER_ORCID = stringPreferencesKey("user_orcid")
+        private val PINNED_INSTRUMENTS = stringPreferencesKey("pinned_instruments")
 
         const val PROJECT_TAB_SAMPLES = "SAMPLES"
         const val PROJECT_TAB_DATASETS = "DATASETS"
@@ -100,6 +101,10 @@ class PreferencesManager(private val context: Context) {
 
     val defaultProjectTab: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[DEFAULT_PROJECT_TAB] ?: PROJECT_TAB_SAMPLES
+    }
+
+    val pinnedInstruments: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     }
 
     val userOrcid: Flow<String?> = context.dataStore.data.map { preferences ->
@@ -194,6 +199,14 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun saveDefaultProjectTab(tab: String) {
         context.dataStore.edit { prefs -> prefs[DEFAULT_PROJECT_TAB] = tab }
+    }
+
+    suspend fun togglePinnedInstrument(id: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+            if (id in current) current.remove(id) else current.add(id)
+            prefs[PINNED_INSTRUMENTS] = current.joinToString(",")
+        }
     }
 
     suspend fun saveUserOrcid(orcid: String?) {

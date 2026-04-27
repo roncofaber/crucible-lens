@@ -131,6 +131,8 @@ fun NavGraph(
     onTogglePinnedProject: (String) -> Unit,
     archivedProjects: Set<String>,
     onToggleArchive: (String) -> Unit,
+    pinnedInstruments: Set<String> = emptySet(),
+    onTogglePinnedInstrument: (String) -> Unit = {},
     userOrcid: String? = null,
     onUserOrcidSave: (String?) -> Unit = {},
     viewModel: ScannerViewModel = viewModel()
@@ -694,7 +696,8 @@ fun NavGraph(
                 onSearch = { navController.navigate(Screen.Search.route) },
                 onInstrumentClick = { id ->
                     navController.navigate(Screen.InstrumentDetail.createRoute(id))
-                }
+                },
+                pinnedInstruments = pinnedInstruments
             )
         }
 
@@ -705,6 +708,8 @@ fun NavGraph(
             val instrumentId = backStackEntry.arguments?.getString("instrumentId") ?: ""
             InstrumentDetailScreen(
                 instrumentId = instrumentId,
+                isPinned = instrumentId in pinnedInstruments,
+                onTogglePin = { onTogglePinnedInstrument(instrumentId) },
                 onBack = { navController.popBackStack() },
                 onHome = {
                     navController.navigate(Screen.Home.route) {

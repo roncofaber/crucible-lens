@@ -134,6 +134,7 @@ class MainActivity : ComponentActivity() {
             val resourceHistory by preferencesManager.resourceHistory.collectAsState(
                 initial = emptyList()
             )
+            val pinnedInstruments by preferencesManager.pinnedInstruments.collectAsState(initial = emptySet())
             val userOrcid by preferencesManager.userOrcid.collectAsState(initial = null)
             val scope = rememberCoroutineScope()
 
@@ -232,6 +233,10 @@ class MainActivity : ComponentActivity() {
                         scope.launch {
                             preferencesManager.toggleArchivedProject(id)
                         }
+                    },
+                    pinnedInstruments = pinnedInstruments,
+                    onTogglePinnedInstrument = { id ->
+                        scope.launch { preferencesManager.togglePinnedInstrument(id) }
                     },
                     userOrcid = userOrcid,
                     onUserOrcidSave = { orcid ->

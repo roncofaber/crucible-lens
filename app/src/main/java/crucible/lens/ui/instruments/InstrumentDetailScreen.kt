@@ -54,6 +54,8 @@ private enum class DatasetSortOrder { NEWEST, OLDEST, NAME }
 @Composable
 fun InstrumentDetailScreen(
     instrumentId: String,
+    isPinned: Boolean = false,
+    onTogglePin: () -> Unit = {},
     onBack: () -> Unit,
     onHome: () -> Unit,
     onSearch: () -> Unit = {},
@@ -169,6 +171,14 @@ fun InstrumentDetailScreen(
                         horizontalArrangement = Arrangement.spacedBy((-4).dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        IconButton(onClick = onTogglePin, modifier = Modifier.size(40.dp)) {
+                            Icon(
+                                if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                contentDescription = if (isPinned) "Unpin" else "Pin",
+                                tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                         IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
                             Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
                         }
