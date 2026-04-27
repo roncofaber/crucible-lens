@@ -135,6 +135,7 @@ fun NavGraph(
     onTogglePinnedInstrument: (String) -> Unit = {},
     userOrcid: String? = null,
     onUserOrcidSave: (String?) -> Unit = {},
+    onSignOut: () -> Unit = {},
     viewModel: ScannerViewModel = viewModel()
 ) {
     LaunchedEffect(deepLinkUuid) {
@@ -338,6 +339,7 @@ fun NavGraph(
                 onApiBaseUrlSave = onApiBaseUrlSave,
                 onGraphExplorerUrlSave = onGraphExplorerUrlSave,
                 onUserOrcidSave = onUserOrcidSave,
+                onSignOut = onSignOut,
                 onSignIn = { navController.navigate(Screen.OrcidLogin.route) },
                 onBack = { navController.popBackStack() },
                 onHome = {
