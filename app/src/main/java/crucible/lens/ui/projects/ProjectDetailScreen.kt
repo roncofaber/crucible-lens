@@ -66,12 +66,18 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+private enum class SortField(val label: String) {
+    NAME("Name"), MFID("MFID"), DATE("Date")
+}
+
+private data class SortState(val field: SortField = SortField.NAME, val ascending: Boolean = true)
+
 private enum class SampleGroupBy(val label: String) {
-    TYPE("Type"), DATE("Date"), OWNER("Owner")
+    NONE("None"), TYPE("Type"), DATE("Date"), OWNER("Owner")
 }
 
 private enum class DatasetGroupBy(val label: String) {
-    MEASUREMENT("Measurement"), INSTRUMENT("Instrument"),
+    NONE("None"), MEASUREMENT("Measurement"), INSTRUMENT("Instrument"),
     DATE("Date"), FORMAT("Format"), SESSION("Session"), OWNER("Owner")
 }
 
@@ -197,6 +203,7 @@ fun ProjectDetailScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var sampleGroupBy by remember { mutableStateOf(SampleGroupBy.TYPE) }
     var datasetGroupBy by remember { mutableStateOf(DatasetGroupBy.MEASUREMENT) }
+    var sortState by remember { mutableStateOf(SortState()) }
     var fromCache by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -389,6 +396,8 @@ fun ProjectDetailScreen(
                 datasetGroupBy = datasetGroupBy,
                 onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) } },
                 onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) } },
+                sortState = sortState,
+                onSortStateChange = { sortState = it },
             )
 
             // Tabs
@@ -530,6 +539,7 @@ fun ProjectDetailScreen(
                                 projectId = projectId,
                                 graphExplorerUrl = graphExplorerUrl,
                                 groupBy = sampleGroupBy,
+                                sortState = sortState,
                                 onSampleClick = { uuid -> onResourceClick(uuid, sampleGroupBy.name) }
                             )
                             1 -> DatasetsList(
@@ -539,6 +549,7 @@ fun ProjectDetailScreen(
                                 projectId = projectId,
                                 graphExplorerUrl = graphExplorerUrl,
                                 groupBy = datasetGroupBy,
+                                sortState = sortState,
                                 onDatasetClick = { uuid -> onResourceClick(uuid, datasetGroupBy.name) }
                             )
                         }
@@ -588,8 +599,11 @@ private fun ProjectHeader(
     datasetGroupBy: DatasetGroupBy = DatasetGroupBy.MEASUREMENT,
     onSampleGroupByChange: (SampleGroupBy) -> Unit = {},
     onDatasetGroupByChange: (DatasetGroupBy) -> Unit = {},
+    sortState: SortState = SortState(),
+    onSortStateChange: (SortState) -> Unit = {},
 ) {
     var groupMenuExpanded by remember { mutableStateOf(false) }
+    var sortMenuExpanded by remember { mutableStateOf(false) }
 
     Surface(
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
@@ -691,7 +705,7 @@ private fun ProjectHeader(
                     }
                 }
 
-            // Search field + group-by
+            // Search field + group-by + sort
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -735,22 +749,69 @@ private fun ProjectHeader(
                         Icon(Icons.Default.Tune, contentDescription = "Group by", modifier = Modifier.size(20.dp))
                     }
                     DropdownMenu(expanded = groupMenuExpanded, onDismissRequest = { groupMenuExpanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Group by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                            onClick = {}, enabled = false,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                        )
                         if (currentPage == 0) {
                             SampleGroupBy.entries.forEach { opt ->
                                 DropdownMenuItem(
-                                    text = { Text(opt.label) },
-                                    leadingIcon = if (opt == sampleGroupBy) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
-                                    onClick = { onSampleGroupByChange(opt); groupMenuExpanded = false }
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            if (opt == sampleGroupBy) Icon(Icons.Default.Circle, contentDescription = null, modifier = Modifier.size(6.dp))
+                                            else Spacer(modifier = Modifier.size(6.dp))
+                                            Text(opt.label)
+                                        }
+                                    },
+                                    onClick = { onSampleGroupByChange(opt); groupMenuExpanded = false },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                 )
                             }
                         } else {
                             DatasetGroupBy.entries.forEach { opt ->
                                 DropdownMenuItem(
-                                    text = { Text(opt.label) },
-                                    leadingIcon = if (opt == datasetGroupBy) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
-                                    onClick = { onDatasetGroupByChange(opt); groupMenuExpanded = false }
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            if (opt == datasetGroupBy) Icon(Icons.Default.Circle, contentDescription = null, modifier = Modifier.size(6.dp))
+                                            else Spacer(modifier = Modifier.size(6.dp))
+                                            Text(opt.label)
+                                        }
+                                    },
+                                    onClick = { onDatasetGroupByChange(opt); groupMenuExpanded = false },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                 )
                             }
+                        }
+                    }
+                }
+                Box {
+                    IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.SwapVert, contentDescription = "Sort", modifier = Modifier.size(20.dp))
+                    }
+                    DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Sort by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                            onClick = {}, enabled = false,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                        )
+                        SortField.entries.forEach { field ->
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        if (sortState.field == field) Icon(if (sortState.ascending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, contentDescription = null, modifier = Modifier.size(14.dp))
+                                        else Spacer(modifier = Modifier.size(14.dp))
+                                        Text(field.label)
+                                    }
+                                },
+                                onClick = {
+                                    onSortStateChange(
+                                        if (sortState.field == field) sortState.copy(ascending = !sortState.ascending)
+                                        else SortState(field, true)
+                                    )
+                                },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            )
                         }
                     }
                 }
@@ -769,6 +830,7 @@ private fun SamplesList(
     projectId: String = "",
     graphExplorerUrl: String = "",
     groupBy: SampleGroupBy = SampleGroupBy.TYPE,
+    sortState: SortState = SortState(),
     onSampleClick: (String) -> Unit
 ) {
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == SampleGroupBy.OWNER, projectId)
@@ -780,7 +842,9 @@ private fun SamplesList(
         }
     } else {
         val groupedSamples = remember(samples, groupBy, ownerNames.toMap()) {
-            samples.groupBy { s -> when (groupBy) {
+            if (groupBy == SampleGroupBy.NONE) emptyList()
+            else samples.groupBy { s -> when (groupBy) {
+                SampleGroupBy.NONE  -> ""
                 SampleGroupBy.TYPE  -> s.sampleType ?: "No type"
                 SampleGroupBy.DATE  -> dateGroupKey(s.timestamp)
                 SampleGroupBy.OWNER -> s.ownerOrcid?.let { ownerNames[it] ?: it } ?: "Unknown owner"
@@ -799,9 +863,16 @@ private fun SamplesList(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
-                groupedSamples.forEach { (groupKey, samplesInGroup) ->
+                if (groupBy == SampleGroupBy.NONE) {
+                    val sortedSamples = samples.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTime ?: "" })
+                    items(sortedSamples, key = { it.uniqueId }) { sample ->
+                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                            ResourceCard(title = sample.name, uniqueId = sample.uniqueId, icon = Icons.Default.Science, graphExplorerUrl = graphExplorerUrl, projectId = projectId, resourceType = "sample", onClick = { onSampleClick(sample.uniqueId) })
+                        }
+                    }
+                } else groupedSamples.forEach { (groupKey, samplesInGroup) ->
                     val expanded = expandedGroups[groupKey] == true
-                    val sortedSamples = samplesInGroup.sortedBy { it.uniqueId }
+                    val sortedSamples = samplesInGroup.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTime ?: "" })
                     val displayedCount = displayedCounts[groupKey] ?: 50
 
                     stickyHeader(key = "header_sample_$groupKey") {
@@ -866,6 +937,7 @@ private fun DatasetsList(
     projectId: String = "",
     graphExplorerUrl: String = "",
     groupBy: DatasetGroupBy = DatasetGroupBy.MEASUREMENT,
+    sortState: SortState = SortState(),
     onDatasetClick: (String) -> Unit
 ) {
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == DatasetGroupBy.OWNER, projectId)
@@ -877,7 +949,9 @@ private fun DatasetsList(
         }
     } else {
         val groupedDatasets = remember(datasets, groupBy, ownerNames.toMap()) {
-            datasets.groupBy { d -> when (groupBy) {
+            if (groupBy == DatasetGroupBy.NONE) emptyList()
+            else datasets.groupBy { d -> when (groupBy) {
+                DatasetGroupBy.NONE        -> ""
                 DatasetGroupBy.MEASUREMENT -> d.measurement ?: "No measurement"
                 DatasetGroupBy.INSTRUMENT  -> d.instrumentName ?: "No instrument"
                 DatasetGroupBy.DATE        -> dateGroupKey(d.timestamp)
@@ -899,9 +973,16 @@ private fun DatasetsList(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
-                groupedDatasets.forEach { (groupKey, datasetsInGroup) ->
+                if (groupBy == DatasetGroupBy.NONE) {
+                    val sortedDatasets = datasets.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTime ?: "" })
+                    items(sortedDatasets, key = { it.uniqueId }) { dataset ->
+                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                            ResourceCard(title = dataset.name, uniqueId = dataset.uniqueId, icon = Icons.Default.Dataset, graphExplorerUrl = graphExplorerUrl, projectId = projectId, resourceType = "dataset", onClick = { onDatasetClick(dataset.uniqueId) })
+                        }
+                    }
+                } else groupedDatasets.forEach { (groupKey, datasetsInGroup) ->
                     val expanded = expandedGroups[groupKey] == true
-                    val sortedDatasets = datasetsInGroup.sortedBy { it.uniqueId }
+                    val sortedDatasets = datasetsInGroup.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTime ?: "" })
                     val displayedCount = displayedCounts[groupKey] ?: 50
 
                     stickyHeader(key = "header_dataset_$groupKey") {
@@ -1151,5 +1232,14 @@ private fun Any?.matchesSearchValue(query: String): Boolean = when (this) {
     is Map<*, *> -> @Suppress("UNCHECKED_CAST") (this as Map<String, Any?>).matchesSearch(query)
     is List<*> -> any { it.matchesSearchValue(query) }
     else -> toString().lowercase().contains(query)
+}
+
+private fun <T> List<T>.applySortState(sortState: SortState, name: T.() -> String, mfid: T.() -> String, date: T.() -> String): List<T> {
+    val selector: (T) -> String = when (sortState.field) {
+        SortField.NAME -> name
+        SortField.MFID -> mfid
+        SortField.DATE -> date
+    }
+    return if (sortState.ascending) sortedBy { selector(it) } else sortedByDescending { selector(it) }
 }
 
