@@ -1,70 +1,50 @@
 package crucible.lens.data.api
 
-import com.squareup.moshi.Moshi
 import crucible.lens.BuildConfig
 import crucible.lens.data.preferences.PreferencesManager
-import okhttp3.Interceptor
-import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
-import retrofit2.Retrofit
-import retrofit2.converter.moshi.MoshiConverterFactory
-import java.util.concurrent.TimeUnit
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.logging.LogLevel
+import io.ktor.client.plugins.logging.Logging
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.Json
 
 object ApiClient {
-    private var apiKey: String? = null
+    private var apiKey: String = ""
     private var baseUrl: String = PreferencesManager.DEFAULT_API_BASE_URL
     private var _service: CrucibleApiService? = null
 
     fun setApiKey(key: String) {
         apiKey = key
+        _service = null // Force recreation with new API key
     }
 
     fun setBaseUrl(url: String) {
-        if (url != baseUrl) {
-            baseUrl = url
-            _service = null // Force recreation with new URL
-        }
+        baseUrl = url.trimEnd('/') + "/"
+        _service = null // Force recreation with new URL
     }
 
-    private val moshi = Moshi.Builder()
-        .build()
+    fun getBaseUrl() = baseUrl
 
-    private val authInterceptor = Interceptor { chain ->
-        val request = chain.request()
-        val newRequest = if (apiKey != null) {
-            request.newBuilder()
-                .addHeader("Authorization", "Bearer $apiKey")
-                .build()
-        } else {
-            request
+    fun getApiKey() = apiKey
+
+    val httpClient: HttpClient
+        get() = HttpClient {
+            install(ContentNegotiation) {
+                json(Json {
+                    ignoreUnknownKeys = true
+                    isLenient = true
+                })
+            }
+            install(Logging) {
+                level = if (BuildConfig.DEBUG) LogLevel.BASIC else LogLevel.NONE
+            }
         }
-        chain.proceed(newRequest)
-    }
 
     val service: CrucibleApiService
         get() {
             if (_service == null) {
-                val clientBuilder = OkHttpClient.Builder()
-                    .addInterceptor(authInterceptor)
-                    .connectTimeout(15, TimeUnit.SECONDS)
-                    .readTimeout(20, TimeUnit.SECONDS)
-                    .writeTimeout(20, TimeUnit.SECONDS)
-
-                if (BuildConfig.DEBUG) {
-                    clientBuilder.addInterceptor(
-                        HttpLoggingInterceptor().apply {
-                            level = HttpLoggingInterceptor.Level.BASIC
-                        }
-                    )
-                }
-
-                val retrofit = Retrofit.Builder()
-                    .baseUrl(baseUrl)
-                    .client(clientBuilder.build())
-                    .addConverterFactory(MoshiConverterFactory.create(moshi))
-                    .build()
-
-                _service = retrofit.create(CrucibleApiService::class.java)
+                _service = CrucibleApiService(httpClient, baseUrl, apiKey)
             }
             return requireNotNull(_service)
         }
