@@ -8,14 +8,10 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.Serializable
-
-@Serializable
-data class HistoryItem(val uuid: String, val name: String, val timestamp: Long)
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
-class PreferencesManager(private val context: Context) {
+class PreferencesManager(private val context: Context) : AppPreferences {
 
     companion object {
         private val API_KEY = stringPreferencesKey("api_key")
