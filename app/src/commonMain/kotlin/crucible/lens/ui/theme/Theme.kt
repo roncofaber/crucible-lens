@@ -1,0 +1,189 @@
+package crucible.lens.ui.theme
+
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+
+private val onPrimaryDark  = Color(0xFF1C1B1F)
+private val onPrimaryLight = Color.White
+
+// Blue
+private val BlueDarkColorScheme = darkColorScheme(
+    primary = Color(0xFF90CAF9), onPrimary = onPrimaryDark,
+    primaryContainer = Color(0xFF0D47A1), onPrimaryContainer = Color(0xFFE3F2FD),
+    secondary = Color(0xFF80DEEA), tertiary = Color(0xFFA5D6A7)
+)
+private val BlueLightColorScheme = lightColorScheme(
+    primary = Color(0xFF1976D2), onPrimary = onPrimaryLight,
+    primaryContainer = Color(0xFFBBDEFB), onPrimaryContainer = Color(0xFF002171),
+    secondary = Color(0xFF0097A7), tertiary = Color(0xFF388E3C)
+)
+
+// Purple
+private val PurpleDarkColorScheme = darkColorScheme(
+    primary = Color(0xFFCE93D8), onPrimary = onPrimaryDark,
+    primaryContainer = Color(0xFF4A148C), onPrimaryContainer = Color(0xFFF3E5F5),
+    secondary = Color(0xFF90CAF9), tertiary = Color(0xFFA5D6A7)
+)
+private val PurpleLightColorScheme = lightColorScheme(
+    primary = Color(0xFF9C27B0), onPrimary = onPrimaryLight,
+    primaryContainer = Color(0xFFE1BEE7), onPrimaryContainer = Color(0xFF38006B),
+    secondary = Color(0xFF1976D2), tertiary = Color(0xFF388E3C)
+)
+
+// Green
+private val GreenDarkColorScheme = darkColorScheme(
+    primary = Color(0xFFA5D6A7), onPrimary = onPrimaryDark,
+    primaryContainer = Color(0xFF1B5E20), onPrimaryContainer = Color(0xFFE8F5E9),
+    secondary = Color(0xFF90CAF9), tertiary = Color(0xFFCE93D8)
+)
+private val GreenLightColorScheme = lightColorScheme(
+    primary = Color(0xFF388E3C), onPrimary = onPrimaryLight,
+    primaryContainer = Color(0xFFC8E6C9), onPrimaryContainer = Color(0xFF1B5E20),
+    secondary = Color(0xFF1976D2), tertiary = Color(0xFF9C27B0)
+)
+
+// Orange
+private val OrangeDarkColorScheme = darkColorScheme(
+    primary = Color(0xFFFFB74D), onPrimary = onPrimaryDark,
+    primaryContainer = Color(0xFFE65100), onPrimaryContainer = Color(0xFFFFF3E0),
+    secondary = Color(0xFF80DEEA), tertiary = Color(0xFFA5D6A7)
+)
+private val OrangeLightColorScheme = lightColorScheme(
+    primary = Color(0xFFF57C00), onPrimary = onPrimaryLight,
+    primaryContainer = Color(0xFFFFE0B2), onPrimaryContainer = Color(0xFFE65100),
+    secondary = Color(0xFF0097A7), tertiary = Color(0xFF388E3C)
+)
+
+// Red
+private val RedDarkColorScheme = darkColorScheme(
+    primary = Color(0xFFEF5350), onPrimary = onPrimaryDark,
+    primaryContainer = Color(0xFFB71C1C), onPrimaryContainer = Color(0xFFFFEBEE),
+    secondary = Color(0xFF80DEEA), tertiary = Color(0xFFA5D6A7)
+)
+private val RedLightColorScheme = lightColorScheme(
+    primary = Color(0xFFD32F2F), onPrimary = onPrimaryLight,
+    primaryContainer = Color(0xFFFFCDD2), onPrimaryContainer = Color(0xFFB71C1C),
+    secondary = Color(0xFF0097A7), tertiary = Color(0xFF388E3C)
+)
+
+// Teal
+private val TealDarkColorScheme = darkColorScheme(
+    primary = Color(0xFF4DB6AC), onPrimary = onPrimaryDark,
+    primaryContainer = Color(0xFF004D40), onPrimaryContainer = Color(0xFFE0F2F1),
+    secondary = Color(0xFF90CAF9), tertiary = Color(0xFFA5D6A7)
+)
+private val TealLightColorScheme = lightColorScheme(
+    primary = Color(0xFF00796B), onPrimary = onPrimaryLight,
+    primaryContainer = Color(0xFFB2DFDB), onPrimaryContainer = Color(0xFF004D40),
+    secondary = Color(0xFF1976D2), tertiary = Color(0xFF388E3C)
+)
+
+// Pink
+private val PinkDarkColorScheme = darkColorScheme(
+    primary = Color(0xFFF48FB1), onPrimary = onPrimaryDark,
+    primaryContainer = Color(0xFF880E4F), onPrimaryContainer = Color(0xFFFCE4EC),
+    secondary = Color(0xFF80DEEA), tertiary = Color(0xFFA5D6A7)
+)
+private val PinkLightColorScheme = lightColorScheme(
+    primary = Color(0xFFE91E63), onPrimary = onPrimaryLight,
+    primaryContainer = Color(0xFFFCE4EC), onPrimaryContainer = Color(0xFF880E4F),
+    secondary = Color(0xFF0097A7), tertiary = Color(0xFF388E3C)
+)
+
+// Indigo
+private val IndigoDarkColorScheme = darkColorScheme(
+    primary = Color(0xFF7986CB), onPrimary = onPrimaryDark,
+    primaryContainer = Color(0xFF1A237E), onPrimaryContainer = Color(0xFFE8EAF6),
+    secondary = Color(0xFF80DEEA), tertiary = Color(0xFFA5D6A7)
+)
+private val IndigoLightColorScheme = lightColorScheme(
+    primary = Color(0xFF3F51B5), onPrimary = onPrimaryLight,
+    primaryContainer = Color(0xFFC5CAE9), onPrimaryContainer = Color(0xFF1A237E),
+    secondary = Color(0xFF0097A7), tertiary = Color(0xFF388E3C)
+)
+
+// Amber
+private val AmberDarkColorScheme = darkColorScheme(
+    primary = Color(0xFFFFD54F), onPrimary = onPrimaryDark,
+    primaryContainer = Color(0xFFFF6F00), onPrimaryContainer = Color(0xFFFFF8E1),
+    secondary = Color(0xFF80DEEA), tertiary = Color(0xFFA5D6A7)
+)
+private val AmberLightColorScheme = lightColorScheme(
+    primary = Color(0xFFFFA000), onPrimary = onPrimaryLight,
+    primaryContainer = Color(0xFFFFECB3), onPrimaryContainer = Color(0xFFFF6F00),
+    secondary = Color(0xFF0097A7), tertiary = Color(0xFF388E3C)
+)
+
+// Brown
+private val BrownDarkColorScheme = darkColorScheme(
+    primary = Color(0xFFA1887F), onPrimary = onPrimaryDark,
+    primaryContainer = Color(0xFF3E2723), onPrimaryContainer = Color(0xFFEFEBE9),
+    secondary = Color(0xFF80DEEA), tertiary = Color(0xFFA5D6A7)
+)
+private val BrownLightColorScheme = lightColorScheme(
+    primary = Color(0xFF5D4037), onPrimary = onPrimaryLight,
+    primaryContainer = Color(0xFFD7CCC8), onPrimaryContainer = Color(0xFF3E2723),
+    secondary = Color(0xFF0097A7), tertiary = Color(0xFF388E3C)
+)
+
+@Composable
+fun CrucibleScannerTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = false,
+    accentColor: String = "blue",
+    content: @Composable () -> Unit
+) {
+    // Note: dynamicColor is ignored on non-Android platforms; dynamic color requires Android 12+
+    // and access to the Android Context, which is not available in commonMain
+    val colorScheme = when {
+        accentColor.startsWith("#") -> {
+            val c = try {
+                Color(parseHexColor(accentColor))
+            } catch (_: Exception) {
+                Color(0xFF1976D2)
+            }
+            if (darkTheme) {
+                darkColorScheme(
+                    primary = c, onPrimary = onPrimaryDark,
+                    primaryContainer = Color(c.red * 0.35f, c.green * 0.35f, c.blue * 0.35f),
+                    onPrimaryContainer = Color(c.red * 0.1f + 0.9f, c.green * 0.1f + 0.9f, c.blue * 0.1f + 0.9f),
+                    secondary = Color(0xFF80DEEA), tertiary = Color(0xFFA5D6A7)
+                )
+            } else {
+                lightColorScheme(
+                    primary = c, onPrimary = onPrimaryLight,
+                    primaryContainer = Color(c.red * 0.15f + 0.85f, c.green * 0.15f + 0.85f, c.blue * 0.15f + 0.85f),
+                    onPrimaryContainer = Color(c.red * 0.45f, c.green * 0.45f, c.blue * 0.45f),
+                    secondary = Color(0xFF0097A7), tertiary = Color(0xFF388E3C)
+                )
+            }
+        }
+        else -> when (accentColor.lowercase()) {
+            "purple" -> if (darkTheme) PurpleDarkColorScheme else PurpleLightColorScheme
+            "green"  -> if (darkTheme) GreenDarkColorScheme  else GreenLightColorScheme
+            "orange" -> if (darkTheme) OrangeDarkColorScheme else OrangeLightColorScheme
+            "red"    -> if (darkTheme) RedDarkColorScheme    else RedLightColorScheme
+            "teal"   -> if (darkTheme) TealDarkColorScheme   else TealLightColorScheme
+            "pink"   -> if (darkTheme) PinkDarkColorScheme   else PinkLightColorScheme
+            "indigo" -> if (darkTheme) IndigoDarkColorScheme else IndigoLightColorScheme
+            "amber"  -> if (darkTheme) AmberDarkColorScheme  else AmberLightColorScheme
+            "brown"  -> if (darkTheme) BrownDarkColorScheme  else BrownLightColorScheme
+            else     -> if (darkTheme) BlueDarkColorScheme   else BlueLightColorScheme
+        }
+    }
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = Typography,
+        content = content
+    )
+}
+
+private fun parseHexColor(hex: String): Long {
+    val cleanHex = hex.removePrefix("#")
+    return cleanHex.toLong(16)
+}
