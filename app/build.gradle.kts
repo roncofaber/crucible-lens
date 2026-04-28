@@ -1,9 +1,127 @@
+import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
+    id("org.jetbrains.kotlin.multiplatform")
     id("com.android.application")
-    id("com.google.devtools.ksp")
+    id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.google.devtools.ksp")
+}
+
+kotlin {
+    androidTarget {
+        @OptIn(ExperimentalKotlinGradlePluginApi::class)
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+            freeCompilerArgs.add("-Xannotation-default-target=param-property")
+        }
+    }
+
+    listOf(
+        iosX64(),
+        iosArm64(),
+        iosSimulatorArm64()
+    ).forEach { iosTarget ->
+        iosTarget.binaries.framework {
+            baseName = "ComposeApp"
+            isStatic = true
+        }
+    }
+
+    sourceSets {
+        // Android-specific source — existing code lives here initially
+        androidMain {
+            kotlin.srcDirs("src/main/java")
+            dependencies {
+                implementation("androidx.core:core-ktx:1.13.1")
+                implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.0")
+                implementation("androidx.activity:activity-compose:1.9.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+                // Ktor Android engine
+                implementation("io.ktor:ktor-client-okhttp:3.0.3")
+                implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+                // CameraX
+                implementation("androidx.camera:camera-camera2:1.3.3")
+                implementation("androidx.camera:camera-lifecycle:1.3.3")
+                implementation("androidx.camera:camera-view:1.3.3")
+
+                // ML Kit
+                implementation("com.google.mlkit:barcode-scanning:17.2.0")
+
+                // ZXing
+                implementation("com.google.zxing:core:3.5.3")
+
+                // DataStore
+                implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+                // Splash Screen
+                implementation("androidx.core:core-splashscreen:1.0.1")
+
+                // Navigation (Android)
+                implementation("androidx.navigation:navigation-compose:2.7.7")
+
+                // Coil SVG (Android only)
+                implementation("io.coil-kt:coil-svg:2.6.0")
+                implementation("com.caverock:androidsvg-aar:1.4")
+
+                // FileProvider
+                implementation("androidx.core:core:1.13.1")
+            }
+        }
+
+        commonMain {
+            dependencies {
+                // Compose Multiplatform
+                implementation(compose.runtime)
+                implementation(compose.foundation)
+                implementation(compose.material3)
+                implementation(compose.materialIconsExtended)
+                implementation(compose.components.resources)
+                implementation(compose.components.uiToolingPreview)
+
+                // Ktor (multiplatform)
+                implementation("io.ktor:ktor-client-core:3.0.3")
+                implementation("io.ktor:ktor-client-content-negotiation:3.0.3")
+                implementation("io.ktor:ktor-serialization-kotlinx-json:3.0.3")
+                implementation("io.ktor:ktor-client-logging:3.0.3")
+
+                // Serialization
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+
+                // Coroutines
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+
+                // Multiplatform Settings
+                implementation("com.russhwolf:multiplatform-settings:1.2.0")
+                implementation("com.russhwolf:multiplatform-settings-coroutines:1.2.0")
+
+                // Coil 3 (multiplatform)
+                implementation("io.coil-kt.coil3:coil-compose:3.0.4")
+                implementation("io.coil-kt.coil3:coil-network-ktor3:3.0.4")
+
+                // Lifecycle / ViewModel
+                implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
+                implementation("org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
+            }
+        }
+
+        iosMain {
+            dependencies {
+                // Ktor iOS engine
+                implementation("io.ktor:ktor-client-darwin:3.0.3")
+            }
+        }
+
+        commonTest {
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
+    }
 }
 
 android {
@@ -16,11 +134,7 @@ android {
         targetSdk = 35
         versionCode = 4
         versionName = "0.3.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        vectorDrawables {
-            useSupportLibrary = true
-        }
     }
 
     buildTypes {
@@ -48,73 +162,12 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
-}
 
-kotlin {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_17)
-        freeCompilerArgs.add("-Xannotation-default-target=param-property")
+    // KMP: point Android manifest and resources at existing locations
+    sourceSets {
+        getByName("main") {
+            manifest.srcFile("src/main/AndroidManifest.xml")
+            res.srcDirs("src/main/res")
+        }
     }
-}
-
-dependencies {
-    // Core Android
-    implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.0")
-    implementation("androidx.activity:activity-compose:1.9.0")
-
-    // Compose
-    implementation(platform("androidx.compose:compose-bom:2024.02.02"))
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
-
-    // Navigation
-    implementation("androidx.navigation:navigation-compose:2.7.7")
-
-    // ViewModel
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
-
-    // CameraX
-    implementation("androidx.camera:camera-camera2:1.3.3")
-    implementation("androidx.camera:camera-lifecycle:1.3.3")
-    implementation("androidx.camera:camera-view:1.3.3")
-
-    // ML Kit Barcode Scanning
-    implementation("com.google.mlkit:barcode-scanning:17.2.0")
-
-    // ZXing for QR code generation
-    implementation("com.google.zxing:core:3.5.3")
-
-    // Retrofit & Networking
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-moshi:2.9.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-
-    // Moshi
-    implementation("com.squareup.moshi:moshi:1.15.1")
-    ksp("com.squareup.moshi:moshi-kotlin-codegen:1.15.1")
-
-    // Coil for image loading
-    implementation("io.coil-kt:coil-compose:2.6.0")
-    implementation("io.coil-kt:coil-svg:2.6.0")
-    implementation("com.caverock:androidsvg-aar:1.4")
-
-    // DataStore for preferences
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
-
-    // Splash Screen
-    implementation("androidx.core:core-splashscreen:1.0.1")
-
-    // Testing
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2024.02.02"))
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

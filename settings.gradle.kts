@@ -18,4 +18,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Crucible Lens"
-include(":app")
+include(":composeApp")
+project(":composeApp").projectDir = file("app")
