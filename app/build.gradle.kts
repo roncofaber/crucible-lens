@@ -109,6 +109,9 @@ kotlin {
                 // Navigation (multiplatform, 2.8+)
                 implementation("org.jetbrains.androidx.navigation:navigation-compose:2.8.0-alpha10")
 
+                // Multiplatform WebView (ORCID login)
+                api("io.github.kevinnzou:compose-webview-multiplatform:2.0.3")
+
                 // QR code scanning + generation
                 implementation("network.chaintech:qr-kit:3.1.3")
 
