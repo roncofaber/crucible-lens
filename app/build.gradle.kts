@@ -108,6 +108,15 @@ kotlin {
 
                 // Navigation (multiplatform, 2.8+)
                 implementation("org.jetbrains.androidx.navigation:navigation-compose:2.8.0-alpha10")
+
+                // QR code scanning + generation
+                implementation("network.chaintech:qr-kit:3.1.3")
+
+                // Image picking (gallery + camera)
+                implementation("dev.icerock.moko:media-compose:0.12.0")
+
+                // Camera permissions
+                implementation("dev.icerock.moko:permissions-compose:0.20.1")
             }
         }
 

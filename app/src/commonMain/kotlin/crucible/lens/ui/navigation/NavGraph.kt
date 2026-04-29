@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
 import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.ui.home.HomeScreen
 import crucible.lens.ui.history.HistoryScreen
-import crucible.lens.ui.scanner.QRScannerScreen
+import crucible.lens.ui.scanner.QRCodeScannerView
 import crucible.lens.ui.search.SearchScreen
 import crucible.lens.ui.settings.SettingsScreen
 import crucible.lens.ui.settings.ApiSettingsScreen
@@ -309,12 +309,9 @@ fun NavGraph(
         }
 
         composable(Screen.Scanner.route) {
-            QRScannerScreen(
-                onQRCodeScanned = { code ->
-                    // If the scanned code is a URL (e.g. a graph-explorer share link),
-                    // extract the last path segment as the UUID. Otherwise, use as-is.
+            QRCodeScannerView(
+                onCodeScanned = { code ->
                     val uuid = runCatching {
-                        // If it looks like a URL, extract the last path segment
                         if (code.contains("://")) code.substringAfterLast('/').substringBefore('?').trim()
                         else code
                     }.getOrDefault(code).trim()
