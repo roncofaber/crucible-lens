@@ -25,6 +25,11 @@ fun OrcidLoginScreen(
     val state = rememberWebViewState(loginUrl)
     val navigator = rememberWebViewNavigator()
 
+    // JavaScript must be enabled to evaluate body text and extract the API key
+    state.webSettings.isJavaScriptEnabled = true
+    // ORCID uses DOM storage for session state
+    state.webSettings.androidWebSettings.domStorageEnabled = true
+
     // Evaluate body text whenever a page finishes loading
     val loadingState = state.loadingState
     LaunchedEffect(loadingState) {
