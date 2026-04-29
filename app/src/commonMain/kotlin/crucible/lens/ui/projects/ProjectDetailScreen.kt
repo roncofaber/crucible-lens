@@ -343,7 +343,7 @@ fun ProjectDetailScreen(
                                     leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
                                     onClick = {
                                         topBarMenuExpanded = false
-                                        openUrlInBrowser("$graphExplorerUrl/$projectId")
+                                        openUrlInBrowser(getPlatformContext(), "$graphExplorerUrl/$projectId")
                                     }
                                 )
                                 DropdownMenuItem(

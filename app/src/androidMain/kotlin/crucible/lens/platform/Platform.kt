@@ -8,3 +8,6 @@ actual typealias PlatformContext = Context
 
 @Composable
 actual fun getPlatformContext(): PlatformContext = LocalContext.current
+
+@Composable
+actual fun supportsDynamicColor(): Boolean = android.os.Build.VERSION.SDK_INT >= 31
