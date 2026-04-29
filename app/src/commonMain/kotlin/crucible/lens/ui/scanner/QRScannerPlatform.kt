@@ -2,6 +2,7 @@ package crucible.lens.ui.scanner
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import qrscanner.CameraLens
 import qrscanner.QrScanner
 
 @Composable
@@ -12,6 +13,7 @@ fun QRCodeScannerView(
     QrScanner(
         modifier = modifier,
         flashlightOn = false,
+        cameraLens = CameraLens.Back,
         openImagePicker = false,
         onCompletion = onCodeScanned,
         imagePickerHandler = {},
