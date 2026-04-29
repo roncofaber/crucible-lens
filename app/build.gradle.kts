@@ -112,7 +112,10 @@ kotlin {
                 // Multiplatform WebView (ORCID login)
                 api("io.github.kevinnzou:compose-webview-multiplatform:2.0.3")
 
-                // QR code scanning + generation
+                // QR code scanning (EasyQRScan - KMP, handles lifecycle correctly)
+                implementation("io.github.kalinjul.easyqrscan:scanner:0.7.1")
+
+                // QR code display/generation (qr-kit painter only)
                 implementation("network.chaintech:qr-kit:3.1.3")
 
                 // Image picking (gallery + camera)
