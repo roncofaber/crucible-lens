@@ -75,10 +75,10 @@ class ScannerViewModel : ViewModel() {
             val cachedResource = CacheManager.getResource(trimmedUuid)
             val cachedThumbnails = getThumbnails(trimmedUuid)
 
+            // Show cached version immediately for snappy navigation, but always
+            // fetch fresh data so the detail view has links and full metadata.
             if (cachedResource != null) {
                 _uiState.value = UiState.Success(cachedResource, cachedThumbnails ?: emptyList())
-                preloadRelatedResources(cachedResource)
-                return@launch
             }
 
             val current = _uiState.value

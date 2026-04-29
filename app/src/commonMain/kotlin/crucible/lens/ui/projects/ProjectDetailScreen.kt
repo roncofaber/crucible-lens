@@ -279,13 +279,6 @@ fun ProjectDetailScreen(
                 if (loadedSamples != null && loadedDatasets != null) {
                     CacheManager.cacheProjectSamples(projectId, loadedSamples)
                     CacheManager.cacheProjectDatasets(projectId, loadedDatasets)
-                    // Populate resource cache with metadata-rich versions for each dataset,
-                    // but only if a richer individually-fetched version isn't already there.
-                    loadedDatasets.forEach { dataset ->
-                        if (CacheManager.getResource(dataset.uniqueId) == null) {
-                            CacheManager.cacheResource(dataset.uniqueId, dataset)
-                        }
-                    }
                     samples = loadedSamples
                     datasets = loadedDatasets
                 } else {
