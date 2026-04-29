@@ -1,13 +1,11 @@
 package crucible.lens.data.repository
 
+import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
-import crucible.lens.data.api.CrucibleApiService
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 
 sealed class ResourceResult {
@@ -23,7 +21,9 @@ private fun httpError(code: Int): ResourceResult.Error = when (code) {
     else        -> ResourceResult.Error("Request failed (HTTP $code)")
 }
 
-class CrucibleRepository(private val api: CrucibleApiService) {
+class CrucibleRepository {
+    // Always access ApiClient.service dynamically so API key/URL changes are picked up
+    private val api get() = ApiClient.service
 
     suspend fun fetchResourceByUuid(uuid: String): ResourceResult = withContext(Dispatchers.IO) {
         try {
