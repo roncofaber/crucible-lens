@@ -220,7 +220,7 @@ class IosAppPreferences : AppPreferences {
                 }
             }
 
-        val updated = listOf(HistoryItem(uuid, name, System.currentTimeMillis())) +
+        val updated = listOf(HistoryItem(uuid, name, kotlinx.datetime.Clock.System.now().toEpochMilliseconds())) +
             existing.filter { it.uuid != uuid }
 
         val encoded = updated.take(20).joinToString(",") {
