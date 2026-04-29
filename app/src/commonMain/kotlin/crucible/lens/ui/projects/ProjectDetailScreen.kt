@@ -36,11 +36,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -588,24 +585,10 @@ private fun ProjectHeader(
                                 horizontalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 val nameScrollState = rememberScrollState()
-                                val showRightFade = nameScrollState.canScrollForward
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
-                                        .drawWithContent {
-                                            drawContent()
-                                            if (showRightFade) {
-                                                drawRect(
-                                                    brush = Brush.horizontalGradient(
-                                                        colors = listOf(Color.Black, Color.Transparent),
-                                                        startX = size.width * 0.75f,
-                                                        endX = size.width
-                                                    ),
-                                                    blendMode = BlendMode.DstIn
-                                                )
-                                            }
-                                        }
+                                        .fadeEndEdge(nameScrollState.canScrollForward)
                                 ) {
                                     Text(
                                         text = project?.title ?: projectId,

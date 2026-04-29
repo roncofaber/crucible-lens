@@ -27,11 +27,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -52,6 +48,7 @@ import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
+import crucible.lens.ui.common.fadeEndEdge
 import kotlinx.coroutines.launch
 
 private enum class InstrumentDatasetGroupBy(val label: String) {
@@ -341,11 +338,7 @@ private fun InstrumentHeader(
                     Icon(Icons.Default.Biotech, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         val nameScrollState = rememberScrollState()
-                        val showFade = nameScrollState.canScrollForward
-                        Box(modifier = Modifier.fillMaxWidth().graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen).drawWithContent {
-                            drawContent()
-                            if (showFade) drawRect(brush = Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = size.width * 0.75f, endX = size.width), blendMode = BlendMode.DstIn)
-                        }) {
+                        Box(modifier = Modifier.fillMaxWidth().fadeEndEdge(nameScrollState.canScrollForward)) {
                             Text(text = instrument.instrumentName ?: instrument.uniqueId, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.horizontalScroll(nameScrollState))
                         }
                     }

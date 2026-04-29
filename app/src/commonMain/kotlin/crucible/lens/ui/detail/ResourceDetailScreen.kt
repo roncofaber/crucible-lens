@@ -33,14 +33,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import coil3.compose.AsyncImage
@@ -1354,25 +1351,10 @@ private fun BasicInfoCard(
                 label = "resource_name"
             ) { name ->
                 val nameScrollState = rememberScrollState()
-                var nameOverflows by remember(name) { mutableStateOf(false) }
-                val showRightFade = nameOverflows && nameScrollState.canScrollForward
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
-                        .drawWithContent {
-                            drawContent()
-                            if (showRightFade) {
-                                drawRect(
-                                    brush = Brush.horizontalGradient(
-                                        colors = listOf(Color.Black, Color.Transparent),
-                                        startX = size.width * 0.75f,
-                                        endX = size.width
-                                    ),
-                                    blendMode = BlendMode.DstIn
-                                )
-                            }
-                        }
+                        .fadeEndEdge(nameScrollState.canScrollForward)
                 ) {
                     Text(
                         text = name,

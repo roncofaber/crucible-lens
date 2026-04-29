@@ -821,47 +821,27 @@ fun NavGraph(
             modifier = Modifier
                 .offset { IntOffset(fabOffsetX.value.roundToInt(), fabOffsetY.value.roundToInt()) }
                 .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragEnd = {
-                            val distLeft   = fabOffsetX.value
-                            val distRight  = screenWidthPx  - fabSizePx - fabOffsetX.value
-                            val distTop    = fabOffsetY.value
-                            val distBottom = screenHeightPx - fabSizePx - fabOffsetY.value
-                            val spec = spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
-                            val xBounds = marginPx..(screenWidthPx  - fabSizePx - marginPx)
-                            val yBounds = marginPx..(screenHeightPx - fabSizePx - marginPx)
-                            if (minOf(distLeft, distRight) <= minOf(distTop, distBottom)) {
-                                val targetX = if (distLeft <= distRight) marginPx else screenWidthPx - fabSizePx - marginPx
-                                val targetY = fabOffsetY.value.coerceIn(yBounds)
-                                fabScope.launch { fabOffsetX.animateTo(targetX, animationSpec = spec) }
-                                fabScope.launch { fabOffsetY.animateTo(targetY, animationSpec = spec) }
-                            } else {
-                                val targetY = if (distTop <= distBottom) marginPx else screenHeightPx - fabSizePx - marginPx
-                                val targetX = fabOffsetX.value.coerceIn(xBounds)
-                                fabScope.launch { fabOffsetY.animateTo(targetY, animationSpec = spec) }
-                                fabScope.launch { fabOffsetX.animateTo(targetX, animationSpec = spec) }
-                            }
-                        },
-                        onDragCancel = {
-                            val distLeft   = fabOffsetX.value
-                            val distRight  = screenWidthPx  - fabSizePx - fabOffsetX.value
-                            val distTop    = fabOffsetY.value
-                            val distBottom = screenHeightPx - fabSizePx - fabOffsetY.value
-                            val spec = spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
-                            val xBounds = marginPx..(screenWidthPx  - fabSizePx - marginPx)
-                            val yBounds = marginPx..(screenHeightPx - fabSizePx - marginPx)
-                            if (minOf(distLeft, distRight) <= minOf(distTop, distBottom)) {
-                                val targetX = if (distLeft <= distRight) marginPx else screenWidthPx - fabSizePx - marginPx
-                                val targetY = fabOffsetY.value.coerceIn(yBounds)
-                                fabScope.launch { fabOffsetX.animateTo(targetX, animationSpec = spec) }
-                                fabScope.launch { fabOffsetY.animateTo(targetY, animationSpec = spec) }
-                            } else {
-                                val targetY = if (distTop <= distBottom) marginPx else screenHeightPx - fabSizePx - marginPx
-                                val targetX = fabOffsetX.value.coerceIn(xBounds)
-                                fabScope.launch { fabOffsetY.animateTo(targetY, animationSpec = spec) }
-                                fabScope.launch { fabOffsetX.animateTo(targetX, animationSpec = spec) }
-                            }
+                    val fabSnapSpec = spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+                    fun snapToEdge() {
+                        val distLeft   = fabOffsetX.value
+                        val distRight  = screenWidthPx  - fabSizePx - fabOffsetX.value
+                        val distTop    = fabOffsetY.value
+                        val distBottom = screenHeightPx - fabSizePx - fabOffsetY.value
+                        val xBounds = marginPx..(screenWidthPx  - fabSizePx - marginPx)
+                        val yBounds = marginPx..(screenHeightPx - fabSizePx - marginPx)
+                        if (minOf(distLeft, distRight) <= minOf(distTop, distBottom)) {
+                            val targetX = if (distLeft <= distRight) marginPx else screenWidthPx - fabSizePx - marginPx
+                            fabScope.launch { fabOffsetX.animateTo(targetX, animationSpec = fabSnapSpec) }
+                            fabScope.launch { fabOffsetY.animateTo(fabOffsetY.value.coerceIn(yBounds), animationSpec = fabSnapSpec) }
+                        } else {
+                            val targetY = if (distTop <= distBottom) marginPx else screenHeightPx - fabSizePx - marginPx
+                            fabScope.launch { fabOffsetY.animateTo(targetY, animationSpec = fabSnapSpec) }
+                            fabScope.launch { fabOffsetX.animateTo(fabOffsetX.value.coerceIn(xBounds), animationSpec = fabSnapSpec) }
                         }
+                    }
+                    detectDragGestures(
+                        onDragEnd = { snapToEdge() },
+                        onDragCancel = { snapToEdge() }
                     ) { _, dragAmount ->
                         fabScope.launch {
                             fabOffsetX.snapTo((fabOffsetX.value + dragAmount.x).coerceIn(0f, screenWidthPx - fabSizePx))

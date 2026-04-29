@@ -18,11 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -39,6 +35,7 @@ import crucible.lens.data.model.Project
 import crucible.lens.data.util.fetchProjectData
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.allLoadingMessages
+import crucible.lens.ui.common.fadeEndEdge
 import kotlinx.coroutines.launch
 
 
@@ -414,18 +411,7 @@ private fun HomeLastVisited(name: String, onClick: () -> Unit, onHistory: () -> 
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
-                        .drawWithContent {
-                            drawContent()
-                            drawRect(
-                                brush = Brush.horizontalGradient(
-                                    colors = listOf(Color.Black, Color.Transparent),
-                                    startX = size.width * 0.8f,
-                                    endX = size.width
-                                ),
-                                blendMode = BlendMode.DstIn
-                            )
-                        }
+                        .fadeEndEdge(startFraction = 0.8f)
                 ) {
                     Text(
                         text = name,
