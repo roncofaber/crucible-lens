@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,17 +34,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Instrument
 import crucible.lens.ui.common.AppScaffold
-import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
 import kotlinx.coroutines.launch
@@ -97,12 +97,9 @@ fun InstrumentDetailScreen(
     val pullRefreshState = rememberPullToRefreshState()
     val scope = rememberCoroutineScope()
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+    val platformCtx = getPlatformContext()
 
-    val contentTranslation by animateFloatAsState(
-        targetValue = if (pullRefreshState.isRefreshing) 0f else pullRefreshState.verticalOffset,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-        label = "ptr_translation"
-    )
+    var isRefreshingNow by remember { mutableStateOf(false) }
 
     val filteredDatasets = remember(datasets, searchQuery, sortState) {
         val list = datasets ?: emptyList()
@@ -134,41 +131,35 @@ fun InstrumentDetailScreen(
             try {
                 val resolvedInstrument = if (!forceRefresh) {
                     CacheManager.getInstruments()?.find { it.uniqueId == instrumentId }
-                        ?: ApiClient.service.getInstrument(instrumentId).body()
+                        ?: (ApiClient.service.getInstrument(instrumentId) as? crucible.lens.data.api.ApiResult.Success)?.data
                 } else {
-                    ApiClient.service.getInstrument(instrumentId).body()
+                    (ApiClient.service.getInstrument(instrumentId) as? crucible.lens.data.api.ApiResult.Success)?.data
                 }
                 if (resolvedInstrument == null) { error = "Instrument not found"; return@launch }
                 instrument = resolvedInstrument
                 val instrName = resolvedInstrument.instrumentName ?: resolvedInstrument.uniqueId
                 if (!forceRefresh) {
                     val cached = CacheManager.getInstrumentDatasets(instrName)
-                    if (cached != null) { datasets = cached; fromCache = true; isLoading = false; pullRefreshState.endRefresh(); return@launch }
+                    if (cached != null) { datasets = cached; fromCache = true; isLoading = false; return@launch }
                 }
                 fromCache = false
-                val response = ApiClient.service.getDatasetsByInstrument(instrName)
-                if (response.isSuccessful) {
-                    val body = response.body() ?: emptyList()
-                    CacheManager.cacheInstrumentDatasets(instrName, body)
-                    datasets = body
-                } else { error = "Failed to load datasets" }
+                when (val response = ApiClient.service.getDatasetsByInstrument(instrName)) {
+                    is crucible.lens.data.api.ApiResult.Success -> {
+                        val body = response.data
+                        CacheManager.cacheInstrumentDatasets(instrName, body)
+                        datasets = body
+                    }
+                    is crucible.lens.data.api.ApiResult.Error -> { error = "Failed to load datasets" }
+                }
             } catch (e: Exception) {
                 error = "Connection error — check your network"
             } finally {
                 isLoading = false
-                pullRefreshState.endRefresh()
             }
         }
     }
 
     LaunchedEffect(instrumentId) { loadData() }
-
-    if (pullRefreshState.isRefreshing && !isLoading) {
-        LaunchedEffect(Unit) {
-            instrument?.instrumentName?.let { CacheManager.clearInstrumentsCache() }
-            loadData(forceRefresh = true)
-        }
-    }
 
     AppScaffold(
         topBar = {
@@ -189,7 +180,7 @@ fun InstrumentDetailScreen(
                                         onClick = {
                                             overflowMenuExpanded = false
                                             val text = "${instr.instrumentName ?: instr.uniqueId}\nID: ${instr.uniqueId}"
-                                            shareText(getPlatformContext(), text, instr.instrumentName ?: instr.uniqueId)
+                                            shareText(platformCtx, text, instr.instrumentName ?: instr.uniqueId)
                                         }
                                     )
                                     DropdownMenuItem(
@@ -205,10 +196,15 @@ fun InstrumentDetailScreen(
             )
         }
     ) { padding ->
-        Box(modifier = modifier.fillMaxSize().padding(padding).nestedScroll(pullRefreshState.nestedScrollConnection)) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshingNow,
+            onRefresh = { loadData(forceRefresh = true) },
+            state = pullRefreshState,
+            modifier = modifier.fillMaxSize().padding(padding)
+        ) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize().graphicsLayer { translationY = contentTranslation }
+                modifier = Modifier.fillMaxSize()
             ) {
                 // ── Header ────────────────────────────────────────────────────
                 item(key = "header") {
@@ -301,11 +297,13 @@ fun InstrumentDetailScreen(
                     }
                 }
             }
-
-            AnimatedPullToRefreshIndicator(state = pullRefreshState, modifier = Modifier.align(Alignment.TopCenter), visible = pullRefreshState.isRefreshing || pullRefreshState.verticalOffset > 0f)
             LazyColumnScrollbar(listState = listState, modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd))
             ScrollToTopButton(visible = showScrollToTop, onClick = { scope.launch { listState.animateScrollToItem(0) } }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp))
         }
+    }
+
+    LaunchedEffect(isLoading) {
+        isRefreshingNow = isLoading
     }
 }
 
@@ -449,6 +447,7 @@ private fun InstrumentHeader(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DatasetCard(dataset: Dataset, onClick: () -> Unit) {
+    val platformCtx = getPlatformContext()
     var menuExpanded by remember { mutableStateOf(false) }
     Box {
         Card(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = { menuExpanded = true }), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
@@ -468,7 +467,7 @@ private fun DatasetCard(dataset: Dataset, onClick: () -> Unit) {
                 leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                 onClick = {
                     menuExpanded = false
-                    copyToClipboard(getPlatformContext(), dataset.uniqueId)
+                    copyToClipboard(platformCtx, dataset.uniqueId)
                 }
             )
         }

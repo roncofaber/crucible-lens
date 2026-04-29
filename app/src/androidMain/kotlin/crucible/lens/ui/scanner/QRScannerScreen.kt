@@ -31,9 +31,9 @@ import java.util.concurrent.Executors
 private const val TAG = "QRScannerScreen"
 
 @Composable
-fun QRScannerScreen(
+actual fun QRScannerScreen(
     onQRCodeScanned: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier
 ) {
     val context = LocalContext.current
     var hasPermission by remember {

@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.MetadataSearchResult
@@ -70,14 +71,14 @@ fun SearchScreen(
             val before = activeFilters.createdBefore.ifBlank { null }
             val projectId = activeFilters.projectId.ifBlank { null }
             val ownerOrcid = activeFilters.ownerOrcid.ifBlank { null }
-            val samples = ApiClient.service.getFilteredSamples(
+            val samples = (ApiClient.service.getFilteredSamples(
                 projectId = projectId,
                 sampleType = activeFilters.sampleType.ifBlank { null },
                 ownerOrcid = ownerOrcid,
                 creationTimeGte = after,
                 creationTimeLte = before
-            ).body() ?: emptyList()
-            val datasets = ApiClient.service.getFilteredDatasets(
+            ) as? crucible.lens.data.api.ApiResult.Success)?.data ?: emptyList()
+            val datasets = (ApiClient.service.getFilteredDatasets(
                 projectId = projectId,
                 measurement = activeFilters.measurement.ifBlank { null },
                 instrumentName = activeFilters.instrumentName.ifBlank { null },
@@ -86,7 +87,7 @@ fun SearchScreen(
                 ownerOrcid = ownerOrcid,
                 creationTimeGte = after,
                 creationTimeLte = before
-            ).body() ?: emptyList()
+            ) as? crucible.lens.data.api.ApiResult.Success)?.data ?: emptyList()
             filterResults = samples to datasets
         } catch (e: Exception) {
             filterResults = null
@@ -101,8 +102,10 @@ fun SearchScreen(
         // Get or fetch projects list
         val projects = CacheManager.getProjects()
             ?: try {
-                val r = ApiClient.service.getProjects()
-                if (r.isSuccessful) r.body()?.also { CacheManager.cacheProjects(it) } else null
+                when (val r = ApiClient.service.getProjects()) {
+                    is crucible.lens.data.api.ApiResult.Success -> r.data.also { CacheManager.cacheProjects(it) }
+                    is crucible.lens.data.api.ApiResult.Error -> null
+                }
             } catch (e: Exception) {
                 null
             }
@@ -300,8 +303,10 @@ fun SearchScreen(
                                     scope.launch {
                                         isMetadataSearching = true
                                         metadataResults = try {
-                                            val resp = ApiClient.service.searchScientificMetadata(query.trim())
-                                            if (resp.isSuccessful) resp.body() else emptyList()
+                                            when (val resp = ApiClient.service.searchScientificMetadata(query.trim())) {
+                                                is crucible.lens.data.api.ApiResult.Success -> resp.data
+                                                is crucible.lens.data.api.ApiResult.Error -> emptyList()
+                                            }
                                         } catch (_: Exception) { emptyList() }
                                         isMetadataSearching = false
                                     }
@@ -419,8 +424,10 @@ fun SearchScreen(
                                 scope.launch {
                                     isMetadataSearching = true
                                     metadataResults = try {
-                                        val resp = ApiClient.service.searchScientificMetadata(query.trim())
-                                        if (resp.isSuccessful) resp.body() else emptyList()
+                                        when (val resp = ApiClient.service.searchScientificMetadata(query.trim())) {
+                                            is crucible.lens.data.api.ApiResult.Success -> resp.data
+                                            is crucible.lens.data.api.ApiResult.Error -> emptyList()
+                                        }
                                     } catch (_: Exception) { emptyList() }
                                     isMetadataSearching = false
                                 }

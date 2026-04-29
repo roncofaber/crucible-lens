@@ -46,137 +46,137 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         const val APP_ICON_DARK = "dark"
     }
 
-    val apiKey: Flow<String?> = context.dataStore.data.map { preferences ->
+    override val apiKey: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[API_KEY]
     }
 
-    val apiBaseUrl: Flow<String> = context.dataStore.data.map { preferences ->
+    override val apiBaseUrl: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[API_BASE_URL] ?: DEFAULT_API_BASE_URL
     }
 
-    val graphExplorerUrl: Flow<String> = context.dataStore.data.map { preferences ->
+    override val graphExplorerUrl: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[GRAPH_EXPLORER_URL] ?: DEFAULT_GRAPH_EXPLORER_URL
     }
 
-    val themeMode: Flow<String> = context.dataStore.data.map { preferences ->
+    override val themeMode: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[THEME_MODE] ?: THEME_MODE_SYSTEM
     }
 
-    val accentColor: Flow<String> = context.dataStore.data.map { preferences ->
+    override val accentColor: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[ACCENT_COLOR] ?: DEFAULT_ACCENT_COLOR
     }
 
-    val appIcon: Flow<String> = context.dataStore.data.map { preferences ->
+    override val appIcon: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[APP_ICON] ?: APP_ICON_LIGHT
     }
 
-    val lastVisitedResource: Flow<String?> = context.dataStore.data.map { preferences ->
+    override val lastVisitedResource: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[LAST_VISITED_RESOURCE]
     }
 
-    val lastVisitedResourceName: Flow<String?> = context.dataStore.data.map { preferences ->
+    override val lastVisitedResourceName: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[LAST_VISITED_RESOURCE_NAME]
     }
 
-    val floatingScanButton: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    override val floatingScanButton: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[FLOATING_SCAN_BUTTON]?.toBoolean() ?: true // Default to enabled
     }
 
-    val pinnedProjects: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+    override val pinnedProjects: Flow<Set<String>> = context.dataStore.data.map { prefs ->
         prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     }
 
-    val archivedProjects: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+    override val archivedProjects: Flow<Set<String>> = context.dataStore.data.map { prefs ->
         prefs[ARCHIVED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     }
 
-    val sampleGroupBy: Flow<String> = context.dataStore.data.map { prefs ->
+    override val sampleGroupBy: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[SAMPLE_GROUP_BY] ?: "TYPE"
     }
 
-    val datasetGroupBy: Flow<String> = context.dataStore.data.map { prefs ->
+    override val datasetGroupBy: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[DATASET_GROUP_BY] ?: "MEASUREMENT"
     }
 
-    val defaultProjectTab: Flow<String> = context.dataStore.data.map { prefs ->
+    override val defaultProjectTab: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[DEFAULT_PROJECT_TAB] ?: PROJECT_TAB_SAMPLES
     }
 
-    val useDynamicColor: Flow<Boolean> = context.dataStore.data.map { prefs ->
+    override val useDynamicColor: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[USE_DYNAMIC_COLOR]?.toBoolean() ?: false
     }
 
-    val pinnedInstruments: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+    override val pinnedInstruments: Flow<Set<String>> = context.dataStore.data.map { prefs ->
         prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     }
 
-    val userOrcid: Flow<String?> = context.dataStore.data.map { preferences ->
+    override val userOrcid: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[USER_ORCID]
     }
 
-    val resourceHistory: Flow<List<HistoryItem>> = context.dataStore.data.map { prefs ->
+    override val resourceHistory: Flow<List<HistoryItem>> = context.dataStore.data.map { prefs ->
         prefs[RESOURCE_HISTORY]?.split(",")?.mapNotNull { entry ->
             val parts = entry.split("|||")
             if (parts.size == 3) HistoryItem(parts[0], parts[1], parts[2].toLongOrNull() ?: 0L) else null
         } ?: emptyList()
     }
 
-    suspend fun saveApiKey(key: String) {
+    override suspend fun saveApiKey(key: String) {
         context.dataStore.edit { preferences ->
             preferences[API_KEY] = key
         }
     }
 
-    suspend fun saveApiBaseUrl(url: String) {
+    override suspend fun saveApiBaseUrl(url: String) {
         context.dataStore.edit { preferences ->
             preferences[API_BASE_URL] = url
         }
     }
 
-    suspend fun saveGraphExplorerUrl(url: String) {
+    override suspend fun saveGraphExplorerUrl(url: String) {
         context.dataStore.edit { preferences ->
             preferences[GRAPH_EXPLORER_URL] = url
         }
     }
 
-    suspend fun saveThemeMode(mode: String) {
+    override suspend fun saveThemeMode(mode: String) {
         context.dataStore.edit { preferences ->
             preferences[THEME_MODE] = mode
         }
     }
 
-    suspend fun saveAccentColor(color: String) {
+    override suspend fun saveAccentColor(color: String) {
         context.dataStore.edit { preferences ->
             preferences[ACCENT_COLOR] = color
         }
     }
 
-    suspend fun saveAppIcon(icon: String) {
+    override suspend fun saveAppIcon(icon: String) {
         context.dataStore.edit { preferences ->
             preferences[APP_ICON] = icon
         }
     }
 
-    suspend fun saveLastVisitedResource(uuid: String, name: String) {
+    override suspend fun saveLastVisitedResource(uuid: String, name: String) {
         context.dataStore.edit { preferences ->
             preferences[LAST_VISITED_RESOURCE] = uuid
             preferences[LAST_VISITED_RESOURCE_NAME] = name
         }
     }
 
-    suspend fun saveFloatingScanButton(enabled: Boolean) {
+    override suspend fun saveFloatingScanButton(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[FLOATING_SCAN_BUTTON] = enabled.toString()
         }
     }
 
-    suspend fun clearApiKey() {
+    override suspend fun clearApiKey() {
         context.dataStore.edit { preferences ->
             preferences.remove(API_KEY)
         }
     }
 
-    suspend fun togglePinnedProject(id: String) {
+    override suspend fun togglePinnedProject(id: String) {
         context.dataStore.edit { prefs ->
             val projects = prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
             val instruments = prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
@@ -186,7 +186,7 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         }
     }
 
-    suspend fun toggleArchivedProject(id: String) {
+    override suspend fun toggleArchivedProject(id: String) {
         context.dataStore.edit { prefs ->
             val current = prefs[ARCHIVED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
             if (id in current) current.remove(id) else current.add(id)
@@ -194,23 +194,23 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         }
     }
 
-    suspend fun saveSampleGroupBy(value: String) {
+    override suspend fun saveSampleGroupBy(value: String) {
         context.dataStore.edit { prefs -> prefs[SAMPLE_GROUP_BY] = value }
     }
 
-    suspend fun saveDatasetGroupBy(value: String) {
+    override suspend fun saveDatasetGroupBy(value: String) {
         context.dataStore.edit { prefs -> prefs[DATASET_GROUP_BY] = value }
     }
 
-    suspend fun saveDefaultProjectTab(tab: String) {
+    override suspend fun saveDefaultProjectTab(tab: String) {
         context.dataStore.edit { prefs -> prefs[DEFAULT_PROJECT_TAB] = tab }
     }
 
-    suspend fun saveUseDynamicColor(enabled: Boolean) {
+    override suspend fun saveUseDynamicColor(enabled: Boolean) {
         context.dataStore.edit { prefs -> prefs[USE_DYNAMIC_COLOR] = enabled.toString() }
     }
 
-    suspend fun togglePinnedInstrument(id: String) {
+    override suspend fun togglePinnedInstrument(id: String) {
         context.dataStore.edit { prefs ->
             val instruments = prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
             val projects = prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
@@ -220,18 +220,18 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         }
     }
 
-    suspend fun saveUserOrcid(orcid: String?) {
+    override suspend fun saveUserOrcid(orcid: String?) {
         context.dataStore.edit { preferences ->
             if (orcid != null) preferences[USER_ORCID] = orcid
             else preferences.remove(USER_ORCID)
         }
     }
 
-    suspend fun clearHistory() {
+    override suspend fun clearHistory() {
         context.dataStore.edit { prefs -> prefs.remove(RESOURCE_HISTORY) }
     }
 
-    suspend fun addToHistory(uuid: String, name: String) {
+    override suspend fun addToHistory(uuid: String, name: String) {
         context.dataStore.edit { prefs ->
             val existing = prefs[RESOURCE_HISTORY]?.split(",")?.mapNotNull { entry ->
                 val parts = entry.split("|||")

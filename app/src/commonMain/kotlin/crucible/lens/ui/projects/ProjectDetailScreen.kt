@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,20 +42,18 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 
 import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.ui.common.AppScaffold
-import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
-
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.ScrollToTopButton
@@ -97,9 +96,13 @@ private fun rememberOwnerNames(
     LaunchedEffect(isOwnerGroupBy, projectId) {
         if (!isOwnerGroupBy || ownerNames.isNotEmpty()) { ownerNamesReady = true; return@LaunchedEffect }
         try {
-            val resp = ApiClient.service.getProjectUsers(projectId)
-            if (resp.isSuccessful) {
-                resp.body()?.forEach { u -> u.uniqueId?.let { id -> ownerNames[id] = ownerDisplayName(u.firstName, u.lastName) } }
+            when (val resp = ApiClient.service.getProjectUsers(projectId)) {
+                is crucible.lens.data.api.ApiResult.Success -> {
+                    resp.data.forEach { u -> u.uniqueId?.let { id -> ownerNames[id] = ownerDisplayName(u.firstName, u.lastName) } }
+                }
+                is crucible.lens.data.api.ApiResult.Error -> {
+                    // Fail silently
+                }
             }
         } catch (_: Exception) { }
         ownerNamesReady = true
@@ -196,7 +199,8 @@ fun ProjectDetailScreen(
         CacheManager.getProjects()?.find { it.projectId == projectId }
     }
 
-    val prefs = remember { createAppPreferences(getPlatformContext()) }
+    val ctx = getPlatformContext()
+    val prefs = remember(ctx) { createAppPreferences(ctx) }
 
     var samples by remember { mutableStateOf<List<Sample>?>(null) }
     var datasets by remember { mutableStateOf<List<Dataset>?>(null) }
@@ -221,6 +225,7 @@ fun ProjectDetailScreen(
     }
     val mainScrollState = rememberScrollState()
     val pullRefreshState = rememberPullToRefreshState()
+    var isRefreshingNow by remember { mutableStateOf(false) }
 
     val filteredSamples = remember(samples, searchQuery) {
         if (searchQuery.isBlank()) samples ?: emptyList()
@@ -246,7 +251,6 @@ fun ProjectDetailScreen(
                     datasets = cachedDatasets
                     fromCache = true
                     isLoading = false
-                    pullRefreshState.endRefresh()
                     return@launch
                 }
 
@@ -257,7 +261,6 @@ fun ProjectDetailScreen(
                     datasets = cachedDatasets ?: emptyList()
                     fromCache = cachedSamples != null && cachedDatasets != null
                     isLoading = false
-                    pullRefreshState.endRefresh()
                     return@launch
                 }
 
@@ -270,25 +273,21 @@ fun ProjectDetailScreen(
                     s.await() to d.await()
                 }
 
-                if (samplesResponse.isSuccessful && datasetsResponse.isSuccessful) {
-                    val loadedSamples = samplesResponse.body()
-                    val loadedDatasets = datasetsResponse.body()
+                val loadedSamples = (samplesResponse as? crucible.lens.data.api.ApiResult.Success)?.data
+                val loadedDatasets = (datasetsResponse as? crucible.lens.data.api.ApiResult.Success)?.data
 
-                    if (loadedSamples != null && loadedDatasets != null) {
-                        CacheManager.cacheProjectSamples(projectId, loadedSamples)
-                        CacheManager.cacheProjectDatasets(projectId, loadedDatasets)
-                        // Populate resource cache with metadata-rich versions for each dataset,
-                        // but only if a richer individually-fetched version isn't already there.
-                        loadedDatasets.forEach { dataset ->
-                            if (CacheManager.getResource(dataset.uniqueId) == null) {
-                                CacheManager.cacheResource(dataset.uniqueId, dataset)
-                            }
+                if (loadedSamples != null && loadedDatasets != null) {
+                    CacheManager.cacheProjectSamples(projectId, loadedSamples)
+                    CacheManager.cacheProjectDatasets(projectId, loadedDatasets)
+                    // Populate resource cache with metadata-rich versions for each dataset,
+                    // but only if a richer individually-fetched version isn't already there.
+                    loadedDatasets.forEach { dataset ->
+                        if (CacheManager.getResource(dataset.uniqueId) == null) {
+                            CacheManager.cacheResource(dataset.uniqueId, dataset)
                         }
-                        samples = loadedSamples
-                        datasets = loadedDatasets
-                    } else {
-                        error = "Failed to load project data"
                     }
+                    samples = loadedSamples
+                    datasets = loadedDatasets
                 } else {
                     error = "Failed to load project data"
                 }
@@ -296,7 +295,6 @@ fun ProjectDetailScreen(
                 error = "Error: ${e.message}"
             } finally {
                 isLoading = false
-                pullRefreshState.endRefresh()
             }
         }
     }
@@ -343,7 +341,7 @@ fun ProjectDetailScreen(
                                     leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
                                     onClick = {
                                         topBarMenuExpanded = false
-                                        openUrlInBrowser(getPlatformContext(), "$graphExplorerUrl/$projectId")
+                                        openUrlInBrowser(ctx, "$graphExplorerUrl/$projectId")
                                     }
                                 )
                                 DropdownMenuItem(
@@ -351,7 +349,7 @@ fun ProjectDetailScreen(
                                     leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                                     onClick = {
                                         topBarMenuExpanded = false
-                                        shareText(getPlatformContext(), "$graphExplorerUrl/$projectId", project?.title ?: projectId)
+                                        shareText(ctx, "$graphExplorerUrl/$projectId", project?.title ?: projectId)
                                     }
                                 )
                             }
@@ -361,23 +359,18 @@ fun ProjectDetailScreen(
             )
         }
     ) { padding ->
-        // Animate back to 0 when refresh starts so the header springs back up
-        val contentTranslation by animateFloatAsState(
-            targetValue = if (pullRefreshState.isRefreshing) 0f else pullRefreshState.verticalOffset,
-            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
-            label = "ptr_translation"
-        )
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshingNow,
+            onRefresh = { loadProjectData(forceRefresh = true) },
+            state = pullRefreshState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .nestedScroll(pullRefreshState.nestedScrollConnection)
         ) {
             Column(
                 modifier = modifier
                     .fillMaxSize()
                     .verticalScroll(mainScrollState)
-                    .graphicsLayer { translationY = contentTranslation }
             ) {
             // Project header with integrated search
             ProjectHeader(
@@ -553,31 +546,11 @@ fun ProjectDetailScreen(
                 }
             }
             }
-
-            // Pull-to-refresh indicator with spring animation
-            // Only show when not showing full loading screen
-            AnimatedPullToRefreshIndicator(
-                state = pullRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter),
-                visible = (pullRefreshState.isRefreshing || pullRefreshState.verticalOffset > 0f) && !isLoading
-            )
-
         }
     }
 
     LaunchedEffect(isLoading) {
-        if (isLoading) {
-            pullRefreshState.startRefresh()
-        } else {
-            pullRefreshState.endRefresh()
-        }
-    }
-
-    if (pullRefreshState.isRefreshing && !isLoading) {
-        LaunchedEffect(Unit) {
-            CacheManager.clearProjectDetail(projectId)
-            loadProjectData(forceRefresh = true)
-        }
+        isRefreshingNow = isLoading
     }
 
 }
@@ -1095,6 +1068,7 @@ private fun ResourceCard(
     resourceType: String = "sample",
     onClick: () -> Unit
 ) {
+    val platformCtx = getPlatformContext()
     var menuExpanded by remember { mutableStateOf(false) }
 
     val webUrl = if (projectId != null && graphExplorerUrl.isNotBlank()) {
@@ -1157,9 +1131,9 @@ private fun ResourceCard(
                 leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                 onClick = {
                     menuExpanded = false
-                    
-                    
-                    copyToClipboard(getPlatformContext(), uniqueId)
+
+
+                    copyToClipboard(platformCtx, uniqueId)
                 }
             )
             if (webUrl != null) {
@@ -1168,7 +1142,7 @@ private fun ResourceCard(
                     leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
                     onClick = {
                         menuExpanded = false
-                        openUrl(getPlatformContext(), webUrl)
+                        openUrl(platformCtx, webUrl)
                     }
                 )
                 DropdownMenuItem(
@@ -1176,7 +1150,7 @@ private fun ResourceCard(
                     leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                     onClick = {
                         menuExpanded = false
-                        shareText(getPlatformContext(), webUrl, project?.title ?: "")
+                        shareText(platformCtx, webUrl, project?.title ?: "")
                     }
                 )
             }

@@ -10,21 +10,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Instrument
 import crucible.lens.ui.common.AppScaffold
-import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
 import kotlinx.coroutines.launch
@@ -65,35 +65,28 @@ fun InstrumentListScreen(
                     if (cached != null) {
                         instruments = cached
                         isLoading = false
-                        pullRefreshState.endRefresh()
                         return@launch
                     }
                 }
-                val response = ApiClient.service.getInstruments()
-                if (response.isSuccessful) {
-                    val body = response.body() ?: emptyList()
-                    CacheManager.cacheInstruments(body)
-                    instruments = body
-                } else {
-                    error = "Failed to load instruments"
+                when (val response = ApiClient.service.getInstruments()) {
+                    is crucible.lens.data.api.ApiResult.Success -> {
+                        val body = response.data
+                        CacheManager.cacheInstruments(body)
+                        instruments = body
+                    }
+                    is crucible.lens.data.api.ApiResult.Error -> {
+                        error = "Failed to load instruments"
+                    }
                 }
             } catch (e: Exception) {
                 error = "Error: ${e.message}"
             } finally {
                 isLoading = false
-                pullRefreshState.endRefresh()
             }
         }
     }
 
     LaunchedEffect(Unit) { loadInstruments() }
-
-    if (pullRefreshState.isRefreshing && !isLoading) {
-        LaunchedEffect(Unit) {
-            CacheManager.clearInstrumentsCache()
-            loadInstruments(forceRefresh = true)
-        }
-    }
 
     AppScaffold(
         topBar = {
@@ -117,11 +110,13 @@ fun InstrumentListScreen(
             )
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isLoading,
+            onRefresh = { loadInstruments(forceRefresh = true) },
+            state = pullRefreshState,
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding)
-                .nestedScroll(pullRefreshState.nestedScrollConnection)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 // Search bar
@@ -216,17 +211,7 @@ fun InstrumentListScreen(
                     }
                 }
             }
-
-            AnimatedPullToRefreshIndicator(
-                state = pullRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter),
-                visible = (pullRefreshState.isRefreshing || pullRefreshState.verticalOffset > 0f) && !isLoading
-            )
         }
-    }
-
-    LaunchedEffect(isLoading) {
-        if (isLoading) pullRefreshState.startRefresh() else pullRefreshState.endRefresh()
     }
 }
 

@@ -47,7 +47,7 @@ import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateDatasetScreen(
+actual fun CreateDatasetScreen(
     initialProjectId: String?,
     onBack: () -> Unit,
     onCreated: (uuid: String) -> Unit

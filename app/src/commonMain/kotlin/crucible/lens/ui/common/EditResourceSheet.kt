@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
 
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.ui.common.DateTimePickerField
@@ -93,6 +94,7 @@ private fun SampleEditFields(
     onSavingChange: (Boolean) -> Unit,
     scope: kotlinx.coroutines.CoroutineScope
 ) {
+    val ctx = getPlatformContext()
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     var name by remember { mutableStateOf(resource.name) }
     var type by remember { mutableStateOf(resource.sampleType ?: "") }
@@ -164,7 +166,7 @@ private fun SampleEditFields(
         scope.launch {
             onSavingChange(true)
             try {
-                val resp = ApiClient.service.updateSample(
+                when (val resp = ApiClient.service.updateSample(
                     resource.uniqueId,
                     SampleUpdateRequest(
                         sampleName = name.trim(),
@@ -173,12 +175,15 @@ private fun SampleEditFields(
                         timestamp = timestamp.trim().ifBlank { null },
                         projectId = selectedProjectId
                     )
-                )
-                if (resp.isSuccessful) {
-                    showToast(getPlatformContext(), "Saved")
-                    onSaved()
+                )) {
+                    is crucible.lens.data.api.ApiResult.Success -> {
+                        showToast(ctx, "Saved")
+                        onSaved()
+                    }
+                    is crucible.lens.data.api.ApiResult.Error -> {
+                        snackbarHostState.showSnackbar("Save failed (${resp.code})")
+                    }
                 }
-                else snackbarHostState.showSnackbar("Save failed (${resp.code()})")
             } catch (e: Exception) {
                 snackbarHostState.showSnackbar("Connection error — check your network")
             } finally {
@@ -198,6 +203,7 @@ private fun DatasetEditFields(
     onSavingChange: (Boolean) -> Unit,
     scope: kotlinx.coroutines.CoroutineScope
 ) {
+    val ctx = getPlatformContext()
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     var name by remember { mutableStateOf(resource.name) }
     var measurement by remember { mutableStateOf(resource.measurement ?: "") }
@@ -298,7 +304,7 @@ private fun DatasetEditFields(
         scope.launch {
             onSavingChange(true)
             try {
-                val resp = ApiClient.service.updateDataset(
+                when (val resp = ApiClient.service.updateDataset(
                     resource.uniqueId,
                     DatasetUpdateRequest(
                         datasetName = name.trim(),
@@ -310,12 +316,15 @@ private fun DatasetEditFields(
                         dataType = dataType.trim().ifBlank { null },
                         scientificMetadata = parseMetadataText(metadataText)
                     )
-                )
-                if (resp.isSuccessful) {
-                    showToast(getPlatformContext(), "Saved")
-                    onSaved()
+                )) {
+                    is crucible.lens.data.api.ApiResult.Success -> {
+                        showToast(ctx, "Saved")
+                        onSaved()
+                    }
+                    is crucible.lens.data.api.ApiResult.Error -> {
+                        snackbarHostState.showSnackbar("Save failed (${resp.code})")
+                    }
                 }
-                else snackbarHostState.showSnackbar("Save failed (${resp.code()})")
             } catch (e: Exception) {
                 snackbarHostState.showSnackbar("Connection error — check your network")
             } finally {

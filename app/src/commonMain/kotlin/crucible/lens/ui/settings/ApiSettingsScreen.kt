@@ -17,6 +17,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.UserLead
 import crucible.lens.platform.getPlatformContext
 import kotlinx.coroutines.launch
@@ -59,13 +60,15 @@ fun ApiSettingsScreen(
         }
         accountLoading = true; accountError = false
         try {
-            val resp = ApiClient.service.getAccount()
-            if (resp.isSuccessful) {
-                val body = resp.body()?.userInfo
-                account = body; accountError = body == null
-                onUserOrcidSave(body?.uniqueId)
-            } else {
-                account = null; accountError = true
+            when (val resp = ApiClient.service.getAccount()) {
+                is crucible.lens.data.api.ApiResult.Success -> {
+                    val body = resp.data.userInfo
+                    account = body; accountError = body == null
+                    onUserOrcidSave(body?.uniqueId)
+                }
+                is crucible.lens.data.api.ApiResult.Error -> {
+                    account = null; accountError = true
+                }
             }
         } catch (_: Exception) {
             account = null; accountError = true

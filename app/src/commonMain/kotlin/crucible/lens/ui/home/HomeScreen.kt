@@ -88,11 +88,14 @@ fun HomeScreen(
             allProjects = cached
         } else {
             try {
-                val response = ApiClient.service.getProjects()
-                if (response.isSuccessful) {
-                    response.body()?.let { projects ->
+                when (val response = ApiClient.service.getProjects()) {
+                    is crucible.lens.data.api.ApiResult.Success -> {
+                        val projects = response.data
                         CacheManager.cacheProjects(projects)
                         allProjects = projects
+                    }
+                    is crucible.lens.data.api.ApiResult.Error -> {
+                        println("Failed to load projects: ${response.message}")
                     }
                 }
             } catch (e: Exception) {
@@ -522,13 +525,14 @@ private fun HomePinnedProjects(
 
 @Composable
 private fun HomeFooter(graphExplorerUrl: String) {
+    val ctx = getPlatformContext()
     Column(
         modifier = Modifier.padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         OutlinedButton(onClick = {
-            openUrl(getPlatformContext(), graphExplorerUrl)
+            openUrl(ctx, graphExplorerUrl)
         }) {
             Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
@@ -543,7 +547,7 @@ private fun HomeFooter(graphExplorerUrl: String) {
                 style = footerStyle,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 modifier = Modifier.clickable {
-                    openUrl(getPlatformContext(), "https://crucible.lbl.gov/")
+                    openUrl(ctx, "https://crucible.lbl.gov/")
                 }
             )
             Text(" • Molecular Foundry", style = footerStyle, color = footerColor)

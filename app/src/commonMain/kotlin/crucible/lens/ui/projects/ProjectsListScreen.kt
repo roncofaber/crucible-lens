@@ -15,23 +15,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.SolidColor
 import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.data.cache.ProjectSummary
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
-import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.AppScaffold
@@ -94,7 +94,6 @@ fun ProjectsListScreen(
                             val newCounts = cachedProjects.associate { it.projectId to Pair<Int?, Int?>(null, null) }
                             projectCounts = projectCounts + newCounts
                             isLoading = false
-                            pullRefreshState.endRefresh()
                         }
                         return@launch
                     }
@@ -111,22 +110,22 @@ fun ProjectsListScreen(
                     isLoading = true
                     error = null
                 }
-                val response = ApiClient.service.getProjects()
-                if (response.isSuccessful) {
-                    val fetchedProjects = response.body()
-                    // Cache the projects
-                    fetchedProjects?.let { CacheManager.cacheProjects(it) }
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        projects = fetchedProjects
-                        // Initialize all projects with null counts to show loading spinners
-                        fetchedProjects?.let { projectList ->
-                            val newCounts = projectList.associate { it.projectId to Pair<Int?, Int?>(null, null) }
+                when (val response = ApiClient.service.getProjects()) {
+                    is crucible.lens.data.api.ApiResult.Success -> {
+                        val fetchedProjects = response.data
+                        // Cache the projects
+                        CacheManager.cacheProjects(fetchedProjects)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            projects = fetchedProjects
+                            // Initialize all projects with null counts to show loading spinners
+                            val newCounts = fetchedProjects.associate { it.projectId to Pair<Int?, Int?>(null, null) }
                             projectCounts = projectCounts + newCounts
                         }
                     }
-                } else {
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        error = "Failed to load projects: ${response.message()}"
+                    is crucible.lens.data.api.ApiResult.Error -> {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            error = "Failed to load projects: ${response.message}"
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -136,7 +135,6 @@ fun ProjectsListScreen(
             } finally {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     isLoading = false
-                    pullRefreshState.endRefresh()
                 }
             }
         }
@@ -213,22 +211,26 @@ fun ProjectsListScreen(
                     // Fetch samples and datasets with metadata for search functionality
                     var hadError = false
                     val sampleCount = try {
-                        val resp = ApiClient.service.getSamplesByProject(project.projectId)
-                        if (resp.isSuccessful) {
-                            consecutiveFailures = 0 // Reset on success
-                            resp.body()?.also { CacheManager.cacheProjectSamples(project.projectId, it) }?.size
-                        } else null
+                        when (val resp = ApiClient.service.getSamplesByProject(project.projectId)) {
+                            is crucible.lens.data.api.ApiResult.Success -> {
+                                consecutiveFailures = 0 // Reset on success
+                                resp.data.also { CacheManager.cacheProjectSamples(project.projectId, it) }.size
+                            }
+                            is crucible.lens.data.api.ApiResult.Error -> null
+                        }
                     } catch (e: Exception) {
                         hadError = true
                         null
                     }
 
                     val datasetCount = try {
-                        val resp = ApiClient.service.getDatasetsByProject(project.projectId)
-                        if (resp.isSuccessful) {
-                            consecutiveFailures = 0 // Reset on success
-                            resp.body()?.also { CacheManager.cacheProjectDatasets(project.projectId, it) }?.size
-                        } else null
+                        when (val resp = ApiClient.service.getDatasetsByProject(project.projectId)) {
+                            is crucible.lens.data.api.ApiResult.Success -> {
+                                consecutiveFailures = 0 // Reset on success
+                                resp.data.also { CacheManager.cacheProjectDatasets(project.projectId, it) }.size
+                            }
+                            is crucible.lens.data.api.ApiResult.Error -> null
+                        }
                     } catch (e: Exception) {
                         hadError = true
                         null
@@ -316,11 +318,13 @@ fun ProjectsListScreen(
             } // end Column
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isLoading,
+            onRefresh = { loadProjects(forceRefresh = true) },
+            state = pullRefreshState,
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding)
-                .nestedScroll(pullRefreshState.nestedScrollConnection)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 // Search bar
@@ -691,15 +695,6 @@ fun ProjectsListScreen(
             }
             } // end Column
 
-            // Pull-to-refresh indicator with spring animation
-            // Only show when not showing full loading screen
-            AnimatedPullToRefreshIndicator(
-                state = pullRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter),
-                visible = (pullRefreshState.isRefreshing || pullRefreshState.verticalOffset > 0f) &&
-                        !(isLoading && persistentSummaries == null)
-            )
-
             // Scroll-to-top button
             ScrollToTopButton(
                 visible = showScrollToTop,
@@ -712,23 +707,6 @@ fun ProjectsListScreen(
                     .align(Alignment.BottomEnd)
                     .padding(16.dp)
             )
-        }
-    }
-
-    LaunchedEffect(isLoading) {
-        if (isLoading) {
-            pullRefreshState.startRefresh()
-        } else {
-            pullRefreshState.endRefresh()
-        }
-    }
-
-    if (pullRefreshState.isRefreshing && !isLoading) {
-        LaunchedEffect(Unit) {
-            CacheManager.clearProjectsCache()
-            CacheManager.clearProjectDetailsCache()
-            projectCounts = emptyMap()
-            loadProjects(forceRefresh = true)
         }
     }
 }

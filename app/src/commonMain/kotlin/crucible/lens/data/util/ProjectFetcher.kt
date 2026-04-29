@@ -4,6 +4,7 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
+import crucible.lens.data.api.ApiResult
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
@@ -27,12 +28,18 @@ suspend fun fetchProjectData(
         if (cachedSamples != null && cachedDatasets != null) return@withLock cachedSamples to cachedDatasets
         coroutineScope {
             val s = async {
-                cachedSamples ?: ApiClient.service.getSamplesByProject(projectId).body()
-                    ?.also { CacheManager.cacheProjectSamples(projectId, it) } ?: emptyList()
+                if (cachedSamples != null) cachedSamples else {
+                    val result = ApiClient.service.getSamplesByProject(projectId)
+                    (result as? ApiResult.Success)?.data
+                        ?.also { CacheManager.cacheProjectSamples(projectId, it) } ?: emptyList()
+                }
             }
             val d = async {
-                cachedDatasets ?: ApiClient.service.getDatasetsByProject(projectId).body()
-                    ?.also { CacheManager.cacheProjectDatasets(projectId, it) } ?: emptyList()
+                if (cachedDatasets != null) cachedDatasets else {
+                    val result = ApiClient.service.getDatasetsByProject(projectId)
+                    (result as? ApiResult.Success)?.data
+                        ?.also { CacheManager.cacheProjectDatasets(projectId, it) } ?: emptyList()
+                }
             }
             s.await() to d.await()
         }

@@ -84,22 +84,22 @@ sealed class Screen(val route: String) {
     }
     object Detail : Screen("detail/{mfid}?groupBy={groupBy}") {
         fun createRoute(mfid: String, groupBy: String? = null) =
-            "detail/${encodeRouteSegment(\1)}?groupBy=${groupBy ?: ""}"
+            "detail/${encodeRouteSegment(mfid)}?groupBy=${groupBy ?: ""}"
     }
     object History : Screen("history")
     object Search : Screen("search")
     object OrcidLogin : Screen("orcid-login")
     object CreateSample : Screen("create-sample?projectId={projectId}") {
         fun createRoute(projectId: String? = null) =
-            if (projectId != null) "create-sample?projectId=${encodeRouteSegment(\1)}" else "create-sample?projectId="
+            if (projectId != null) "create-sample?projectId=${encodeRouteSegment(projectId)}" else "create-sample?projectId="
     }
     object CreateDataset : Screen("create-dataset?projectId={projectId}") {
         fun createRoute(projectId: String? = null) =
-            if (projectId != null) "create-dataset?projectId=${encodeRouteSegment(\1)}" else "create-dataset?projectId="
+            if (projectId != null) "create-dataset?projectId=${encodeRouteSegment(projectId)}" else "create-dataset?projectId="
     }
     object Instruments : Screen("instruments")
     object InstrumentDetail : Screen("instrument/{instrumentId}") {
-        fun createRoute(id: String) = "instrument/${encodeRouteSegment(\1)}"
+        fun createRoute(id: String) = "instrument/${encodeRouteSegment(id)}"
     }
 }
 
@@ -145,6 +145,8 @@ fun NavGraph(
     onSignOut: () -> Unit = {},
     viewModel: ScannerViewModel = viewModel()
 ) {
+    val platformCtx = getPlatformContext()
+
     LaunchedEffect(deepLinkUuid) {
         if (!deepLinkUuid.isNullOrBlank()) {
             navController.navigate(Screen.Detail.createRoute(deepLinkUuid))
@@ -365,7 +367,7 @@ fun NavGraph(
                 onBack = { navController.popBackStack() },
                 onKeyFound = { key ->
                     onApiKeySave(key)
-                    showToast(getPlatformContext(), "API key saved")
+                    showToast(platformCtx, "API key saved")
                     navController.popBackStack()
                 }
             )

@@ -24,6 +24,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,10 +62,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -79,6 +79,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlin.math.abs
 import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
 
 
 import crucible.lens.data.cache.CacheManager
@@ -88,7 +89,6 @@ import crucible.lens.data.model.ResourceLink
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.ui.common.AppScaffold
-import crucible.lens.ui.common.AnimatedPullToRefreshIndicator
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.QrCodeDialog
 import crucible.lens.ui.common.QrCodeDialogWithNavigation
@@ -232,15 +232,18 @@ fun ResourceDetailScreen(
                                     creationTimeLte = bounds?.second
                                 )
                             }
-                            if (resp.isSuccessful) {
-                                val all = resp.body() ?: emptyList()
-                                val sorted = if (all.any { it.uniqueId == resource.uniqueId }) all.sortedBy { it.uniqueId }
-                                             else (all + resource).sortedBy { it.uniqueId }
-                                sorted.forEach { s -> loadedResources.getOrPut(s.uniqueId) { s } }
-                                sameTypeSamples = sorted
-                                siblingsResolved = true
-                            } else {
-                                siblingsResolved = true
+                            when (resp) {
+                                is ApiResult.Success -> {
+                                    val all = resp.data
+                                    val sorted = if (all.any { it.uniqueId == resource.uniqueId }) all.sortedBy { it.uniqueId }
+                                                 else (all + resource).sortedBy { it.uniqueId }
+                                    sorted.forEach { s -> loadedResources.getOrPut(s.uniqueId) { s } }
+                                    sameTypeSamples = sorted
+                                    siblingsResolved = true
+                                }
+                                is ApiResult.Error -> {
+                                    siblingsResolved = true
+                                }
                             }
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
@@ -287,15 +290,18 @@ fun ResourceDetailScreen(
                                     creationTimeLte = bounds?.second
                                 )
                             }
-                            if (resp.isSuccessful) {
-                                val all = resp.body() ?: emptyList()
-                                val sorted = if (all.any { it.uniqueId == resource.uniqueId }) all.sortedBy { it.uniqueId }
-                                             else (all + resource).sortedBy { it.uniqueId }
-                                sorted.forEach { d -> loadedResources.getOrPut(d.uniqueId) { d } }
-                                sameTypeDatasets = sorted
-                                siblingsResolved = true
-                            } else {
-                                siblingsResolved = true
+                            when (resp) {
+                                is ApiResult.Success -> {
+                                    val all = resp.data
+                                    val sorted = if (all.any { it.uniqueId == resource.uniqueId }) all.sortedBy { it.uniqueId }
+                                                 else (all + resource).sortedBy { it.uniqueId }
+                                    sorted.forEach { d -> loadedResources.getOrPut(d.uniqueId) { d } }
+                                    sameTypeDatasets = sorted
+                                    siblingsResolved = true
+                                }
+                                is ApiResult.Error -> {
+                                    siblingsResolved = true
+                                }
                             }
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
@@ -339,13 +345,16 @@ fun ResourceDetailScreen(
                                 creationTimeGte = bounds?.first, creationTimeLte = bounds?.second
                             )
                         }
-                        if (resp.isSuccessful) {
-                            val all = resp.body() ?: emptyList()
-                            val sorted = if (all.any { it.uniqueId == resource.uniqueId }) all.sortedBy { it.uniqueId }
-                                         else (all + resource).sortedBy { it.uniqueId }
-                            sameTypeSamples = sorted
-                            siblingsResolved = true
-                        } else { siblingsResolved = true }
+                        when (resp) {
+                            is ApiResult.Success -> {
+                                val all = resp.data
+                                val sorted = if (all.any { it.uniqueId == resource.uniqueId }) all.sortedBy { it.uniqueId }
+                                             else (all + resource).sortedBy { it.uniqueId }
+                                sameTypeSamples = sorted
+                                siblingsResolved = true
+                            }
+                            is ApiResult.Error -> { siblingsResolved = true }
+                        }
                     }
                 }
                 is Dataset -> {
@@ -378,13 +387,16 @@ fun ResourceDetailScreen(
                                 creationTimeGte = bounds?.first, creationTimeLte = bounds?.second
                             )
                         }
-                        if (resp.isSuccessful) {
-                            val all = resp.body() ?: emptyList()
-                            val sorted = if (all.any { it.uniqueId == resource.uniqueId }) all.sortedBy { it.uniqueId }
-                                         else (all + resource).sortedBy { it.uniqueId }
-                            sameTypeDatasets = sorted
-                            siblingsResolved = true
-                        } else { siblingsResolved = true }
+                        when (resp) {
+                            is ApiResult.Success -> {
+                                val all = resp.data
+                                val sorted = if (all.any { it.uniqueId == resource.uniqueId }) all.sortedBy { it.uniqueId }
+                                             else (all + resource).sortedBy { it.uniqueId }
+                                sameTypeDatasets = sorted
+                                siblingsResolved = true
+                            }
+                            is ApiResult.Error -> { siblingsResolved = true }
+                        }
                     }
                 }
             }
@@ -512,12 +524,12 @@ fun ResourceDetailScreen(
 
                 try {
                     val enriched: CrucibleResource? = when (pageResource) {
-                        is Sample -> ApiClient.service.getSample(uuid).body()
+                        is Sample -> (ApiClient.service.getSample(uuid) as? ApiResult.Success)?.data
                         is Dataset -> kotlinx.coroutines.coroutineScope {
                             val dsDeferred   = async { ApiClient.service.getDataset(uuid, includeMetadata = true) }
                             val metaDeferred = async { try { ApiClient.service.getDatasetScientificMetadata(uuid) } catch (_: Exception) { null } }
-                            val ds   = dsDeferred.await().body()
-                            val meta = metaDeferred.await()?.takeIf { it.isSuccessful }?.body()
+                            val ds   = (dsDeferred.await() as? ApiResult.Success)?.data
+                            val meta = (metaDeferred.await() as? ApiResult.Success)?.data?.takeIf { it.isNotEmpty() }
                             if (ds != null && !meta.isNullOrEmpty()) ds.copy(scientificMetadata = meta) else ds
                         }
                     }
@@ -579,10 +591,9 @@ fun ResourceDetailScreen(
 
                 try {
                     val thumbResp = ApiClient.service.getThumbnails(uuid)
-                    val thumbs = if (thumbResp.isSuccessful) {
-                        thumbResp.body()?.map { "data:image/png;base64,${it.thumbnailB64}" } ?: emptyList()
-                    } else {
-                        emptyList()
+                    val thumbs = when (thumbResp) {
+                        is ApiResult.Success -> thumbResp.data.map { "data:image/png;base64,${it.thumbnailB64}" }
+                        is ApiResult.Error -> emptyList()
                     }
                     withContext(Dispatchers.Main) {
                         loadedThumbnails[uuid] = thumbs
@@ -630,19 +641,25 @@ fun ResourceDetailScreen(
                     )
                 )
             }
-            if (resp.isSuccessful) {
-                CacheManager.clearThumbnail(datasetUuid)
-                val thumbResp = withContext(Dispatchers.IO) { ApiClient.service.getThumbnails(datasetUuid) }
-                if (thumbResp.isSuccessful) {
-                    val thumbs = thumbResp.body()?.map { "data:image/png;base64,${it.thumbnailB64}" } ?: emptyList()
-                    loadedThumbnails[datasetUuid] = thumbs
-                    CacheManager.cacheThumbnails(datasetUuid, thumbs)
-                    showToast(platformContext, "Thumbnail uploaded")
-                } else {
-                    showToast(platformContext, "Uploaded — pull to refresh to view")
+            when (resp) {
+                is ApiResult.Success -> {
+                    CacheManager.clearThumbnail(datasetUuid)
+                    val thumbResp = withContext(Dispatchers.IO) { ApiClient.service.getThumbnails(datasetUuid) }
+                    when (thumbResp) {
+                        is ApiResult.Success -> {
+                            val thumbs = thumbResp.data.map { "data:image/png;base64,${it.thumbnailB64}" }
+                            loadedThumbnails[datasetUuid] = thumbs
+                            CacheManager.cacheThumbnails(datasetUuid, thumbs)
+                            showToast(platformContext, "Thumbnail uploaded")
+                        }
+                        is ApiResult.Error -> {
+                            showToast(platformContext, "Uploaded — pull to refresh to view")
+                        }
+                    }
                 }
-            } else {
-                showToast(platformContext, "Upload failed — try again")
+                is ApiResult.Error -> {
+                    showToast(platformContext, "Upload failed — try again")
+                }
             }
         } catch (e: Exception) {
             showToast(platformContext, "Unexpected error — try again")
@@ -664,30 +681,32 @@ fun ResourceDetailScreen(
     // True only when a sibling (not the primary resource) was pull-to-refreshed.
     // Guards siblingReloadTrigger so it only fires on actual sibling PTRs.
     var isSiblingRefreshPending by remember { mutableStateOf(false) }
+    var localRefreshState by remember { mutableStateOf(false) }
 
-    if (pullRefreshState.isRefreshing) {
-        LaunchedEffect(true) {
-            val currentUuid = siblingList.getOrNull(pagerState.currentPage)?.uniqueId
-                ?: resource.uniqueId
-            if (currentUuid != mfid) {
-                // Refreshing a sibling — clear stale local state so the pager
-                // picks up the fresh data once the ViewModel signals isRefreshing=false.
-                loadedResources.remove(currentUuid)
-                loadedThumbnails.remove(currentUuid)
-                enrichedUuids.remove(currentUuid)
-                isSiblingRefreshPending = true
-            }
-            onRefresh(currentUuid)
+    fun triggerRefresh() {
+        val currentUuid = siblingList.getOrNull(pagerState.currentPage)?.uniqueId
+            ?: resource.uniqueId
+        if (currentUuid != mfid) {
+            // Refreshing a sibling — clear stale local state so the pager
+            // picks up the fresh data once the ViewModel signals isRefreshing=false.
+            loadedResources.remove(currentUuid)
+            loadedThumbnails.remove(currentUuid)
+            enrichedUuids.remove(currentUuid)
+            isSiblingRefreshPending = true
         }
+        onRefresh(currentUuid)
     }
+
     LaunchedEffect(isRefreshing) {
         if (!isRefreshing) {
-            pullRefreshState.endRefresh()
+            localRefreshState = false
             // Only re-trigger lazy loading when a sibling was actually refreshed
             if (isSiblingRefreshPending) {
                 isSiblingRefreshPending = false
                 siblingReloadTrigger++
             }
+        } else {
+            localRefreshState = true
         }
     }
 
@@ -781,7 +800,7 @@ fun ResourceDetailScreen(
                                         leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
                                         onClick = {
                                             overflowMenuExpanded = false
-                                            openUrl(getPlatformContext(), webUrl)
+                                            openUrl(platformContext, webUrl)
                                         }
                                     )
                                     DropdownMenuItem(
@@ -789,7 +808,7 @@ fun ResourceDetailScreen(
                                         leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                                         onClick = {
                                             overflowMenuExpanded = false
-                                            shareText(getPlatformContext(), webUrl, currentDisplayResource.name)
+                                            shareText(platformContext, webUrl, currentDisplayResource.name)
                                         }
                                     )
                                 }
@@ -813,7 +832,10 @@ fun ResourceDetailScreen(
             )
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = localRefreshState,
+            onRefresh = { triggerRefresh() },
+            state = pullRefreshState,
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -822,10 +844,7 @@ fun ResourceDetailScreen(
             if (siblingList.isNotEmpty() && siblingIndex >= 0) {
                 HorizontalPager(
                     state = pagerState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .nestedScroll(pullRefreshState.nestedScrollConnection),
-                    beyondBoundsPageCount = 1, // Pre-render adjacent pages
+                    modifier = Modifier.fillMaxSize(),
                     userScrollEnabled = true
                 ) { pageIndex ->
                     if (pageIndex >= siblingList.size) return@HorizontalPager
@@ -862,8 +881,7 @@ fun ResourceDetailScreen(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp)
-                        .graphicsLayer { translationY = pullRefreshState.verticalOffset },
+                        .padding(16.dp),
                     verticalArrangement = Arrangement.Top
                 ) {
                     item(key = "basic_info_$pageIndex") {
@@ -1128,12 +1146,6 @@ fun ResourceDetailScreen(
                 } // end LazyColumn items
             } // end LazyColumn
 
-                        // Pull-to-refresh indicator with spring animation
-                        AnimatedPullToRefreshIndicator(
-                            state = pullRefreshState,
-                            modifier = Modifier.align(Alignment.TopCenter)
-                        )
-
                         // Scroll-to-top button
                         ScrollToTopButton(
                             visible = showScrollToTop,
@@ -1152,9 +1164,7 @@ fun ResourceDetailScreen(
             } else {
                 // Fallback when siblings haven't loaded yet
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .nestedScroll(pullRefreshState.nestedScrollConnection)
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     // Show loading or error state
                     AnimatedVisibility(
@@ -1164,15 +1174,9 @@ fun ResourceDetailScreen(
                     ) {
                         LoadingContent(title = "Loading Resource")
                     }
-
-                    // Pull-to-refresh indicator
-                    AnimatedPullToRefreshIndicator(
-                        state = pullRefreshState,
-                        modifier = Modifier.align(Alignment.TopCenter)
-                    )
                 }
             } // end else
-        } // end outer Box
+        } // end PullToRefreshBox
     } // end Scaffold
 
     // Screen-level sheets and dialogs — operate on currentDisplayResource
@@ -1642,7 +1646,7 @@ private fun SampleDetailsCard(
                             label = "Owner ORCID",
                             value = sample.ownerOrcid,
                             onClick = {
-                                openUrl(getPlatformContext(), "https://orcid.org/${sample.ownerOrcid}")
+                                openUrl(platformCtx, "https://orcid.org/${sample.ownerOrcid}")
                             }
                         )
                     } else {
@@ -1783,8 +1787,10 @@ private fun DatasetDetailsCard(
                         instrumentScope.launch {
                             val instruments = CacheManager.getInstruments()
                                 ?: withContext(Dispatchers.IO) {
-                                    ApiClient.service.getInstruments().body()
-                                        ?.also { CacheManager.cacheInstruments(it) }
+                                    when (val resp = ApiClient.service.getInstruments()) {
+                                        is ApiResult.Success -> resp.data.also { CacheManager.cacheInstruments(it) }
+                                        is ApiResult.Error -> null
+                                    }
                                 }
                             val instrument = instruments?.find { it.instrumentName == dataset.instrumentName }
                             if (instrument != null) onInstrumentClick(instrument.uniqueId)
@@ -2538,8 +2544,10 @@ private fun DeletionRequestDialog(
                                 resourceId = resource.uniqueId,
                                 reason = reason.trim().ifBlank { null }
                             )
-                            if (resp.isSuccessful) onSubmitted()
-                            else errorMsg = "Failed (${resp.code()}) — a request may already exist"
+                            when (resp) {
+                                is ApiResult.Success -> onSubmitted()
+                                is ApiResult.Error -> errorMsg = "Failed (${resp.code}) — a request may already exist"
+                            }
                         } catch (e: Exception) {
                             errorMsg = "Network error: ${e.message}"
                         } finally {

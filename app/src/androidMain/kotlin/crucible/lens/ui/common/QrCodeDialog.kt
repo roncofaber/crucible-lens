@@ -34,9 +34,8 @@ import com.google.zxing.MultiFormatWriter
 import com.google.zxing.EncodeHintType
 import crucible.lens.data.model.CrucibleResource
 
-// Single resource QR dialog (legacy - for compatibility)
 @Composable
-fun QrCodeDialog(mfid: String, name: String, onDismiss: () -> Unit) {
+actual fun QrCodeDialog(mfid: String, name: String, onDismiss: () -> Unit) {
     val bitmap = remember(mfid) { generateQrBitmap(mfid, 512) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -99,11 +98,11 @@ fun QrCodeDialog(mfid: String, name: String, onDismiss: () -> Unit) {
 // Swipeable QR dialog for navigating between resources
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun QrCodeDialogWithNavigation(
+actual fun QrCodeDialogWithNavigation(
     resources: List<CrucibleResource>,
     initialIndex: Int,
     onDismiss: () -> Unit,
-    onPageChange: (Int) -> Unit = {}
+    onPageChange: (Int) -> Unit
 ) {
     val pagerState = rememberPagerState(
         initialPage = initialIndex.coerceIn(0, resources.size - 1),

@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 
 
 import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
@@ -105,17 +106,19 @@ fun LinkResourceSheet(
         }
         isResolving = true
         resolvedType = try {
-            val resp = ApiClient.service.getResourceType(trimmed)
-            if (resp.isSuccessful) {
-                resolvedUuid = trimmed
-                val type = resp.body()?.resolvedType?.lowercase()
-                // Try to populate selectedResource from cache or project pool
-                if (type != null) {
-                    selectedResource = CacheManager.getResource(trimmed)
-                        ?: projectResources.find { it.uniqueId == trimmed }
+            when (val resp = ApiClient.service.getResourceType(trimmed)) {
+                is crucible.lens.data.api.ApiResult.Success -> {
+                    resolvedUuid = trimmed
+                    val type = resp.data.resolvedType?.lowercase()
+                    // Try to populate selectedResource from cache or project pool
+                    if (type != null) {
+                        selectedResource = CacheManager.getResource(trimmed)
+                            ?: projectResources.find { it.uniqueId == trimmed }
+                    }
+                    type
                 }
-                type
-            } else null
+                is crucible.lens.data.api.ApiResult.Error -> null
+            }
         } catch (_: Exception) { null }
         isResolving = false
     }
@@ -466,5 +469,5 @@ private suspend fun performLink(
             api.linkDatasetSample(datasetUuid = current.uniqueId, sampleUuid = targetUuid)
         else -> return false
     }
-    return resp.isSuccessful
+    return resp is crucible.lens.data.api.ApiResult.Success
 }

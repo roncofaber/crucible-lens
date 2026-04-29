@@ -55,7 +55,8 @@ fun AppearanceSettingsScreen(
     LaunchedEffect(currentFloatingScanButton) { floatingScanButtonInput = currentFloatingScanButton }
     LaunchedEffect(currentUseDynamicColor)    { useDynamicColorInput    = currentUseDynamicColor }
 
-    val prefs = remember { createAppPreferences(getPlatformContext()) }
+    val platformCtx = getPlatformContext()
+    val prefs = remember(platformCtx) { createAppPreferences(platformCtx) }
     val scope = rememberCoroutineScope()
     var defaultProjectTabInput by remember { mutableStateOf(AppPreferences.PROJECT_TAB_SAMPLES) }
     LaunchedEffect(Unit) {

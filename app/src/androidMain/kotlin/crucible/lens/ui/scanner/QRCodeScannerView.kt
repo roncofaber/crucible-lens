@@ -25,7 +25,7 @@ import java.util.concurrent.Executors
  */
 @Composable
 actual fun QRCodeScannerView(
-    modifier: Modifier = Modifier,
+    modifier: Modifier,
     onCodeScanned: (String) -> Unit
 ) {
     val context = LocalContext.current

@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.Instrument
 
 @Composable
@@ -27,8 +28,10 @@ fun InstrumentPickerField(
 
     LaunchedEffect(Unit) {
         try {
-            val resp = ApiClient.service.getInstruments()
-            instruments = if (resp.isSuccessful) resp.body() ?: emptyList() else emptyList()
+            instruments = when (val resp = ApiClient.service.getInstruments()) {
+                is crucible.lens.data.api.ApiResult.Success -> resp.data
+                is crucible.lens.data.api.ApiResult.Error -> emptyList()
+            }
         } catch (_: Exception) {
             instruments = emptyList()
         }

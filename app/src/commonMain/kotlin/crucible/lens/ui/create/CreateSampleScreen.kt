@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.SampleCreateRequest
@@ -141,7 +142,7 @@ fun CreateSampleScreen(
                     scope.launch {
                         isSaving = true
                         try {
-                            val resp = ApiClient.service.createSample(
+                            when (val resp = ApiClient.service.createSample(
                                 SampleCreateRequest(
                                     sampleName = name.trim(),
                                     sampleType = type.trim().ifBlank { null },
@@ -149,18 +150,20 @@ fun CreateSampleScreen(
                                     projectId = selectedProjectId,
                                     timestamp = timestamp.trim().ifBlank { null }
                                 )
-                            )
-                            if (resp.isSuccessful) {
-                                val sample = resp.body()
-                                val uuid = sample?.uniqueId
-                                if (uuid != null) {
-                                    CacheManager.cacheResource(uuid, sample)
-                                    // Invalidate project list so the new sample appears immediately
-                                    selectedProjectId?.let { CacheManager.clearProjectDetail(it) }
-                                    onCreated(uuid)
-                                } else snackbarHostState.showSnackbar("Created — couldn't retrieve the ID")
-                            } else {
-                                snackbarHostState.showSnackbar("Save failed (${resp.code()})")
+                            )) {
+                                is crucible.lens.data.api.ApiResult.Success -> {
+                                    val sample = resp.data
+                                    val uuid = sample.uniqueId
+                                    if (uuid != null) {
+                                        CacheManager.cacheResource(uuid, sample)
+                                        // Invalidate project list so the new sample appears immediately
+                                        selectedProjectId?.let { CacheManager.clearProjectDetail(it) }
+                                        onCreated(uuid)
+                                    } else snackbarHostState.showSnackbar("Created — couldn't retrieve the ID")
+                                }
+                                is crucible.lens.data.api.ApiResult.Error -> {
+                                    snackbarHostState.showSnackbar("Save failed (${resp.code})")
+                                }
                             }
                         } catch (e: Exception) {
                             snackbarHostState.showSnackbar("Connection error — check your network")
