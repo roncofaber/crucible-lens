@@ -118,13 +118,13 @@ class CrucibleApiService(
     }
 
     suspend fun getDatasetsByInstrument(
-        instrumentName: String,
-        limit: Int = 100000
-    ): ApiResult<List<Dataset>> = safeCall {
+        instrumentName: String
+    ): ApiResult<List<Dataset>> = fetchAllPages { limit, offset ->
         client.get("${baseUrl}datasets") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("instrument_name", instrumentName)
             url.parameters.append("limit", limit.toString())
+            url.parameters.append("offset", offset.toString())
         }.body()
     }
 
@@ -133,24 +133,24 @@ class CrucibleApiService(
     }
 
     suspend fun getSamplesByProject(
-        projectId: String,
-        limit: Int = 100000
-    ): ApiResult<List<Sample>> = safeCall {
+        projectId: String
+    ): ApiResult<List<Sample>> = fetchAllPages { limit, offset ->
         client.get("${baseUrl}samples") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("project_id", projectId)
             url.parameters.append("limit", limit.toString())
+            url.parameters.append("offset", offset.toString())
         }.body()
     }
 
     suspend fun getDatasetsByProject(
-        projectId: String,
-        limit: Int = 100000
-    ): ApiResult<List<Dataset>> = safeCall {
+        projectId: String
+    ): ApiResult<List<Dataset>> = fetchAllPages { limit, offset ->
         client.get("${baseUrl}datasets") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("project_id", projectId)
             url.parameters.append("limit", limit.toString())
+            url.parameters.append("offset", offset.toString())
         }.body()
     }
 
@@ -162,9 +162,8 @@ class CrucibleApiService(
         sessionName: String? = null,
         ownerOrcid: String? = null,
         creationTimeGte: String? = null,
-        creationTimeLte: String? = null,
-        limit: Int = 100000
-    ): ApiResult<List<Dataset>> = safeCall {
+        creationTimeLte: String? = null
+    ): ApiResult<List<Dataset>> = fetchAllPages { limit, offset ->
         client.get("${baseUrl}datasets") {
             header("Authorization", "Bearer $apiKey")
             if (projectId != null) url.parameters.append("project_id", projectId)
@@ -176,6 +175,7 @@ class CrucibleApiService(
             if (creationTimeGte != null) url.parameters.append("creation_time_gte", creationTimeGte)
             if (creationTimeLte != null) url.parameters.append("creation_time_lte", creationTimeLte)
             url.parameters.append("limit", limit.toString())
+            url.parameters.append("offset", offset.toString())
         }.body()
     }
 
@@ -184,9 +184,8 @@ class CrucibleApiService(
         sampleType: String? = null,
         ownerOrcid: String? = null,
         creationTimeGte: String? = null,
-        creationTimeLte: String? = null,
-        limit: Int = 100000
-    ): ApiResult<List<Sample>> = safeCall {
+        creationTimeLte: String? = null
+    ): ApiResult<List<Sample>> = fetchAllPages { limit, offset ->
         client.get("${baseUrl}samples") {
             header("Authorization", "Bearer $apiKey")
             if (projectId != null) url.parameters.append("project_id", projectId)
@@ -195,6 +194,7 @@ class CrucibleApiService(
             if (creationTimeGte != null) url.parameters.append("creation_time_gte", creationTimeGte)
             if (creationTimeLte != null) url.parameters.append("creation_time_lte", creationTimeLte)
             url.parameters.append("limit", limit.toString())
+            url.parameters.append("offset", offset.toString())
         }.body()
     }
 
@@ -302,6 +302,27 @@ class CrucibleApiService(
     ): ApiResult<Unit> = safeCall {
         delete("datasets/$datasetUuid/samples/$sampleUuid")
         Unit
+    }
+
+    // ── Pagination ───────────────────────────────────────────────────────────
+
+    /**
+     * Fetches all pages of a paginated endpoint by repeatedly calling [page]
+     * with increasing offsets until a page returns fewer items than the page size.
+     * The API enforces a hard cap of 1000 per request; we use 1000 as the page size.
+     */
+    private suspend inline fun <reified T> fetchAllPages(
+        pageSize: Int = 1000,
+        crossinline page: suspend (limit: Int, offset: Int) -> List<T>
+    ): ApiResult<List<T>> = safeCall {
+        val result = mutableListOf<T>()
+        var offset = 0
+        do {
+            val batch = page(pageSize, offset)
+            result.addAll(batch)
+            offset += batch.size
+        } while (batch.size >= pageSize)
+        result
     }
 }
 
