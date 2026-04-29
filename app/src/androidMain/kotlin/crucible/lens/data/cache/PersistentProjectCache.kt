@@ -21,7 +21,7 @@ actual object PersistentProjectCache {
         projects: List<Project>,
         samplesMap: Map<String, List<Sample>>,
         datasetsMap: Map<String, List<Dataset>>
-    ) = withContext(Dispatchers.IO) {
+    ) { withContext(Dispatchers.IO) {
         try {
             val summaries = projects.map { project ->
                 val samples = samplesMap[project.projectId] ?: emptyList()
@@ -36,22 +36,22 @@ actual object PersistentProjectCache {
                     datasetCount = datasets.size,
                     sampleTypes = samples.mapNotNull { it.sampleType }.distinct().sorted(),
                     measurements = datasets.mapNotNull { it.measurement }.distinct().sorted(),
-                    lastUpdated = System.currentTimeMillis()
+                    lastUpdated = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
                 )
             }
-            val cacheData = CachedProjectData(summaries = summaries, cachedAt = System.currentTimeMillis())
+            val cacheData = CachedProjectData(summaries = summaries, cachedAt = kotlinx.datetime.Clock.System.now().toEpochMilliseconds())
             File(context.filesDir, CACHE_FILE).writeText(Json.encodeToString(cacheData))
         } catch (e: Exception) {
-            Log.e("PersistentProjectCache", "Failed to save project data", e)
+            println("Failed to save project data: $e")
         }
-    }
+    } }
 
     actual suspend fun loadProjectData(context: PlatformContext): List<ProjectSummary>? = withContext(Dispatchers.IO) {
         try {
             val file = File(context.filesDir, CACHE_FILE)
             if (!file.exists()) return@withContext null
             val cacheData = Json.decodeFromString<CachedProjectData>(file.readText())
-            if (System.currentTimeMillis() - cacheData.cachedAt > MAX_CACHE_AGE_MS) {
+            if (kotlinx.datetime.Clock.System.now().toEpochMilliseconds() - cacheData.cachedAt > MAX_CACHE_AGE_MS) {
                 file.delete(); return@withContext null
             }
             cacheData.summaries
@@ -61,17 +61,17 @@ actual object PersistentProjectCache {
         }
     }
 
-    actual suspend fun clear(context: PlatformContext) = withContext(Dispatchers.IO) {
+    actual suspend fun clear(context: PlatformContext) { withContext(Dispatchers.IO) {
         try { File(context.filesDir, CACHE_FILE).delete() }
-        catch (e: Exception) { Log.e("PersistentProjectCache", "Failed to clear cache", e) }
-    }
+        catch (e: Exception) { println("Failed to clear cache: $e") }
+    } }
 
     actual suspend fun getCacheAgeHours(context: PlatformContext): Long? = withContext(Dispatchers.IO) {
         try {
             val file = File(context.filesDir, CACHE_FILE)
             if (!file.exists()) return@withContext null
             val cacheData = Json.decodeFromString<CachedProjectData>(file.readText())
-            (System.currentTimeMillis() - cacheData.cachedAt) / 3_600_000L
+            (kotlinx.datetime.Clock.System.now().toEpochMilliseconds() - cacheData.cachedAt) / 3_600_000L
         } catch (e: Exception) { null }
     }
 }
