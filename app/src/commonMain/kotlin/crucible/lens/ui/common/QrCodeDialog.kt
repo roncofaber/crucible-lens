@@ -111,24 +111,54 @@ fun QrCodeDialogWithNavigation(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (pagerState.currentPage > 0) {
-                    Icon(Icons.Default.ChevronLeft, contentDescription = "Previous",
-                        tint = MaterialTheme.colorScheme.primary)
+                    Icon(
+                        Icons.Default.ChevronLeft, contentDescription = "Previous",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
                 } else {
-                    Spacer(Modifier.size(24.dp))
+                    Spacer(Modifier.size(20.dp))
                 }
-                val current = resources.getOrNull(pagerState.currentPage)
-                Text(
-                    text = current?.name ?: "",
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                )
+                // Scrollable title with right-side fade for long names
+                key(pagerState.currentPage) {
+                    val scrollState = rememberScrollState()
+                    val showFade = scrollState.canScrollForward
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp)
+                            .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                            .drawWithContent {
+                                drawContent()
+                                if (showFade) {
+                                    drawRect(
+                                        brush = Brush.horizontalGradient(
+                                            colors = listOf(Color.Black, Color.Transparent),
+                                            startX = size.width * 0.75f,
+                                            endX = size.width
+                                        ),
+                                        blendMode = BlendMode.DstIn
+                                    )
+                                }
+                            }
+                    ) {
+                        Text(
+                            text = resources.getOrNull(pagerState.currentPage)?.name ?: "",
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip,
+                            modifier = Modifier.horizontalScroll(scrollState)
+                        )
+                    }
+                }
                 if (pagerState.currentPage < resources.size - 1) {
-                    Icon(Icons.Default.ChevronRight, contentDescription = "Next",
-                        tint = MaterialTheme.colorScheme.primary)
+                    Icon(
+                        Icons.Default.ChevronRight, contentDescription = "Next",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
                 } else {
-                    Spacer(Modifier.size(24.dp))
+                    Spacer(Modifier.size(20.dp))
                 }
             }
         },
