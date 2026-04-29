@@ -67,7 +67,7 @@ fun OrcidLoginScreen(
             WebView(
                 state = state,
                 navigator = navigator,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.weight(1f).fillMaxWidth()
             )
         }
     }
