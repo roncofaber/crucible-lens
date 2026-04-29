@@ -43,32 +43,22 @@ import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Instrument
+import crucible.lens.data.util.MONTH_NAMES
+import crucible.lens.data.util.dateGroupKey
+import crucible.lens.data.util.SortField
+import crucible.lens.data.util.SortState
+import crucible.lens.data.util.applySortState
+import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
 import kotlinx.coroutines.launch
-
-private enum class SortField(val label: String) {
-    NAME("Name"), MFID("MFID"), DATE("Date")
-}
-
-private data class SortState(val field: SortField = SortField.NAME, val ascending: Boolean = true)
 
 private enum class InstrumentDatasetGroupBy(val label: String) {
     NONE("None"), MEASUREMENT("Measurement"), PROJECT("Project"), DATE("Date"),
     SESSION("Session"), FORMAT("Format"), OWNER("Owner")
 }
 
-private val MONTH_NAMES = arrayOf("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
-
-private fun dateGroupKey(raw: String?): String {
-    if (raw == null) return "No date"
-    return try {
-        val year = raw.trim().substring(0, 4).toInt()
-        val month = raw.trim().substring(5, 7).toInt()
-        "${MONTH_NAMES[month - 1]} $year"
-    } catch (_: Exception) { "No date" }
-}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -474,20 +464,3 @@ private fun DatasetCard(dataset: Dataset, onClick: () -> Unit) {
     }
 }
 
-private fun Dataset.matchesSearch(query: String): Boolean {
-    val q = query.lowercase()
-    return name.lowercase().contains(q) ||
-        (measurement?.lowercase()?.contains(q) == true) ||
-        (sessionName?.lowercase()?.contains(q) == true) ||
-        (projectId?.lowercase()?.contains(q) == true) ||
-        uniqueId.lowercase().contains(q)
-}
-
-private fun <T> List<T>.applySortState(sortState: SortState, name: T.() -> String, mfid: T.() -> String, date: T.() -> String): List<T> {
-    val selector: (T) -> String = when (sortState.field) {
-        SortField.NAME -> name
-        SortField.MFID -> mfid
-        SortField.DATE -> date
-    }
-    return if (sortState.ascending) sortedBy { selector(it) } else sortedByDescending { selector(it) }
-}

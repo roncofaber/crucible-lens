@@ -24,6 +24,7 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Instrument
+import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
@@ -265,13 +266,3 @@ private fun InstrumentCard(
     }
 }
 
-private fun Instrument.matchesSearch(query: String): Boolean {
-    val q = query.lowercase()
-    return (instrumentName?.lowercase()?.contains(q) == true) ||
-        (instrumentType?.lowercase()?.contains(q) == true) ||
-        (manufacturer?.lowercase()?.contains(q) == true) ||
-        (model?.lowercase()?.contains(q) == true) ||
-        (location?.lowercase()?.contains(q) == true) ||
-        (owner?.lowercase()?.contains(q) == true) ||
-        uniqueId.lowercase().contains(q)
-}

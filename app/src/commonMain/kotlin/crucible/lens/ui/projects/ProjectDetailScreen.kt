@@ -53,6 +53,12 @@ import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
+import crucible.lens.data.util.MONTH_NAMES
+import crucible.lens.data.util.dateGroupKey
+import crucible.lens.data.util.SortField
+import crucible.lens.data.util.SortState
+import crucible.lens.data.util.applySortState
+import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
@@ -65,12 +71,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-
-private enum class SortField(val label: String) {
-    NAME("Name"), MFID("MFID"), DATE("Date")
-}
-
-private data class SortState(val field: SortField = SortField.NAME, val ascending: Boolean = true)
 
 private enum class SampleGroupBy(val label: String) {
     NONE("None"), TYPE("Type"), DATE("Date"), OWNER("Owner")
@@ -168,16 +168,6 @@ private fun androidx.compose.foundation.lazy.LazyListScope.loadMoreItem(
     }
 }
 
-private val MONTH_NAMES = arrayOf("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
-
-private fun dateGroupKey(raw: String?): String {
-    if (raw == null) return "No date"
-    return try {
-        val year = raw.trim().substring(0, 4).toInt()
-        val month = raw.trim().substring(5, 7).toInt()
-        "${MONTH_NAMES[month - 1]} $year"
-    } catch (_: Exception) { "No date" }
-}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -1151,51 +1141,4 @@ private fun ResourceCard(
     } // end Box
 }
 
-private fun Sample.matchesSearch(query: String): Boolean {
-    val q = query.lowercase()
-    return name.lowercase().contains(q) ||
-        (sampleType?.lowercase()?.contains(q) == true) ||
-        (projectId?.lowercase()?.contains(q) == true) ||
-        uniqueId.lowercase().contains(q) ||
-        (createdAt?.lowercase()?.contains(q) == true)
-}
-
-private fun Dataset.matchesSearch(query: String): Boolean {
-    val q = query.lowercase()
-    return name.lowercase().contains(q) ||
-        (measurement?.lowercase()?.contains(q) == true) ||
-        (instrumentName?.lowercase()?.contains(q) == true) ||
-        (sessionName?.lowercase()?.contains(q) == true) ||
-        (projectId?.lowercase()?.contains(q) == true) ||
-        uniqueId.lowercase().contains(q) ||
-        (timestamp?.lowercase()?.contains(q) == true) ||
-        (dataFormat?.lowercase()?.contains(q) == true) ||
-        (ownerOrcid?.lowercase()?.contains(q) == true) ||
-        (sourceFolder?.lowercase()?.contains(q) == true) ||
-        (fileToUpload?.lowercase()?.contains(q) == true) ||
-        (sha256Hash?.lowercase()?.contains(q) == true) ||
-        (scientificMetadata?.matchesSearch(q) == true)
-}
-
-private fun Map<String, Any?>.matchesSearch(query: String): Boolean =
-    entries.any { (key, value) ->
-        key.lowercase().contains(query) || value.matchesSearchValue(query)
-    }
-
-private fun Any?.matchesSearchValue(query: String): Boolean = when (this) {
-    null -> false
-    is String -> lowercase().contains(query)
-    is Map<*, *> -> @Suppress("UNCHECKED_CAST") (this as Map<String, Any?>).matchesSearch(query)
-    is List<*> -> any { it.matchesSearchValue(query) }
-    else -> toString().lowercase().contains(query)
-}
-
-private fun <T> List<T>.applySortState(sortState: SortState, name: T.() -> String, mfid: T.() -> String, date: T.() -> String): List<T> {
-    val selector: (T) -> String = when (sortState.field) {
-        SortField.NAME -> name
-        SortField.MFID -> mfid
-        SortField.DATE -> date
-    }
-    return if (sortState.ascending) sortedBy { selector(it) } else sortedByDescending { selector(it) }
-}
 

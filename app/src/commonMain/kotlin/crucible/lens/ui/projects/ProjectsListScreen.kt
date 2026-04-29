@@ -32,6 +32,8 @@ import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.data.cache.ProjectSummary
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
+import crucible.lens.data.model.Sample
+import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.AppScaffold
@@ -853,47 +855,4 @@ private fun CountChip(
     }
 }
 
-// Search helper functions
-private fun crucible.lens.data.model.Sample.matchesSearch(query: String): Boolean {
-    val q = query.lowercase()
-    return name.lowercase().contains(q) ||
-        (sampleType?.lowercase()?.contains(q) == true) ||
-        (projectId?.lowercase()?.contains(q) == true) ||
-        uniqueId.lowercase().contains(q) ||
-        (createdAt?.lowercase()?.contains(q) == true) ||
-        (ownerOrcid?.lowercase()?.contains(q) == true) ||
-        (keywords?.any { it.lowercase().contains(q) } == true)
-}
-
-private fun Dataset.matchesSearch(query: String): Boolean {
-    val q = query.lowercase()
-    return name.lowercase().contains(q) ||
-        (measurement?.lowercase()?.contains(q) == true) ||
-        (instrumentName?.lowercase()?.contains(q) == true) ||
-        (sessionName?.lowercase()?.contains(q) == true) ||
-        (projectId?.lowercase()?.contains(q) == true) ||
-        uniqueId.lowercase().contains(q) ||
-        (timestamp?.lowercase()?.contains(q) == true) ||
-        (dataFormat?.lowercase()?.contains(q) == true) ||
-        (ownerOrcid?.lowercase()?.contains(q) == true) ||
-        (sourceFolder?.lowercase()?.contains(q) == true) ||
-        (fileToUpload?.lowercase()?.contains(q) == true) ||
-        (sha256Hash?.lowercase()?.contains(q) == true) ||
-        (keywords?.any { it.lowercase().contains(q) } == true) ||
-        (scientificMetadata?.containsQuery(q) == true)
-}
-
-private fun Map<String, Any?>.containsQuery(q: String): Boolean =
-    entries.any { (key, value) -> key.lowercase().contains(q) || value.matchesQuery(q) }
-
-private fun Any?.matchesQuery(q: String): Boolean = when (this) {
-    null -> false
-    is String -> lowercase().contains(q)
-    is Number -> toString().contains(q)
-    is Map<*, *> -> entries.any { (k, v) ->
-        k.toString().lowercase().contains(q) || v.matchesQuery(q)
-    }
-    is List<*> -> any { it.matchesQuery(q) }
-    else -> toString().lowercase().contains(q)
-}
 

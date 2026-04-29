@@ -88,6 +88,8 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.ResourceLink
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.ThumbnailCreateRequest
+import crucible.lens.data.util.MONTH_NAMES
+import crucible.lens.data.util.dateGroupKey
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.QrCodeDialog
@@ -125,16 +127,6 @@ private fun siblingGroupLabel(groupBy: String?, resource: CrucibleResource): Str
     else -> groupBy.lowercase().replaceFirstChar { it.uppercase() }
 }
 
-private val MONTH_NAMES = arrayOf("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
-
-private fun dateGroupKey(raw: String?): String {
-    if (raw == null) return "No date"
-    return try {
-        val year = raw.trim().substring(0, 4).toInt()
-        val month = raw.trim().substring(5, 7).toInt()
-        "${MONTH_NAMES[month - 1]} $year"
-    } catch (_: Exception) { "No date" }
-}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
