@@ -2131,9 +2131,9 @@ private fun ParentDatasetsCard(
                     for (link in parents) {
                         ResourceRow(
                             icon = Icons.Default.DataObject,
-                            name = link.name,
+                            name = link.name ?: "",
                             onClick = { onNavigateToResource(link.uniqueId) },
-                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name) } }
+                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name ?: "") } }
                         )
                     }
                 }
@@ -2189,9 +2189,9 @@ private fun ChildDatasetsCard(
                     for (link in children) {
                         ResourceRow(
                             icon = Icons.Default.DataObject,
-                            name = link.name,
+                            name = link.name ?: "",
                             onClick = { onNavigateToResource(link.uniqueId) },
-                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name) } }
+                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name ?: "") } }
                         )
                     }
                 }
@@ -2247,9 +2247,9 @@ private fun LinkedSamplesCard(
                     for (link in samples) {
                         ResourceRow(
                             icon = Icons.Default.BubbleChart,
-                            name = link.name,
+                            name = link.name ?: "",
                             onClick = { onNavigateToResource(link.uniqueId) },
-                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name) } }
+                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name ?: "") } }
                         )
                     }
                 }
@@ -2305,9 +2305,9 @@ private fun LinkedDatasetsCard(
                     for (link in datasets) {
                         ResourceRow(
                             icon = Icons.Default.DataObject,
-                            name = link.name,
+                            name = link.name ?: "",
                             onClick = { onNavigateToResource(link.uniqueId) },
-                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name) } }
+                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name ?: "") } }
                         )
                     }
                 }
@@ -2363,9 +2363,9 @@ private fun ParentSamplesCard(
                     for (link in parents) {
                         ResourceRow(
                             icon = Icons.Default.BubbleChart,
-                            name = link.name,
+                            name = link.name ?: "",
                             onClick = { onNavigateToResource(link.uniqueId) },
-                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name) } }
+                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name ?: "") } }
                         )
                     }
                 }
@@ -2421,9 +2421,9 @@ private fun ChildSamplesCard(
                     for (link in children) {
                         ResourceRow(
                             icon = Icons.Default.BubbleChart,
-                            name = link.name,
+                            name = link.name ?: "",
                             onClick = { onNavigateToResource(link.uniqueId) },
-                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name) } }
+                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name ?: "") } }
                         )
                     }
                 }
