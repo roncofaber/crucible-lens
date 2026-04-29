@@ -35,7 +35,7 @@ object ApiClient {
                 })
             }
             install(Logging) {
-                level = LogLevel.NONE
+                level = LogLevel.ALL
             }
         }
 

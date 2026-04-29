@@ -62,8 +62,8 @@ data class Dataset(
 data class ResourceLink(
     @SerialName("unique_id") val uniqueId: String,
     @SerialName("resource_type") val resourceType: String,
-    @SerialName("name") val name: String,
-    @SerialName("relationship") val relationship: String  // "parent", "child", "associated"
+    @SerialName("name") val name: String? = null,
+    @SerialName("relationship") val relationship: String? = null
 )
 
 @Serializable
