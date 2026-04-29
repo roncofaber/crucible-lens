@@ -1,7 +1,7 @@
 # Platform Parity: Android vs iOS
 
 Branch: `ios-development`  
-Last updated: 2026-04-29
+Last updated: 2026-04-29 (updated after health checks + model alignment)
 
 This document captures where Android and iOS implementations differ, what is fully shared, and what remains incomplete on iOS.
 

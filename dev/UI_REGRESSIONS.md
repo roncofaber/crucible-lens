@@ -4,7 +4,7 @@ Comparison of `ios-development` (commonMain) against `main` (pure Android).
 
 ---
 
-## Fixed in this session
+## Fixed
 
 ### QrCodeDialogWithNavigation — title area degraded
 **Original**: Resource name was scrollable horizontally with a right-edge fade gradient; scroll state reset per page via `key(pagerState.currentPage)`; navigation arrows were subtle (`onSurface.copy(alpha=0.5f)`, 20dp).  
