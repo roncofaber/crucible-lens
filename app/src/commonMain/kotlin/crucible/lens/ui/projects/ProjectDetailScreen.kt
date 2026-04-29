@@ -1150,7 +1150,7 @@ private fun ResourceCard(
                     leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                     onClick = {
                         menuExpanded = false
-                        shareText(platformCtx, webUrl, project?.title ?: "")
+                        shareText(platformCtx, webUrl ?: "", "")
                     }
                 )
             }

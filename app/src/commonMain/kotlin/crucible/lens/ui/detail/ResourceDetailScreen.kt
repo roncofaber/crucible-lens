@@ -248,7 +248,7 @@ fun ResourceDetailScreen(
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
                         } catch (e: Exception) {
-                            println("\2: \$e")
+                            println("Error: $e")
                             siblingsResolved = true
                         }
                     }
@@ -306,7 +306,7 @@ fun ResourceDetailScreen(
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
                         } catch (e: Exception) {
-                            println("\2: \$e")
+                            println("Error: $e")
                             siblingsResolved = true
                         }
                     }
@@ -406,7 +406,7 @@ fun ResourceDetailScreen(
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            println("\2: \$e")
+            println("Error: $e")
             siblingsResolved = true
         }
     }
@@ -543,7 +543,7 @@ fun ResourceDetailScreen(
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    println("\2: \$e")
+                    println("Error: $e")
                 }
             }
         }
@@ -602,7 +602,7 @@ fun ResourceDetailScreen(
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    println("\2: \$e")
+                    println("Error: $e")
                     withContext(Dispatchers.Main) { loadedThumbnails[uuid] = emptyList() }
                 }
             }
@@ -1478,7 +1478,7 @@ private fun ThumbnailsSection(thumbnails: List<String>) {
                         null
                     }
                 } catch (e: Exception) {
-                    println("\2: \$e")
+                    println("Error: $e")
                     null
                 }
             }
@@ -1816,7 +1816,7 @@ private fun DatasetDetailsCard(
                             label = "Owner ORCID",
                             value = dataset.ownerOrcid,
                             onClick = {
-                                openUrl(getPlatformContext(), "https://orcid.org/${dataset.ownerOrcid}")
+                                openUrl(platformCtx, "https://orcid.org/${dataset.ownerOrcid}")
                             }
                         )
                     } else {

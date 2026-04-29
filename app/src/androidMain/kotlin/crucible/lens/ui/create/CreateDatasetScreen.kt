@@ -28,17 +28,23 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
-import coil.compose.AsyncImage
+import android.content.Context
+import android.net.Uri
+import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
+import coil3.compose.AsyncImage
 import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.util.DuplicateHolder
+import crucible.lens.platform.currentIsoDateTime
 import crucible.lens.ui.common.DateTimePickerField
 import crucible.lens.ui.common.InstrumentPickerField
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -61,7 +67,7 @@ actual fun CreateDatasetScreen(
     var sessionName by remember { mutableStateOf(prefill?.sessionName ?: "") }
     var dataType by remember { mutableStateOf("") }
     var metadataText by remember { mutableStateOf("") }
-    var timestamp by remember { mutableStateOf(prefill?.timestamp ?: LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)) }
+    var timestamp by remember { mutableStateOf(prefill?.timestamp ?: currentIsoDateTime()) }
     var selectedProjectId by remember { mutableStateOf(prefill?.projectId ?: initialProjectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
     var photoUri by remember { mutableStateOf<Uri?>(null) }
@@ -270,12 +276,13 @@ actual fun CreateDatasetScreen(
                                     scientificMetadata = parseMetadataText(metadataText)
                                 )
                             )
-                            if (!createResp.isSuccessful) {
-                                snackbarHostState.showSnackbar("Could not create dataset (${createResp.code()})")
+                            if (createResp !is ApiResult.Success) {
+                                val code = (createResp as? ApiResult.Error)?.code ?: -1
+                                snackbarHostState.showSnackbar("Could not create dataset ($code)")
                                 return@launch
                             }
-                            val newDataset = createResp.body()
-                            val newUuid = newDataset?.uniqueId
+                            val newDataset = createResp.data
+                            val newUuid = newDataset.uniqueId
                                 ?: run {
                                     snackbarHostState.showSnackbar("Created — couldn't retrieve the ID")
                                     return@launch
@@ -301,7 +308,7 @@ actual fun CreateDatasetScreen(
                                             )
                                         )
                                     }
-                                    if (!thumbResp.isSuccessful) thumbnailFailed = true
+                                    if (thumbResp !is ApiResult.Success) thumbnailFailed = true
                                 } else {
                                     thumbnailFailed = true
                                 }

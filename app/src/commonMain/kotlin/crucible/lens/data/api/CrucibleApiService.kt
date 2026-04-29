@@ -63,7 +63,7 @@ class CrucibleApiService(
     private suspend fun delete(endpoint: String): Boolean =
         client.delete("$baseUrl$endpoint") {
             header("Authorization", "Api-Key $apiKey")
-        }.status.isSuccess()
+        }.status.value in 200..299
 
     // ── Read ─────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,8 @@
 package crucible.lens.platform
 
 import android.content.ClipData
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
@@ -36,5 +38,5 @@ actual fun showToast(context: PlatformContext, message: String) {
 
 actual fun currentIsoDateTime(): String {
     val now = kotlinx.datetime.Clock.System.now()
-    return now.toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).toString()
+    return now.toLocalDateTime(TimeZone.currentSystemDefault()).toString()
 }

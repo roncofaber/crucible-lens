@@ -42,7 +42,7 @@ fun DateTimePickerField(
     // Creating → default to now; editing → default to existing value
     val pickerDefault = remember(parsedValue) {
         parsedValue ?: LocalDateTime.parse(
-            Instant.now().toLocalDateTime(TimeZone.UTC).toString()
+            kotlinx.datetime.Clock.System.now().toLocalDateTime(TimeZone.UTC).toString()
         )
     }
 

@@ -127,6 +127,10 @@ kotlin {
     }
 }
 
+compose.resources {
+    packageOfResClass = "crucible.lens.composeapp.generated.resources"
+}
+
 android {
     namespace = "crucible.lens"
     compileSdk = 35
