@@ -2,7 +2,7 @@ package crucible.lens.platform
 
 import androidx.compose.runtime.Composable
 
-expect class PlatformContext
+expect abstract class PlatformContext
 
 @Composable
 expect fun getPlatformContext(): PlatformContext
