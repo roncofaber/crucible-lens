@@ -216,15 +216,16 @@ fun ApiSettingsScreen(
                             modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary
                         )
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            val acc = account ?: return@Row
                             Text(
-                                "${account!!.firstName ?: ""} ${account!!.lastName ?: ""}".trim(),
+                                "${acc.firstName ?: ""} ${acc.lastName ?: ""}".trim(),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
-                            account!!.email?.let {
+                            acc.email?.let {
                                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            account!!.uniqueId?.let {
+                            acc.uniqueId?.let {
                                 Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                             }
                         }

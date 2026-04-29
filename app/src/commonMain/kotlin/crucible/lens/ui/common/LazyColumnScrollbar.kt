@@ -86,7 +86,7 @@ fun LazyColumnScrollbar(
         val secondItem = sortedVisible.drop(1).firstOrNull()
         val isStuckStickyHeader = firstItem != null && secondItem != null &&
                 (secondItem.index - firstItem.index) > 1
-        val effectiveFirstIndex = if (isStuckStickyHeader) secondItem!!.index
+        val effectiveFirstIndex = if (isStuckStickyHeader) secondItem?.index ?: listState.firstVisibleItemIndex
                                   else listState.firstVisibleItemIndex
 
         val scrollFraction = (effectiveFirstIndex.toFloat() / scrollableItems).coerceIn(0f, 1f)

@@ -123,8 +123,8 @@ class ScannerViewModel : ViewModel() {
                                 }
                                 else -> {}
                             }
-                        } catch (e: Exception) {
-                            // Logging stubbed for commonMain
+                        } catch (_: Exception) {
+                            // Background preload — silently ignore failures
                         }
                     }
                 }

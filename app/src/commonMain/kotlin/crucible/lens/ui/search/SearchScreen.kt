@@ -143,7 +143,8 @@ fun SearchScreen(
                 datasets.addAll(d.map { (CacheManager.getResource(it.uniqueId) as? Dataset) ?: it })
                 allSamples = samples.toList()
                 allDatasets = datasets.toList()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
+                // Skip projects that fail to load — continue searching others
             }
             loadedCount++
         }
@@ -325,12 +326,12 @@ fun SearchScreen(
                             }
                             if (!metadataResults.isNullOrEmpty()) {
                                 Text(
-                                    "Server Metadata (${metadataResults!!.size})",
+                                    "Server Metadata (${metadataResults?.size})",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.primary
                                 )
-                                metadataResults!!.forEach { result ->
+                                metadataResults?.forEach { result ->
                                     val cachedDataset = CacheManager.getResource(result.datasetMfid) as? Dataset
                                     val displayName = cachedDataset?.name ?: result.datasetMfid
                                     val snippet = result.scientificMetadata
@@ -449,13 +450,13 @@ fun SearchScreen(
                     if (!metadataResults.isNullOrEmpty()) {
                         item {
                             Text(
-                                "Server Metadata (${metadataResults!!.size})",
+                                "Server Metadata (${metadataResults?.size})",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
-                        items(metadataResults!!, key = { it.datasetMfid }) { result ->
+                        items(metadataResults ?: emptyList(), key = { it.datasetMfid }) { result ->
                             val cachedDataset = CacheManager.getResource(result.datasetMfid) as? Dataset
                             val displayName = cachedDataset?.name ?: result.datasetMfid
                             val snippet = result.scientificMetadata
