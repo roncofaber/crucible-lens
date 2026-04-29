@@ -8,6 +8,8 @@ sealed class CrucibleResource {
     abstract val uniqueId: String
     abstract val name: String
     abstract val description: String?
+    // keywords are served by a separate endpoint; inline here for future API support
+    open val keywords: List<String>? get() = null
 }
 
 @Serializable
@@ -18,15 +20,12 @@ data class Sample(
     @SerialName("sample_type") val sampleType: String? = null,
     @SerialName("owner_orcid") val ownerOrcid: String? = null,
     @SerialName("project_id") val projectId: String? = null,
-    @SerialName("datasets") val datasets: List<DatasetReference>? = null,
-    @SerialName("keywords") val keywords: List<String>? = null,
-    @SerialName("date_created") val createdAt: String? = null,
     @SerialName("timestamp") val timestamp: String? = null,
-    @SerialName("owner_user_id") val ownerUserId: Int? = null,
     @SerialName("creation_time") val creationTime: String? = null,
     @SerialName("modification_time") val modificationTime: String? = null,
-    @SerialName("id") val internalId: Int? = null,
     @SerialName("resource_type") val resourceType: String? = null,
+    @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null,
+    @SerialName("datasets") val datasets: List<DatasetReference>? = null,
     @SerialName("deletion_request") val deletionRequest: JsonObject? = null,
     @SerialName("links") val links: List<ResourceLink>? = null
 ) : CrucibleResource() {
@@ -44,7 +43,6 @@ data class Dataset(
     @SerialName("owner_orcid") val ownerOrcid: String? = null,
     @SerialName("data_format") val dataFormat: String? = null,
     @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null,
-    @SerialName("keywords") val keywords: List<String>? = null,
     @SerialName("timestamp") val timestamp: String? = null,
     @SerialName("creation_time") val creationTime: String? = null,
     @SerialName("modification_time") val modificationTime: String? = null,
@@ -55,6 +53,9 @@ data class Dataset(
     @SerialName("file_to_upload") val fileToUpload: String? = null,
     @SerialName("size") val size: Long? = null,
     @SerialName("sha256_hash_file_to_upload") val sha256Hash: String? = null,
+    @SerialName("ingestion_githash") val ingestionGithash: String? = null,
+    @SerialName("ingestion_class") val ingestionClass: String? = null,
+    @SerialName("keywords") override val keywords: List<String>? = null,
     @SerialName("resource_type") val resourceType: String? = null,
     @SerialName("deletion_request") val deletionRequest: JsonObject? = null,
     @SerialName("links") val links: List<ResourceLink>? = null
@@ -67,7 +68,7 @@ data class ResourceLink(
     @SerialName("unique_id") val uniqueId: String,
     @SerialName("resource_type") val resourceType: String,
     @SerialName("name") val name: String? = null,
-    @SerialName("relationship") val relationship: String? = null
+    @SerialName("relationship") val relationship: String = "associated"
 )
 
 @Serializable
@@ -87,6 +88,7 @@ data class SampleReference(
 @Serializable
 data class Thumbnail(
     @SerialName("thumbnail_b64str") val thumbnailB64: String,
+    @SerialName("thumbnail_name") val thumbnailName: String? = null,
     @SerialName("dataset_id") val datasetId: Int? = null
 )
 
