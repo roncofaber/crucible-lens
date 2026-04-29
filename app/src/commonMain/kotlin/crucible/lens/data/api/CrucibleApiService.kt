@@ -13,8 +13,12 @@ import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.model.ThumbnailCreateRequest
+import crucible.lens.data.model.PaginatedResponse
 import crucible.lens.data.model.UserLead
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlin.math.ceil
 import io.ktor.client.call.body
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -125,7 +129,7 @@ class CrucibleApiService(
             url.parameters.append("instrument_name", instrumentName)
             url.parameters.append("limit", limit.toString())
             url.parameters.append("offset", offset.toString())
-        }.body()
+        }.body<PaginatedResponse<Dataset>>()
     }
 
     suspend fun getProjects(): ApiResult<List<Project>> = safeCall {
@@ -140,7 +144,7 @@ class CrucibleApiService(
             url.parameters.append("project_id", projectId)
             url.parameters.append("limit", limit.toString())
             url.parameters.append("offset", offset.toString())
-        }.body()
+        }.body<PaginatedResponse<Sample>>()
     }
 
     suspend fun getDatasetsByProject(
@@ -151,7 +155,7 @@ class CrucibleApiService(
             url.parameters.append("project_id", projectId)
             url.parameters.append("limit", limit.toString())
             url.parameters.append("offset", offset.toString())
-        }.body()
+        }.body<PaginatedResponse<Dataset>>()
     }
 
     suspend fun getFilteredDatasets(
@@ -176,7 +180,7 @@ class CrucibleApiService(
             if (creationTimeLte != null) url.parameters.append("creation_time_lte", creationTimeLte)
             url.parameters.append("limit", limit.toString())
             url.parameters.append("offset", offset.toString())
-        }.body()
+        }.body<PaginatedResponse<Dataset>>()
     }
 
     suspend fun getFilteredSamples(
@@ -195,7 +199,7 @@ class CrucibleApiService(
             if (creationTimeLte != null) url.parameters.append("creation_time_lte", creationTimeLte)
             url.parameters.append("limit", limit.toString())
             url.parameters.append("offset", offset.toString())
-        }.body()
+        }.body<PaginatedResponse<Sample>>()
     }
 
     // ── Write ────────────────────────────────────────────────────────────────
@@ -307,22 +311,27 @@ class CrucibleApiService(
     // ── Pagination ───────────────────────────────────────────────────────────
 
     /**
-     * Fetches all pages of a paginated endpoint by repeatedly calling [page]
-     * with increasing offsets until a page returns fewer items than the page size.
-     * The API enforces a hard cap of 1000 per request; we use 1000 as the page size.
+     * Fetches all pages of a paginated envelope endpoint in parallel.
+     * Fetches page 0 first to get [total], then fires all remaining pages
+     * concurrently with limit=1000. Results are concatenated in order.
      */
     private suspend inline fun <reified T> fetchAllPages(
         pageSize: Int = 1000,
-        crossinline page: suspend (limit: Int, offset: Int) -> List<T>
+        crossinline page: suspend (limit: Int, offset: Int) -> PaginatedResponse<T>
     ): ApiResult<List<T>> = safeCall {
-        val result = mutableListOf<T>()
-        var offset = 0
-        do {
-            val batch = page(pageSize, offset)
-            result.addAll(batch)
-            offset += batch.size
-        } while (batch.size >= pageSize)
-        result
+        coroutineScope {
+            val first = page(pageSize, 0)
+            val total = first.total
+            val remaining = total - first.items.size
+            if (remaining <= 0) return@coroutineScope first.items
+
+            val extraPages = ceil(remaining / pageSize.toDouble()).toInt()
+            val rest = (1..extraPages)
+                .map { pageIndex -> async { page(pageSize, pageIndex * pageSize).items } }
+                .flatMap { it.await() }
+
+            first.items + rest
+        }
     }
 }
 

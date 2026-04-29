@@ -170,6 +170,14 @@ data class Instrument(
     @SerialName("resource_type") val resourceType: String? = null
 )
 
+@Serializable
+data class PaginatedResponse<T>(
+    @SerialName("total") val total: Int,
+    @SerialName("limit") val limit: Int,
+    @SerialName("offset") val offset: Int,
+    @SerialName("items") val items: List<T>
+)
+
 // ── Write request bodies ──────────────────────────────────────────────────────
 
 @Serializable
