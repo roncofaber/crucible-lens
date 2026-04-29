@@ -9,15 +9,15 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ProjectSummary(
     val projectId: String,
-    val projectName: String?,
-    val description: String?,
-    val projectLeadEmail: String?,
-    val createdAt: String?,
-    val sampleCount: Int,
-    val datasetCount: Int,
-    val sampleTypes: List<String>,
-    val measurements: List<String>,
-    val lastUpdated: Long
+    val projectName: String? = null,
+    val description: String? = null,
+    val projectLeadEmail: String? = null,
+    val createdAt: String? = null,
+    val sampleCount: Int = 0,
+    val datasetCount: Int = 0,
+    val sampleTypes: List<String> = emptyList(),
+    val measurements: List<String> = emptyList(),
+    val lastUpdated: Long = 0L
 )
 
 @Serializable

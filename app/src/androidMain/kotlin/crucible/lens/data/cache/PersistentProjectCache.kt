@@ -9,6 +9,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+
+private val json = Json { ignoreUnknownKeys = true }
 import java.io.File
 
 private const val CACHE_FILE = "projects_cache.json"
@@ -40,7 +42,7 @@ actual object PersistentProjectCache {
                 )
             }
             val cacheData = CachedProjectData(summaries = summaries, cachedAt = kotlinx.datetime.Clock.System.now().toEpochMilliseconds())
-            File(context.filesDir, CACHE_FILE).writeText(Json.encodeToString(cacheData))
+            File(context.filesDir, CACHE_FILE).writeText(json.encodeToString(cacheData))
         } catch (e: Exception) {
             println("Failed to save project data: $e")
         }
@@ -50,7 +52,7 @@ actual object PersistentProjectCache {
         try {
             val file = File(context.filesDir, CACHE_FILE)
             if (!file.exists()) return@withContext null
-            val cacheData = Json.decodeFromString<CachedProjectData>(file.readText())
+            val cacheData = json.decodeFromString<CachedProjectData>(file.readText())
             if (kotlinx.datetime.Clock.System.now().toEpochMilliseconds() - cacheData.cachedAt > MAX_CACHE_AGE_MS) {
                 file.delete(); return@withContext null
             }
@@ -70,7 +72,7 @@ actual object PersistentProjectCache {
         try {
             val file = File(context.filesDir, CACHE_FILE)
             if (!file.exists()) return@withContext null
-            val cacheData = Json.decodeFromString<CachedProjectData>(file.readText())
+            val cacheData = json.decodeFromString<CachedProjectData>(file.readText())
             (kotlinx.datetime.Clock.System.now().toEpochMilliseconds() - cacheData.cachedAt) / 3_600_000L
         } catch (e: Exception) { null }
     }
