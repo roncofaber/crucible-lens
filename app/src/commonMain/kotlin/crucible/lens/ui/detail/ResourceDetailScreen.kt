@@ -88,6 +88,7 @@ import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.util.MONTH_NAMES
 import crucible.lens.data.util.dateGroupKey
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.fadeEndEdge
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.QrCodeDialog
 import crucible.lens.ui.common.QrCodeDialogWithNavigation
@@ -1351,10 +1352,11 @@ private fun BasicInfoCard(
                 label = "resource_name"
             ) { name ->
                 val nameScrollState = rememberScrollState()
+                var nameOverflows by remember(name) { mutableStateOf(false) }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .fadeEndEdge(nameScrollState.canScrollForward)
+                        .fadeEndEdge(nameOverflows && nameScrollState.canScrollForward)
                 ) {
                     Text(
                         text = name,
@@ -1623,7 +1625,6 @@ private fun SampleDetailsCard(
                     }
                     InfoRow(icon = Icons.Default.Schedule, label = "Created at", value = formatDateTime(sample.creationTime))
                     InfoRow(icon = Icons.Default.Update, label = "Modified at", value = formatDateTime(sample.modificationTime))
-                    InfoRow(icon = Icons.Default.Numbers, label = "Internal ID", value = sample.internalId?.toString() ?: "None")
                 }
             }
 

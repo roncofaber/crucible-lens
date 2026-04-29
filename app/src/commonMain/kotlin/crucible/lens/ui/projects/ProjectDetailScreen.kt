@@ -57,6 +57,7 @@ import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.fadeEndEdge
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.ScrollToTopButton

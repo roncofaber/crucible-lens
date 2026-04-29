@@ -22,7 +22,6 @@ fun Sample.matchesSearch(query: String): Boolean {
         (sampleType?.lowercase()?.contains(q) == true) ||
         (projectId?.lowercase()?.contains(q) == true) ||
         uniqueId.lowercase().contains(q) ||
-        (createdAt?.lowercase()?.contains(q) == true) ||
         (ownerOrcid?.lowercase()?.contains(q) == true) ||
         (keywords?.any { it.lowercase().contains(q) } == true)
 }
