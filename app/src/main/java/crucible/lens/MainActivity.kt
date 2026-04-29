@@ -14,6 +14,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.navigation.compose.rememberNavController
 import crucible.lens.data.api.ApiClient
+import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.network.ConnectivityObserver
 import crucible.lens.data.preferences.PreferencesManager
 import crucible.lens.ui.navigation.NavGraph
@@ -186,12 +187,14 @@ class MainActivity : ComponentActivity() {
                         scope.launch {
                             preferencesManager.saveApiKey(key)
                             ApiClient.setApiKey(key)
+                            CacheManager.clearAll()
                         }
                     },
                     onApiBaseUrlSave = { url ->
                         scope.launch {
                             preferencesManager.saveApiBaseUrl(url)
                             ApiClient.setBaseUrl(url)
+                            CacheManager.clearAll()
                         }
                     },
                     onGraphExplorerUrlSave = { url ->
