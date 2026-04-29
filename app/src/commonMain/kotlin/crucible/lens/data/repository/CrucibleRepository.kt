@@ -101,27 +101,12 @@ class CrucibleRepository(private val api: CrucibleApiService) {
         }
     }
 
-    // Fetch dataset and its scientific metadata in parallel, then merge.
-    private suspend fun fetchDatasetWithMetadata(uuid: String): Dataset? = coroutineScope {
-        val datasetDeferred = async { api.getDataset(uuid, includeMetadata = true) }
-        val metaDeferred = async {
-            try {
-                api.getDatasetScientificMetadata(uuid)
-            } catch (e: Exception) {
-                ApiResult.Error(-1, e.message ?: "Unknown error")
-            }
-        }
-        val datasetResult = datasetDeferred.await()
-        val dataset = when (datasetResult) {
-            is ApiResult.Success -> datasetResult.data
-            is ApiResult.Error -> return@coroutineScope null
-        }
-        val metaResult = metaDeferred.await()
-        val meta = when (metaResult) {
-            is ApiResult.Success -> metaResult.data
+    // include_metadata=true returns scientific metadata inline — no separate call needed.
+    private suspend fun fetchDatasetWithMetadata(uuid: String): Dataset? {
+        return when (val result = api.getDataset(uuid, includeMetadata = true)) {
+            is ApiResult.Success -> result.data
             is ApiResult.Error -> null
         }
-        if (meta != null) dataset.copy(scientificMetadata = meta) else dataset
     }
 
     suspend fun fetchThumbnails(datasetUuid: String): List<String> = withContext(Dispatchers.IO) {

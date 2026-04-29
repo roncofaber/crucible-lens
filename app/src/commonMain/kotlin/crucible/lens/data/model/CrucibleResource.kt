@@ -13,7 +13,7 @@ sealed class CrucibleResource {
 @Serializable
 data class Sample(
     @SerialName("unique_id") override val uniqueId: String,
-    @SerialName("sample_name") override val name: String,
+    @SerialName("sample_name") val sampleName: String? = null,
     @SerialName("description") override val description: String? = null,
     @SerialName("sample_type") val sampleType: String? = null,
     @SerialName("owner_orcid") val ownerOrcid: String? = null,
@@ -29,12 +29,14 @@ data class Sample(
     @SerialName("resource_type") val resourceType: String? = null,
     @SerialName("deletion_request") val deletionRequest: JsonObject? = null,
     @SerialName("links") val links: List<ResourceLink>? = null
-) : CrucibleResource()
+) : CrucibleResource() {
+    override val name: String get() = sampleName ?: uniqueId
+}
 
 @Serializable
 data class Dataset(
     @SerialName("unique_id") override val uniqueId: String,
-    @SerialName("dataset_name") override val name: String,
+    @SerialName("dataset_name") val datasetName: String? = null,
     @SerialName("description") override val description: String? = null,
     @SerialName("measurement") val measurement: String? = null,
     @SerialName("project_id") val projectId: String? = null,
@@ -56,7 +58,9 @@ data class Dataset(
     @SerialName("resource_type") val resourceType: String? = null,
     @SerialName("deletion_request") val deletionRequest: JsonObject? = null,
     @SerialName("links") val links: List<ResourceLink>? = null
-) : CrucibleResource()
+) : CrucibleResource() {
+    override val name: String get() = datasetName ?: uniqueId
+}
 
 @Serializable
 data class ResourceLink(
