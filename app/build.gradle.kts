@@ -141,12 +141,12 @@ compose.resources {
 
 android {
     namespace = "crucible.lens"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "crucible.lens"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 4
         versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
