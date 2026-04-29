@@ -9,9 +9,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.io.File
 
 private val json = Json { ignoreUnknownKeys = true }
-import java.io.File
 
 private const val CACHE_FILE = "projects_cache.json"
 private const val MAX_CACHE_AGE_MS = 24 * 60 * 60 * 1000L
