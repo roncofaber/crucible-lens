@@ -25,7 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Image
 import crucible.lens.data.model.CrucibleResource
-import network.chaintech.qr_kit.rememberQrKitPainter
+import qrgenerator.qrkitpainter.rememberQrKitPainter
 
 @Composable
 fun QrCodeDialog(mfid: String, name: String, onDismiss: () -> Unit) {

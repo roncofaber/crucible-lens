@@ -547,7 +547,7 @@ fun ProjectsListScreen(
                                 state = dismissState,
                                 enableDismissFromStartToEnd = false,
                                 enableDismissFromEndToStart = true,
-                                modifier = Modifier.animateItemPlacement(
+                                modifier = Modifier.animateItem(
                                     spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
                                 ),
                                 backgroundContent = {
@@ -642,7 +642,7 @@ fun ProjectsListScreen(
                                         state = dismissState,
                                         enableDismissFromStartToEnd = true,
                                         enableDismissFromEndToStart = false,
-                                        modifier = Modifier.animateItemPlacement(
+                                        modifier = Modifier.animateItem(
                                             spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
                                         ),
                                         backgroundContent = {
