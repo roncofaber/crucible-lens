@@ -35,14 +35,14 @@ class CrucibleApiService(
 
     private suspend inline fun <reified T> get(endpoint: String): T =
         client.get("$baseUrl$endpoint") {
-            header("Authorization", "Api-Key $apiKey")
+            header("Authorization", "Bearer $apiKey")
         }.body()
 
     private suspend inline fun <reified T> post(
         endpoint: String,
         body: Any? = null
     ): T = client.post("$baseUrl$endpoint") {
-        header("Authorization", "Api-Key $apiKey")
+        header("Authorization", "Bearer $apiKey")
         if (body != null) {
             contentType(ContentType.Application.Json)
             setBody(body)
@@ -53,7 +53,7 @@ class CrucibleApiService(
         endpoint: String,
         body: Any? = null
     ): T = client.patch("$baseUrl$endpoint") {
-        header("Authorization", "Api-Key $apiKey")
+        header("Authorization", "Bearer $apiKey")
         if (body != null) {
             contentType(ContentType.Application.Json)
             setBody(body)
@@ -62,7 +62,7 @@ class CrucibleApiService(
 
     private suspend fun delete(endpoint: String): Boolean =
         client.delete("$baseUrl$endpoint") {
-            header("Authorization", "Api-Key $apiKey")
+            header("Authorization", "Bearer $apiKey")
         }.status.value in 200..299
 
     // ── Read ─────────────────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ class CrucibleApiService(
         includeLinks: Boolean = true
     ): ApiResult<Sample> = safeCall {
         client.get("${baseUrl}samples/$uuid") {
-            header("Authorization", "Api-Key $apiKey")
+            header("Authorization", "Bearer $apiKey")
             url.parameters.append("include_links", includeLinks.toString())
         }.body()
     }
@@ -91,7 +91,7 @@ class CrucibleApiService(
         includeMetadata: Boolean? = null
     ): ApiResult<Dataset> = safeCall {
         client.get("${baseUrl}datasets/$uuid") {
-            header("Authorization", "Api-Key $apiKey")
+            header("Authorization", "Bearer $apiKey")
             url.parameters.append("include_links", includeLinks.toString())
             if (includeMetadata != null) {
                 url.parameters.append("include_metadata", includeMetadata.toString())
@@ -120,7 +120,7 @@ class CrucibleApiService(
         limit: Int = 100000
     ): ApiResult<List<Dataset>> = safeCall {
         client.get("${baseUrl}datasets") {
-            header("Authorization", "Api-Key $apiKey")
+            header("Authorization", "Bearer $apiKey")
             url.parameters.append("instrument_name", instrumentName)
             url.parameters.append("limit", limit.toString())
         }.body()
@@ -135,7 +135,7 @@ class CrucibleApiService(
         limit: Int = 100000
     ): ApiResult<List<Sample>> = safeCall {
         client.get("${baseUrl}samples") {
-            header("Authorization", "Api-Key $apiKey")
+            header("Authorization", "Bearer $apiKey")
             url.parameters.append("project_id", projectId)
             url.parameters.append("limit", limit.toString())
         }.body()
@@ -146,7 +146,7 @@ class CrucibleApiService(
         limit: Int = 100000
     ): ApiResult<List<Dataset>> = safeCall {
         client.get("${baseUrl}datasets") {
-            header("Authorization", "Api-Key $apiKey")
+            header("Authorization", "Bearer $apiKey")
             url.parameters.append("project_id", projectId)
             url.parameters.append("limit", limit.toString())
         }.body()
@@ -164,7 +164,7 @@ class CrucibleApiService(
         limit: Int = 100000
     ): ApiResult<List<Dataset>> = safeCall {
         client.get("${baseUrl}datasets") {
-            header("Authorization", "Api-Key $apiKey")
+            header("Authorization", "Bearer $apiKey")
             if (projectId != null) url.parameters.append("project_id", projectId)
             if (measurement != null) url.parameters.append("measurement", measurement)
             if (instrumentName != null) url.parameters.append("instrument_name", instrumentName)
@@ -186,7 +186,7 @@ class CrucibleApiService(
         limit: Int = 100000
     ): ApiResult<List<Sample>> = safeCall {
         client.get("${baseUrl}samples") {
-            header("Authorization", "Api-Key $apiKey")
+            header("Authorization", "Bearer $apiKey")
             if (projectId != null) url.parameters.append("project_id", projectId)
             if (sampleType != null) url.parameters.append("sample_type", sampleType)
             if (ownerOrcid != null) url.parameters.append("owner_orcid", ownerOrcid)
@@ -218,7 +218,7 @@ class CrucibleApiService(
         reason: String? = null
     ): ApiResult<Unit> = safeCall {
         client.post("${baseUrl}deletion_requests") {
-            header("Authorization", "Api-Key $apiKey")
+            header("Authorization", "Bearer $apiKey")
             url.parameters.append("resource_id", resourceId)
             if (reason != null) url.parameters.append("reason", reason)
         }
@@ -233,7 +233,7 @@ class CrucibleApiService(
         limit: Int = 50
     ): ApiResult<List<MetadataSearchResult>> = safeCall {
         client.get("${baseUrl}scientific_metadata/search") {
-            header("Authorization", "Api-Key $apiKey")
+            header("Authorization", "Bearer $apiKey")
             url.parameters.append("q", query)
             url.parameters.append("limit", limit.toString())
         }.body()
