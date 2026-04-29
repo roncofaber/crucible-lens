@@ -525,13 +525,8 @@ fun ResourceDetailScreen(
                 try {
                     val enriched: CrucibleResource? = when (pageResource) {
                         is Sample -> (ApiClient.service.getSample(uuid) as? ApiResult.Success)?.data
-                        is Dataset -> kotlinx.coroutines.coroutineScope {
-                            val dsDeferred   = async { ApiClient.service.getDataset(uuid, includeMetadata = true) }
-                            val metaDeferred = async { try { ApiClient.service.getDatasetScientificMetadata(uuid) } catch (_: Exception) { null } }
-                            val ds   = (dsDeferred.await() as? ApiResult.Success)?.data
-                            val meta = (metaDeferred.await() as? ApiResult.Success)?.data?.takeIf { it.isNotEmpty() }
-                            if (ds != null && !meta.isNullOrEmpty()) ds.copy(scientificMetadata = meta) else ds
-                        }
+                        is Dataset ->
+                            (ApiClient.service.getDataset(uuid, includeMetadata = true) as? ApiResult.Success)?.data
                     }
                     withContext(Dispatchers.Main) {
                         enrichedUuids.add(uuid)
