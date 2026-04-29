@@ -8,9 +8,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.ConcurrentHashMap
-
-private val projectFetchMutexes = ConcurrentHashMap<String, Mutex>()
+private val projectFetchMutexes = mutableMapOf<String, Mutex>()
 
 /**
  * Fetches samples and datasets for a project in parallel, using the cache when available.

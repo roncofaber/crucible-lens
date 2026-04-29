@@ -34,7 +34,6 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,12 +59,15 @@ private enum class InstrumentDatasetGroupBy(val label: String) {
     SESSION("Session"), FORMAT("Format"), OWNER("Owner")
 }
 
+private val MONTH_NAMES = arrayOf("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+
 private fun dateGroupKey(raw: String?): String {
     if (raw == null) return "No date"
-    val fmt = java.time.format.DateTimeFormatter.ofPattern("MMM yyyy")
-    return try { fmt.format(java.time.OffsetDateTime.parse(raw.trim())) }
-    catch (_: Exception) { try { fmt.format(java.time.LocalDateTime.parse(raw.trim())) }
-    catch (_: Exception) { "No date" } }
+    return try {
+        val year = raw.trim().substring(0, 4).toInt()
+        val month = raw.trim().substring(5, 7).toInt()
+        "${MONTH_NAMES[month - 1]} $year"
+    } catch (_: Exception) { "No date" }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -91,7 +93,6 @@ fun InstrumentDetailScreen(
 
     var overflowMenuExpanded by remember { mutableStateOf(false) }
     var fromCache by remember { mutableStateOf(false) }
-    val context = LocalContext.current
     val listState = rememberLazyListState()
     val pullRefreshState = rememberPullToRefreshState()
     val scope = rememberCoroutineScope()
@@ -448,7 +449,6 @@ private fun InstrumentHeader(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DatasetCard(dataset: Dataset, onClick: () -> Unit) {
-    val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
     Box {
         Card(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = { menuExpanded = true }), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
@@ -468,8 +468,6 @@ private fun DatasetCard(dataset: Dataset, onClick: () -> Unit) {
                 leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                 onClick = {
                     menuExpanded = false
-                    
-                    clipboard?.setPrimaryClip(ClipData.newPlainText("ID", dataset.uniqueId))
                     copyToClipboard(getPlatformContext(), dataset.uniqueId)
                 }
             )

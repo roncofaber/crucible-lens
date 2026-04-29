@@ -25,8 +25,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalContext
-import java.util.concurrent.atomic.AtomicInteger
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.cache.PersistentProjectCache
@@ -53,7 +51,7 @@ fun ProjectsListScreen(
     archivedProjects: Set<String> = emptySet(),
     onToggleArchive: (String) -> Unit = {},
 ) {
-    val context = LocalContext.current
+    val platformContext = getPlatformContext()
     var projects by remember { mutableStateOf<List<Project>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -74,7 +72,7 @@ fun ProjectsListScreen(
 
     // Load persistent cache immediately on startup for instant display
     LaunchedEffect(Unit) {
-        persistentSummaries = PersistentProjectCache.loadProjectData(context)
+        persistentSummaries = PersistentProjectCache.loadProjectData(platformContext)
         // If we have persistent cache, populate counts immediately
         persistentSummaries?.let { summaries ->
             projectCounts = summaries.associate {
@@ -166,7 +164,7 @@ fun ProjectsListScreen(
                     }
                 }
 
-                PersistentProjectCache.saveProjectData(context, currentProjects, samplesMap, datasetsMap)
+                PersistentProjectCache.saveProjectData(platformContext, currentProjects, samplesMap, datasetsMap)
             } catch (e: Exception) {
                 // Fail silently
             }
@@ -184,13 +182,13 @@ fun ProjectsListScreen(
                 .thenBy { it.projectId in archivedProjects })
 
         // Track consecutive failures to stop on network errors (thread-safe for concurrent launches)
-        val consecutiveFailures = AtomicInteger(0)
+        var consecutiveFailures = 0
         val maxConsecutiveFailures = 5
 
         // Process in small batches to avoid overwhelming the device
         prioritizedProjects.chunked(5).forEach { batch ->
             // Stop if we've had too many consecutive failures (likely network issue)
-            if (consecutiveFailures.get() >= maxConsecutiveFailures) {
+            if (consecutiveFailures >= maxConsecutiveFailures) {
                 return@LaunchedEffect
             }
             batch.forEach { project ->
@@ -217,7 +215,7 @@ fun ProjectsListScreen(
                     val sampleCount = try {
                         val resp = ApiClient.service.getSamplesByProject(project.projectId)
                         if (resp.isSuccessful) {
-                            consecutiveFailures.set(0) // Reset on success
+                            consecutiveFailures = 0 // Reset on success
                             resp.body()?.also { CacheManager.cacheProjectSamples(project.projectId, it) }?.size
                         } else null
                     } catch (e: Exception) {
@@ -228,7 +226,7 @@ fun ProjectsListScreen(
                     val datasetCount = try {
                         val resp = ApiClient.service.getDatasetsByProject(project.projectId)
                         if (resp.isSuccessful) {
-                            consecutiveFailures.set(0) // Reset on success
+                            consecutiveFailures = 0 // Reset on success
                             resp.body()?.also { CacheManager.cacheProjectDatasets(project.projectId, it) }?.size
                         } else null
                     } catch (e: Exception) {
@@ -238,7 +236,7 @@ fun ProjectsListScreen(
 
                     // Track failures (thread-safe increment)
                     if (hadError) {
-                        consecutiveFailures.incrementAndGet()
+                        consecutiveFailures++
                     }
 
                     // Show counts after loading

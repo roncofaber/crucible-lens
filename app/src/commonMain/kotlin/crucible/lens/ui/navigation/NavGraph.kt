@@ -67,6 +67,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 
 import kotlin.math.roundToInt
 
+private fun encodeRouteSegment(s: String) =
+    s.replace("%", "%25").replace("/", "%2F").replace("?", "%3F").replace("&", "%26").replace("=", "%3D").replace(" ", "%20")
+
 sealed class Screen(val route: String) {
     object Home : Screen("home")
     object Scanner : Screen("scanner")
@@ -81,22 +84,22 @@ sealed class Screen(val route: String) {
     }
     object Detail : Screen("detail/{mfid}?groupBy={groupBy}") {
         fun createRoute(mfid: String, groupBy: String? = null) =
-            "detail/${Uri.encode(mfid)}?groupBy=${groupBy ?: ""}"
+            "detail/${encodeRouteSegment(\1)}?groupBy=${groupBy ?: ""}"
     }
     object History : Screen("history")
     object Search : Screen("search")
     object OrcidLogin : Screen("orcid-login")
     object CreateSample : Screen("create-sample?projectId={projectId}") {
         fun createRoute(projectId: String? = null) =
-            if (projectId != null) "create-sample?projectId=${Uri.encode(projectId)}" else "create-sample?projectId="
+            if (projectId != null) "create-sample?projectId=${encodeRouteSegment(\1)}" else "create-sample?projectId="
     }
     object CreateDataset : Screen("create-dataset?projectId={projectId}") {
         fun createRoute(projectId: String? = null) =
-            if (projectId != null) "create-dataset?projectId=${Uri.encode(projectId)}" else "create-dataset?projectId="
+            if (projectId != null) "create-dataset?projectId=${encodeRouteSegment(\1)}" else "create-dataset?projectId="
     }
     object Instruments : Screen("instruments")
     object InstrumentDetail : Screen("instrument/{instrumentId}") {
-        fun createRoute(id: String) = "instrument/${Uri.encode(id)}"
+        fun createRoute(id: String) = "instrument/${encodeRouteSegment(\1)}"
     }
 }
 
@@ -309,8 +312,9 @@ fun NavGraph(
                     // If the scanned code is a URL (e.g. a graph-explorer share link),
                     // extract the last path segment as the UUID. Otherwise, use as-is.
                     val uuid = runCatching {
-                        val parsed = Uri.parse(code)
-                        if (parsed.scheme != null) parsed.lastPathSegment ?: code else code
+                        // If it looks like a URL, extract the last path segment
+                        if (code.contains("://")) code.substringAfterLast('/').substringBefore('?').trim()
+                        else code
                     }.getOrDefault(code).trim()
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 }
@@ -356,7 +360,6 @@ fun NavGraph(
         }
 
         composable(Screen.OrcidLogin.route) {
-            val context = androidx.compose.ui.platform.LocalContext.current
             OrcidLoginScreen(
                 loginUrl = "${apiBaseUrl}user_apikey",
                 onBack = { navController.popBackStack() },

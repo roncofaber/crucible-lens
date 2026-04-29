@@ -42,7 +42,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,7 +60,8 @@ import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.openUrlInBrowser
 import androidx.compose.ui.graphics.SolidColor
-import crucible.lens.data.preferences.PreferencesManager
+import crucible.lens.data.preferences.AppPreferences
+import crucible.lens.data.preferences.createAppPreferences
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
@@ -165,12 +165,15 @@ private fun androidx.compose.foundation.lazy.LazyListScope.loadMoreItem(
     }
 }
 
+private val MONTH_NAMES = arrayOf("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+
 private fun dateGroupKey(raw: String?): String {
     if (raw == null) return "No date"
-    val fmt = java.time.format.DateTimeFormatter.ofPattern("MMM yyyy")
-    return try { fmt.format(java.time.OffsetDateTime.parse(raw.trim())) }
-    catch (_: Exception) { try { fmt.format(java.time.LocalDateTime.parse(raw.trim())) }
-    catch (_: Exception) { "No date" } }
+    return try {
+        val year = raw.trim().substring(0, 4).toInt()
+        val month = raw.trim().substring(5, 7).toInt()
+        "${MONTH_NAMES[month - 1]} $year"
+    } catch (_: Exception) { "No date" }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class, ExperimentalFoundationApi::class)
@@ -193,8 +196,7 @@ fun ProjectDetailScreen(
         CacheManager.getProjects()?.find { it.projectId == projectId }
     }
 
-    val context = LocalContext.current
-    val prefs = remember { PreferencesManager(context) }
+    val prefs = remember { createAppPreferences(getPlatformContext()) }
 
     var samples by remember { mutableStateOf<List<Sample>?>(null) }
     var datasets by remember { mutableStateOf<List<Dataset>?>(null) }
@@ -213,7 +215,7 @@ fun ProjectDetailScreen(
         sampleGroupBy = SampleGroupBy.valueOf(prefs.sampleGroupBy.first())
         datasetGroupBy = DatasetGroupBy.valueOf(prefs.datasetGroupBy.first())
         val tab = prefs.defaultProjectTab.first()
-        if (tab == PreferencesManager.PROJECT_TAB_DATASETS) {
+        if (tab == AppPreferences.PROJECT_TAB_DATASETS) {
             pagerState.scrollToPage(1)
         }
     }
@@ -313,7 +315,6 @@ fun ProjectDetailScreen(
                     }
                 },
                 actions = {
-                    val topBarContext = LocalContext.current
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
                         IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
                             Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
@@ -342,7 +343,7 @@ fun ProjectDetailScreen(
                                     leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
                                     onClick = {
                                         topBarMenuExpanded = false
-                                        openUrlInBrowser(topBarContext, "$graphExplorerUrl/$projectId")
+                                        openUrlInBrowser("$graphExplorerUrl/$projectId")
                                     }
                                 )
                                 DropdownMenuItem(
@@ -1094,7 +1095,6 @@ private fun ResourceCard(
     resourceType: String = "sample",
     onClick: () -> Unit
 ) {
-    val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
 
     val webUrl = if (projectId != null && graphExplorerUrl.isNotBlank()) {
@@ -1176,8 +1176,6 @@ private fun ResourceCard(
                     leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                     onClick = {
                         menuExpanded = false
-                        val intent = Intent().apply {
-                        }
                         shareText(getPlatformContext(), webUrl, project?.title ?: "")
                     }
                 )

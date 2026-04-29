@@ -15,8 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.toColorInt
-import crucible.lens.data.preferences.PreferencesManager
+import crucible.lens.data.preferences.AppPreferences
+import crucible.lens.data.preferences.createAppPreferences
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.supportsDynamicColor
 import kotlinx.coroutines.flow.first
@@ -55,10 +55,9 @@ fun AppearanceSettingsScreen(
     LaunchedEffect(currentFloatingScanButton) { floatingScanButtonInput = currentFloatingScanButton }
     LaunchedEffect(currentUseDynamicColor)    { useDynamicColorInput    = currentUseDynamicColor }
 
-    val context = getPlatformContext()
-    val prefs = remember { PreferencesManager(context) }
+    val prefs = remember { createAppPreferences(getPlatformContext()) }
     val scope = rememberCoroutineScope()
-    var defaultProjectTabInput by remember { mutableStateOf(PreferencesManager.PROJECT_TAB_SAMPLES) }
+    var defaultProjectTabInput by remember { mutableStateOf(AppPreferences.PROJECT_TAB_SAMPLES) }
     LaunchedEffect(Unit) {
         defaultProjectTabInput = prefs.defaultProjectTab.first()
     }
@@ -331,8 +330,8 @@ fun AppearanceSettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         listOf(
-                            PreferencesManager.PROJECT_TAB_SAMPLES to "Samples",
-                            PreferencesManager.PROJECT_TAB_DATASETS to "Datasets"
+                            AppPreferences.PROJECT_TAB_SAMPLES to "Samples",
+                            AppPreferences.PROJECT_TAB_DATASETS to "Datasets"
                         ).forEach { (value, label) ->
                             FilterChip(
                                 selected = defaultProjectTabInput == value,
@@ -505,7 +504,10 @@ private fun isValidHex(hex: String): Boolean =
 
 internal fun accentColorToColor(colorName: String): Color {
     if (colorName.startsWith("#") && colorName.length == 7) {
-        return try { Color(colorName.toColorInt()) } catch (e: Exception) { Color(0xFF1976D2) }
+        return try {
+            val hex = colorName.substring(1).toLong(16)
+            Color((0xFF000000L or hex).toInt())
+        } catch (_: Exception) { Color(0xFF1976D2) }
     }
     return when (colorName.lowercase()) {
         "blue"   -> Color(0xFF1976D2)

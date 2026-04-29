@@ -4,3 +4,4 @@ expect fun copyToClipboard(context: PlatformContext, text: String, label: String
 expect fun openUrl(context: PlatformContext, url: String)
 expect fun shareText(context: PlatformContext, text: String, subject: String = "")
 expect fun showToast(context: PlatformContext, message: String)
+expect fun currentIsoDateTime(): String

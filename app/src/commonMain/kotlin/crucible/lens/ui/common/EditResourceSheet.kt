@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 
-import androidx.compose.ui.platform.LocalContext
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.ui.common.DateTimePickerField
 import crucible.lens.ui.common.InstrumentPickerField
@@ -94,7 +93,6 @@ private fun SampleEditFields(
     onSavingChange: (Boolean) -> Unit,
     scope: kotlinx.coroutines.CoroutineScope
 ) {
-    val context = LocalContext.current
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     var name by remember { mutableStateOf(resource.name) }
     var type by remember { mutableStateOf(resource.sampleType ?: "") }
@@ -200,7 +198,6 @@ private fun DatasetEditFields(
     onSavingChange: (Boolean) -> Unit,
     scope: kotlinx.coroutines.CoroutineScope
 ) {
-    val context = LocalContext.current
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     var name by remember { mutableStateOf(resource.name) }
     var measurement by remember { mutableStateOf(resource.measurement ?: "") }

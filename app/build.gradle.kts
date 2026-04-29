@@ -61,9 +61,6 @@ kotlin {
                 // Splash Screen
                 implementation("androidx.core:core-splashscreen:1.0.1")
 
-                // Navigation (Android)
-                implementation("androidx.navigation:navigation-compose:2.7.7")
-
                 // Coil SVG (Android only)
                 implementation("io.coil-kt:coil-svg:2.6.0")
                 implementation("com.caverock:androidsvg-aar:1.4")
@@ -95,6 +92,9 @@ kotlin {
                 // Coroutines
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
 
+                // Date/time
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
+
                 // Multiplatform Settings
                 implementation("com.russhwolf:multiplatform-settings:1.2.0")
                 implementation("com.russhwolf:multiplatform-settings-coroutines:1.2.0")
@@ -106,6 +106,9 @@ kotlin {
                 // Lifecycle / ViewModel
                 implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
                 implementation("org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
+
+                // Navigation (multiplatform, 2.8+)
+                implementation("org.jetbrains.androidx.navigation:navigation-compose:2.8.0-alpha10")
             }
         }
 

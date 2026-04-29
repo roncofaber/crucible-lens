@@ -242,7 +242,7 @@ private fun HistoryCard(
 }
 
 private fun formatRelativeTime(timestamp: Long): String {
-    val diffMs = abs(System.currentTimeMillis() - timestamp)
+    val diffMs = abs(kotlinx.datetime.Clock.System.now().toEpochMilliseconds() - timestamp)
     val diffMinutes = diffMs / 60000
     val diffHours = diffMinutes / 60
     val diffDays = diffHours / 24

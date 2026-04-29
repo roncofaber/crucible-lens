@@ -16,9 +16,8 @@ import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.util.DuplicateHolder
+import crucible.lens.platform.currentIsoDateTime
 import crucible.lens.ui.common.DateTimePickerField
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,7 +31,7 @@ fun CreateSampleScreen(
     var name by remember { mutableStateOf(prefill?.name?.let { "$it (copy)" } ?: "") }
     var type by remember { mutableStateOf(prefill?.type ?: "") }
     var description by remember { mutableStateOf(prefill?.description ?: "") }
-    var timestamp by remember { mutableStateOf(prefill?.timestamp ?: LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)) }
+    var timestamp by remember { mutableStateOf(prefill?.timestamp ?: currentIsoDateTime()) }
     var selectedProjectId by remember { mutableStateOf(prefill?.projectId ?: initialProjectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
 

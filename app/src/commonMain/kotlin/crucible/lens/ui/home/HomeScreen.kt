@@ -24,10 +24,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.Image
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -36,8 +32,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 
 
-import crucible.lens.BuildConfig
-import crucible.lens.R
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.cache.PersistentProjectCache
@@ -45,10 +39,8 @@ import crucible.lens.data.model.Project
 import crucible.lens.data.util.fetchProjectData
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.allLoadingMessages
-import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.launch
 
-private const val TAG = "HomeScreen"
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -76,12 +68,12 @@ fun HomeScreen(
     var showHelpDialog by remember { mutableStateOf(false) }
     var showEasterEggDialog by remember { mutableStateOf(false) }
     var clickCount by remember { mutableIntStateOf(0) }
-    val context = LocalContext.current
+    val platformContext = getPlatformContext()
 
     var allProjects by remember { mutableStateOf(CacheManager.getProjects() ?: emptyList()) }
 
     LaunchedEffect(Unit) {
-        val persistentData = PersistentProjectCache.loadProjectData(context)
+        val persistentData = PersistentProjectCache.loadProjectData(platformContext)
         if (persistentData != null && allProjects.isEmpty()) {
             allProjects = persistentData.map {
                 Project(projectId = it.projectId, title = it.projectName)
@@ -104,7 +96,7 @@ fun HomeScreen(
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to load projects", e)
+                println("Failed to load projects: $e")
             }
         }
     }
@@ -114,19 +106,18 @@ fun HomeScreen(
         kotlinx.coroutines.delay(500)
 
         val prioritizedProjects = allProjects.sortedByDescending { it.projectId in pinnedProjects }
-        val consecutiveFailures = AtomicInteger(0)
+        var consecutiveFailures = 0
         val maxConsecutiveFailures = 5
 
         prioritizedProjects.chunked(3).forEach { batch ->
-            if (consecutiveFailures.get() >= maxConsecutiveFailures) return@LaunchedEffect
+            if (consecutiveFailures >= maxConsecutiveFailures) return@LaunchedEffect
             batch.forEach { project ->
                 launch(kotlinx.coroutines.Dispatchers.IO) {
                     try {
                         fetchProjectData(project.projectId)
-                        consecutiveFailures.set(0)
+                        consecutiveFailures = 0
                     } catch (e: Exception) {
-                        Log.e(TAG, "Failed to prefetch project ${project.projectId}", e)
-                        consecutiveFailures.incrementAndGet()
+                        consecutiveFailures++
                     }
                 }
             }
@@ -141,9 +132,9 @@ fun HomeScreen(
                     CacheManager.getProjectSamples(project.projectId)?.let { samplesMap[project.projectId] = it }
                     CacheManager.getProjectDatasets(project.projectId)?.let { datasetsMap[project.projectId] = it }
                 }
-                PersistentProjectCache.saveProjectData(context, allProjects, samplesMap, datasetsMap)
+                PersistentProjectCache.saveProjectData(platformContext, allProjects, samplesMap, datasetsMap)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to save project cache to disk", e)
+                println("Failed to save project cache to disk: $e")
             }
         }
     }
@@ -260,12 +251,8 @@ private fun HomeLogo(isDarkTheme: Boolean) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Image(
-            painter = painterResource(
-                id = if (isDarkTheme) R.drawable.crucible_text_dark else R.drawable.crucible_text_light
-            ),
-            contentDescription = "Crucible",
-            contentScale = ContentScale.Fit,
+        AppLogo(
+            isDarkTheme = isDarkTheme,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(60.dp)
@@ -273,7 +260,7 @@ private fun HomeLogo(isDarkTheme: Boolean) {
                     interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                     indication = null
                 ) {
-                    val now = System.currentTimeMillis()
+                    val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
                     if (now - lastTapTime < 350L) {
                         tagline = taglines.filter { it != tagline }.random()
                         lastTapTime = 0L
@@ -535,7 +522,6 @@ private fun HomePinnedProjects(
 
 @Composable
 private fun HomeFooter(graphExplorerUrl: String) {
-    val context = LocalContext.current
     Column(
         modifier = Modifier.padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -551,7 +537,7 @@ private fun HomeFooter(graphExplorerUrl: String) {
         val footerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
         val footerStyle = MaterialTheme.typography.labelSmall
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Crucible Lens v${BuildConfig.VERSION_NAME} • by ", style = footerStyle, color = footerColor)
+            Text("Crucible Lens v${appVersionName()} • by ", style = footerStyle, color = footerColor)
             Text(
                 "Crucible Team",
                 style = footerStyle,

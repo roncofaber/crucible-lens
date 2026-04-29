@@ -11,7 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import crucible.lens.BuildConfig
+import crucible.lens.platform.appVersionName
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,7 +96,7 @@ fun SettingsScreen(
             SettingsRow(
                 icon = Icons.Default.Info,
                 title = "About",
-                subtitle = "Crucible Lens v${BuildConfig.VERSION_NAME}",
+                subtitle = "Crucible Lens v${appVersionName()}",
                 onClick = onNavigateToAbout
             )
         }

@@ -28,7 +28,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.draw.clip
@@ -42,7 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -97,16 +96,20 @@ import crucible.lens.ui.common.ScrollToTopButton
 
 private data class UnlinkRequest(val name: String, val otherUuid: String, val action: suspend () -> Unit)
 
+private val DAYS_IN_MONTH = intArrayOf(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+private fun isLeapYear(y: Int) = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+
 private fun monthBounds(raw: String?): Pair<String, String>? {
     if (raw == null) return null
     return try {
-        val ldt = try { java.time.OffsetDateTime.parse(raw.trim()).toLocalDateTime() }
-                  catch (_: Exception) { java.time.LocalDateTime.parse(raw.trim()) }
-        val start = ldt.withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0)
-        val end = ldt.withDayOfMonth(ldt.toLocalDate().lengthOfMonth())
-                    .withHour(23).withMinute(59).withSecond(59).withNano(999_999_999)
-        val fmt = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME
-        start.format(fmt) to end.format(fmt)
+        // Parse YYYY-MM from ISO 8601 string (handles offset and local forms)
+        val s = raw.trim().replace("T", " ")
+        val year = s.substring(0, 4).toInt()
+        val month = s.substring(5, 7).toInt()
+        val daysInMonth = if (month == 2 && isLeapYear(year)) 29 else DAYS_IN_MONTH[month - 1]
+        val mm = month.toString().padStart(2, '0')
+        val dd = daysInMonth.toString().padStart(2, '0')
+        "${year}-${mm}-01T00:00:00" to "${year}-${mm}-${dd}T23:59:59"
     } catch (_: Exception) { null }
 }
 
@@ -122,12 +125,15 @@ private fun siblingGroupLabel(groupBy: String?, resource: CrucibleResource): Str
     else -> groupBy.lowercase().replaceFirstChar { it.uppercase() }
 }
 
+private val MONTH_NAMES = arrayOf("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+
 private fun dateGroupKey(raw: String?): String {
     if (raw == null) return "No date"
-    val fmt = java.time.format.DateTimeFormatter.ofPattern("MMM yyyy")
-    return try { fmt.format(java.time.OffsetDateTime.parse(raw.trim())) }
-    catch (_: Exception) { try { fmt.format(java.time.LocalDateTime.parse(raw.trim())) }
-    catch (_: Exception) { "No date" } }
+    return try {
+        val year = raw.trim().substring(0, 4).toInt()
+        val month = raw.trim().substring(5, 7).toInt()
+        "${MONTH_NAMES[month - 1]} $year"
+    } catch (_: Exception) { "No date" }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -239,7 +245,7 @@ fun ResourceDetailScreen(
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
                         } catch (e: Exception) {
-                            Log.e("ResourceDetail", "Failed to load sibling samples", e)
+                            println("\2: \$e")
                             siblingsResolved = true
                         }
                     }
@@ -294,7 +300,7 @@ fun ResourceDetailScreen(
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
                         } catch (e: Exception) {
-                            Log.e("ResourceDetail", "Failed to load sibling datasets", e)
+                            println("\2: \$e")
                             siblingsResolved = true
                         }
                     }
@@ -388,7 +394,7 @@ fun ResourceDetailScreen(
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e("ResourceDetail", "Failed to reload siblings", e)
+            println("\2: \$e")
             siblingsResolved = true
         }
     }
@@ -525,7 +531,7 @@ fun ResourceDetailScreen(
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Log.e("ResourceDetail", "Failed to load relationships for $uuid", e)
+                    println("\2: \$e")
                 }
             }
         }
@@ -585,7 +591,7 @@ fun ResourceDetailScreen(
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Log.e("ResourceDetail", "Failed to load thumbnails for $uuid", e)
+                    println("\2: \$e")
                     withContext(Dispatchers.Main) { loadedThumbnails[uuid] = emptyList() }
                 }
             }
@@ -609,23 +615,17 @@ fun ResourceDetailScreen(
         onSaveToHistory(resource.uniqueId, resource.name)
     }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
+    val platformContext = getPlatformContext()
 
-    // Shared upload logic for both gallery pick and camera capture
-    suspend fun uploadThumbnail(uri: Uri, datasetUuid: String) {
+    suspend fun uploadThumbnail(bytes: ByteArray, datasetUuid: String) {
         isUploadingThumbnail = true
         try {
-            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            if (bytes == null) {
-                showToast(getPlatformContext(), "Could not read the image")
-                return
-            }
-            val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+            val base64 = PlatformBase64.encode(bytes)
             val resp = withContext(Dispatchers.IO) {
                 ApiClient.service.addThumbnail(
                     datasetUuid,
                     ThumbnailCreateRequest(
-                        thumbnailName = "thumbnail_${System.currentTimeMillis()}.png",
+                        thumbnailName = "thumbnail_${kotlinx.datetime.Clock.System.now().toEpochMilliseconds()}.png",
                         thumbnailB64str = base64
                     )
                 )
@@ -637,25 +637,28 @@ fun ResourceDetailScreen(
                     val thumbs = thumbResp.body()?.map { "data:image/png;base64,${it.thumbnailB64}" } ?: emptyList()
                     loadedThumbnails[datasetUuid] = thumbs
                     CacheManager.cacheThumbnails(datasetUuid, thumbs)
-                    showToast(getPlatformContext(), "Thumbnail uploaded")
+                    showToast(platformContext, "Thumbnail uploaded")
                 } else {
-                    showToast(getPlatformContext(), "Uploaded — pull to refresh to view")
+                    showToast(platformContext, "Uploaded — pull to refresh to view")
                 }
             } else {
-                showToast(getPlatformContext(), "Upload failed (${resp.code()}) — try again")
+                showToast(platformContext, "Upload failed — try again")
             }
         } catch (e: Exception) {
-            showToast(getPlatformContext(), "Unexpected error — try again")
+            showToast(platformContext, "Unexpected error — try again")
         } finally {
             isUploadingThumbnail = false
         }
     }
 
-    // TODO: Thumbnail upload requires platform-specific image picker (ActivityResultContracts on Android, PHPicker on iOS)
-    // Stub implementations for now — full expect/actual needed
-    val galleryPicker: Any = Unit
-    val cameraPicker: Any = Unit
-    var cameraUri: Any? = null
+    val galleryPicker = rememberGalleryPicker { bytes ->
+        val dataset = currentDisplayResource as? Dataset ?: return@rememberGalleryPicker
+        if (bytes != null) scope.launch { uploadThumbnail(bytes, dataset.uniqueId) }
+    }
+    val cameraPicker = rememberCameraPicker { bytes ->
+        val dataset = currentDisplayResource as? Dataset ?: return@rememberCameraPicker
+        if (bytes != null) scope.launch { uploadThumbnail(bytes, dataset.uniqueId) }
+    }
 
     val pullRefreshState = rememberPullToRefreshState()
     // True only when a sibling (not the primary resource) was pull-to-refreshed.
@@ -1229,8 +1232,7 @@ fun ResourceDetailScreen(
                     OutlinedButton(
                         onClick = {
                             showThumbnailSourcePicker = false
-                            // TODO: implement platform-specific gallery picker (expect/actual)
-                            showToast(getPlatformContext(), "Gallery picker not yet available on this platform")
+                            galleryPicker()
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -1241,8 +1243,7 @@ fun ResourceDetailScreen(
                     OutlinedButton(
                         onClick = {
                             showThumbnailSourcePicker = false
-                            // TODO: implement platform-specific camera capture (expect/actual)
-                            showToast(getPlatformContext(), "Camera capture not yet available on this platform")
+                            cameraPicker()
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -1468,12 +1469,12 @@ private fun ThumbnailsSection(thumbnails: List<String>) {
                 try {
                     if (thumbnail.startsWith("data:image/")) {
                         val base64String = thumbnail.substringAfter("base64,")
-                        Base64.decode(base64String, Base64.DEFAULT)
+                        PlatformBase64.decode(base64String)
                     } else {
                         null
                     }
                 } catch (e: Exception) {
-                    Log.e("ResourceDetailScreen", "Failed to decode thumbnail ${index + 1}", e)
+                    println("\2: \$e")
                     null
                 }
             }
@@ -1544,7 +1545,7 @@ private fun SampleDetailsCard(
     initialAdvanced: Boolean = false,
     onAdvancedChange: (Boolean) -> Unit = {}
 ) {
-    val context = LocalContext.current
+    val platformCtx = getPlatformContext()
     var advanced by remember { mutableStateOf(initialAdvanced) }
     Card {
         Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
@@ -1564,9 +1565,8 @@ private fun SampleDetailsCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = {
-                            
-                            clipboard.setPrimaryClip(ClipData.newPlainText("MFID", sample.uniqueId))
-                            showToast(getPlatformContext(), "ID copied")
+                            copyToClipboard(platformCtx, sample.uniqueId)
+                            showToast(platformCtx, "ID copied")
                         },
                         modifier = Modifier.size(38.dp)
                     ) {
@@ -1691,7 +1691,7 @@ private fun DatasetDetailsCard(
     initialAdvanced: Boolean = false,
     onAdvancedChange: (Boolean) -> Unit = {}
 ) {
-    val context = LocalContext.current
+    val platformCtx = getPlatformContext()
     var advanced by remember { mutableStateOf(initialAdvanced) }
 
     Card {
@@ -1712,9 +1712,8 @@ private fun DatasetDetailsCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = {
-                            
-                            clipboard.setPrimaryClip(ClipData.newPlainText("MFID", dataset.uniqueId))
-                            showToast(getPlatformContext(), "ID copied")
+                            copyToClipboard(platformCtx, dataset.uniqueId)
+                            showToast(platformCtx, "ID copied")
                         },
                         modifier = Modifier.size(38.dp)
                     ) {
@@ -2563,29 +2562,32 @@ private fun DeletionRequestDialog(
 private fun formatDateTime(raw: String?): String {
     if (raw == null) return "None"
     val s = raw.trim()
-    val fmtDateTime = java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a", java.util.Locale.getDefault())
-    val fmtDate     = java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy",           java.util.Locale.getDefault())
+    // Compact yyyyMMdd_am|pm pattern
+    val compact = Regex("""(\d{4})(\d{2})(\d{2})_(am|pm)""", RegexOption.IGNORE_CASE).matchEntire(s)
+    if (compact != null) {
+        val (y, mo, d, ampm) = compact.destructured
+        val m = mo.toIntOrNull() ?: return raw
+        if (m < 1 || m > 12) return raw
+        return "${MONTH_NAMES[m - 1]} ${d.trimStart('0').ifEmpty { "0" }}, $y · ${ampm.uppercase()}"
+    }
+    // ISO 8601: YYYY-MM-DDThh:mm... (with optional offset/Z/fractional seconds)
     return try {
-        // Full datetime with timezone offset (Z, +HH:MM, etc.) — any fractional-second length
-        fmtDateTime.format(java.time.OffsetDateTime.parse(s).toLocalDateTime())
-    } catch (_: Exception) { try {
-        // Full datetime without timezone
-        fmtDateTime.format(java.time.LocalDateTime.parse(s))
-    } catch (_: Exception) { try {
-        // Date only
-        fmtDate.format(java.time.LocalDate.parse(s))
-    } catch (_: Exception) {
-        // Compact date with AM/PM suffix: yyyyMMdd_am or yyyyMMdd_pm
-        val match = Regex("""(\d{8})_(am|pm)""", RegexOption.IGNORE_CASE).matchEntire(s)
-        if (match != null) try {
-            val date = java.time.LocalDate.parse(
-                match.groupValues[1],
-                java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")
-            )
-            fmtDate.format(date) + " · ${match.groupValues[2].uppercase()}"
-        } catch (_: Exception) { raw }
-        else raw
-    } } }
+        val datePart = s.substring(0, 10) // YYYY-MM-DD
+        val year = datePart.substring(0, 4).toInt()
+        val month = datePart.substring(5, 7).toInt()
+        val day = datePart.substring(8, 10).toInt()
+        if (month < 1 || month > 12) return raw
+        val monthName = MONTH_NAMES[month - 1]
+        val dateStr = "$monthName $day, $year"
+        if (s.length < 13) return dateStr
+        // Parse time hh:mm
+        val timePart = s.substring(11, 16) // hh:mm
+        val hour = timePart.substring(0, 2).toInt()
+        val minute = timePart.substring(3, 5).toInt()
+        val ampm = if (hour < 12) "AM" else "PM"
+        val hour12 = when { hour == 0 -> 12; hour > 12 -> hour - 12; else -> hour }
+        "$dateStr · $hour12:${minute.toString().padStart(2, '0')} $ampm"
+    } catch (_: Exception) { raw }
 }
 
 private fun formatFileSize(bytes: Long): String = when {

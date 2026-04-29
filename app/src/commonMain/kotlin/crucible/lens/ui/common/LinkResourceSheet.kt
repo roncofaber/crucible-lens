@@ -18,7 +18,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 
@@ -34,7 +33,6 @@ import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.scanner.QRCodeScannerView
 import kotlinx.coroutines.launch
 
-private const val TAG = "LinkResourceSheet"
 
 private enum class Direction { THEY_ARE_PARENT, THEY_ARE_CHILD }
 
@@ -46,7 +44,6 @@ fun LinkResourceSheet(
     onDismiss: () -> Unit,
     onLinked: () -> Unit
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -81,7 +78,7 @@ fun LinkResourceSheet(
             val (samples, datasets) = fetchProjectData(projectId)
             projectResources = (samples + datasets).filter { it.uniqueId != resource.uniqueId }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load project resources for $projectId", e)
+            println("Failed to load project resources for $projectId: $e")
         }
     }
 

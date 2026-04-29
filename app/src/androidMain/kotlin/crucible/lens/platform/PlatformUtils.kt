@@ -33,3 +33,8 @@ actual fun shareText(context: PlatformContext, text: String, subject: String) {
 actual fun showToast(context: PlatformContext, message: String) {
     Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 }
+
+actual fun currentIsoDateTime(): String {
+    val now = kotlinx.datetime.Clock.System.now()
+    return now.toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).toString()
+}

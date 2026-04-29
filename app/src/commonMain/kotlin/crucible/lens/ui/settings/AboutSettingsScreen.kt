@@ -15,10 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.decode.SvgDecoder
-import coil.request.ImageRequest
-import crucible.lens.BuildConfig
+import crucible.lens.platform.appVersionName
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
 
@@ -105,7 +102,7 @@ fun AboutSettingsScreen(
                     }
 
                     Text(
-                        text = "Version ${BuildConfig.VERSION_NAME}",
+                        text = "Version ${appVersionName()}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
