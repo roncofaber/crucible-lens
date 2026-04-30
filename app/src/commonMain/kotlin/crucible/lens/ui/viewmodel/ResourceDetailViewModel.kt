@@ -11,6 +11,7 @@ import crucible.lens.data.model.Sample
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.repository.ResourceResult
 import crucible.lens.data.sync.DataSyncManager
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +29,10 @@ private const val MAX_CARD_STATE_ENTRIES = 50
 
 class ResourceDetailViewModel : ViewModel() {
     private val repository = CrucibleRepository()
+
+    // Tracks the active fetch/refresh so navigating to a new resource
+    // cancels any in-flight request for the previous one.
+    private var activeFetchJob: Job? = null
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -70,7 +75,8 @@ class ResourceDetailViewModel : ViewModel() {
     // ─────────────────────────────────────────────────────────────────────────
 
     fun fetchResource(uuid: String) {
-        viewModelScope.launch {
+        activeFetchJob?.cancel()
+        activeFetchJob = viewModelScope.launch {
             val trimmedUuid = uuid.trim()
 
             val cachedResource = CacheManager.getResource(trimmedUuid)
@@ -144,7 +150,8 @@ class ResourceDetailViewModel : ViewModel() {
     }
 
     fun refreshResource(uuid: String) {
-        viewModelScope.launch {
+        activeFetchJob?.cancel()
+        activeFetchJob = viewModelScope.launch {
             val trimmedUuid = uuid.trim()
             CacheManager.clearResource(trimmedUuid)
             evictThumbnails(trimmedUuid)
