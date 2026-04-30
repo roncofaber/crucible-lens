@@ -57,23 +57,30 @@ fun ApiSettingsScreen(
 
     var account by remember { mutableStateOf<UserLead?>(null) }
     var accountLoading by remember { mutableStateOf(false) }
-    var accountError by remember { mutableStateOf(false) }
+    var accountErrorMsg by remember { mutableStateOf<String?>(null) }
     var refreshTrigger by remember { mutableStateOf(0) }
     LaunchedEffect(currentApiKey, refreshTrigger) {
         if (currentApiKey.isNullOrBlank()) {
-            account = null; accountError = false; return@LaunchedEffect
+            account = null; accountErrorMsg = null; return@LaunchedEffect
         }
-        accountLoading = true; accountError = false
+        accountLoading = true; accountErrorMsg = null
         try {
             when (val resp = ApiClient.service.getAccount()) {
                 is ApiResult.Success -> {
                     val body = resp.data.userInfo
-                    account = body; accountError = body == null
+                    account = body
+                    accountErrorMsg = if (body == null) "No account info returned" else null
                     onUserOrcidSave(body?.uniqueId)
                 }
-                is ApiResult.Error -> { account = null; accountError = true }
+                is ApiResult.Error -> {
+                    account = null
+                    accountErrorMsg = resp.message
+                }
             }
-        } catch (_: Exception) { account = null; accountError = true }
+        } catch (e: Exception) {
+            account = null
+            accountErrorMsg = e.message ?: "Unknown error"
+        }
         accountLoading = false
     }
 
@@ -239,7 +246,7 @@ fun ApiSettingsScreen(
                     }
                 }
 
-                accountError -> Card(
+                accountErrorMsg != null -> Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
                 ) {
@@ -249,7 +256,7 @@ fun ApiSettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onErrorContainer)
-                        Text("Invalid or expired API key", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f))
+                        Text(accountErrorMsg ?: "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f))
                         IconButton(onClick = { refreshTrigger++ }, modifier = Modifier.size(36.dp)) {
                             Icon(Icons.Default.Refresh, contentDescription = "Retry", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onErrorContainer)
                         }

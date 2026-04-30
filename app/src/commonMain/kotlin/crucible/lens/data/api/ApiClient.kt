@@ -35,7 +35,7 @@ object ApiClient {
             })
         }
         install(Logging) {
-            level = LogLevel.NONE
+            level = LogLevel.INFO  // shows method, URL, status — change to ALL for body
         }
         install(HttpTimeout) {
             requestTimeoutMillis = 30_000
