@@ -703,7 +703,7 @@ private fun ProjectCard(
         elevation = CardDefaults.cardElevation(defaultElevation = if (isArchived) 0.dp else 2.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isArchived) MaterialTheme.colorScheme.surfaceVariant
-                             else MaterialTheme.colorScheme.surface
+                             else MaterialTheme.colorScheme.surfaceContainerHigh
         )
     ) {
         Row(
