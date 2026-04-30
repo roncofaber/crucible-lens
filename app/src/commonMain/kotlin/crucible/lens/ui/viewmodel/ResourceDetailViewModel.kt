@@ -26,7 +26,7 @@ sealed class UiState {
 
 private const val MAX_CARD_STATE_ENTRIES = 50
 
-class ScannerViewModel : ViewModel() {
+class ResourceDetailViewModel : ViewModel() {
     private val repository = CrucibleRepository()
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)

@@ -29,7 +29,7 @@ import crucible.lens.ui.settings.OrcidLoginScreen
 import crucible.lens.ui.settings.AppearanceSettingsScreen
 import crucible.lens.ui.settings.CacheSettingsScreen
 import crucible.lens.ui.settings.AboutSettingsScreen
-import crucible.lens.ui.viewmodel.ScannerViewModel
+import crucible.lens.ui.viewmodel.ResourceDetailViewModel
 import crucible.lens.ui.viewmodel.UiState
 import crucible.lens.ui.detail.ResourceDetailScreen
 import crucible.lens.ui.projects.ProjectsListScreen
@@ -143,7 +143,7 @@ fun NavGraph(
     userOrcid: String? = null,
     onUserOrcidSave: (String?) -> Unit = {},
     onSignOut: () -> Unit = {},
-    viewModel: ScannerViewModel = viewModel()
+    viewModel: ResourceDetailViewModel = viewModel()
 ) {
     val platformCtx = getPlatformContext()
 

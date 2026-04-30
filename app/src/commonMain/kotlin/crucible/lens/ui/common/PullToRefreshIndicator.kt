@@ -8,7 +8,7 @@ import androidx.compose.ui.Modifier
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AnimatedPullToRefreshIndicator(
+fun PullToRefreshIndicator(
     state: PullToRefreshState,
     isRefreshing: Boolean,
     modifier: Modifier = Modifier,
