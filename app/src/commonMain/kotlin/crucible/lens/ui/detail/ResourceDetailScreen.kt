@@ -66,6 +66,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -87,7 +88,9 @@ import crucible.lens.data.model.Sample
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.util.MONTH_NAMES
 import crucible.lens.data.util.dateGroupKey
+import androidx.compose.runtime.snapshots.SnapshotStateSet
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.fadeEndEdge
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.QrCodeDialog
@@ -160,6 +163,7 @@ fun ResourceDetailScreen(
     // Tracks UUIDs that have been fetched with full metadata (links + scientificMetadata).
     // Checked on the main thread to avoid SnapshotStateMap reads from IO dispatchers.
     val enrichedUuids = remember { mutableSetOf<String>() }
+    val failedEnrichmentUuids = remember { mutableStateSetOf<String>() }
     // Pre-seed only when thumbnails is non-empty. An empty list from the ViewModel means
     // either the fetch failed or the thumbnail cache expired — in both cases we want the
     // LaunchedEffect to retry. Only skip the fetch when we already have real images.
@@ -523,12 +527,15 @@ fun ResourceDetailScreen(
                         if (enriched != null) {
                             loadedResources[uuid] = enriched
                             CacheManager.cacheResource(uuid, enriched)
+                            failedEnrichmentUuids.remove(uuid)
+                        } else {
+                            failedEnrichmentUuids.add(uuid)
                         }
                     }
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    println("Error: $e")
+                    withContext(Dispatchers.Main) { failedEnrichmentUuids.add(uuid) }
                 }
             }
         }
@@ -544,6 +551,7 @@ fun ResourceDetailScreen(
                 loadedResources.remove(uuid)
                 loadedThumbnails.remove(uuid)
                 enrichedUuids.remove(uuid)
+                failedEnrichmentUuids.remove(uuid)
             }
         }
     }
@@ -902,6 +910,22 @@ fun ResourceDetailScreen(
                     ?: if (isCurrentResource) resource else pageResource
                 val displayThumbnails = loadedThumbnails[pageResource.uniqueId]
                     ?: if (isCurrentResource) thumbnails else emptyList()
+
+                if (pageResource.uniqueId in failedEnrichmentUuids) {
+                    item(key = "enrich_error_$pageIndex") {
+                        ErrorCard(
+                            title = "Could not load full data",
+                            message = "Links and metadata may be incomplete.",
+                            modifier = Modifier.padding(bottom = 16.dp),
+                            onRetry = {
+                                enrichedUuids.remove(pageResource.uniqueId)
+                                failedEnrichmentUuids.remove(pageResource.uniqueId)
+                                siblingReloadTrigger++
+                            }
+                        )
+                    }
+                }
+
                 when (displayResource) {
                     is Sample -> item(key = "type_details_$pageIndex") {
                         Box(modifier = Modifier.padding(bottom = 16.dp)) {
