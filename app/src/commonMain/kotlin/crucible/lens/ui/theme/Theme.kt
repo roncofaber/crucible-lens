@@ -6,6 +6,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import crucible.lens.platform.resolveDynamicColorScheme
 
 private val onPrimaryDark  = Color(0xFF1C1B1F)
 private val onPrimaryLight = Color.White
@@ -137,9 +138,7 @@ fun CrucibleScannerTheme(
     accentColor: String = "blue",
     content: @Composable () -> Unit
 ) {
-    // Note: dynamicColor is ignored on non-Android platforms; dynamic color requires Android 12+
-    // and access to the Android Context, which is not available in commonMain
-    val colorScheme = when {
+    val colorScheme = resolveDynamicColorScheme(darkTheme).takeIf { dynamicColor } ?: when {
         accentColor.startsWith("#") -> {
             val c = try {
                 Color(parseHexColor(accentColor))
