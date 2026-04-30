@@ -151,6 +151,16 @@ compose.resources {
     packageOfResClass = "crucible.lens.composeapp.generated.resources"
 }
 
+// CMP 1.7.3 requires Material3 1.3.x, but transitive deps compiled against older versions
+// (notably moko-media/permissions 0.12.x/0.20.x) pull in an incompatible M3 with different
+// Compose-compiler-generated method signatures, causing NoSuchMethodError at runtime.
+// Forcing a single version here ensures only one M3 artifact ends up in the APK.
+configurations.configureEach {
+    resolutionStrategy {
+        force("androidx.compose.material3:material3:1.3.1")
+    }
+}
+
 android {
     namespace = "crucible.lens"
     compileSdk = 36
