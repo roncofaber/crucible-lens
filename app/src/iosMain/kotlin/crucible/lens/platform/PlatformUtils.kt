@@ -1,5 +1,6 @@
 package crucible.lens.platform
 
+import crucible.lens.data.model.CrucibleResource
 import platform.Foundation.NSURL
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
@@ -30,3 +31,12 @@ actual fun currentIsoDateTime(): String {
     val now = kotlinx.datetime.Clock.System.now()
     return now.toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).toString()
 }
+
+actual fun shareResource(
+    context: PlatformContext,
+    resource: CrucibleResource,
+    shareText: String,
+    subject: String,
+    darkTheme: Boolean,
+    bannerColorValue: Long
+) = shareText(context, shareText, subject)

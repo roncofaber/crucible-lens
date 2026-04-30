@@ -12,6 +12,7 @@ import crucible.lens.platform.*
 
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -622,6 +623,8 @@ fun ResourceDetailScreen(
     }
     val scope = rememberCoroutineScope()
     val platformContext = getPlatformContext()
+    val isDarkTheme = isSystemInDarkTheme()
+    val primaryColorValue = MaterialTheme.colorScheme.primary.value.toLong()
 
     suspend fun uploadThumbnail(bytes: ByteArray, datasetUuid: String) {
         isUploadingThumbnail = true
@@ -805,7 +808,14 @@ fun ResourceDetailScreen(
                                         leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                                         onClick = {
                                             overflowMenuExpanded = false
-                                            shareText(platformContext, webUrl, currentDisplayResource.name)
+                                            shareResource(
+                                                context = platformContext,
+                                                resource = currentDisplayResource,
+                                                shareText = webUrl,
+                                                subject = currentDisplayResource.name,
+                                                darkTheme = isDarkTheme,
+                                                bannerColorValue = primaryColorValue
+                                            )
                                         }
                                     )
                                 }
