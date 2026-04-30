@@ -113,7 +113,7 @@ kotlin {
                 implementation("org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
 
                 // Navigation (multiplatform, 2.8+)
-                implementation("org.jetbrains.androidx.navigation:navigation-compose:2.8.0-alpha10")
+                implementation("org.jetbrains.androidx.navigation:navigation-compose:2.9.2")
 
                 // Multiplatform WebView (ORCID login)
                 api("io.github.kevinnzou:compose-webview-multiplatform:2.0.3")

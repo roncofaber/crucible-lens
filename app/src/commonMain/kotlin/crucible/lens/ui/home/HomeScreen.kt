@@ -95,6 +95,8 @@ fun HomeScreen(
                         println("Failed to load projects: ${response.message}")
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 println("Failed to load projects: $e")
             }
