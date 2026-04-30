@@ -37,6 +37,7 @@ import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.ErrorCard
+import crucible.lens.ui.common.showFeedback
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.AppScaffold
@@ -491,6 +492,7 @@ fun ProjectsListScreen(
                             val dismissState = rememberSwipeToDismissBoxState(
                                 confirmValueChange = { value ->
                                     if (value == SwipeToDismissBoxValue.EndToStart) {
+                                        showFeedback(platformContext, "Project archived")
                                         onToggleArchive(project.projectId)
                                         true
                                     } else false
@@ -540,7 +542,10 @@ fun ProjectsListScreen(
                                     counts = projectCounts[project.projectId],
                                     onClick = { onProjectClick(project.projectId) },
                                     isPinned = project.projectId in pinnedProjects,
-                                    onTogglePin = { onTogglePin(project.projectId) }
+                                    onTogglePin = {
+                                        showFeedback(platformContext, if (project.projectId in pinnedProjects) "Project unpinned" else "Project pinned")
+                                        onTogglePin(project.projectId)
+                                    }
                                 )
                             }
                         }
@@ -586,6 +591,7 @@ fun ProjectsListScreen(
                                             if (value == SwipeToDismissBoxValue.StartToEnd) {
                                                 // Mark as manually unarchived to prevent auto-archiving
                                                 manuallyUnarchived = manuallyUnarchived + project.projectId
+                                                showFeedback(platformContext, "Project unarchived")
                                                 onToggleArchive(project.projectId)
                                                 true
                                             } else false

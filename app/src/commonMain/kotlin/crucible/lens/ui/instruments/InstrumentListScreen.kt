@@ -30,6 +30,7 @@ import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
+import crucible.lens.ui.common.showFeedback
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
 import kotlinx.coroutines.launch
@@ -45,6 +46,7 @@ fun InstrumentListScreen(
     pinnedInstruments: Set<String> = emptySet(),
     onTogglePin: (String) -> Unit = {}
 ) {
+    val platformContext = getPlatformContext()
     var instruments by remember { mutableStateOf<List<Instrument>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -193,7 +195,10 @@ fun InstrumentListScreen(
                                     InstrumentCard(
                                         instrument = instrument,
                                         isPinned = instrument.uniqueId in pinnedInstruments,
-                                        onTogglePin = { onTogglePin(instrument.uniqueId) },
+                                        onTogglePin = {
+                                            showFeedback(platformContext, if (instrument.uniqueId in pinnedInstruments) "Instrument unpinned" else "Instrument pinned")
+                                            onTogglePin(instrument.uniqueId)
+                                        },
                                         onClick = { onInstrumentClick(instrument.uniqueId) }
                                     )
                                 }

@@ -646,7 +646,9 @@ fun ResourceDetailScreen(
                             showToast(platformContext, "Thumbnail uploaded")
                         }
                         is ApiResult.Error -> {
-                            showToast(platformContext, "Uploaded — pull to refresh to view")
+                            // Thumbnail list fetch failed after successful upload — auto-refresh
+                            showToast(platformContext, "Uploaded successfully")
+                            triggerRefresh()
                         }
                     }
                 }

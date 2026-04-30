@@ -48,6 +48,7 @@ import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingItem
+import crucible.lens.ui.common.showFeedback
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.fadeEndEdge
@@ -205,9 +206,9 @@ fun InstrumentDetailScreen(
                             searchQuery = searchQuery,
                             onSearchChange = { searchQuery = it },
                             sortState = sortState,
-                            onSortStateChange = { sortState = it },
+                            onSortStateChange = { sortState = it; showFeedback(platformCtx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
                             groupBy = groupBy,
-                            onGroupByChange = { groupBy = it }
+                            onGroupByChange = { groupBy = it; showFeedback(platformCtx, "Grouped by ${it.label}") }
                         )
                     }
                 }

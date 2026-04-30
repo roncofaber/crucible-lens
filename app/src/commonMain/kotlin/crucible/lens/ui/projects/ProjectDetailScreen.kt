@@ -57,6 +57,7 @@ import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.showFeedback
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.fadeEndEdge
 import crucible.lens.ui.common.LazyColumnScrollbar
@@ -365,10 +366,10 @@ fun ProjectDetailScreen(
                 currentPage = pagerState.currentPage,
                 sampleGroupBy = sampleGroupBy,
                 datasetGroupBy = datasetGroupBy,
-                onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) } },
-                onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) } },
+                onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
+                onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
                 sortState = sortState,
-                onSortStateChange = { sortState = it },
+                onSortStateChange = { sortState = it; showFeedback(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
             )
 
             // Tabs
