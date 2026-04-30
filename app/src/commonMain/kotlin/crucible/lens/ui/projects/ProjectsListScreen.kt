@@ -210,40 +210,16 @@ fun ProjectsListScreen(
                         return@launch
                     }
 
-                    // Fetch samples and datasets with metadata for search functionality
-                    var hadError = false
-                    val sampleCount = try {
-                        when (val resp = ApiClient.service.getSamplesByProject(project.projectId)) {
-                            is crucible.lens.data.api.ApiResult.Success -> {
-                                consecutiveFailures = 0 // Reset on success
-                                resp.data.also { CacheManager.cacheProjectSamples(project.projectId, it) }.size
-                            }
-                            is crucible.lens.data.api.ApiResult.Error -> null
-                        }
-                    } catch (e: Exception) {
-                        hadError = true
-                        null
-                    }
-
-                    val datasetCount = try {
-                        when (val resp = ApiClient.service.getDatasetsByProject(project.projectId)) {
-                            is crucible.lens.data.api.ApiResult.Success -> {
-                                consecutiveFailures = 0 // Reset on success
-                                resp.data.also { CacheManager.cacheProjectDatasets(project.projectId, it) }.size
-                            }
-                            is crucible.lens.data.api.ApiResult.Error -> null
-                        }
-                    } catch (e: Exception) {
-                        hadError = true
-                        null
-                    }
-
-                    // Track failures (thread-safe increment)
-                    if (hadError) {
+                    // Fetch counts first (limit=1, two parallel requests) — shows numbers immediately
+                    val (sampleCount, datasetCount) = try {
+                        val counts = ApiClient.service.getProjectItemCounts(project.projectId)
+                        consecutiveFailures = 0
+                        counts
+                    } catch (_: Exception) {
                         consecutiveFailures++
+                        null to null
                     }
 
-                    // Show counts after loading
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                         projectCounts = projectCounts + (project.projectId to Pair(sampleCount, datasetCount))
 

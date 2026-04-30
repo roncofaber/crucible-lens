@@ -136,6 +136,31 @@ class CrucibleApiService(
         get("projects")
     }
 
+    /** Fetches sample and dataset counts for a project using limit=1 — fast, minimal payload. */
+    suspend fun getProjectItemCounts(projectId: String): Pair<Int?, Int?> = coroutineScope {
+        val samples = async {
+            runCatching {
+                client.get("${baseUrl}samples") {
+                    header("Authorization", "Bearer $apiKey")
+                    url.parameters.append("project_id", projectId)
+                    url.parameters.append("limit", "1")
+                    url.parameters.append("offset", "0")
+                }.body<PaginatedResponse<Sample>>().total
+            }.getOrNull()
+        }
+        val datasets = async {
+            runCatching {
+                client.get("${baseUrl}datasets") {
+                    header("Authorization", "Bearer $apiKey")
+                    url.parameters.append("project_id", projectId)
+                    url.parameters.append("limit", "1")
+                    url.parameters.append("offset", "0")
+                }.body<PaginatedResponse<Dataset>>().total
+            }.getOrNull()
+        }
+        samples.await() to datasets.await()
+    }
+
     suspend fun getSamplesByProject(
         projectId: String
     ): ApiResult<List<Sample>> = fetchAllPages { limit, offset ->
