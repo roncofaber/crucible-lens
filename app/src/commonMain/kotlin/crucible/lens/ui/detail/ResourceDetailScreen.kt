@@ -941,7 +941,7 @@ fun ResourceDetailScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Column(modifier = Modifier.fillMaxWidth(0.9f)) {
-                                        ThumbnailsSection(displayThumbnails)
+                                        ThumbnailsSection(pageResource.uniqueId, displayThumbnails)
                                     }
                                 }
                             }
@@ -1429,7 +1429,7 @@ private fun BasicInfoCard(
 }
 
 @Composable
-private fun ThumbnailsSection(thumbnails: List<String>) {
+private fun ThumbnailsSection(uuid: String, thumbnails: List<String>) {
     thumbnails.forEachIndexed { index, thumbnail ->
         Card(
             modifier = Modifier
@@ -1439,18 +1439,16 @@ private fun ThumbnailsSection(thumbnails: List<String>) {
         ) {
             var imageState by remember { mutableStateOf<String?>(null) }
 
-            // Extract base64 data from data URI (format: "data:image/png;base64,<base64_string>")
-            val base64Data = remember(thumbnail) {
-                try {
-                    if (thumbnail.startsWith("data:image/")) {
-                        val base64String = thumbnail.substringAfter("base64,")
-                        PlatformBase64.decode(base64String)
-                    } else {
-                        null
-                    }
-                } catch (e: Exception) {
-                    println("Error: $e")
-                    null
+            // Decode base64 off the main thread, keyed by uuid+index (stable, cheap to compare)
+            // rather than the full thumbnail string (200KB+ equality check on every recomposition).
+            var base64Data by remember(uuid, index) { mutableStateOf<ByteArray?>(null) }
+            LaunchedEffect(uuid, index) {
+                base64Data = withContext(Dispatchers.Default) {
+                    try {
+                        if (thumbnail.startsWith("data:image/"))
+                            PlatformBase64.decode(thumbnail.substringAfter("base64,"))
+                        else null
+                    } catch (e: Exception) { null }
                 }
             }
 
