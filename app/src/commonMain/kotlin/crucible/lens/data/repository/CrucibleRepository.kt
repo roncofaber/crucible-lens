@@ -22,100 +22,38 @@ private fun httpError(code: Int): ResourceResult.Error = when (code) {
 }
 
 class CrucibleRepository {
-    // Always access ApiClient.service dynamically so API key/URL changes are picked up
     private val api get() = ApiClient.service
 
+    /**
+     * Fetches any resource by UUID using the unified /resources/{uuid} endpoint.
+     * Single call — no type lookup needed, links and metadata included.
+     */
     suspend fun fetchResourceByUuid(uuid: String): ResourceResult = withContext(Dispatchers.IO) {
         try {
-            // Check if we already know the resource type from cache
-            val cachedType = CacheManager.getResourceType(uuid)
-
-            val resourceType = if (cachedType != null) {
-                cachedType
-            } else {
-                val typeResult = api.getResourceType(uuid)
-                when (typeResult) {
-                    is ApiResult.Success -> typeResult.data.resolvedType?.lowercase()
-                        ?: return@withContext fetchResourceByUuidFallback(uuid)
-                    is ApiResult.Error -> return@withContext fetchResourceByUuidFallback(uuid)
-                }
+            val cached = CacheManager.getResource(uuid)
+            // Check if we have a fully-loaded cached version (with links)
+            if (cached != null && hasLinks(cached)) {
+                return@withContext ResourceResult.Success(cached)
             }
 
-            when (resourceType.lowercase()) {
-                "sample" -> {
-                    val sampleResult = api.getSample(uuid)
-                    return@withContext when (sampleResult) {
-                        is ApiResult.Success -> {
-                            CacheManager.cacheResourceType(uuid, "sample")
-                            ResourceResult.Success(sampleResult.data)
-                        }
-                        is ApiResult.Error -> {
-                            if (cachedType != null) {
-                                CacheManager.removeResourceType(uuid)
-                                fetchResourceByUuidFallback(uuid)
-                            } else {
-                                httpError(sampleResult.code)
-                            }
-                        }
-                    }
-                }
-                "dataset" -> {
-                    val dataset = fetchDatasetWithMetadata(uuid)
-                    if (dataset != null) {
-                        CacheManager.cacheResourceType(uuid, "dataset")
-                        ResourceResult.Success(dataset)
-                    } else if (cachedType != null) {
-                        CacheManager.removeResourceType(uuid)
-                        fetchResourceByUuidFallback(uuid)
-                    } else {
-                        ResourceResult.Error("Failed to fetch dataset")
-                    }
-                }
-                else -> ResourceResult.Error("Unknown resource type: $resourceType")
-            }
-        } catch (e: Exception) {
-            ResourceResult.Error("Network error: ${e.message ?: "check your connection"}")
-        }
-    }
-
-    private suspend fun fetchResourceByUuidFallback(uuid: String): ResourceResult {
-        // Use the unified /resources/{uuid} endpoint to resolve type in one call,
-        // then fetch the full resource with include_links for the complete detail view.
-        return try {
-            when (val resolved = api.getResource(uuid)) {
+            when (val result = api.getResource(uuid)) {
                 is ApiResult.Success -> {
-                    val resource = resolved.data
-                    when (resource) {
-                        is crucible.lens.data.model.Sample -> {
-                            CacheManager.cacheResourceType(uuid, "sample")
-                            // Refetch with include_links for full relationship data
-                            when (val full = api.getSample(uuid)) {
-                                is ApiResult.Success -> ResourceResult.Success(full.data)
-                                is ApiResult.Error -> ResourceResult.Success(resource) // use resolved data as fallback
-                            }
-                        }
-                        is crucible.lens.data.model.Dataset -> {
-                            CacheManager.cacheResourceType(uuid, "dataset")
-                            val dataset = fetchDatasetWithMetadata(uuid)
-                            if (dataset != null) ResourceResult.Success(dataset)
-                            else ResourceResult.Success(resource)
-                        }
-                        else -> ResourceResult.Success(resource)
-                    }
+                    val resource = result.data
+                    CacheManager.cacheResource(uuid, resource)
+                    ResourceResult.Success(resource)
                 }
-                is ApiResult.Error -> httpError(resolved.code)
+                is ApiResult.Error -> httpError(result.code)
             }
         } catch (e: Exception) {
             ResourceResult.Error("Network error: ${e.message ?: "check your connection"}")
         }
     }
 
-    // include_metadata=true returns scientific metadata inline — no separate call needed.
-    private suspend fun fetchDatasetWithMetadata(uuid: String): Dataset? {
-        return when (val result = api.getDataset(uuid, includeMetadata = true)) {
-            is ApiResult.Success -> result.data
-            is ApiResult.Error -> null
-        }
+    /** Returns true if the resource was loaded with links (i.e. from a detail fetch, not a list fetch). */
+    private fun hasLinks(resource: CrucibleResource): Boolean = when (resource) {
+        is crucible.lens.data.model.Sample  -> resource.links != null
+        is Dataset -> resource.links != null
+        else -> true
     }
 
     suspend fun fetchThumbnails(datasetUuid: String): List<String> = withContext(Dispatchers.IO) {

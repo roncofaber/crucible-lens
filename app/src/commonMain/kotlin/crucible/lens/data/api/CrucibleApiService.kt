@@ -21,6 +21,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlin.math.ceil
 import io.ktor.client.call.body
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.decodeFromJsonElement
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -36,6 +40,7 @@ class CrucibleApiService(
     private val baseUrl: String,
     private val apiKey: String
 ) {
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     private fun String.withAuth(): String = this
 
     private suspend inline fun <reified T> get(endpoint: String): T =
@@ -76,9 +81,28 @@ class CrucibleApiService(
         get("account")
     }
 
-    /** Resolves resource type and returns the full resource in one call (no /idtype lookup needed). */
-    suspend fun getResource(uuid: String): ApiResult<CrucibleResource> = safeCall {
-        get("resources/$uuid")
+    /**
+     * Fetches any resource by UUID in a single call — the API resolves the type
+     * and returns the full record with links and metadata included.
+     * Replaces the previous two-step /idtype + typed fetch.
+     */
+    suspend fun getResource(
+        uuid: String,
+        includeLinks: Boolean = true,
+        includeMetadata: Boolean = true
+    ): ApiResult<CrucibleResource> = safeCall {
+        val obj: JsonObject = client.get("${baseUrl}resources/$uuid") {
+            header("Authorization", "Bearer $apiKey")
+            if (includeLinks) url.parameters.append("include_links", "true")
+            if (includeMetadata) url.parameters.append("include_metadata", "true")
+        }.body()
+        val type = obj["resource_type"]?.jsonPrimitive?.content?.lowercase()
+        when (type) {
+            "sample"     -> json.decodeFromJsonElement<Sample>(obj)
+            "dataset"    -> json.decodeFromJsonElement<Dataset>(obj)
+            "instrument" -> json.decodeFromJsonElement<Instrument>(obj)
+            else         -> throw IllegalStateException("Unknown resource_type: $type")
+        }
     }
 
     suspend fun getResourceType(uuid: String): ApiResult<ResourceType> = safeCall {
