@@ -21,10 +21,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlin.math.ceil
 import io.ktor.client.call.body
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.decodeFromJsonElement
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -33,7 +29,10 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonPrimitive
 
 class CrucibleApiService(
     private val client: HttpClient,
@@ -98,9 +97,9 @@ class CrucibleApiService(
         }.body()
         val type = obj["resource_type"]?.jsonPrimitive?.content?.lowercase()
         when (type) {
-            "sample"     -> json.decodeFromJsonElement<Sample>(obj)
-            "dataset"    -> json.decodeFromJsonElement<Dataset>(obj)
-            "instrument" -> json.decodeFromJsonElement<Instrument>(obj)
+            "sample"     -> json.decodeFromJsonElement<Sample>(obj) as CrucibleResource
+            "dataset"    -> json.decodeFromJsonElement<Dataset>(obj) as CrucibleResource
+            "instrument" -> json.decodeFromJsonElement<Instrument>(obj) as CrucibleResource
             else         -> throw IllegalStateException("Unknown resource_type: $type")
         }
     }
