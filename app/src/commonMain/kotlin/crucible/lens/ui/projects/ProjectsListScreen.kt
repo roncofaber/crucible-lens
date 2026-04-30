@@ -37,6 +37,8 @@ import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.ErrorCard
+import crucible.lens.ui.common.RefreshMenuItem
+import crucible.lens.ui.common.ToggleHiddenMenuItem
 import crucible.lens.ui.common.showFeedback
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
@@ -290,21 +292,8 @@ fun ProjectsListScreen(
                                 Icon(Icons.Default.MoreVert, contentDescription = "More options", modifier = Modifier.size(24.dp))
                             }
                             DropdownMenu(expanded = listMenuExpanded, onDismissRequest = { listMenuExpanded = false }) {
-                                DropdownMenuItem(
-                                    text = { Text(if (hiddenExpanded) "Collapse hidden" else "Show hidden") },
-                                    leadingIcon = {
-                                        Icon(
-                                            if (hiddenExpanded) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    onClick = { hiddenExpanded = !hiddenExpanded; listMenuExpanded = false }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Refresh") },
-                                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                                    onClick = { listMenuExpanded = false; loadProjects(forceRefresh = true) }
-                                )
+                                ToggleHiddenMenuItem(hiddenExpanded) { hiddenExpanded = !hiddenExpanded; listMenuExpanded = false }
+                                RefreshMenuItem { listMenuExpanded = false; loadProjects(forceRefresh = true) }
                             }
                         }
                     }

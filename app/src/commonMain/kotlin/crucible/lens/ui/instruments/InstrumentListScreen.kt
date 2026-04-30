@@ -30,6 +30,8 @@ import crucible.lens.data.model.Instrument
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.RefreshMenuItem
+import crucible.lens.ui.common.ToggleHiddenMenuItem
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.LazyColumnScrollbar
@@ -133,21 +135,8 @@ fun InstrumentListScreen(
                                 Icon(Icons.Default.MoreVert, contentDescription = "More options", modifier = Modifier.size(24.dp))
                             }
                             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                                DropdownMenuItem(
-                                    text = { Text(if (hiddenExpanded) "Collapse hidden" else "Show hidden") },
-                                    leadingIcon = {
-                                        Icon(
-                                            if (hiddenExpanded) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    onClick = { hiddenExpanded = !hiddenExpanded; menuExpanded = false }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Refresh") },
-                                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                                    onClick = { menuExpanded = false; loadInstruments(forceRefresh = true) }
-                                )
+                                ToggleHiddenMenuItem(hiddenExpanded) { hiddenExpanded = !hiddenExpanded; menuExpanded = false }
+                                RefreshMenuItem { menuExpanded = false; loadInstruments(forceRefresh = true) }
                             }
                         }
                     }

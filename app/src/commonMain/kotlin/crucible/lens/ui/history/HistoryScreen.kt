@@ -21,6 +21,9 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.platform.getPlatformContext
+import crucible.lens.ui.common.CopyIdMenuItem
+import crucible.lens.ui.common.OpenInWebMenuItem
+import crucible.lens.ui.common.ShareMenuItem
 import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.openUrl
 import crucible.lens.platform.shareText
@@ -210,32 +213,14 @@ private fun HistoryCard(
         }
 
         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Copy ID") },
-                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                onClick = {
-                    menuExpanded = false
-                    copyToClipboard(platformContext, item.uuid, "ID")
-                    showToast(platformContext, "ID copied")
-                }
-            )
+            CopyIdMenuItem {
+                menuExpanded = false
+                copyToClipboard(platformContext, item.uuid, "ID")
+                showToast(platformContext, "ID copied")
+            }
             if (webUrl != null) {
-                DropdownMenuItem(
-                    text = { Text("Open in web") },
-                    leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
-                    onClick = {
-                        menuExpanded = false
-                        openUrl(platformContext, webUrl)
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Share") },
-                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                    onClick = {
-                        menuExpanded = false
-                        shareText(platformContext, webUrl, item.name)
-                    }
-                )
+                OpenInWebMenuItem { menuExpanded = false; openUrl(platformContext, webUrl) }
+                ShareMenuItem { menuExpanded = false; shareText(platformContext, webUrl, item.name) }
             }
         }
     }

@@ -59,6 +59,10 @@ import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.CopyIdMenuItem
+import crucible.lens.ui.common.OpenInWebMenuItem
+import crucible.lens.ui.common.RefreshMenuItem
+import crucible.lens.ui.common.ShareMenuItem
 import crucible.lens.ui.common.showFeedback
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.fadeEndEdge
@@ -320,28 +324,10 @@ fun ProjectDetailScreen(
                                     leadingIcon = { Icon(Icons.Default.Dataset, contentDescription = null) },
                                     onClick = { topBarMenuExpanded = false; onCreateDataset() }
                                 )
-                                DropdownMenuItem(
-                                    text = { Text("Open in web") },
-                                    leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
-                                    onClick = {
-                                        topBarMenuExpanded = false
-                                        openUrlInBrowser(ctx, "$graphExplorerUrl/$projectId")
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Share") },
-                                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                                    onClick = {
-                                        topBarMenuExpanded = false
-                                        shareText(ctx, "$graphExplorerUrl/$projectId", project?.title ?: projectId)
-                                    }
-                                )
+                                OpenInWebMenuItem { topBarMenuExpanded = false; openUrlInBrowser(ctx, "$graphExplorerUrl/$projectId") }
+                                ShareMenuItem { topBarMenuExpanded = false; shareText(ctx, "$graphExplorerUrl/$projectId", project?.title ?: projectId) }
                                 HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text("Refresh") },
-                                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                                    onClick = { topBarMenuExpanded = false; loadProjectData(forceRefresh = true) }
-                                )
+                                RefreshMenuItem { topBarMenuExpanded = false; loadProjectData(forceRefresh = true) }
                             }
                         }
                     }
@@ -1075,33 +1061,10 @@ private fun ResourceCard(
         } // end Card
 
         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Copy ID") },
-                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                onClick = {
-                    menuExpanded = false
-
-
-                    copyToClipboard(platformCtx, uniqueId)
-                }
-            )
+            CopyIdMenuItem { menuExpanded = false; copyToClipboard(platformCtx, uniqueId) }
             if (webUrl != null) {
-                DropdownMenuItem(
-                    text = { Text("Open in web") },
-                    leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
-                    onClick = {
-                        menuExpanded = false
-                        openUrl(platformCtx, webUrl)
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Share") },
-                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                    onClick = {
-                        menuExpanded = false
-                        shareText(platformCtx, webUrl ?: "", "")
-                    }
-                )
+                OpenInWebMenuItem { menuExpanded = false; openUrl(platformCtx, webUrl) }
+                ShareMenuItem { menuExpanded = false; shareText(platformCtx, webUrl, "") }
             }
         }
     } // end Box

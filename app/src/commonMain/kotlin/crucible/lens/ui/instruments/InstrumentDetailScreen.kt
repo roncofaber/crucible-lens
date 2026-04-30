@@ -48,8 +48,11 @@ import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.CopyIdMenuItem
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingItem
+import crucible.lens.ui.common.RefreshMenuItem
+import crucible.lens.ui.common.ShareMenuItem
 import crucible.lens.ui.common.showFeedback
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
@@ -166,30 +169,18 @@ fun InstrumentDetailScreen(
                             IconButton(onClick = { overflowMenuExpanded = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(24.dp)) }
                             DropdownMenu(expanded = overflowMenuExpanded, onDismissRequest = { overflowMenuExpanded = false }) {
                                 instrument?.let { instr ->
-                                    DropdownMenuItem(
-                                        text = { Text("Copy ID") },
-                                        leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                                        onClick = {
-                                            overflowMenuExpanded = false
-                                            copyToClipboard(platformCtx, instr.uniqueId)
-                                            showFeedback(platformCtx, "ID copied")
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Share") },
-                                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                                        onClick = {
-                                            overflowMenuExpanded = false
-                                            val text = "${instr.instrumentName ?: instr.uniqueId}\nID: ${instr.uniqueId}"
-                                            shareText(platformCtx, text, instr.instrumentName ?: instr.uniqueId)
-                                        }
-                                    )
+                                    CopyIdMenuItem {
+                                        overflowMenuExpanded = false
+                                        copyToClipboard(platformCtx, instr.uniqueId)
+                                        showFeedback(platformCtx, "ID copied")
+                                    }
+                                    ShareMenuItem {
+                                        overflowMenuExpanded = false
+                                        val text = "${instr.instrumentName ?: instr.uniqueId}\nID: ${instr.uniqueId}"
+                                        shareText(platformCtx, text, instr.instrumentName ?: instr.uniqueId)
+                                    }
                                     HorizontalDivider()
-                                    DropdownMenuItem(
-                                        text = { Text("Refresh") },
-                                        leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                                        onClick = { overflowMenuExpanded = false; CacheManager.clearInstrumentsCache(); loadData(forceRefresh = true) }
-                                    )
+                                    RefreshMenuItem { overflowMenuExpanded = false; CacheManager.clearInstrumentsCache(); loadData(forceRefresh = true) }
                                 }
                             }
                         }

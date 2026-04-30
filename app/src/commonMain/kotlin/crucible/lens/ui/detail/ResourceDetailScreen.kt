@@ -93,6 +93,8 @@ import crucible.lens.data.util.MONTH_NAMES
 import crucible.lens.data.util.dateGroupKey
 import androidx.compose.runtime.snapshots.SnapshotStateSet
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.OpenInWebMenuItem
+import crucible.lens.ui.common.ShareMenuItem
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.fadeEndEdge
 import crucible.lens.ui.common.LoadingContent
@@ -795,29 +797,18 @@ fun ResourceDetailScreen(
                                         is Sample  -> "$graphExplorerUrl/$projectId/sample-graph/${currentDisplayResource.uniqueId}"
                                         is Dataset -> "$graphExplorerUrl/$projectId/dataset/${currentDisplayResource.uniqueId}"
                                     }
-                                    DropdownMenuItem(
-                                        text = { Text("Open in web") },
-                                        leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
-                                        onClick = {
-                                            overflowMenuExpanded = false
-                                            openUrl(platformContext, webUrl)
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Share") },
-                                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                                        onClick = {
-                                            overflowMenuExpanded = false
-                                            shareResource(
-                                                context = platformContext,
-                                                resource = currentDisplayResource,
-                                                shareText = webUrl,
-                                                subject = currentDisplayResource.name,
-                                                darkTheme = isDarkTheme,
-                                                bannerColorValue = primaryColorValue
-                                            )
-                                        }
-                                    )
+                                    OpenInWebMenuItem { overflowMenuExpanded = false; openUrl(platformContext, webUrl) }
+                                    ShareMenuItem {
+                                        overflowMenuExpanded = false
+                                        shareResource(
+                                            context = platformContext,
+                                            resource = currentDisplayResource,
+                                            shareText = webUrl,
+                                            subject = currentDisplayResource.name,
+                                            darkTheme = isDarkTheme,
+                                            bannerColorValue = primaryColorValue
+                                        )
+                                    }
                                 }
                                 // Sibling grouping — only when resource belongs to a project
                                 if (projectId != null) {
