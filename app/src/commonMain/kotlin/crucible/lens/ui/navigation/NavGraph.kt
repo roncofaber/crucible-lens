@@ -136,10 +136,12 @@ fun NavGraph(
     onLastVisitedResourceSave: (String, String) -> Unit,
     onFloatingScanButtonSave: (Boolean) -> Unit,
     onTogglePinnedProject: (String) -> Unit,
-    archivedProjects: Set<String>,
-    onToggleArchive: (String) -> Unit,
+    hiddenProjects: Set<String>,
+    onToggleHideProject: (String) -> Unit,
     pinnedInstruments: Set<String> = emptySet(),
     onTogglePinnedInstrument: (String) -> Unit = {},
+    hiddenInstruments: Set<String> = emptySet(),
+    onToggleHideInstrument: (String) -> Unit = {},
     userOrcid: String? = null,
     onUserOrcidSave: (String?) -> Unit = {},
     onSignOut: () -> Unit = {},
@@ -671,8 +673,8 @@ fun NavGraph(
                 },
                 pinnedProjects = pinnedProjects,
                 onTogglePin = onTogglePinnedProject,
-                archivedProjects = archivedProjects,
-                onToggleArchive = onToggleArchive
+                hiddenProjects = hiddenProjects,
+                onToggleHide = onToggleHideProject
             )
         }
 
@@ -697,7 +699,7 @@ fun NavGraph(
                 },
                 isPinned = projectId in pinnedProjects,
                 onTogglePin = { onTogglePinnedProject(projectId) },
-                isArchived = projectId in archivedProjects,
+                isHidden = projectId in hiddenProjects,
                 onCreateSample = {
                     navController.navigate(Screen.CreateSample.createRoute(projectId))
                 },
@@ -720,7 +722,9 @@ fun NavGraph(
                     navController.navigate(Screen.InstrumentDetail.createRoute(id))
                 },
                 pinnedInstruments = pinnedInstruments,
-                onTogglePin = onTogglePinnedInstrument
+                onTogglePin = onTogglePinnedInstrument,
+                hiddenInstruments = hiddenInstruments,
+                onToggleHide = onToggleHideInstrument
             )
         }
 

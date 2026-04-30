@@ -23,8 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.ui.graphics.SolidColor
+import crucible.lens.ui.common.SearchBar
+
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 import crucible.lens.data.api.ApiClient
@@ -55,8 +55,8 @@ fun ProjectsListScreen(
     onProjectClick: (String) -> Unit,
     pinnedProjects: Set<String> = emptySet(),
     onTogglePin: (String) -> Unit = {},
-    archivedProjects: Set<String> = emptySet(),
-    onToggleArchive: (String) -> Unit = {},
+    hiddenProjects: Set<String> = emptySet(),
+    onToggleHide: (String) -> Unit = {},
 ) {
     val platformContext = getPlatformContext()
     var projects by remember { mutableStateOf<List<Project>?>(null) }
@@ -66,10 +66,10 @@ fun ProjectsListScreen(
     var projectCounts by remember { mutableStateOf<Map<String, Pair<Int?, Int?>>>(emptyMap()) }
     // Persistent cache summaries - loaded immediately for instant display
     var persistentSummaries by remember { mutableStateOf<List<ProjectSummary>?>(null) }
-    var archivedExpanded by remember { mutableStateOf(false) }
+    var hiddenExpanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     // Track which projects were manually unarchived (so we don't auto-archive them again)
-    var manuallyUnarchived by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var manuallyShown by remember { mutableStateOf<Set<String>>(emptySet()) }
     // Trigger for forcing background reload - increments on refresh
     var reloadTrigger by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
@@ -186,7 +186,7 @@ fun ProjectsListScreen(
         val projectList = projects ?: return@LaunchedEffect
         val prioritizedProjects = projectList
             .sortedWith(compareByDescending<Project> { it.projectId in pinnedProjects }
-                .thenBy { it.projectId in archivedProjects })
+                .thenBy { it.projectId in hiddenProjects })
 
         // Track consecutive failures to stop on network errors (thread-safe for concurrent launches)
         var consecutiveFailures = 0
@@ -209,9 +209,9 @@ fun ProjectsListScreen(
 
                             // Auto-archive empty projects (unless manually unarchived or already archived)
                             if (cachedSamples.isEmpty() && cachedDatasets.isEmpty() &&
-                                project.projectId !in manuallyUnarchived &&
-                                project.projectId !in archivedProjects) {
-                                onToggleArchive(project.projectId)
+                                project.projectId !in manuallyShown &&
+                                project.projectId !in hiddenProjects) {
+                                onToggleHide(project.projectId)
                             }
                         }
                         return@launch
@@ -237,9 +237,9 @@ fun ProjectsListScreen(
 
                         // Auto-archive empty projects (unless manually unarchived or already archived)
                         if (sampleCount == 0 && datasetCount == 0 &&
-                            project.projectId !in manuallyUnarchived &&
-                            project.projectId !in archivedProjects) {
-                            onToggleArchive(project.projectId)
+                            project.projectId !in manuallyShown &&
+                            project.projectId !in hiddenProjects) {
+                            onToggleHide(project.projectId)
                         }
                     }
                 }
@@ -291,14 +291,14 @@ fun ProjectsListScreen(
                             }
                             DropdownMenu(expanded = listMenuExpanded, onDismissRequest = { listMenuExpanded = false }) {
                                 DropdownMenuItem(
-                                    text = { Text(if (archivedExpanded) "Hide archived" else "Show archived") },
+                                    text = { Text(if (hiddenExpanded) "Collapse hidden" else "Show hidden") },
                                     leadingIcon = {
                                         Icon(
-                                            if (archivedExpanded) Icons.Default.VisibilityOff else Icons.Default.Inventory2,
+                                            if (hiddenExpanded) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                                             contentDescription = null
                                         )
                                     },
-                                    onClick = { archivedExpanded = !archivedExpanded; listMenuExpanded = false }
+                                    onClick = { hiddenExpanded = !hiddenExpanded; listMenuExpanded = false }
                                 )
                             }
                         }
@@ -316,46 +316,22 @@ fun ProjectsListScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            Column(modifier = Modifier.fillMaxSize().offset {
-                IntOffset(0, (pullRefreshState.distanceFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
-            }) {
-                // Search bar
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                        Box(modifier = Modifier.weight(1f)) {
-                            if (searchQuery.isEmpty()) {
-                                Text("Search by name, ID, or project lead…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                            }
-                            BasicTextField(
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                singleLine = true
-                            )
-                        }
-                        if (searchQuery.isNotEmpty()) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp).clickable { searchQuery = "" })
-                        }
-                    }
-                }
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Search bar — stays fixed during pull-to-refresh
+                SearchBar(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    placeholder = "Search by name, ID, or project lead…"
+                )
 
+                Box(modifier = Modifier.weight(1f).offset {
+                    IntOffset(0, (pullRefreshState.distanceFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
+                }) {
                 when {
                     isLoading && persistentSummaries == null -> {
                     LoadingContent(
                         title = "Loading Projects",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
                 error != null -> {
@@ -435,10 +411,10 @@ fun ProjectsListScreen(
                     }
 
                     val activeProjects = filteredProjects
-                        .filter { it.projectId !in archivedProjects }
+                        .filter { it.projectId !in hiddenProjects }
                         .sortedByDescending { it.projectId in pinnedProjects }
-                    val archivedProjectsList = filteredProjects
-                        .filter { it.projectId in archivedProjects }
+                    val hiddenProjectsList = filteredProjects
+                        .filter { it.projectId in hiddenProjects }
 
                     // Box to contain list + scrollbar
                     Box(
@@ -492,8 +468,8 @@ fun ProjectsListScreen(
                             val dismissState = rememberSwipeToDismissBoxState(
                                 confirmValueChange = { value ->
                                     if (value == SwipeToDismissBoxValue.EndToStart) {
-                                        showFeedback(platformContext, "Project archived")
-                                        onToggleArchive(project.projectId)
+                                        showFeedback(platformContext, "Project hidden")
+                                        onToggleHide(project.projectId)
                                         true
                                     } else false
                                 },
@@ -505,7 +481,7 @@ fun ProjectsListScreen(
                                     dampingRatio = Spring.DampingRatioNoBouncy,
                                     stiffness = Spring.StiffnessMedium
                                 ),
-                                label = "archiveIconScale"
+                                label = "hideIconScale"
                             )
                             SwipeToDismissBox(
                                 state = dismissState,
@@ -531,8 +507,8 @@ fun ProjectsListScreen(
                                             horizontalAlignment = Alignment.CenterHorizontally,
                                             modifier = Modifier.scale(iconScale)
                                         ) {
-                                            Icon(Icons.Default.Archive, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
-                                            Text("Archive", style = MaterialTheme.typography.labelSmall, color = contentColor)
+                                            Icon(Icons.Default.VisibilityOff, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
+                                            Text("Hide", style = MaterialTheme.typography.labelSmall, color = contentColor)
                                         }
                                     }
                                 }
@@ -550,12 +526,12 @@ fun ProjectsListScreen(
                             }
                         }
 
-                        if (archivedProjectsList.isNotEmpty()) {
-                            item(key = "__archived_header__") {
+                        if (hiddenProjectsList.isNotEmpty()) {
+                            item(key = "__hidden_header__") {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { archivedExpanded = !archivedExpanded }
+                                        .clickable { hiddenExpanded = !hiddenExpanded }
                                         .padding(vertical = 4.dp, horizontal = 4.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
@@ -565,46 +541,46 @@ fun ProjectsListScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
-                                            Icons.Default.Archive,
+                                            Icons.Default.VisibilityOff,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Text(
-                                            "Archived (${archivedProjectsList.size})",
+                                            "Hidden (${hiddenProjectsList.size})",
                                             style = MaterialTheme.typography.labelLarge,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                     Icon(
-                                        if (archivedExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        if (hiddenExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
 
-                            if (archivedExpanded) {
-                                items(archivedProjectsList, key = { "arch_${it.projectId}" }) { project ->
+                            if (hiddenExpanded) {
+                                items(hiddenProjectsList, key = { "hidden_${it.projectId}" }) { project ->
                                     val dismissState = rememberSwipeToDismissBoxState(
                                         confirmValueChange = { value ->
                                             if (value == SwipeToDismissBoxValue.StartToEnd) {
-                                                // Mark as manually unarchived to prevent auto-archiving
-                                                manuallyUnarchived = manuallyUnarchived + project.projectId
-                                                showFeedback(platformContext, "Project unarchived")
-                                                onToggleArchive(project.projectId)
+                                                // Mark as manually shown to prevent auto-hiding
+                                                manuallyShown = manuallyShown + project.projectId
+                                                showFeedback(platformContext, "Project shown")
+                                                onToggleHide(project.projectId)
                                                 true
                                             } else false
                                         },
                                         positionalThreshold = { totalDistance -> totalDistance * 0.65f }
                                     )
-                                    val unarchiveIconScale by animateFloatAsState(
+                                    val showIconScale by animateFloatAsState(
                                         targetValue = 0.75f + 0.5f * dismissState.progress,
                                         animationSpec = spring(
                                             dampingRatio = Spring.DampingRatioNoBouncy,
                                             stiffness = Spring.StiffnessMedium
                                         ),
-                                        label = "unarchiveIconScale"
+                                        label = "showIconScale"
                                     )
                                     SwipeToDismissBox(
                                         state = dismissState,
@@ -628,10 +604,10 @@ fun ProjectsListScreen(
                                             ) {
                                                 Column(
                                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                                    modifier = Modifier.scale(unarchiveIconScale)
+                                                    modifier = Modifier.scale(showIconScale)
                                                 ) {
-                                                    Icon(Icons.Default.Unarchive, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
-                                                    Text("Unarchive", style = MaterialTheme.typography.labelSmall, color = contentColor)
+                                                    Icon(Icons.Default.Visibility, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
+                                                    Text("Show", style = MaterialTheme.typography.labelSmall, color = contentColor)
                                                 }
                                             }
                                         }
@@ -642,7 +618,7 @@ fun ProjectsListScreen(
                                             onClick = { onProjectClick(project.projectId) },
                                             isPinned = false,
                                             onTogglePin = {},
-                                            isArchived = true
+                                            isHidden = true
                                         )
                                     }
                                 }
@@ -661,6 +637,8 @@ fun ProjectsListScreen(
                     } // end Box
                 }
             }
+                } // end when
+                } // end offset Box
             } // end Column
 
             // Scroll-to-top button
@@ -686,13 +664,13 @@ private fun ProjectCard(
     onClick: () -> Unit,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
-    isArchived: Boolean = false
+    isHidden: Boolean = false
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isArchived) 0.dp else 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isHidden) 0.dp else 2.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isArchived) MaterialTheme.colorScheme.surfaceVariant
+            containerColor = if (isHidden) MaterialTheme.colorScheme.surfaceVariant
                              else MaterialTheme.colorScheme.surfaceContainerHigh
         )
     ) {
@@ -710,9 +688,9 @@ private fun ProjectCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Icon(
-                    if (isArchived) Icons.Default.Archive else Icons.Default.Folder,
+                    if (isHidden) Icons.Default.VisibilityOff else Icons.Default.Folder,
                     contentDescription = null,
-                    tint = if (isArchived) MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = if (isHidden) MaterialTheme.colorScheme.onSurfaceVariant
                            else MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
@@ -757,7 +735,7 @@ private fun ProjectCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy((-8).dp)
             ) {
-                if (!isArchived) {
+                if (!isHidden) {
                     IconButton(
                         onClick = { onTogglePin() },
                         modifier = Modifier.size(40.dp)

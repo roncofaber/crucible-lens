@@ -19,8 +19,9 @@ interface AppPreferences {
     val lastVisitedResourceName: Flow<String?>
     val floatingScanButton: Flow<Boolean>
     val pinnedProjects: Flow<Set<String>>
-    val archivedProjects: Flow<Set<String>>
+    val hiddenProjects: Flow<Set<String>>
     val pinnedInstruments: Flow<Set<String>>
+    val hiddenInstruments: Flow<Set<String>>
     val userOrcid: Flow<String?>
     val resourceHistory: Flow<List<HistoryItem>>
     val sampleGroupBy: Flow<String>
@@ -39,8 +40,9 @@ interface AppPreferences {
     suspend fun saveFloatingScanButton(enabled: Boolean)
     suspend fun clearApiKey()
     suspend fun togglePinnedProject(id: String)
-    suspend fun toggleArchivedProject(id: String)
+    suspend fun toggleHiddenProject(id: String)
     suspend fun togglePinnedInstrument(id: String)
+    suspend fun toggleHiddenInstrument(id: String)
     suspend fun saveUserOrcid(orcid: String?)
     suspend fun addToHistory(uuid: String, name: String)
     suspend fun clearHistory()

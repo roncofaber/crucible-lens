@@ -129,13 +129,14 @@ class MainActivity : ComponentActivity() {
             val pinnedProjects by preferencesManager.pinnedProjects.collectAsState(
                 initial = emptySet()
             )
-            val archivedProjects by preferencesManager.archivedProjects.collectAsState(
+            val hiddenProjects by preferencesManager.hiddenProjects.collectAsState(
                 initial = emptySet()
             )
             val resourceHistory by preferencesManager.resourceHistory.collectAsState(
                 initial = emptyList()
             )
             val pinnedInstruments by preferencesManager.pinnedInstruments.collectAsState(initial = emptySet())
+            val hiddenInstruments by preferencesManager.hiddenInstruments.collectAsState(initial = emptySet())
             val userOrcid by preferencesManager.userOrcid.collectAsState(initial = null)
             val scope = rememberCoroutineScope()
 
@@ -234,15 +235,19 @@ class MainActivity : ComponentActivity() {
                             preferencesManager.togglePinnedProject(id)
                         }
                     },
-                    archivedProjects = archivedProjects,
-                    onToggleArchive = { id ->
+                    hiddenProjects = hiddenProjects,
+                    onToggleHideProject = { id ->
                         scope.launch {
-                            preferencesManager.toggleArchivedProject(id)
+                            preferencesManager.toggleHiddenProject(id)
                         }
                     },
                     pinnedInstruments = pinnedInstruments,
                     onTogglePinnedInstrument = { id ->
                         scope.launch { preferencesManager.togglePinnedInstrument(id) }
+                    },
+                    hiddenInstruments = hiddenInstruments,
+                    onToggleHideInstrument = { id ->
+                        scope.launch { preferencesManager.toggleHiddenInstrument(id) }
                     },
                     userOrcid = userOrcid,
                     onUserOrcidSave = { orcid ->

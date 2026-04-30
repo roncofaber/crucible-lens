@@ -181,7 +181,7 @@ fun ProjectDetailScreen(
     onResourceClick: (uuid: String, groupBy: String) -> Unit,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
-    isArchived: Boolean = false,
+    isHidden: Boolean = false,
     onCreateSample: () -> Unit = {},
     onCreateDataset: () -> Unit = {},
 ) {
@@ -245,7 +245,7 @@ fun ProjectDetailScreen(
                 }
 
                 // Skip API calls for archived projects (use cache only)
-                if (isArchived) {
+                if (isHidden) {
                     // Use cache if available, otherwise show empty
                     samples = cachedSamples ?: emptyList()
                     datasets = cachedDatasets ?: emptyList()

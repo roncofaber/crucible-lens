@@ -49,9 +49,17 @@ class IosAppPreferences : AppPreferences {
                 .toSet()
         )
 
-    override val archivedProjects: Flow<Set<String>> =
+    override val hiddenProjects: Flow<Set<String>> =
         MutableStateFlow(
-            settings.getString("archived_projects", "")
+            settings.getString("hidden_projects", "")
+                .split(",")
+                .filter { it.isNotBlank() }
+                .toSet()
+        )
+
+    override val hiddenInstruments: Flow<Set<String>> =
+        MutableStateFlow(
+            settings.getString("hidden_instruments", "")
                 .split(",")
                 .filter { it.isNotBlank() }
                 .toSet()
@@ -163,20 +171,24 @@ class IosAppPreferences : AppPreferences {
         (pinnedProjects as? MutableStateFlow)?.value = projects
     }
 
-    override suspend fun toggleArchivedProject(id: String) {
-        val current = settings.getString("archived_projects", "")
+    override suspend fun toggleHiddenProject(id: String) {
+        val current = settings.getString("hidden_projects", "")
             .split(",")
             .filter { it.isNotBlank() }
             .toMutableSet()
+        if (id in current) current.remove(id) else current.add(id)
+        settings.putString("hidden_projects", current.joinToString(","))
+        (hiddenProjects as? MutableStateFlow)?.value = current
+    }
 
-        if (id in current) {
-            current.remove(id)
-        } else {
-            current.add(id)
-        }
-
-        settings.putString("archived_projects", current.joinToString(","))
-        (archivedProjects as? MutableStateFlow)?.value = current
+    override suspend fun toggleHiddenInstrument(id: String) {
+        val current = settings.getString("hidden_instruments", "")
+            .split(",")
+            .filter { it.isNotBlank() }
+            .toMutableSet()
+        if (id in current) current.remove(id) else current.add(id)
+        settings.putString("hidden_instruments", current.joinToString(","))
+        (hiddenInstruments as? MutableStateFlow)?.value = current
     }
 
     override suspend fun togglePinnedInstrument(id: String) {

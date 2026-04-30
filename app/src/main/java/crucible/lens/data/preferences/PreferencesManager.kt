@@ -24,7 +24,8 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         private val LAST_VISITED_RESOURCE_NAME = stringPreferencesKey("last_visited_resource_name")
         private val FLOATING_SCAN_BUTTON = stringPreferencesKey("floating_scan_button")
         private val PINNED_PROJECTS = stringPreferencesKey("pinned_projects")
-        private val ARCHIVED_PROJECTS = stringPreferencesKey("archived_projects")
+        private val HIDDEN_PROJECTS = stringPreferencesKey("hidden_projects")
+        private val HIDDEN_INSTRUMENTS = stringPreferencesKey("hidden_instruments")
         private val RESOURCE_HISTORY = stringPreferencesKey("resource_history")
         private val SAMPLE_GROUP_BY = stringPreferencesKey("sample_group_by")
         private val DATASET_GROUP_BY = stringPreferencesKey("dataset_group_by")
@@ -86,8 +87,12 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     }
 
-    override val archivedProjects: Flow<Set<String>> = context.dataStore.data.map { prefs ->
-        prefs[ARCHIVED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+    override val hiddenProjects: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[HIDDEN_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+    }
+
+    override val hiddenInstruments: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[HIDDEN_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     }
 
     override val sampleGroupBy: Flow<String> = context.dataStore.data.map { prefs ->
@@ -186,11 +191,19 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         }
     }
 
-    override suspend fun toggleArchivedProject(id: String) {
+    override suspend fun toggleHiddenProject(id: String) {
         context.dataStore.edit { prefs ->
-            val current = prefs[ARCHIVED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+            val current = prefs[HIDDEN_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
             if (id in current) current.remove(id) else current.add(id)
-            prefs[ARCHIVED_PROJECTS] = current.joinToString(",")
+            prefs[HIDDEN_PROJECTS] = current.joinToString(",")
+        }
+    }
+
+    override suspend fun toggleHiddenInstrument(id: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[HIDDEN_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+            if (id in current) current.remove(id) else current.add(id)
+            prefs[HIDDEN_INSTRUMENTS] = current.joinToString(",")
         }
     }
 
