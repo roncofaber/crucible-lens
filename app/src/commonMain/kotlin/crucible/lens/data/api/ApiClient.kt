@@ -27,23 +27,22 @@ object ApiClient {
 
     fun getApiKey() = apiKey
 
-    val httpClient: HttpClient
-        get() = HttpClient {
-            install(ContentNegotiation) {
-                json(Json {
-                    ignoreUnknownKeys = true
-                    isLenient = true
-                })
-            }
-            install(Logging) {
-                level = LogLevel.NONE
-            }
-            install(HttpTimeout) {
-                requestTimeoutMillis = 30_000  // 30s per request
-                connectTimeoutMillis = 10_000  // 10s to establish connection
-                socketTimeoutMillis  = 30_000  // 30s for data transfer
-            }
+    private val httpClient: HttpClient = HttpClient {
+        install(ContentNegotiation) {
+            json(Json {
+                ignoreUnknownKeys = true
+                isLenient = true
+            })
         }
+        install(Logging) {
+            level = LogLevel.NONE
+        }
+        install(HttpTimeout) {
+            requestTimeoutMillis = 30_000
+            connectTimeoutMillis = 10_000
+            socketTimeoutMillis  = 30_000
+        }
+    }
 
     val service: CrucibleApiService
         get() {

@@ -17,6 +17,7 @@ import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.model.PaginatedResponse
 import crucible.lens.data.model.UserLead
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlin.math.ceil
@@ -408,6 +409,8 @@ sealed class ApiResult<out T> {
 
 suspend fun <T> safeCall(block: suspend () -> T): ApiResult<T> = try {
     ApiResult.Success(block())
+} catch (e: ResponseException) {
+    ApiResult.Error(e.response.status.value, "HTTP ${e.response.status.value}: ${e.response.status.description}")
 } catch (e: Exception) {
     ApiResult.Error(-1, e.message ?: "Unknown error")
 }
