@@ -417,11 +417,7 @@ fun ProjectsListScreen(
                         .filter { it.projectId in hiddenProjects }
 
                     // Box to contain list + scrollbar
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
                         // Show message when search returns no results
                         if (searchQuery.isNotBlank() && filteredProjects.isEmpty()) {
                         Card(
@@ -635,10 +631,9 @@ fun ProjectsListScreen(
                                 .padding(end = 4.dp)
                         )
                     } // end Box
-                }
-            }
+                } // end else ->
                 } // end when
-                } // end offset Box
+            } // end offset Box
             } // end Column
 
             // Scroll-to-top button
