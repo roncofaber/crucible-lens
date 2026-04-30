@@ -2,8 +2,8 @@ package crucible.lens.ui.scanner
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import io.github.kalinjul.easyqrscan.scanner.CodeType
-import io.github.kalinjul.easyqrscan.scanner.ScannerWithPermissions
+import org.publicvalue.multiplatform.qrcode.CodeType
+import org.publicvalue.multiplatform.qrcode.ScannerWithPermissions
 
 @Composable
 fun QRCodeScannerView(
