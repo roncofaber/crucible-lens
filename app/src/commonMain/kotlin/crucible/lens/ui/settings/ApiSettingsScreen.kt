@@ -37,8 +37,7 @@ fun ApiSettingsScreen(
     onSignOut: () -> Unit = {},
     onSignIn: () -> Unit = {},
     onBack: () -> Unit,
-    onHome: () -> Unit,
-    onSearch: () -> Unit
+    onHome: () -> Unit
 ) {
     var apiKeyInput by remember { mutableStateOf(currentApiKey ?: "") }
     LaunchedEffect(currentApiKey) {
@@ -108,13 +107,8 @@ fun ApiSettingsScreen(
                     }
                 },
                 actions = {
-                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
-                            Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
-                        }
-                        IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
-                            Icon(Icons.Default.Home, contentDescription = "Home", modifier = Modifier.size(24.dp))
-                        }
+                    IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Default.Home, contentDescription = "Home", modifier = Modifier.size(24.dp))
                     }
                 }
             )
