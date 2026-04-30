@@ -41,7 +41,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 
 
 import crucible.lens.data.api.ApiClient
@@ -213,7 +215,6 @@ fun ProjectDetailScreen(
             pagerState.scrollToPage(1)
         }
     }
-    val mainScrollState = rememberScrollState()
     val pullRefreshState = rememberPullToRefreshState()
     var isRefreshingNow by remember { mutableStateOf(false) }
 
@@ -350,13 +351,9 @@ fun ProjectDetailScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            Column(
-                modifier = modifier
-                    .fillMaxSize()
-                    .verticalScroll(mainScrollState)
-            ) {
-            // Project header with integrated search
-            ProjectHeader(
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Fixed header — stays in place during pull-to-refresh
+                ProjectHeader(
                 project = project,
                 projectId = projectId,
                 searchQuery = searchQuery,
@@ -371,6 +368,11 @@ fun ProjectDetailScreen(
                 sortState = sortState,
                 onSortStateChange = { sortState = it; showFeedback(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
             )
+
+                // Sliding content — offsets down during pull
+                Column(modifier = Modifier.weight(1f).offset {
+                    IntOffset(0, (pullRefreshState.distanceFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
+                }) {
 
             // Tabs
             TabRow(selectedTabIndex = pagerState.currentPage) {
@@ -498,8 +500,9 @@ fun ProjectDetailScreen(
                         }
                     }
                 }
-            }
-            }
+            } // end when
+                } // end offset Column
+            } // end outer Column
         }
     }
 

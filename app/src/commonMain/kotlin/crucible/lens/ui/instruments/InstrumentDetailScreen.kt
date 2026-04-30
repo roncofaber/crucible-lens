@@ -33,7 +33,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
@@ -192,26 +194,30 @@ fun InstrumentDetailScreen(
             state = pullRefreshState,
             modifier = modifier.fillMaxSize().padding(padding)
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // ── Header ────────────────────────────────────────────────────
-                item(key = "header") {
-                    instrument?.let { instr ->
-                        InstrumentHeader(
-                            instrument = instr,
-                            isPinned = isPinned,
-                            onTogglePin = onTogglePin,
-                            searchQuery = searchQuery,
-                            onSearchChange = { searchQuery = it },
-                            sortState = sortState,
-                            onSortStateChange = { sortState = it; showFeedback(platformCtx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
-                            groupBy = groupBy,
-                            onGroupByChange = { groupBy = it; showFeedback(platformCtx, "Grouped by ${it.label}") }
-                        )
-                    }
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Fixed header — stays in place during pull-to-refresh
+                instrument?.let { instr ->
+                    InstrumentHeader(
+                        instrument = instr,
+                        isPinned = isPinned,
+                        onTogglePin = onTogglePin,
+                        searchQuery = searchQuery,
+                        onSearchChange = { searchQuery = it },
+                        sortState = sortState,
+                        onSortStateChange = { sortState = it; showFeedback(platformCtx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
+                        groupBy = groupBy,
+                        onGroupByChange = { groupBy = it; showFeedback(platformCtx, "Grouped by ${it.label}") }
+                    )
                 }
+
+                // Sliding content — offsets down during pull
+                Box(modifier = Modifier.weight(1f).offset {
+                    IntOffset(0, (pullRefreshState.distanceFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
+                }) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize()
+                ) {
 
                 // ── States ────────────────────────────────────────────────────
                 when {
@@ -279,8 +285,10 @@ fun InstrumentDetailScreen(
                     }
                 }
             }
-            LazyColumnScrollbar(listState = listState, modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd))
-            ScrollToTopButton(visible = showScrollToTop, onClick = { scope.launch { listState.animateScrollToItem(0) } }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp))
+                LazyColumnScrollbar(listState = listState, modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd))
+                ScrollToTopButton(visible = showScrollToTop, onClick = { scope.launch { listState.animateScrollToItem(0) } }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp))
+                } // end offset Box
+            } // end Column
         }
     }
 
