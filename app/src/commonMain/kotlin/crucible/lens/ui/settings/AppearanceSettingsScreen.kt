@@ -108,11 +108,6 @@ fun AppearanceSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("Appearance", style = MaterialTheme.typography.titleLarge)
-            Text(
-                "Changes apply immediately as you select them.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
 
             // Theme Mode
             Card {
