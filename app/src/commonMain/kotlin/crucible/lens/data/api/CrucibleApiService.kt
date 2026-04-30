@@ -113,8 +113,12 @@ class CrucibleApiService(
         get("datasets/$uuid/thumbnails")
     }
 
-    suspend fun getInstruments(): ApiResult<List<Instrument>> = safeCall {
-        get("instruments")
+    suspend fun getInstruments(): ApiResult<List<Instrument>> = fetchAllPages { limit, offset ->
+        client.get("${baseUrl}instruments") {
+            header("Authorization", "Bearer $apiKey")
+            url.parameters.append("limit", limit.toString())
+            url.parameters.append("offset", offset.toString())
+        }.body<PaginatedResponse<Instrument>>()
     }
 
     suspend fun getInstrument(id: String): ApiResult<Instrument> = safeCall {
@@ -132,8 +136,12 @@ class CrucibleApiService(
         }.body<PaginatedResponse<Dataset>>()
     }
 
-    suspend fun getProjects(): ApiResult<List<Project>> = safeCall {
-        get("projects")
+    suspend fun getProjects(): ApiResult<List<Project>> = fetchAllPages { limit, offset ->
+        client.get("${baseUrl}projects") {
+            header("Authorization", "Bearer $apiKey")
+            url.parameters.append("limit", limit.toString())
+            url.parameters.append("offset", offset.toString())
+        }.body<PaginatedResponse<Project>>()
     }
 
     /** Fetches sample and dataset counts for a project using limit=1 — fast, minimal payload. */
@@ -255,8 +263,12 @@ class CrucibleApiService(
         }
     }
 
-    suspend fun getProjectUsers(projectId: String): ApiResult<List<UserLead>> = safeCall {
-        get("projects/$projectId/users")
+    suspend fun getProjectUsers(projectId: String): ApiResult<List<UserLead>> = fetchAllPages { limit, offset ->
+        client.get("${baseUrl}projects/$projectId/users") {
+            header("Authorization", "Bearer $apiKey")
+            url.parameters.append("limit", limit.toString())
+            url.parameters.append("offset", offset.toString())
+        }.body<PaginatedResponse<UserLead>>()
     }
 
     suspend fun searchScientificMetadata(
