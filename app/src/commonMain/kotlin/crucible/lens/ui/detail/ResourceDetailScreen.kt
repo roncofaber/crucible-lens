@@ -38,7 +38,9 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import androidx.compose.foundation.shape.RoundedCornerShape
 import coil3.compose.AsyncImage
 import androidx.compose.animation.AnimatedContent
@@ -856,7 +858,9 @@ fun ResourceDetailScreen(
                         val pageGetCardState: (String) -> Boolean = { key -> getCardState("$pageId/$key") }
                         val pageSetCardState: (String, Boolean) -> Unit = { key, value -> onCardStateChange("$pageId/$key", value) }
 
-                        Box(modifier = Modifier.fillMaxSize()) {
+                        Box(modifier = Modifier.fillMaxSize().offset {
+                            IntOffset(0, (pullRefreshState.distanceFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
+                        }) {
             // Show loading only when actually waiting for data
             AnimatedVisibility(
                 visible = isCurrentResource && resource.uniqueId != mfid && !isRefreshing,
