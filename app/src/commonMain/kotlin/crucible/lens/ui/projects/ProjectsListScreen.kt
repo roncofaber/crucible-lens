@@ -38,6 +38,7 @@ import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ScrollToTopButton
+import crucible.lens.data.util.fetchProjectData
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -218,6 +219,11 @@ fun ProjectsListScreen(
                     } catch (_: Exception) {
                         consecutiveFailures++
                         null to null
+                    }
+
+                    // Warm the full data cache in background so ProjectDetailScreen opens instantly
+                    launch {
+                        try { fetchProjectData(project.projectId) } catch (_: Exception) { }
                     }
 
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
