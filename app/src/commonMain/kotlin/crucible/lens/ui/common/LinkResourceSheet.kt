@@ -311,7 +311,7 @@ fun LinkResourceSheet(
                             label = { Text("Relationship direction") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = directionExpanded) },
                             leadingIcon = { Icon(Icons.Default.AccountTree, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth().menuAnchor()
+                            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable)
                         )
                         ExposedDropdownMenu(
                             expanded = directionExpanded,

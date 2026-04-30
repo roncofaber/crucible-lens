@@ -53,7 +53,7 @@ class CrucibleRepository {
     private fun hasLinks(resource: CrucibleResource): Boolean = when (resource) {
         is crucible.lens.data.model.Sample  -> resource.links != null
         is Dataset -> resource.links != null
-        else -> true
+        is crucible.lens.data.model.Instrument -> true  // instruments don't have links
     }
 
     suspend fun fetchThumbnails(datasetUuid: String): List<String> = withContext(Dispatchers.IO) {

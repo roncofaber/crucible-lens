@@ -132,7 +132,7 @@ fun ApiSettingsScreen(
                             onClick = ::discard,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Icon(Icons.Default.Undo, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
                             Text("Discard")
                         }
