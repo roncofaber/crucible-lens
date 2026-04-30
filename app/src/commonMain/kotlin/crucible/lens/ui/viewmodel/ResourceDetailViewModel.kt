@@ -152,6 +152,15 @@ class ResourceDetailViewModel : ViewModel() {
         }
     }
 
+    fun updateCurrentResource(resource: CrucibleResource) {
+        _uiState.update {
+            if (it is UiState.Success && it.resource.uniqueId != resource.uniqueId) {
+                val thumbnails = CacheManager.getThumbnails(resource.uniqueId) ?: emptyList()
+                it.copy(resource = resource, thumbnails = thumbnails)
+            } else it
+        }
+    }
+
     fun reset() {
         _uiState.value = UiState.Idle
     }

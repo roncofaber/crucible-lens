@@ -151,7 +151,7 @@ fun ResourceDetailScreen(
     onSearch: () -> Unit = {},
     onHome: () -> Unit,
     onRefresh: (uuid: String) -> Unit,
-    onNavigateToSibling: (uuid: String, groupBy: String?) -> Unit = { uuid, _ -> onNavigateToResource(uuid) },
+    onCurrentResourceChanged: (CrucibleResource) -> Unit = {},
     onDuplicate: (CrucibleResource) -> Unit = {},
     recentHistory: List<crucible.lens.data.preferences.HistoryItem> = emptyList(),
     onSaveToHistory: (uuid: String, name: String) -> Unit = { _, _ -> },
@@ -456,12 +456,14 @@ fun ResourceDetailScreen(
         }
     }
 
-    // Handle pager swipes to trigger navigation when scroll completes
-    LaunchedEffect(pagerState.currentPage) {
+    // Update the reference resource when the user swipes to a sibling and the scroll settles.
+    // Keying on isScrollInProgress ensures this fires even when currentPage changes mid-scroll.
+    LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
         if (siblingList.isNotEmpty() && !pagerState.isScrollInProgress) {
             val targetResource = siblingList.getOrNull(pagerState.currentPage)
             if (targetResource != null && targetResource.uniqueId != resource.uniqueId) {
-                onNavigateToSibling(targetResource.uniqueId, activeSiblingGroupBy)
+                val full = loadedResources[targetResource.uniqueId] ?: targetResource
+                onCurrentResourceChanged(full)
             }
         }
     }
