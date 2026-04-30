@@ -155,6 +155,8 @@ fun HomeScreen(
         CacheManager.getInstruments()?.filter { it.uniqueId in pinnedInstruments } ?: emptyList()
     }
 
+    val isLoadingProjects = !apiKey.isNullOrBlank() && allProjects.isEmpty() && fetchError == null
+
     AppScaffold(
         topBar = {
             Column {
@@ -176,6 +178,9 @@ fun HomeScreen(
                         IconButton(onClick = onSettingsClick) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
                     }
                 )
+                if (isLoadingProjects) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
             }
         }
     ) { padding ->

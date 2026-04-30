@@ -46,6 +46,8 @@ import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.ErrorCard
+import crucible.lens.ui.common.LoadingItem
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.fadeEndEdge
@@ -213,23 +215,15 @@ fun InstrumentDetailScreen(
                 // ── States ────────────────────────────────────────────────────
                 when {
                     isLoading -> item(key = "loading") {
-                        Box(modifier = Modifier.fillMaxWidth().padding(top = 64.dp), contentAlignment = Alignment.TopCenter) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                CircularProgressIndicator()
-                                Text("Loading…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
+                        LoadingItem(label = "Loading datasets…")
                     }
                     error != null -> item(key = "error") {
-                        Card(modifier = Modifier.fillMaxWidth().padding(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
-                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
-                                    Text("Error", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold)
-                                }
-                                Text(error ?: "Unknown error", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
-                            }
-                        }
+                        ErrorCard(
+                            title = "Error Loading Datasets",
+                            message = error ?: "Unknown error",
+                            modifier = Modifier.padding(16.dp),
+                            onRetry = { loadData(forceRefresh = true) }
+                        )
                     }
                     filteredDatasets.isEmpty() -> item(key = "empty") {
                         Card(modifier = Modifier.fillMaxWidth().padding(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {

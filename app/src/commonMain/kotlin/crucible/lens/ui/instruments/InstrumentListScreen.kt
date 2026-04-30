@@ -29,6 +29,7 @@ import crucible.lens.data.model.Instrument
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ErrorCard
+import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
 import kotlinx.coroutines.launch
@@ -156,14 +157,7 @@ fun InstrumentListScreen(
                 }
 
                 when {
-                    isLoading -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                CircularProgressIndicator()
-                                Text("Loading instruments…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
+                    isLoading -> LoadingContent(title = "Loading Instruments")
                     error != null -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             ErrorCard(
