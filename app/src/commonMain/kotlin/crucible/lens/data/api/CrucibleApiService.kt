@@ -1,6 +1,7 @@
 package crucible.lens.data.api
 
 import crucible.lens.data.model.AccountResponse
+import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.DatasetUpdateRequest
@@ -73,6 +74,11 @@ class CrucibleApiService(
 
     suspend fun getAccount(): ApiResult<AccountResponse> = safeCall {
         get("account")
+    }
+
+    /** Resolves resource type and returns the full resource in one call (no /idtype lookup needed). */
+    suspend fun getResource(uuid: String): ApiResult<CrucibleResource> = safeCall {
+        get("resources/$uuid")
     }
 
     suspend fun getResourceType(uuid: String): ApiResult<ResourceType> = safeCall {

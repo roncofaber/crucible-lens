@@ -79,22 +79,31 @@ class CrucibleRepository {
     }
 
     private suspend fun fetchResourceByUuidFallback(uuid: String): ResourceResult {
+        // Use the unified /resources/{uuid} endpoint to resolve type in one call,
+        // then fetch the full resource with include_links for the complete detail view.
         return try {
-            val sampleResult = api.getSample(uuid)
-            when (sampleResult) {
+            when (val resolved = api.getResource(uuid)) {
                 is ApiResult.Success -> {
-                    CacheManager.cacheResourceType(uuid, "sample")
-                    ResourceResult.Success(sampleResult.data)
-                }
-                is ApiResult.Error -> {
-                    val dataset = fetchDatasetWithMetadata(uuid)
-                    if (dataset != null) {
-                        CacheManager.cacheResourceType(uuid, "dataset")
-                        ResourceResult.Success(dataset)
-                    } else {
-                        httpError(sampleResult.code)
+                    val resource = resolved.data
+                    when (resource) {
+                        is crucible.lens.data.model.Sample -> {
+                            CacheManager.cacheResourceType(uuid, "sample")
+                            // Refetch with include_links for full relationship data
+                            when (val full = api.getSample(uuid)) {
+                                is ApiResult.Success -> ResourceResult.Success(full.data)
+                                is ApiResult.Error -> ResourceResult.Success(resource) // use resolved data as fallback
+                            }
+                        }
+                        is crucible.lens.data.model.Dataset -> {
+                            CacheManager.cacheResourceType(uuid, "dataset")
+                            val dataset = fetchDatasetWithMetadata(uuid)
+                            if (dataset != null) ResourceResult.Success(dataset)
+                            else ResourceResult.Success(resource)
+                        }
+                        else -> ResourceResult.Success(resource)
                     }
                 }
+                is ApiResult.Error -> httpError(resolved.code)
             }
         } catch (e: Exception) {
             ResourceResult.Error("Network error: ${e.message ?: "check your connection"}")

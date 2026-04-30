@@ -31,14 +31,22 @@ suspend fun fetchProjectData(
                 if (cachedSamples != null) cachedSamples else {
                     val result = ApiClient.service.getSamplesByProject(projectId)
                     (result as? ApiResult.Success)?.data
-                        ?.also { CacheManager.cacheProjectSamples(projectId, it) } ?: emptyList()
+                        ?.also {
+                            CacheManager.cacheProjectSamples(projectId, it)
+                            // Populate type cache so detail screen skips the /idtype lookup
+                            it.forEach { s -> CacheManager.cacheResourceType(s.uniqueId, "sample") }
+                        } ?: emptyList()
                 }
             }
             val d = async {
                 if (cachedDatasets != null) cachedDatasets else {
                     val result = ApiClient.service.getDatasetsByProject(projectId)
                     (result as? ApiResult.Success)?.data
-                        ?.also { CacheManager.cacheProjectDatasets(projectId, it) } ?: emptyList()
+                        ?.also {
+                            CacheManager.cacheProjectDatasets(projectId, it)
+                            // Populate type cache so detail screen skips the /idtype lookup
+                            it.forEach { ds -> CacheManager.cacheResourceType(ds.uniqueId, "dataset") }
+                        } ?: emptyList()
                 }
             }
             s.await() to d.await()
