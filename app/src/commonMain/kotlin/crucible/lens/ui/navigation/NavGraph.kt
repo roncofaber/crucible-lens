@@ -153,6 +153,14 @@ fun NavGraph(
         }
     }
 
+    // Kick off full background data sync whenever the API key becomes available,
+    // so projects, samples, datasets and instruments are cached for instant search.
+    LaunchedEffect(apiKey) {
+        if (!apiKey.isNullOrBlank()) {
+            viewModel.startBackgroundSync()
+        }
+    }
+
     LaunchedEffect(openScanner, apiKey) {
         if (openScanner && !apiKey.isNullOrBlank()) {
             navController.navigate(Screen.Scanner.route) {

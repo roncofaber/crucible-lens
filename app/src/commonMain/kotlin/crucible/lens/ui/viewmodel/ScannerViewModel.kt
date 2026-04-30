@@ -4,12 +4,18 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.repository.ResourceResult
+import crucible.lens.data.util.fetchProjectData
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -129,6 +135,44 @@ class ScannerViewModel : ViewModel() {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Triggers a full background data sync when the API key becomes available.
+     * Loads all projects, their samples/datasets, and all instruments into the
+     * in-memory cache so search works instantly from any screen without API calls.
+     */
+    fun startBackgroundSync() {
+        viewModelScope.launch {
+            try {
+                // 1. Load all projects (parallel with instruments)
+                val projectsDeferred = async {
+                    (ApiClient.service.getProjects() as? ApiResult.Success)?.data
+                        ?.also { CacheManager.cacheProjects(it) }
+                        ?: CacheManager.getProjects()
+                        ?: emptyList()
+                }
+                val instrumentsDeferred = async {
+                    (ApiClient.service.getInstruments() as? ApiResult.Success)?.data
+                        ?.also { CacheManager.cacheInstruments(it) }
+                }
+
+                val projects = projectsDeferred.await()
+                instrumentsDeferred.await()
+
+                // 2. Load samples + datasets for every project in parallel batches
+                projects.chunked(5).forEach { batch ->
+                    coroutineScope {
+                        batch.map { project ->
+                            async {
+                                try { fetchProjectData(project.projectId) }
+                                catch (_: Exception) { }
+                            }
+                        }.awaitAll()
+                    }
+                }
+            } catch (_: Exception) { }
         }
     }
 
