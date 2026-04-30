@@ -193,7 +193,8 @@ actual fun CreateDatasetScreen(
                         label = { Text("Project") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = projectDropdownExpanded) },
                         leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                        @Suppress("DEPRECATION")
+                        modifier = Modifier.fillMaxWidth().menuAnchor()
                     )
                     ExposedDropdownMenu(
                         expanded = projectDropdownExpanded,
