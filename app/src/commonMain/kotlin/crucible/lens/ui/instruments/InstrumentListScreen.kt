@@ -28,6 +28,7 @@ import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Instrument
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
 import kotlinx.coroutines.launch
@@ -165,15 +166,12 @@ fun InstrumentListScreen(
                     }
                     error != null -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Card(modifier = Modifier.fillMaxWidth().padding(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
-                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
-                                        Text("Error", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold)
-                                    }
-                                    Text(error ?: "Unknown error", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
-                                }
-                            }
+                            ErrorCard(
+                                title = "Error Loading Instruments",
+                                message = error ?: "Unknown error",
+                                modifier = Modifier.padding(16.dp),
+                                onRetry = { loadInstruments(forceRefresh = true) }
+                            )
                         }
                     }
                     filteredInstruments.isEmpty() -> {

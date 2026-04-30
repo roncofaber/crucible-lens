@@ -57,6 +57,7 @@ import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.fadeEndEdge
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
@@ -457,41 +458,12 @@ fun ProjectDetailScreen(
                             .fillMaxWidth()
                             .weight(1f)
                     ) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
-                        ) {
-                        Column(
+                        ErrorCard(
+                            title = "Error Loading Data",
+                            message = error ?: "Unknown error",
                             modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Error,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                                Text(
-                                    text = "Error Loading Data",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Text(
-                                text = error ?: "Unknown error",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                    }
+                            onRetry = { loadProjectData(forceRefresh = true) }
+                        )
                     }
                 }
                 else -> {
