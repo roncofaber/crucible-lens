@@ -3,6 +3,9 @@ import crucible.lens.platform.*
 
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -68,6 +71,8 @@ fun HomeScreen(
     val platformContext = getPlatformContext()
 
     var allProjects by remember { mutableStateOf(CacheManager.getProjects() ?: emptyList()) }
+    var fetchError by remember { mutableStateOf<String?>(null) }
+    var retryTrigger by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
         val persistentData = PersistentProjectCache.loadProjectData(platformContext)
@@ -78,11 +83,12 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(apiKey) {
+    LaunchedEffect(apiKey, retryTrigger) {
         if (apiKey.isNullOrBlank()) return@LaunchedEffect
         val cached = CacheManager.getProjects()
         if (cached != null) {
             allProjects = cached
+            fetchError = null
         } else {
             try {
                 when (val response = ApiClient.service.getProjects()) {
@@ -90,15 +96,16 @@ fun HomeScreen(
                         val projects = response.data
                         CacheManager.cacheProjects(projects)
                         allProjects = projects
+                        fetchError = null
                     }
                     is crucible.lens.data.api.ApiResult.Error -> {
-                        println("Failed to load projects: ${response.message}")
+                        fetchError = response.message
                     }
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                println("Failed to load projects: $e")
+                fetchError = e.message ?: "Network error"
             }
         }
     }
@@ -203,6 +210,55 @@ fun HomeScreen(
                         onHistory = onHistory
                     )
                 }
+                AnimatedVisibility(
+                    visible = fetchError != null,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Text(
+                                fetchError ?: "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(
+                                onClick = { fetchError = null; retryTrigger++ },
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            ) {
+                                Text("Retry", style = MaterialTheme.typography.labelMedium)
+                            }
+                            IconButton(
+                                onClick = { fetchError = null },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Dismiss",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                    }
+                }
+
                 HomePinnedProjects(
                     pinnedList = pinnedList,
                     onProjectClick = onProjectClick,
