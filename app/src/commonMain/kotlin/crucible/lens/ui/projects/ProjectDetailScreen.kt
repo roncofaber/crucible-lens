@@ -361,9 +361,13 @@ fun ProjectDetailScreen(
                 onSortStateChange = { sortState = it; showFeedback(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
             )
 
-                // Sliding content — offsets down during pull
+                // Sliding content — offsets down during pull, snaps back on release
+                val ptrFraction by animateFloatAsState(
+                    targetValue = if (isRefreshingNow) 0f else pullRefreshState.distanceFraction,
+                    label = "ptr"
+                )
                 Column(modifier = Modifier.weight(1f).offset {
-                    IntOffset(0, (pullRefreshState.distanceFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
+                    IntOffset(0, (ptrFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
                 }) {
 
             // Tabs

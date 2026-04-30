@@ -174,34 +174,10 @@ class CrucibleApiService(
         }.body<PaginatedResponse<Project>>()
     }
 
-    /** Fetches sample and dataset counts for a project using limit=1 — fast, minimal payload. */
-    suspend fun getProjectItemCounts(projectId: String): Pair<Int?, Int?> = coroutineScope {
-        val samples = async {
-            runCatching {
-                client.get("${baseUrl}samples") {
-                    header("Authorization", "Bearer $apiKey")
-                    url.parameters.append("project_id", projectId)
-                    url.parameters.append("limit", "1")
-                    url.parameters.append("offset", "0")
-                }.body<PaginatedResponse<Sample>>().total
-            }.getOrNull()
-        }
-        val datasets = async {
-            runCatching {
-                client.get("${baseUrl}datasets") {
-                    header("Authorization", "Bearer $apiKey")
-                    url.parameters.append("project_id", projectId)
-                    url.parameters.append("limit", "1")
-                    url.parameters.append("offset", "0")
-                }.body<PaginatedResponse<Dataset>>().total
-            }.getOrNull()
-        }
-        samples.await() to datasets.await()
-    }
-
     suspend fun getSamplesByProject(
-        projectId: String
-    ): ApiResult<List<Sample>> = fetchAllPages { limit, offset ->
+        projectId: String,
+        onTotalKnown: (suspend (Int) -> Unit)? = null
+    ): ApiResult<List<Sample>> = fetchAllPages(onTotalKnown = onTotalKnown) { limit, offset ->
         client.get("${baseUrl}samples") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("project_id", projectId)
@@ -211,8 +187,9 @@ class CrucibleApiService(
     }
 
     suspend fun getDatasetsByProject(
-        projectId: String
-    ): ApiResult<List<Dataset>> = fetchAllPages { limit, offset ->
+        projectId: String,
+        onTotalKnown: (suspend (Int) -> Unit)? = null
+    ): ApiResult<List<Dataset>> = fetchAllPages(onTotalKnown = onTotalKnown) { limit, offset ->
         client.get("${baseUrl}datasets") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("project_id", projectId)
@@ -384,11 +361,13 @@ class CrucibleApiService(
      */
     private suspend inline fun <reified T> fetchAllPages(
         pageSize: Int = 1000,
+        noinline onTotalKnown: (suspend (Int) -> Unit)? = null,
         crossinline page: suspend (limit: Int, offset: Int) -> PaginatedResponse<T>
     ): ApiResult<List<T>> = safeCall {
         coroutineScope {
             val first = page(pageSize, 0)
             val total = first.total
+            onTotalKnown?.invoke(total)
             val remaining = total - first.items.size
             if (remaining <= 0) return@coroutineScope first.items
 

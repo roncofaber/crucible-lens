@@ -139,9 +139,16 @@ class ResourceDetailViewModel : ViewModel() {
         }
     }
 
+    private var syncJob: Job? = null
+
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
     fun startBackgroundSync() {
-        viewModelScope.launch {
+        _isSyncing.value = true
+        syncJob = viewModelScope.launch {
             try { DataSyncManager.syncAll() } catch (_: Exception) { }
+            finally { _isSyncing.value = false }
         }
     }
 
@@ -151,6 +158,11 @@ class ResourceDetailViewModel : ViewModel() {
 
     fun refreshResource(uuid: String) {
         activeFetchJob?.cancel()
+        // Pause background sync so the user-initiated refresh gets uncontested network access.
+        // Sync resumes after the refresh completes.
+        val syncWasActive = syncJob?.isActive == true
+        syncJob?.cancel()
+
         activeFetchJob = viewModelScope.launch {
             val trimmedUuid = uuid.trim()
             CacheManager.clearResource(trimmedUuid)
@@ -175,9 +187,11 @@ class ResourceDetailViewModel : ViewModel() {
                 } finally {
                     // Always clear the spinner — prevents stuck refresh if anything goes wrong
                     _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = false) else it }
+                    if (syncWasActive) startBackgroundSync()
                 }
             } else {
                 fetchResource(trimmedUuid)
+                if (syncWasActive) startBackgroundSync()
             }
         }
     }

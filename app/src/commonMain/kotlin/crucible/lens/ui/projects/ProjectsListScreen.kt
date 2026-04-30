@@ -202,47 +202,24 @@ fun ProjectsListScreen(
             }
             batch.forEach { project ->
                 launch(kotlinx.coroutines.Dispatchers.IO) {
-                    // Use already-cached data if available — no API call needed
-                    val cachedSamples = CacheManager.getProjectSamples(project.projectId)
-                    val cachedDatasets = CacheManager.getProjectDatasets(project.projectId)
-                    if (cachedSamples != null && cachedDatasets != null) {
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            projectCounts = projectCounts + (project.projectId to Pair(cachedSamples.size, cachedDatasets.size))
+                    try {
+                        fetchProjectData(
+                            projectId = project.projectId,
+                            onCountsAvailable = { sampleCount, datasetCount ->
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    projectCounts = projectCounts + (project.projectId to Pair(sampleCount, datasetCount))
 
-                            // Auto-archive empty projects (unless manually unarchived or already archived)
-                            if (cachedSamples.isEmpty() && cachedDatasets.isEmpty() &&
-                                project.projectId !in manuallyShown &&
-                                project.projectId !in hiddenProjects) {
-                                onToggleHide(project.projectId)
+                                    if (sampleCount == 0 && datasetCount == 0 &&
+                                        project.projectId !in manuallyShown &&
+                                        project.projectId !in hiddenProjects) {
+                                        onToggleHide(project.projectId)
+                                    }
+                                }
                             }
-                        }
-                        return@launch
-                    }
-
-                    // Fetch counts first (limit=1, two parallel requests) — shows numbers immediately
-                    val (sampleCount, datasetCount) = try {
-                        val counts = ApiClient.service.getProjectItemCounts(project.projectId)
+                        )
                         consecutiveFailures = 0
-                        counts
                     } catch (_: Exception) {
                         consecutiveFailures++
-                        null to null
-                    }
-
-                    // Warm the full data cache in background so ProjectDetailScreen opens instantly
-                    launch {
-                        try { fetchProjectData(project.projectId) } catch (_: Exception) { }
-                    }
-
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        projectCounts = projectCounts + (project.projectId to Pair(sampleCount, datasetCount))
-
-                        // Auto-archive empty projects (unless manually unarchived or already archived)
-                        if (sampleCount == 0 && datasetCount == 0 &&
-                            project.projectId !in manuallyShown &&
-                            project.projectId !in hiddenProjects) {
-                            onToggleHide(project.projectId)
-                        }
                     }
                 }
             }
@@ -318,8 +295,12 @@ fun ProjectsListScreen(
                     placeholder = "Search by name, ID, or project lead…"
                 )
 
+                val ptrFraction by animateFloatAsState(
+                    targetValue = if (isLoading) 0f else pullRefreshState.distanceFraction,
+                    label = "ptr"
+                )
                 Box(modifier = Modifier.weight(1f).offset {
-                    IntOffset(0, (pullRefreshState.distanceFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
+                    IntOffset(0, (ptrFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
                 }) {
                 when {
                     isLoading && persistentSummaries == null -> {

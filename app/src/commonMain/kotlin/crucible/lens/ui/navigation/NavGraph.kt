@@ -172,6 +172,7 @@ fun NavGraph(
         }
     }
     val uiState by viewModel.uiState.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -314,7 +315,8 @@ fun NavGraph(
                 },
                 onCreateDataset = {
                     navController.navigate(Screen.CreateDataset.createRoute())
-                }
+                },
+                isSyncing = isSyncing
             )
         }
 

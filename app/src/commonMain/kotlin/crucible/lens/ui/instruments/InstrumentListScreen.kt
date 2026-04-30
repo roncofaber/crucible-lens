@@ -160,8 +160,12 @@ fun InstrumentListScreen(
                     placeholder = "Search by name, type, manufacturer…"
                 )
 
+                val ptrFraction by animateFloatAsState(
+                    targetValue = if (isLoading) 0f else pullRefreshState.distanceFraction,
+                    label = "ptr"
+                )
                 Box(modifier = Modifier.weight(1f).offset {
-                    IntOffset(0, (pullRefreshState.distanceFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
+                    IntOffset(0, (ptrFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
                 }) {
                     when {
                         isLoading -> LoadingContent(title = "Loading Instruments")

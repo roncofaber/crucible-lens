@@ -64,6 +64,7 @@ fun HomeScreen(
     onInstrumentClick: (String) -> Unit = {},
     onCreateSample: () -> Unit = {},
     onCreateDataset: () -> Unit = {},
+    isSyncing: Boolean = false,
 ) {
     var showHelpDialog by remember { mutableStateOf(false) }
     var showEasterEggDialog by remember { mutableStateOf(false) }
@@ -73,6 +74,7 @@ fun HomeScreen(
     var allProjects by remember { mutableStateOf(CacheManager.getProjects() ?: emptyList()) }
     var fetchError by remember { mutableStateOf<String?>(null) }
     var retryTrigger by remember { mutableIntStateOf(0) }
+    var isPreloading by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         val persistentData = PersistentProjectCache.loadProjectData(platformContext)
@@ -110,8 +112,19 @@ fun HomeScreen(
         }
     }
 
+    LaunchedEffect(apiKey) {
+        if (apiKey.isNullOrBlank()) return@LaunchedEffect
+        if (CacheManager.getInstruments() != null) return@LaunchedEffect
+        try {
+            (ApiClient.service.getInstruments() as? crucible.lens.data.api.ApiResult.Success)?.data
+                ?.also { CacheManager.cacheInstruments(it) }
+        } catch (_: Exception) { }
+    }
+
     LaunchedEffect(allProjects, pinnedProjects) {
         if (apiKey.isNullOrBlank() || allProjects.isEmpty()) return@LaunchedEffect
+        isPreloading = true
+        try {
         kotlinx.coroutines.delay(500)
 
         val prioritizedProjects = allProjects.sortedByDescending { it.projectId in pinnedProjects }
@@ -119,7 +132,7 @@ fun HomeScreen(
         val maxConsecutiveFailures = 5
 
         prioritizedProjects.chunked(3).forEach { batch ->
-            if (consecutiveFailures >= maxConsecutiveFailures) return@LaunchedEffect
+            if (consecutiveFailures >= maxConsecutiveFailures) return@forEach
             batch.forEach { project ->
                 launch(kotlinx.coroutines.Dispatchers.IO) {
                     try {
@@ -146,6 +159,9 @@ fun HomeScreen(
                 println("Failed to save project cache to disk: $e")
             }
         }
+        } finally {
+            isPreloading = false
+        }
     }
 
     val pinnedList = remember(pinnedProjects, allProjects) {
@@ -155,12 +171,11 @@ fun HomeScreen(
         CacheManager.getInstruments()?.filter { it.uniqueId in pinnedInstruments } ?: emptyList()
     }
 
-    val isLoadingProjects = !apiKey.isNullOrBlank() && allProjects.isEmpty() && fetchError == null
+    val isBackgroundLoading = isSyncing || isPreloading
 
     AppScaffold(
         topBar = {
-            Column {
-                TopAppBar(
+            TopAppBar(
                     title = {
                         Text(
                             "Crucible Lens",
@@ -174,17 +189,19 @@ fun HomeScreen(
                         )
                     },
                     actions = {
-                        IconButton(onClick = { fetchError = null; retryTrigger++ }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        if (isBackgroundLoading) {
+                            Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            }
+                        } else {
+                            IconButton(onClick = { fetchError = null; retryTrigger++ }) {
+                                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                            }
                         }
                         IconButton(onClick = { showHelpDialog = true }) { Icon(Icons.AutoMirrored.Filled.Help, contentDescription = "Help") }
                         IconButton(onClick = onSettingsClick) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
                     }
                 )
-                if (isLoadingProjects) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                }
-            }
         }
     ) { padding ->
         Column(

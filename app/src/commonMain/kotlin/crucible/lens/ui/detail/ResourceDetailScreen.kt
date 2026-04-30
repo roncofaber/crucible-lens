@@ -859,8 +859,12 @@ fun ResourceDetailScreen(
                         val pageGetCardState: (String) -> Boolean = { key -> getCardState("$pageId/$key") }
                         val pageSetCardState: (String, Boolean) -> Unit = { key, value -> onCardStateChange("$pageId/$key", value) }
 
+                        val ptrFraction by animateFloatAsState(
+                            targetValue = if (localRefreshState) 0f else pullRefreshState.distanceFraction,
+                            label = "ptr"
+                        )
                         Box(modifier = Modifier.fillMaxSize().offset {
-                            IntOffset(0, (pullRefreshState.distanceFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
+                            IntOffset(0, (ptrFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
                         }) {
             // Show loading only when actually waiting for data
             AnimatedVisibility(
