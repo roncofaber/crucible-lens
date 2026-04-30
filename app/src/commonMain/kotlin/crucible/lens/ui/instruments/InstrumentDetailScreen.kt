@@ -167,6 +167,15 @@ fun InstrumentDetailScreen(
                             DropdownMenu(expanded = overflowMenuExpanded, onDismissRequest = { overflowMenuExpanded = false }) {
                                 instrument?.let { instr ->
                                     DropdownMenuItem(
+                                        text = { Text("Copy ID") },
+                                        leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                                        onClick = {
+                                            overflowMenuExpanded = false
+                                            copyToClipboard(platformCtx, instr.uniqueId)
+                                            showFeedback(platformCtx, "ID copied")
+                                        }
+                                    )
+                                    DropdownMenuItem(
                                         text = { Text("Share") },
                                         leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                                         onClick = {
@@ -175,6 +184,7 @@ fun InstrumentDetailScreen(
                                             shareText(platformCtx, text, instr.instrumentName ?: instr.uniqueId)
                                         }
                                     )
+                                    HorizontalDivider()
                                     DropdownMenuItem(
                                         text = { Text("Refresh") },
                                         leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
