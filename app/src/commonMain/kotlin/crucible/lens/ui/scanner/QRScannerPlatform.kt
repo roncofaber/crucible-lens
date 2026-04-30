@@ -12,7 +12,11 @@ fun QRCodeScannerView(
 ) {
     ScannerWithPermissions(
         modifier = modifier,
-        onScanned = { onCodeScanned(it) },
-        types = listOf(CodeType.QR)
+        onScanned = { code ->
+            onCodeScanned(code)
+            true // stop scanning after first result
+        },
+        types = listOf(CodeType.QR),
+        enableTorch = false
     )
 }
