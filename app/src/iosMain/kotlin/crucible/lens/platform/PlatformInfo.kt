@@ -5,8 +5,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import platform.Foundation.NSBundle
 
-actual fun appVersionName(): String = "0.3.0" // TODO: read from Info.plist or build config
+actual fun appVersionName(): String =
+    NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "0.3.0"
 
 @Composable
 actual fun AppLogo(isDarkTheme: Boolean, modifier: Modifier) {

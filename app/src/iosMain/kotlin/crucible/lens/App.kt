@@ -35,8 +35,9 @@ actual fun App() {
     val lastVisitedResourceName by prefs.lastVisitedResourceName.collectAsState(initial = null)
     val floatingScanButton by prefs.floatingScanButton.collectAsState(initial = true)
     val pinnedProjects by prefs.pinnedProjects.collectAsState(initial = emptySet())
-    val archivedProjects by prefs.archivedProjects.collectAsState(initial = emptySet())
+    val hiddenProjects by prefs.hiddenProjects.collectAsState(initial = emptySet())
     val pinnedInstruments by prefs.pinnedInstruments.collectAsState(initial = emptySet())
+    val hiddenInstruments by prefs.hiddenInstruments.collectAsState(initial = emptySet())
     val resourceHistory by prefs.resourceHistory.collectAsState(initial = emptyList())
     val userOrcid by prefs.userOrcid.collectAsState(initial = null)
 
@@ -115,13 +116,17 @@ actual fun App() {
             onTogglePinnedProject = { id ->
                 scope.launch { prefs.togglePinnedProject(id) }
             },
-            archivedProjects = archivedProjects,
-            onToggleArchive = { id ->
-                scope.launch { prefs.toggleArchivedProject(id) }
+            hiddenProjects = hiddenProjects,
+            onToggleHideProject = { id ->
+                scope.launch { prefs.toggleHiddenProject(id) }
             },
             pinnedInstruments = pinnedInstruments,
             onTogglePinnedInstrument = { id ->
                 scope.launch { prefs.togglePinnedInstrument(id) }
+            },
+            hiddenInstruments = hiddenInstruments,
+            onToggleHideInstrument = { id ->
+                scope.launch { prefs.toggleHiddenInstrument(id) }
             },
             userOrcid = userOrcid,
             onUserOrcidSave = { orcid ->
