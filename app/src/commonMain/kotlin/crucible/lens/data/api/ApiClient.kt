@@ -1,6 +1,7 @@
 package crucible.lens.data.api
 
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
@@ -36,6 +37,11 @@ object ApiClient {
             }
             install(Logging) {
                 level = LogLevel.NONE
+            }
+            install(HttpTimeout) {
+                requestTimeoutMillis = 30_000  // 30s per request
+                connectTimeoutMillis = 10_000  // 10s to establish connection
+                socketTimeoutMillis  = 30_000  // 30s for data transfer
             }
         }
 

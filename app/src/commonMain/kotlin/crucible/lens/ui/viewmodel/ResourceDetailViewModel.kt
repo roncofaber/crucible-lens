@@ -161,9 +161,12 @@ class ResourceDetailViewModel : ViewModel() {
                             _uiState.value = UiState.Success(result.resource, thumbnails)
                         }
                         is ResourceResult.Error -> _uiState.value = UiState.Error(result.message)
-                        else -> _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = false) else it }
+                        else -> {}
                     }
                 } catch (_: Exception) {
+                    // Timeout or network failure — error state will be set by the result handling above
+                } finally {
+                    // Always clear the spinner — prevents stuck refresh if anything goes wrong
                     _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = false) else it }
                 }
             } else {
