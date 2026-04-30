@@ -58,7 +58,8 @@ fun ApiSettingsScreen(
     var account by remember { mutableStateOf<UserLead?>(null) }
     var accountLoading by remember { mutableStateOf(false) }
     var accountError by remember { mutableStateOf(false) }
-    LaunchedEffect(currentApiKey) {
+    var refreshTrigger by remember { mutableStateOf(0) }
+    LaunchedEffect(currentApiKey, refreshTrigger) {
         if (currentApiKey.isNullOrBlank()) {
             account = null; accountError = false; return@LaunchedEffect
         }
@@ -229,6 +230,9 @@ fun ApiSettingsScreen(
                                 Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                             }
                         }
+                        IconButton(onClick = { refreshTrigger++ }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         IconButton(onClick = onSignOut) {
                             Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Sign out", tint = MaterialTheme.colorScheme.error)
                         }
@@ -240,12 +244,15 @@ fun ApiSettingsScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
                 ) {
                     Row(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onErrorContainer)
-                        Text("Invalid or expired API key", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                        Text("Invalid or expired API key", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f))
+                        IconButton(onClick = { refreshTrigger++ }, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Retry", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onErrorContainer)
+                        }
                     }
                 }
             }
