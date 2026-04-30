@@ -120,12 +120,35 @@ fun InstrumentListScreen(
                     }
                 },
                 actions = {
+                    var menuExpanded by remember { mutableStateOf(false) }
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
                         IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
                             Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
                         }
                         IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
                             Icon(Icons.Default.Home, contentDescription = "Home", modifier = Modifier.size(24.dp))
+                        }
+                        Box {
+                            IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options", modifier = Modifier.size(24.dp))
+                            }
+                            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text(if (hiddenExpanded) "Collapse hidden" else "Show hidden") },
+                                    leadingIcon = {
+                                        Icon(
+                                            if (hiddenExpanded) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    onClick = { hiddenExpanded = !hiddenExpanded; menuExpanded = false }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Refresh") },
+                                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                    onClick = { menuExpanded = false; loadInstruments(forceRefresh = true) }
+                                )
+                            }
                         }
                     }
                 }

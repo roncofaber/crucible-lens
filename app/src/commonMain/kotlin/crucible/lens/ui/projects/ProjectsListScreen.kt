@@ -300,6 +300,11 @@ fun ProjectsListScreen(
                                     },
                                     onClick = { hiddenExpanded = !hiddenExpanded; listMenuExpanded = false }
                                 )
+                                DropdownMenuItem(
+                                    text = { Text("Refresh") },
+                                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                    onClick = { listMenuExpanded = false; loadProjects(forceRefresh = true) }
+                                )
                             }
                         }
                     }

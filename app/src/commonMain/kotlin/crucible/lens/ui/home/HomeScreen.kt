@@ -174,6 +174,9 @@ fun HomeScreen(
                         )
                     },
                     actions = {
+                        IconButton(onClick = { fetchError = null; retryTrigger++ }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        }
                         IconButton(onClick = { showHelpDialog = true }) { Icon(Icons.AutoMirrored.Filled.Help, contentDescription = "Help") }
                         IconButton(onClick = onSettingsClick) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
                     }

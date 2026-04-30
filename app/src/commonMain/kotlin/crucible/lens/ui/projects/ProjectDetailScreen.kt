@@ -336,6 +336,12 @@ fun ProjectDetailScreen(
                                         shareText(ctx, "$graphExplorerUrl/$projectId", project?.title ?: projectId)
                                     }
                                 )
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Refresh") },
+                                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                    onClick = { topBarMenuExpanded = false; loadProjectData(forceRefresh = true) }
+                                )
                             }
                         }
                     }
