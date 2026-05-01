@@ -232,6 +232,7 @@ fun ProjectDetailScreen(
     }
 
     fun loadProjectData(forceRefresh: Boolean = false) {
+        if (forceRefresh) isRefreshingNow = true
         scope.launch {
             try {
                 isLoading = true
@@ -283,6 +284,7 @@ fun ProjectDetailScreen(
                 error = "Error: ${e.message}"
             } finally {
                 isLoading = false
+                isRefreshingNow = false
             }
         }
     }
@@ -502,11 +504,8 @@ fun ProjectDetailScreen(
         }
     }
 
-    LaunchedEffect(isLoading) {
-        isRefreshingNow = isLoading
-    }
-
 }
+
 
 @Composable
 private fun ProjectHeader(

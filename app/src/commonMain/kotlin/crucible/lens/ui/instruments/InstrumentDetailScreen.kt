@@ -120,6 +120,7 @@ fun InstrumentDetailScreen(
     }
 
     fun loadData(forceRefresh: Boolean = false) {
+        if (forceRefresh) isRefreshingNow = true
         scope.launch {
             isLoading = true
             error = null
@@ -150,6 +151,7 @@ fun InstrumentDetailScreen(
                 error = "Connection error — check your network"
             } finally {
                 isLoading = false
+                isRefreshingNow = false
             }
         }
     }
@@ -297,9 +299,6 @@ fun InstrumentDetailScreen(
         }
     }
 
-    LaunchedEffect(isLoading) {
-        isRefreshingNow = isLoading
-    }
 }
 
 @Composable
