@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.platform.getPlatformContext
+import crucible.lens.platform.formatDecimal
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,7 +116,7 @@ fun CacheSettingsScreen(
                         val stats = cacheStats
                         if (stats != null && stats.estimatedSizeKB > 0) {
                             val sizeLabel = if (stats.estimatedSizeKB >= 1024)
-                                "%.1f MB".format(stats.estimatedSizeKB / 1024.0)
+                                formatDecimal(stats.estimatedSizeKB / 1024.0, 1) + " MB"
                             else
                                 "${stats.estimatedSizeKB} KB"
                             Text(

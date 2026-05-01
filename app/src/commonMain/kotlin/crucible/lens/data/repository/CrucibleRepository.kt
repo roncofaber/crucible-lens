@@ -28,7 +28,7 @@ class CrucibleRepository {
      * Fetches any resource by UUID using the unified /resources/{uuid} endpoint.
      * Single call — no type lookup needed, links and metadata included.
      */
-    suspend fun fetchResourceByUuid(uuid: String): ResourceResult = withContext(Dispatchers.IO) {
+    suspend fun fetchResourceByUuid(uuid: String): ResourceResult = withContext(Dispatchers.Default) {
         try {
             val cached = CacheManager.getResource(uuid)
             // Check if we have a fully-loaded cached version (with links)
@@ -56,7 +56,7 @@ class CrucibleRepository {
         is crucible.lens.data.model.Instrument -> true  // instruments don't have links
     }
 
-    suspend fun fetchThumbnails(datasetUuid: String): List<String> = withContext(Dispatchers.IO) {
+    suspend fun fetchThumbnails(datasetUuid: String): List<String> = withContext(Dispatchers.Default) {
         try {
             val result = api.getThumbnails(datasetUuid)
             when (result) {

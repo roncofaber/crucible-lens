@@ -40,6 +40,7 @@ import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.allLoadingMessages
 import crucible.lens.ui.common.fadeEndEdge
 import kotlinx.coroutines.launch
+import kotlin.time.Clock
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -134,7 +135,7 @@ fun HomeScreen(
         prioritizedProjects.chunked(3).forEach { batch ->
             if (consecutiveFailures >= maxConsecutiveFailures) return@forEach
             batch.forEach { project ->
-                launch(kotlinx.coroutines.Dispatchers.IO) {
+                launch(kotlinx.coroutines.Dispatchers.Default) {
                     try {
                         fetchProjectData(project.projectId)
                         consecutiveFailures = 0
@@ -146,7 +147,7 @@ fun HomeScreen(
             kotlinx.coroutines.delay(150)
         }
 
-        launch(kotlinx.coroutines.Dispatchers.IO) {
+        launch(kotlinx.coroutines.Dispatchers.Default) {
             try {
                 val samplesMap = mutableMapOf<String, List<crucible.lens.data.model.Sample>>()
                 val datasetsMap = mutableMapOf<String, List<crucible.lens.data.model.Dataset>>()
@@ -343,7 +344,7 @@ private fun HomeLogo(isDarkTheme: Boolean) {
                     interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                     indication = null
                 ) {
-                    val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+                    val now = Clock.System.now().toEpochMilliseconds()
                     if (now - lastTapTime < 350L) {
                         tagline = taglines.filter { it != tagline }.random()
                         lastTapTime = 0L

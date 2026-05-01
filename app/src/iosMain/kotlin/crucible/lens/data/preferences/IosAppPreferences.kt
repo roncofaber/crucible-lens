@@ -4,6 +4,7 @@ import com.russhwolf.settings.NSUserDefaultsSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import kotlin.time.Clock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -12,7 +13,7 @@ class IosAppPreferences : AppPreferences {
     private val json = Json
 
     override val apiKey: Flow<String?> =
-        MutableStateFlow(settings.getStringOrNull("api_key", null))
+        MutableStateFlow(settings.getStringOrNull("api_key"))
 
     override val apiBaseUrl: Flow<String> =
         MutableStateFlow(settings.getString("api_base_url", AppPreferences.DEFAULT_API_BASE_URL))
@@ -33,10 +34,10 @@ class IosAppPreferences : AppPreferences {
         MutableStateFlow(settings.getBoolean("use_dynamic_color", false))
 
     override val lastVisitedResource: Flow<String?> =
-        MutableStateFlow(settings.getStringOrNull("last_visited_resource", null))
+        MutableStateFlow(settings.getStringOrNull("last_visited_resource"))
 
     override val lastVisitedResourceName: Flow<String?> =
-        MutableStateFlow(settings.getStringOrNull("last_visited_resource_name", null))
+        MutableStateFlow(settings.getStringOrNull("last_visited_resource_name"))
 
     override val floatingScanButton: Flow<Boolean> =
         MutableStateFlow(settings.getBoolean("floating_scan_button", true))
@@ -74,7 +75,7 @@ class IosAppPreferences : AppPreferences {
         )
 
     override val userOrcid: Flow<String?> =
-        MutableStateFlow(settings.getStringOrNull("user_orcid", null))
+        MutableStateFlow(settings.getStringOrNull("user_orcid"))
 
     override val resourceHistory: Flow<List<HistoryItem>> =
         MutableStateFlow(
@@ -232,7 +233,7 @@ class IosAppPreferences : AppPreferences {
                 }
             }
 
-        val updated = listOf(HistoryItem(uuid, name, kotlinx.datetime.Clock.System.now().toEpochMilliseconds())) +
+        val updated = listOf(HistoryItem(uuid, name, Clock.System.now().toEpochMilliseconds())) +
             existing.filter { it.uuid != uuid }
 
         val encoded = updated.take(20).joinToString(",") {

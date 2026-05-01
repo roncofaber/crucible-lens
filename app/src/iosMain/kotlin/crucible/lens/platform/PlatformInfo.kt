@@ -1,10 +1,13 @@
 package crucible.lens.platform
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.ContentScale
+import crucible.lens.composeapp.generated.resources.Res
+import crucible.lens.composeapp.generated.resources.crucible_text_dark
+import crucible.lens.composeapp.generated.resources.crucible_text_light
+import org.jetbrains.compose.resources.painterResource
 import platform.Foundation.NSBundle
 
 actual fun appVersionName(): String =
@@ -12,10 +15,10 @@ actual fun appVersionName(): String =
 
 @Composable
 actual fun AppLogo(isDarkTheme: Boolean, modifier: Modifier) {
-    Text(
-        text = "Crucible Lens",
-        style = MaterialTheme.typography.headlineLarge,
-        fontWeight = FontWeight.Bold,
+    Image(
+        painter = painterResource(if (isDarkTheme) Res.drawable.crucible_text_dark else Res.drawable.crucible_text_light),
+        contentDescription = "Crucible",
+        contentScale = ContentScale.Fit,
         modifier = modifier
     )
 }

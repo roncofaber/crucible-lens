@@ -12,6 +12,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.lifecycle.viewmodel.MutableCreationExtras
+import androidx.lifecycle.ViewModelProvider
+import kotlin.reflect.KClass
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -145,7 +149,14 @@ fun NavGraph(
     userOrcid: String? = null,
     onUserOrcidSave: (String?) -> Unit = {},
     onSignOut: () -> Unit = {},
-    viewModel: ResourceDetailViewModel = viewModel()
+    viewModel: ResourceDetailViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: KClass<T>, extras: CreationExtras): T {
+                @Suppress("UNCHECKED_CAST")
+                return ResourceDetailViewModel() as T
+            }
+        }
+    )
 ) {
     val platformCtx = getPlatformContext()
 
@@ -435,8 +446,8 @@ fun NavGraph(
             )
             // Uses all default transitions - even sibling navigation
         ) { backStackEntry ->
-            val mfid = backStackEntry.arguments?.getString("mfid") ?: ""
-            val siblingGroupBy = backStackEntry.arguments?.getString("groupBy")?.takeIf { it.isNotBlank() }
+            val mfid = backStackEntry.savedStateHandle.get<String>("mfid") ?: ""
+            val siblingGroupBy = backStackEntry.savedStateHandle.get<String>("groupBy")?.takeIf { it.isNotBlank() }
 
             LaunchedEffect(mfid) {
                 viewModel.fetchResource(mfid)
@@ -681,7 +692,7 @@ fun NavGraph(
             arguments = listOf(navArgument("projectId") { type = NavType.StringType })
             // Uses all default transitions
         ) { backStackEntry ->
-            val projectId = backStackEntry.arguments?.getString("projectId") ?: ""
+            val projectId = backStackEntry.savedStateHandle.get<String>("projectId") ?: ""
             ProjectDetailScreen(
                 projectId = projectId,
                 graphExplorerUrl = graphExplorerUrl,
@@ -730,7 +741,7 @@ fun NavGraph(
             route = Screen.InstrumentDetail.route,
             arguments = listOf(navArgument("instrumentId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val instrumentId = backStackEntry.arguments?.getString("instrumentId") ?: ""
+            val instrumentId = backStackEntry.savedStateHandle.get<String>("instrumentId") ?: ""
             InstrumentDetailScreen(
                 instrumentId = instrumentId,
                 isPinned = instrumentId in pinnedInstruments,
@@ -752,7 +763,7 @@ fun NavGraph(
             route = Screen.CreateSample.route,
             arguments = listOf(navArgument("projectId") { type = NavType.StringType; defaultValue = "" })
         ) { backStackEntry ->
-            val projectId = backStackEntry.arguments?.getString("projectId")?.ifBlank { null }
+            val projectId = backStackEntry.savedStateHandle.get<String>("projectId")?.ifBlank { null }
             CreateSampleScreen(
                 initialProjectId = projectId,
                 onBack = { navController.popBackStack() },
@@ -767,7 +778,7 @@ fun NavGraph(
             route = Screen.CreateDataset.route,
             arguments = listOf(navArgument("projectId") { type = NavType.StringType; defaultValue = "" })
         ) { backStackEntry ->
-            val projectId = backStackEntry.arguments?.getString("projectId")?.ifBlank { null }
+            val projectId = backStackEntry.savedStateHandle.get<String>("projectId")?.ifBlank { null }
             CreateDatasetScreen(
                 initialProjectId = projectId,
                 onBack = { navController.popBackStack() },

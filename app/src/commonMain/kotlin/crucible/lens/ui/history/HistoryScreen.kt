@@ -30,6 +30,7 @@ import crucible.lens.platform.shareText
 import crucible.lens.platform.showToast
 import crucible.lens.ui.common.AppScaffold
 import kotlin.math.abs
+import kotlin.time.Clock
 
 private enum class HistorySortOrder { NEWEST, OLDEST }
 
@@ -227,7 +228,7 @@ private fun HistoryCard(
 }
 
 private fun formatRelativeTime(timestamp: Long): String {
-    val diffMs = abs(kotlinx.datetime.Clock.System.now().toEpochMilliseconds() - timestamp)
+    val diffMs = abs(Clock.System.now().toEpochMilliseconds() - timestamp)
     val diffMinutes = diffMs / 60000
     val diffHours = diffMinutes / 60
     val diffDays = diffHours / 24

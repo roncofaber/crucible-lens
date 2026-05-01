@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package crucible.lens.data.cache
 
 import crucible.lens.data.model.Dataset
@@ -26,7 +28,7 @@ actual object PersistentProjectCache {
         projects: List<Project>,
         samplesMap: Map<String, List<Sample>>,
         datasetsMap: Map<String, List<Dataset>>
-    ) = withContext(Dispatchers.Default) {
+    ): Unit = withContext(Dispatchers.Default) {
         try {
             val summaries = projects.map { project ->
                 val samples = samplesMap[project.projectId] ?: emptyList()
@@ -68,7 +70,7 @@ actual object PersistentProjectCache {
         } catch (_: Exception) { null }
     }
 
-    actual suspend fun clear(context: PlatformContext) = withContext(Dispatchers.Default) {
+    actual suspend fun clear(context: PlatformContext): Unit = withContext(Dispatchers.Default) {
         try { NSFileManager.defaultManager.removeItemAtPath(cacheFile(), error = null) }
         catch (_: Exception) {}
     }

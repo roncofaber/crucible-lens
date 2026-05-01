@@ -79,6 +79,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlin.math.abs
+import kotlin.time.Clock
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 
@@ -222,7 +223,7 @@ fun ResourceDetailScreen(
                     launch {
                         try {
                             val bounds = if (siblingGroupBy == "DATE") monthBounds(resource.timestamp) else null
-                            val resp = withContext(Dispatchers.IO) {
+                            val resp = withContext(Dispatchers.Default) {
                                 ApiClient.service.getFilteredSamples(
                                     projectId = projectId,
                                     sampleType = if (siblingGroupBy == null || siblingGroupBy == "TYPE") resource.sampleType else null,
@@ -277,7 +278,7 @@ fun ResourceDetailScreen(
                     launch {
                         try {
                             val bounds = if (siblingGroupBy == "DATE") monthBounds(resource.timestamp) else null
-                            val resp = withContext(Dispatchers.IO) {
+                            val resp = withContext(Dispatchers.Default) {
                                 ApiClient.service.getFilteredDatasets(
                                     projectId = projectId,
                                     measurement = if (siblingGroupBy == null || siblingGroupBy == "MEASUREMENT") resource.measurement else null,
@@ -336,7 +337,7 @@ fun ResourceDetailScreen(
                         siblingsResolved = true
                     } else {
                         val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
-                        val resp = withContext(Dispatchers.IO) {
+                        val resp = withContext(Dispatchers.Default) {
                             ApiClient.service.getFilteredSamples(
                                 projectId = projectId,
                                 sampleType = if (groupBy == null || groupBy == "TYPE") resource.sampleType else null,
@@ -375,7 +376,7 @@ fun ResourceDetailScreen(
                         siblingsResolved = true
                     } else {
                         val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
-                        val resp = withContext(Dispatchers.IO) {
+                        val resp = withContext(Dispatchers.Default) {
                             ApiClient.service.getFilteredDatasets(
                                 projectId = projectId,
                                 measurement = if (groupBy == null || groupBy == "MEASUREMENT") resource.measurement else null,
@@ -499,7 +500,7 @@ fun ResourceDetailScreen(
         }
 
         // Load relationships (but NOT thumbnails yet) for pages in the window
-        launch(Dispatchers.IO) {
+        launch(Dispatchers.Default) {
             toEnrich.forEachIndexed { index, pageIndex ->
                 val pageResource = siblingList[pageIndex]
                 val uuid = pageResource.uniqueId
@@ -574,7 +575,7 @@ fun ResourceDetailScreen(
         val thumbnailPages = (-2..2).map { currentPage + it }.filter { it in siblingList.indices }
 
         // Load thumbnails for these pages
-        launch(Dispatchers.IO) {
+        launch(Dispatchers.Default) {
             thumbnailPages.forEach { pageIndex ->
                 val pageResource = siblingList[pageIndex]
                 val uuid = pageResource.uniqueId
@@ -634,11 +635,11 @@ fun ResourceDetailScreen(
         isUploadingThumbnail = true
         try {
             val base64 = PlatformBase64.encode(bytes)
-            val resp = withContext(Dispatchers.IO) {
+            val resp = withContext(Dispatchers.Default) {
                 ApiClient.service.addThumbnail(
                     datasetUuid,
                     ThumbnailCreateRequest(
-                        thumbnailName = "thumbnail_${kotlinx.datetime.Clock.System.now().toEpochMilliseconds()}.png",
+                        thumbnailName = "thumbnail_${Clock.System.now().toEpochMilliseconds()}.png",
                         thumbnailB64str = base64
                     )
                 )
@@ -646,7 +647,7 @@ fun ResourceDetailScreen(
             when (resp) {
                 is ApiResult.Success -> {
                     CacheManager.clearThumbnail(datasetUuid)
-                    val thumbResp = withContext(Dispatchers.IO) { ApiClient.service.getThumbnails(datasetUuid) }
+                    val thumbResp = withContext(Dispatchers.Default) { ApiClient.service.getThumbnails(datasetUuid) }
                     when (thumbResp) {
                         is ApiResult.Success -> {
                             val thumbs = thumbResp.data.map { "data:image/png;base64,${it.thumbnailB64}" }
@@ -1791,7 +1792,7 @@ private fun DatasetDetailsCard(
                     onClick = {
                         instrumentScope.launch {
                             val instruments = CacheManager.getInstruments()
-                                ?: withContext(Dispatchers.IO) {
+                                ?: withContext(Dispatchers.Default) {
                                     when (val resp = ApiClient.service.getInstruments()) {
                                         is ApiResult.Success -> resp.data.also { CacheManager.cacheInstruments(it) }
                                         is ApiResult.Error -> null
@@ -2043,7 +2044,7 @@ private fun formatValue(value: Any?): String {
             if (num % 1.0 == 0.0) {
                 num.toLong().toString()
             } else {
-                "%.4f".format(num)
+                formatDecimal(num, 4)
             }
         }
         is Boolean -> if (value) "Yes" else "No"
@@ -2604,9 +2605,9 @@ private fun formatDateTime(raw: String?): String {
 }
 
 private fun formatFileSize(bytes: Long): String = when {
-    bytes >= 1_073_741_824 -> "%.2f GB".format(bytes / 1_073_741_824.0)
-    bytes >= 1_048_576     -> "%.2f MB".format(bytes / 1_048_576.0)
-    bytes >= 1_024         -> "%.1f KB".format(bytes / 1_024.0)
+    bytes >= 1_073_741_824 -> formatDecimal(bytes / 1_073_741_824.0, 2) + " GB"
+    bytes >= 1_048_576     -> formatDecimal(bytes / 1_048_576.0, 2) + " MB"
+    bytes >= 1_024         -> formatDecimal(bytes / 1_024.0, 1) + " KB"
     else                   -> "$bytes B"
 }
 

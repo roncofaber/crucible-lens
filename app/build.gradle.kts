@@ -1,5 +1,6 @@
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
 
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
@@ -24,6 +25,7 @@ kotlin {
         freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 
+    val xcf = XCFramework("ComposeApp")
     listOf(
         iosX64(),
         iosArm64(),
@@ -32,6 +34,7 @@ kotlin {
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
+            xcf.add(this)
         }
     }
 
@@ -43,7 +46,7 @@ kotlin {
                 implementation("androidx.core:core-ktx:1.13.1")
                 implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.0")
                 implementation("androidx.activity:activity-compose:1.9.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
                 // Ktor Android engine
                 implementation("io.ktor:ktor-client-okhttp:3.0.3")
@@ -95,10 +98,10 @@ kotlin {
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
                 // Coroutines
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 
                 // Date/time
-                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.7.1")
 
                 // Multiplatform Settings
                 implementation("com.russhwolf:multiplatform-settings:1.2.0")
@@ -109,8 +112,8 @@ kotlin {
                 implementation("io.coil-kt.coil3:coil-network-ktor3:3.0.4")
 
                 // Lifecycle / ViewModel
-                implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
-                implementation("org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
+                implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
+                implementation("org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose:2.9.1")
 
                 // Navigation (multiplatform, 2.8+)
                 implementation("org.jetbrains.androidx.navigation:navigation-compose:2.9.2")

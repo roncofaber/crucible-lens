@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import kotlin.time.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -42,7 +43,7 @@ fun DateTimePickerField(
     // Creating → default to now; editing → default to existing value
     val pickerDefault = remember(parsedValue) {
         parsedValue ?: LocalDateTime.parse(
-            kotlinx.datetime.Clock.System.now().toLocalDateTime(TimeZone.UTC).toString()
+            Clock.System.now().toLocalDateTime(TimeZone.UTC).toString()
         )
     }
 

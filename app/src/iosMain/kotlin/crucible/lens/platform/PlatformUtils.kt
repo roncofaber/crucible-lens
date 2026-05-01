@@ -1,6 +1,9 @@
 package crucible.lens.platform
 
 import crucible.lens.data.model.CrucibleResource
+import kotlin.time.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import platform.Foundation.NSURL
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
@@ -28,8 +31,8 @@ actual fun showToast(context: PlatformContext, message: String) {
 }
 
 actual fun currentIsoDateTime(): String {
-    val now = kotlinx.datetime.Clock.System.now()
-    return now.toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).toString()
+    val now = Clock.System.now()
+    return now.toLocalDateTime(TimeZone.currentSystemDefault()).toString()
 }
 
 actual fun shareResource(

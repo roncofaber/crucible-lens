@@ -1,0 +1,38 @@
+name: Crucible Lens
+options:
+  bundleIdPrefix: crucible.lens
+targets:
+  Crucible Lens:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: iosApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: crucible.lens
+        MARKETING_VERSION: 0.3.0
+        CURRENT_PROJECT_VERSION: 4
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_FILE: iosApp/Info.plist
+      configs:
+        debug:
+          FRAMEWORK_SEARCH_PATHS: $(inherited) $(SRCROOT)/../app/build/XCFrameworks/debug
+        release:
+          FRAMEWORK_SEARCH_PATHS: $(inherited) $(SRCROOT)/../app/build/XCFrameworks/release
+    dependencies:
+      - framework: ../app/build/XCFrameworks/debug/ComposeApp.xcframework
+        embed: true
+    preBuildScripts:
+      - name: Build Kotlin Framework
+        script: |
+          set -ev
+          REPO_ROOT="$SRCROOT/.."
+          # Build only the necessary architecture for the current build
+          if [ "$CONFIGURATION" == "Debug" ]; then
+            "$REPO_ROOT/gradlew" -p "$REPO_ROOT" :composeApp:assembleComposeAppDebugXCFramework
+          else
+            "$REPO_ROOT/gradlew" -p "$REPO_ROOT" :composeApp:assembleComposeAppReleaseXCFramework
+          fi
+        executionOrder: beforeSources

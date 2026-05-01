@@ -5,6 +5,7 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Instrument
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
+import kotlin.time.Clock
 
 data class CachedItem<T>(
     val data: T,
@@ -25,7 +26,7 @@ object CacheManager {
     }
 
     private fun <T> CachedItem<T>.isExpired() =
-        kotlinx.datetime.Clock.System.now().toEpochMilliseconds() - timestamp > CACHE_TTL
+        Clock.System.now().toEpochMilliseconds() - timestamp > CACHE_TTL
 
     private val resourceCache = LinkedHashMap<String, CachedItem<CrucibleResource>>()
     private val resourceTypeCache = LinkedHashMap<String, String>() // UUID -> "sample" or "dataset"
@@ -50,7 +51,7 @@ object CacheManager {
             }
         }
 
-        resourceCache[uuid] = CachedItem(resource, kotlinx.datetime.Clock.System.now().toEpochMilliseconds())
+        resourceCache[uuid] = CachedItem(resource, Clock.System.now().toEpochMilliseconds())
 
         // Also cache the resource type to avoid type-check API calls
         val type = when (resource) {
@@ -86,7 +87,7 @@ object CacheManager {
     // Thumbnail caching
     fun cacheThumbnails(uuid: String, thumbnails: List<String>) {
         thumbnailCache.evictOldestIfOver(MAX_THUMBNAIL_CACHE_SIZE)
-        thumbnailCache[uuid] = CachedItem(thumbnails, kotlinx.datetime.Clock.System.now().toEpochMilliseconds())
+        thumbnailCache[uuid] = CachedItem(thumbnails, Clock.System.now().toEpochMilliseconds())
     }
 
     fun getThumbnails(uuid: String): List<String>? {
@@ -97,7 +98,7 @@ object CacheManager {
 
     // Projects caching
     fun cacheProjects(projects: List<Project>) {
-        projectsCache = CachedItem(projects, kotlinx.datetime.Clock.System.now().toEpochMilliseconds())
+        projectsCache = CachedItem(projects, Clock.System.now().toEpochMilliseconds())
     }
 
     fun getProjects(): List<Project>? {
@@ -108,7 +109,7 @@ object CacheManager {
 
     // Instruments caching
     fun cacheInstruments(instruments: List<Instrument>) {
-        instrumentsCache = CachedItem(instruments, kotlinx.datetime.Clock.System.now().toEpochMilliseconds())
+        instrumentsCache = CachedItem(instruments, Clock.System.now().toEpochMilliseconds())
     }
 
     fun getInstruments(): List<Instrument>? {
@@ -119,7 +120,7 @@ object CacheManager {
 
     fun cacheInstrumentDatasets(instrumentName: String, datasets: List<Dataset>) {
         instrumentDatasetsCache.evictOldestIfOver(MAX_INSTRUMENT_DATASETS_CACHE_SIZE)
-        instrumentDatasetsCache[instrumentName] = CachedItem(datasets, kotlinx.datetime.Clock.System.now().toEpochMilliseconds())
+        instrumentDatasetsCache[instrumentName] = CachedItem(datasets, Clock.System.now().toEpochMilliseconds())
     }
 
     fun getInstrumentDatasets(instrumentName: String): List<Dataset>? {
@@ -146,7 +147,7 @@ object CacheManager {
     // Project detail caching (samples and datasets per project)
     fun cacheProjectSamples(projectId: String, samples: List<Sample>) {
         projectSamplesCache.evictOldestIfOver(MAX_PROJECT_DETAIL_CACHE_SIZE)
-        projectSamplesCache[projectId] = CachedItem(samples, kotlinx.datetime.Clock.System.now().toEpochMilliseconds())
+        projectSamplesCache[projectId] = CachedItem(samples, Clock.System.now().toEpochMilliseconds())
     }
 
     fun getProjectSamples(projectId: String): List<Sample>? {
@@ -157,7 +158,7 @@ object CacheManager {
 
     fun cacheProjectDatasets(projectId: String, datasets: List<Dataset>) {
         projectDatasetsCache.evictOldestIfOver(MAX_PROJECT_DETAIL_CACHE_SIZE)
-        projectDatasetsCache[projectId] = CachedItem(datasets, kotlinx.datetime.Clock.System.now().toEpochMilliseconds())
+        projectDatasetsCache[projectId] = CachedItem(datasets, Clock.System.now().toEpochMilliseconds())
     }
 
     fun getProjectDatasets(projectId: String): List<Dataset>? {
@@ -230,11 +231,11 @@ object CacheManager {
 
     // Age query methods (return null if not cached, otherwise age in minutes)
     fun getProjectsAgeMinutes(): Long? =
-        projectsCache?.let { (kotlinx.datetime.Clock.System.now().toEpochMilliseconds() - it.timestamp) / 60000 }
+        projectsCache?.let { (Clock.System.now().toEpochMilliseconds() - it.timestamp) / 60000 }
 
     fun getProjectDataAgeMinutes(projectId: String): Long? =
-        projectSamplesCache[projectId]?.let { (kotlinx.datetime.Clock.System.now().toEpochMilliseconds() - it.timestamp) / 60000 }
+        projectSamplesCache[projectId]?.let { (Clock.System.now().toEpochMilliseconds() - it.timestamp) / 60000 }
 
     fun getResourceAgeMinutes(uuid: String): Long? =
-        resourceCache[uuid]?.let { (kotlinx.datetime.Clock.System.now().toEpochMilliseconds() - it.timestamp) / 60000 }
+        resourceCache[uuid]?.let { (Clock.System.now().toEpochMilliseconds() - it.timestamp) / 60000 }
 }

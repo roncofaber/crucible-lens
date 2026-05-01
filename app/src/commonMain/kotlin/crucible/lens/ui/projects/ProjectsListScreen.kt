@@ -91,7 +91,7 @@ fun ProjectsListScreen(
     }
 
     fun loadProjects(forceRefresh: Boolean = false) {
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        scope.launch(kotlinx.coroutines.Dispatchers.Default) {
             try {
                 // Check cache first if not forcing refresh
                 if (!forceRefresh) {
@@ -158,7 +158,7 @@ fun ProjectsListScreen(
     // Function to save current state to persistent cache
     fun saveToPersistentCache() {
         val currentProjects = projects ?: return
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        scope.launch(kotlinx.coroutines.Dispatchers.Default) {
             try {
                 // Build maps of samples and datasets
                 val samplesMap = mutableMapOf<String, List<crucible.lens.data.model.Sample>>()
@@ -201,7 +201,7 @@ fun ProjectsListScreen(
                 return@LaunchedEffect
             }
             batch.forEach { project ->
-                launch(kotlinx.coroutines.Dispatchers.IO) {
+                launch(kotlinx.coroutines.Dispatchers.Default) {
                     try {
                         fetchProjectData(
                             projectId = project.projectId,
