@@ -68,6 +68,8 @@ fun ProjectsListScreen(
     var persistentSummaries by remember { mutableStateOf<List<ProjectSummary>?>(null) }
     var hiddenExpanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    var sortMenuExpanded by remember { mutableStateOf(false) }
+    var sortOrder by remember { mutableStateOf(0) } // 0=Name A-Z, 1=Name Z-A
     // Track which projects were manually unarchived (so we don't auto-archive them again)
     var manuallyShown by remember { mutableStateOf<Set<String>>(emptySet()) }
     // Trigger for forcing background reload - increments on refresh
@@ -293,11 +295,46 @@ fun ProjectsListScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     stickyHeader(key = "search_bar") {
-                        SearchBar(
-                            query = searchQuery,
-                            onQueryChange = { searchQuery = it },
-                            placeholder = "Search by name, ID, or project lead…"
-                        )
+                        Surface(color = MaterialTheme.colorScheme.background) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                SearchBar(
+                                    query = searchQuery,
+                                    onQueryChange = { searchQuery = it },
+                                    placeholder = "Search by name, ID, or project lead…",
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Box {
+                                    IconButton(onClick = { sortMenuExpanded = true }) {
+                                        Icon(
+                                            Icons.Default.SwapVert,
+                                            contentDescription = "Sort",
+                                            tint = if (sortOrder != 0) MaterialTheme.colorScheme.primary
+                                                   else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = sortMenuExpanded,
+                                        onDismissRequest = { sortMenuExpanded = false }
+                                    ) {
+                                        listOf("Name A→Z", "Name Z→A").forEachIndexed { i, label ->
+                                            DropdownMenuItem(
+                                                text = { Text(label) },
+                                                leadingIcon = {
+                                                    if (sortOrder == i)
+                                                        Icon(Icons.Default.Check, contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary)
+                                                    else Spacer(Modifier.size(24.dp))
+                                                },
+                                                onClick = { sortOrder = i; sortMenuExpanded = false }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     when {
@@ -384,7 +421,14 @@ fun ProjectsListScreen(
 
                             val activeProjects = filteredProjects
                                 .filter { it.projectId !in hiddenProjects }
-                                .sortedByDescending { it.projectId in pinnedProjects }
+                                .let { list ->
+                                    when (sortOrder) {
+                                        1 -> list.sortedWith(compareByDescending<Project> { it.projectId in pinnedProjects }
+                                            .thenByDescending { it.title?.lowercase() ?: it.projectId.lowercase() })
+                                        else -> list.sortedWith(compareByDescending<Project> { it.projectId in pinnedProjects }
+                                            .thenBy { it.title?.lowercase() ?: it.projectId.lowercase() })
+                                    }
+                                }
                             val hiddenProjectsList = filteredProjects
                                 .filter { it.projectId in hiddenProjects }
 

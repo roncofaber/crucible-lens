@@ -58,6 +58,8 @@ fun InstrumentListScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var hiddenExpanded by remember { mutableStateOf(false) }
+    var sortMenuExpanded by remember { mutableStateOf(false) }
+    var sortOrder by rememberSaveable { mutableStateOf(0) } // 0=Name A-Z, 1=Name Z-A, 2=Type A-Z
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
@@ -68,8 +70,14 @@ fun InstrumentListScreen(
         else list.filter { it.matchesSearch(searchQuery) }
     }
 
-    val activeInstruments = remember(filteredInstruments, hiddenInstruments) {
-        filteredInstruments.filter { it.uniqueId !in hiddenInstruments }
+    val activeInstruments = remember(filteredInstruments, hiddenInstruments, sortOrder) {
+        filteredInstruments.filter { it.uniqueId !in hiddenInstruments }.let { list ->
+            when (sortOrder) {
+                1 -> list.sortedByDescending { it.instrumentName?.lowercase() ?: "" }
+                2 -> list.sortedBy { it.instrumentType?.lowercase() ?: "" }
+                else -> list.sortedBy { it.instrumentName?.lowercase() ?: "" }
+            }
+        }
     }
 
     val hiddenInstrumentsList = remember(instruments, hiddenInstruments) {
@@ -158,11 +166,46 @@ fun InstrumentListScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     stickyHeader(key = "search_bar") {
-                        SearchBar(
-                            query = searchQuery,
-                            onQueryChange = { searchQuery = it },
-                            placeholder = "Search by name, type, manufacturer…"
-                        )
+                        Surface(color = MaterialTheme.colorScheme.background) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                SearchBar(
+                                    query = searchQuery,
+                                    onQueryChange = { searchQuery = it },
+                                    placeholder = "Search by name, type, manufacturer…",
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Box {
+                                    IconButton(onClick = { sortMenuExpanded = true }) {
+                                        Icon(
+                                            Icons.Default.SwapVert,
+                                            contentDescription = "Sort",
+                                            tint = if (sortOrder != 0) MaterialTheme.colorScheme.primary
+                                                   else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = sortMenuExpanded,
+                                        onDismissRequest = { sortMenuExpanded = false }
+                                    ) {
+                                        listOf("Name A→Z", "Name Z→A", "Type A→Z").forEachIndexed { i, label ->
+                                            DropdownMenuItem(
+                                                text = { Text(label) },
+                                                leadingIcon = {
+                                                    if (sortOrder == i)
+                                                        Icon(Icons.Default.Check, contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary)
+                                                    else Spacer(Modifier.size(24.dp))
+                                                },
+                                                onClick = { sortOrder = i; sortMenuExpanded = false }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     when {
