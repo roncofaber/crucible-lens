@@ -25,8 +25,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import crucible.lens.ui.common.SearchBar
 
-import androidx.compose.ui.unit.IntOffset
-import kotlin.math.roundToInt
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
@@ -77,7 +75,6 @@ fun ProjectsListScreen(
     var reloadTrigger by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    val pullRefreshState = rememberPullToRefreshState()
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
     // Load persistent cache immediately on startup for instant display
@@ -285,7 +282,6 @@ fun ProjectsListScreen(
         PullToRefreshBox(
             isRefreshing = isUserRefreshing,
             onRefresh = { loadProjects(forceRefresh = true) },
-            state = pullRefreshState,
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -298,13 +294,7 @@ fun ProjectsListScreen(
                     placeholder = "Search by name, ID, or project lead…"
                 )
 
-                val ptrFraction by animateFloatAsState(
-                    targetValue = if (isUserRefreshing) 0f else pullRefreshState.distanceFraction,
-                    label = "ptr"
-                )
-                Box(modifier = Modifier.weight(1f).offset {
-                    IntOffset(0, (ptrFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
-                }) {
+                Box(modifier = Modifier.weight(1f)) {
                 when {
                     isLoading && persistentSummaries == null -> {
                     LoadingContent(

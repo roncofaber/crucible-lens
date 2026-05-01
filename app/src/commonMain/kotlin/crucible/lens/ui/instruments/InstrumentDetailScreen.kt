@@ -33,9 +33,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
@@ -89,7 +87,6 @@ fun InstrumentDetailScreen(
     var overflowMenuExpanded by remember { mutableStateOf(false) }
     var fromCache by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
-    val pullRefreshState = rememberPullToRefreshState()
     val scope = rememberCoroutineScope()
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
     val platformCtx = getPlatformContext()
@@ -194,7 +191,6 @@ fun InstrumentDetailScreen(
         PullToRefreshBox(
             isRefreshing = isRefreshingNow,
             onRefresh = { loadData(forceRefresh = true) },
-            state = pullRefreshState,
             modifier = modifier.fillMaxSize().padding(padding)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -213,14 +209,7 @@ fun InstrumentDetailScreen(
                     )
                 }
 
-                // Sliding content — offsets down during pull, snaps back on release
-                val ptrFraction by animateFloatAsState(
-                    targetValue = if (isRefreshingNow) 0f else pullRefreshState.distanceFraction,
-                    label = "ptr"
-                )
-                Box(modifier = Modifier.weight(1f).offset {
-                    IntOffset(0, (ptrFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
-                }) {
+                Box(modifier = Modifier.weight(1f)) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize()

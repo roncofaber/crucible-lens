@@ -15,10 +15,10 @@ Comparison of `ios-development` (commonMain) against `main` (pure Android).
 
 ## Remaining known regressions
 
-### Pull-to-refresh content shift removed
-**Original**: During pull-to-refresh, the list content shifted down by `pullRefreshState.verticalOffset` via `graphicsLayer { translationY = ... }`, giving a physical "pushing the content down" feel.  
-**KMP port**: `PullToRefreshBox` handles the indicator but content stays fixed — no vertical translation of the list during the pull gesture.  
-**Severity**: Low — the refresh still works, the animation is just less tactile. Fixing requires wrapping content in a custom `PullToRefreshBox` subclass or using `Modifier.offset`.
+### Pull-to-refresh content shift — intentionally removed
+**Original**: During pull-to-refresh, the list content shifted down by `pullRefreshState.verticalOffset` via `graphicsLayer { translationY = ... }`.  
+**Decision**: A content-slide implementation using `distanceFraction` was attempted but produced unavoidable bounce artifacts. `PullToRefreshState.distanceFraction` conflates user gesture with internal `startRefresh()`/`endRefresh()` animations; there is no public API to distinguish them. The correct fix would require a custom `NestedScrollConnection` (~50 extra lines). The simpler and more broadly correct approach — used by Gmail, Google Photos, Twitter, and the iOS `UIRefreshControl` — is to keep content fixed while the indicator overlays it. That is the current behavior.  
+**Severity**: Resolved by design — the behavior now matches M3 and iOS conventions.
 
 ### `animateItemPlacement()` → `animateItem()` spec change
 **Original**: `Modifier.animateItemPlacement(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))` — custom bouncy spring.  
@@ -53,7 +53,7 @@ Comparison of `ios-development` (commonMain) against `main` (pure Android).
 | Sort/Group controls (tune icon, popups) | ✅ Identical |
 | Archived projects section (collapsed by default) | ✅ Identical |
 | Share action (uses `shareText()` platform wrapper) | ✅ Equivalent |
-| Horizontal pager for resource siblings | ✅ Identical |
+| Horizontal pager for resource siblings | ✅ Equivalent (linear page count, not virtual infinite; initialPage set directly) |
 | Thumbnail carousel in resource detail | ✅ Identical |
 | Scientific metadata display | ✅ Identical |
 | QrCodeDialog (single resource) | ✅ Identical |

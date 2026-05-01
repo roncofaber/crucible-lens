@@ -1,7 +1,7 @@
 # Architecture Notes
 
 Branch: `ios-development`  
-Last updated: 2026-04-29
+Last updated: 2026-05-01
 
 ---
 
@@ -14,16 +14,16 @@ Last updated: 2026-04-29
 | Networking | Ktor 3.0.3 (OkHttp engine on Android, Darwin engine on iOS) |
 | Serialization | kotlinx.serialization 1.7.3 |
 | Preferences | multiplatform-settings (NSUserDefaults on iOS, DataStore on Android) |
-| Date/time | kotlinx-datetime 0.6.1 |
+| Date/time | kotlinx-datetime 0.7.1 |
 | QR scan + display | qr-kit 3.1.3 (Chaintech Network) |
 | Image picking | moko-media 0.12.0 (iOS); ActivityResultContracts (Android) |
 | WebView (ORCID) | compose-webview-multiplatform 2.0.3 |
-| Navigation | org.jetbrains.androidx.navigation 2.8.0-alpha10 |
+| Navigation | org.jetbrains.androidx.navigation 2.9.2 |
 | Min SDK | 26 (Android) |
 | Target/Compile SDK | 36 (Android) |
 | Kotlin | 2.1.0 |
-| AGP | 9.0.0 |
-| Gradle | 9.2.1 |
+| AGP | 9.2.0 |
+| Gradle | 9.4.1 |
 | No DI framework | dependencies passed explicitly |
 
 ---
@@ -131,16 +131,36 @@ Cache is cleared entirely on API key or base URL change.
 
 ---
 
-## ViewModel (`ScannerViewModel`)
+## ViewModel (`ResourceDetailViewModel`)
 
 Single `ViewModel` (commonMain, platform-agnostic) for the resource detail flow:
 - `uiState: StateFlow<UiState>` — `Idle | Loading | Success(resource, thumbnails, isRefreshing) | Error`
+- `isSyncing: StateFlow<Boolean>` — true while `DataSyncManager.syncAll()` is running (drives home screen spinner)
 - `fetchResource(uuid)` — shows cached version immediately, always fetches fresh for full detail
-- `refreshResource(uuid)` — evict cache then refetch
+- `refreshResource(uuid)` — evict cache, refetch; if UUID matches current resource → full refresh; if sibling → fetch+cache without changing `_uiState.resource`
 - `getCardState` / `setCardState` — persists expand/collapse state across pager pages
+- `startBackgroundSync()` / sync is paused during user-initiated refresh and resumed after
 - `preloadRelatedResources(resource)` — background prefetch of linked resource UUIDs
 
-Project/Instrument/List screens manage their own local coroutine state — they do not use `ScannerViewModel`.
+Project/Instrument/List/Detail screens manage their own local coroutine state — they do not use `ResourceDetailViewModel`.
+
+---
+
+## Pull-to-refresh pattern
+
+All screens use `PullToRefreshBox` (M3) with a **dedicated refresh flag** separate from the initial-load flag:
+
+| Screen | PTR flag | Initial-load flag |
+|---|---|---|
+| ProjectsListScreen | `isUserRefreshing` | `isLoading` |
+| InstrumentListScreen | `isUserRefreshing` | `isLoading` |
+| ProjectDetailScreen | `isRefreshingNow` | `isLoading` |
+| InstrumentDetailScreen | `isRefreshingNow` | `isLoading` |
+| ResourceDetailScreen | `localRefreshState` (via `isRefreshing` from ViewModel) | ViewModel `UiState.Loading` |
+
+The PTR flag is set to `true` synchronously before the coroutine launches (`if (forceRefresh) flag = true`) and cleared in the coroutine's `finally` block. This ensures the spinner appears immediately on pull and disappears cleanly when done.
+
+Content does **not** move during pull-to-refresh — the M3 `PullToRefreshBox` indicator overlays the content. This matches the standard Material 3 and iOS `UIRefreshControl` behavior.
 
 ---
 
@@ -157,12 +177,15 @@ All 18 routes: `Home`, `Scanner`, `Detail`, `History`, `Search`, `Projects`, `Pr
 
 ## ResourceDetailScreen pager
 
-- `Int.MAX_VALUE` virtual page count when `n > 1` siblings — enables infinite wrap-around swipe
-- Real sibling index: `pagerState.currentPage % n`
-- Initial virtual page: near `Int.MAX_VALUE / 2`
-- Preload relationships/resources: ±10 pages; thumbnails: ±1 page
-- Evict resources beyond ±20, thumbnails beyond ±2
-- Cleanup uses circular distance: `minOf(d, n - d)`
+Siblings are all samples (or datasets) of the same type within the same project, drawn from the project cache (`sameTypeSamples` / `sameTypeDatasets` params).
+
+- `pageCount = siblingList.size`, `initialPage = siblingIndex` — pager opens at the correct position immediately, no post-composition scroll
+- Lazy enrichment: fetches full resource data (with links) for ±10 pages around the current page; thumbnails for ±2 pages
+- Eviction: resources beyond ±20 pages removed from local maps; thumbnails beyond ±3
+- Primary resource is eagerly seeded into `loadedResources` / `enrichedUuids` on first composition so its page never shows a loading state
+- Swiping is a pure UI gesture — the ViewModel is not updated; `resource` in `UiState.Success` always stays as the navigated-to resource
+- Pull-to-refresh on a sibling fetches and caches that sibling without changing the primary `UiState.resource`; `siblingReloadTrigger` increments after completion to pick up fresh data
+- Per-page loading/content visibility is driven by `enrichedUuids` and `failedEnrichmentUuids` (not by `mfid` comparisons)
 
 ---
 

@@ -22,7 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
@@ -39,7 +38,6 @@ import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.SearchBar
 import crucible.lens.ui.common.showFeedback
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,7 +60,6 @@ fun InstrumentListScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var hiddenExpanded by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
-    val pullRefreshState = rememberPullToRefreshState()
     val scope = rememberCoroutineScope()
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
@@ -150,7 +147,6 @@ fun InstrumentListScreen(
         PullToRefreshBox(
             isRefreshing = isUserRefreshing,
             onRefresh = { loadInstruments(forceRefresh = true) },
-            state = pullRefreshState,
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -163,13 +159,7 @@ fun InstrumentListScreen(
                     placeholder = "Search by name, type, manufacturer…"
                 )
 
-                val ptrFraction by animateFloatAsState(
-                    targetValue = if (isUserRefreshing) 0f else pullRefreshState.distanceFraction,
-                    label = "ptr"
-                )
-                Box(modifier = Modifier.weight(1f).offset {
-                    IntOffset(0, (ptrFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
-                }) {
+                Box(modifier = Modifier.weight(1f)) {
                     when {
                         isLoading -> LoadingContent(title = "Loading Instruments")
                         error != null -> {

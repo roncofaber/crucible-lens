@@ -39,9 +39,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 import androidx.compose.foundation.shape.RoundedCornerShape
 import coil3.compose.AsyncImage
 import androidx.compose.animation.AnimatedContent
@@ -681,7 +679,6 @@ fun ResourceDetailScreen(
         if (bytes != null) scope.launch { uploadThumbnail(bytes, dataset.uniqueId) }
     }
 
-    val pullRefreshState = rememberPullToRefreshState()
     // True only when a sibling (not the primary resource) was pull-to-refreshed.
     // Guards siblingReloadTrigger so it only fires on actual sibling PTRs.
     var isSiblingRefreshPending by remember { mutableStateOf(false) }
@@ -835,7 +832,6 @@ fun ResourceDetailScreen(
         PullToRefreshBox(
             isRefreshing = localRefreshState,
             onRefresh = { triggerRefresh() },
-            state = pullRefreshState,
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -866,13 +862,7 @@ fun ResourceDetailScreen(
                         val isPageEnriched = enrichedUuids.contains(pageResource.uniqueId) ||
                                              failedEnrichmentUuids.contains(pageResource.uniqueId)
 
-                        val ptrFraction by animateFloatAsState(
-                            targetValue = if (localRefreshState) 0f else pullRefreshState.distanceFraction,
-                            label = "ptr"
-                        )
-                        Box(modifier = Modifier.fillMaxSize().offset {
-                            IntOffset(0, (ptrFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
-                        }) {
+                        Box(modifier = Modifier.fillMaxSize()) {
             AnimatedVisibility(
                 visible = !isPageEnriched && !isRefreshing,
                 enter = fadeIn(animationSpec = tween(durationMillis = 300)),

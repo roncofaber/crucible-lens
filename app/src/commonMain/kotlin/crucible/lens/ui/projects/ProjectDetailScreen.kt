@@ -41,9 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 
 
 import crucible.lens.data.api.ApiClient
@@ -219,7 +217,6 @@ fun ProjectDetailScreen(
             pagerState.scrollToPage(1)
         }
     }
-    val pullRefreshState = rememberPullToRefreshState()
     var isRefreshingNow by remember { mutableStateOf(false) }
 
     val filteredSamples = remember(samples, searchQuery) {
@@ -340,7 +337,6 @@ fun ProjectDetailScreen(
         PullToRefreshBox(
             isRefreshing = isRefreshingNow,
             onRefresh = { loadProjectData(forceRefresh = true) },
-            state = pullRefreshState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -363,14 +359,7 @@ fun ProjectDetailScreen(
                 onSortStateChange = { sortState = it; showFeedback(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
             )
 
-                // Sliding content — offsets down during pull, snaps back on release
-                val ptrFraction by animateFloatAsState(
-                    targetValue = if (isRefreshingNow) 0f else pullRefreshState.distanceFraction,
-                    label = "ptr"
-                )
-                Column(modifier = Modifier.weight(1f).offset {
-                    IntOffset(0, (ptrFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
-                }) {
+                Column(modifier = Modifier.weight(1f)) {
 
             // Tabs
             TabRow(selectedTabIndex = pagerState.currentPage) {
