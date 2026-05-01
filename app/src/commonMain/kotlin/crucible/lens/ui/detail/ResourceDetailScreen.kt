@@ -428,7 +428,7 @@ fun ResourceDetailScreen(
     // Scroll to the resource's position once siblings are resolved and pageCount is updated.
     // Runs after recomposition so pageCount reflects the full sibling list size.
     LaunchedEffect(siblingIndex, siblingsResolved) {
-        if (siblingsResolved && siblingIndex > 0) {
+        if (siblingsResolved && siblingIndex > 0 && pagerState.currentPage != siblingIndex) {
             pagerState.scrollToPage(siblingIndex)
         }
     }
