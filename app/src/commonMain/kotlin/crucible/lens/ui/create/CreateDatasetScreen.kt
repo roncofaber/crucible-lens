@@ -25,6 +25,7 @@ import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.util.DuplicateHolder
+import crucible.lens.data.util.MetadataHolder
 import crucible.lens.platform.PlatformBase64
 import crucible.lens.platform.currentIsoDateTime
 import crucible.lens.platform.rememberCameraPicker
@@ -39,7 +40,8 @@ import kotlinx.coroutines.launch
 fun CreateDatasetScreen(
     initialProjectId: String?,
     onBack: () -> Unit,
-    onCreated: (uuid: String) -> Unit
+    onCreated: (uuid: String) -> Unit,
+    onOpenMetadataEditor: () -> Unit = {}
 ) {
     val prefill = remember { DuplicateHolder.takeDataset() }
     var name by remember { mutableStateOf(prefill?.name?.let { "$it (copy)" } ?: "") }
@@ -61,6 +63,13 @@ fun CreateDatasetScreen(
     val scope = rememberCoroutineScope()
 
     val cameraPicker = rememberCameraPicker { bytes -> photoBytes = bytes }
+
+    // Receive metadata back from MetadataEditorScreen
+    LaunchedEffect(MetadataHolder.isDirty) {
+        if (MetadataHolder.isDirty) {
+            metadataEntries = MetadataHolder.take()
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -134,6 +143,9 @@ fun CreateDatasetScreen(
                 }
             }
 
+            // Section: Basic Info
+            Text("Basic Info", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -191,6 +203,11 @@ fun CreateDatasetScreen(
                 )
             }
 
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+            // Section: Scientific Details
+            Text("Scientific Details", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+
             OutlinedTextField(
                 value = sessionName,
                 onValueChange = { sessionName = it },
@@ -217,10 +234,39 @@ fun CreateDatasetScreen(
                 singleLine = true,
                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) }
             )
-            MetadataEditor(
-                entries = metadataEntries,
-                onEntriesChange = { metadataEntries = it }
-            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+            // Section: Metadata
+            Text("Metadata", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+
+            OutlinedCard(
+                onClick = {
+                    MetadataHolder.put(metadataEntries)
+                    onOpenMetadataEditor()
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.DataObject, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        Column {
+                            Text("Scientific metadata", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                if (metadataEntries.isEmpty()) "No fields added"
+                                else "${metadataEntries.count { it.first.isNotBlank() }} field${if (metadataEntries.count { it.first.isNotBlank() } != 1) "s" else ""}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
 
             Button(
                 onClick = {

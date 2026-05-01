@@ -170,7 +170,8 @@ data class SampleCreateRequest(
     @SerialName("sample_type") val sampleType: String? = null,
     @SerialName("description") val description: String? = null,
     @SerialName("project_id") val projectId: String? = null,
-    @SerialName("timestamp") val timestamp: String? = null
+    @SerialName("timestamp") val timestamp: String? = null,
+    @SerialName("scientific_metadata") val scientificMetadata: Map<String, String>? = null
 )
 
 @Serializable
@@ -199,7 +200,8 @@ data class SampleUpdateRequest(
     @SerialName("sample_type") val sampleType: String? = null,
     @SerialName("description") val description: String? = null,
     @SerialName("timestamp") val timestamp: String? = null,
-    @SerialName("project_id") val projectId: String? = null
+    @SerialName("project_id") val projectId: String? = null,
+    @SerialName("scientific_metadata") val scientificMetadata: Map<String, String>? = null
 )
 
 @Serializable

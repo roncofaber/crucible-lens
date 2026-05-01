@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
@@ -17,8 +18,10 @@ import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.util.DuplicateHolder
+import crucible.lens.data.util.MetadataHolder
 import crucible.lens.platform.currentIsoDateTime
 import crucible.lens.ui.common.DateTimePickerField
+import crucible.lens.ui.common.toMetadataMap
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,7 +29,8 @@ import kotlinx.coroutines.launch
 fun CreateSampleScreen(
     initialProjectId: String?,
     onBack: () -> Unit,
-    onCreated: (uuid: String) -> Unit
+    onCreated: (uuid: String) -> Unit,
+    onOpenMetadataEditor: () -> Unit = {}
 ) {
     val prefill = remember { DuplicateHolder.takeSample() }
     var name by remember { mutableStateOf(prefill?.name?.let { "$it (copy)" } ?: "") }
@@ -35,6 +39,7 @@ fun CreateSampleScreen(
     var timestamp by remember { mutableStateOf(prefill?.timestamp ?: currentIsoDateTime()) }
     var selectedProjectId by remember { mutableStateOf(prefill?.projectId ?: initialProjectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
+    var metadataEntries by remember { mutableStateOf(listOf<Pair<String, String>>()) }
 
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
@@ -42,6 +47,13 @@ fun CreateSampleScreen(
     var isSaving by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // Receive metadata back from MetadataEditorScreen
+    LaunchedEffect(MetadataHolder.isDirty) {
+        if (MetadataHolder.isDirty) {
+            metadataEntries = MetadataHolder.take()
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -65,6 +77,9 @@ fun CreateSampleScreen(
                 .padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // Section: Basic Info
+            Text("Basic Info", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -127,6 +142,12 @@ fun CreateSampleScreen(
                 onValueChange = { timestamp = it },
                 modifier = Modifier.fillMaxWidth()
             )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+            // Section: Description
+            Text("Description", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
@@ -136,6 +157,39 @@ fun CreateSampleScreen(
                 maxLines = 4,
                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = null) }
             )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+            // Section: Metadata
+            Text("Metadata", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+
+            OutlinedCard(
+                onClick = {
+                    MetadataHolder.put(metadataEntries)
+                    onOpenMetadataEditor()
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.DataObject, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        Column {
+                            Text("Scientific metadata", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                if (metadataEntries.isEmpty()) "No fields added"
+                                else "${metadataEntries.count { it.first.isNotBlank() }} field${if (metadataEntries.count { it.first.isNotBlank() } != 1) "s" else ""}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
 
             Button(
                 onClick = {
@@ -148,7 +202,8 @@ fun CreateSampleScreen(
                                     sampleType = type.trim().ifBlank { null },
                                     description = description.trim().ifBlank { null },
                                     projectId = selectedProjectId,
-                                    timestamp = timestamp.trim().ifBlank { null }
+                                    timestamp = timestamp.trim().ifBlank { null },
+                                    scientificMetadata = metadataEntries.toMetadataMap()
                                 )
                             )) {
                                 is ApiResult.Success -> {

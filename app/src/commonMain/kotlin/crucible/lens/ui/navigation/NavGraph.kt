@@ -45,6 +45,7 @@ import crucible.lens.data.model.Sample
 import crucible.lens.data.util.DuplicateHolder
 import crucible.lens.ui.create.CreateSampleScreen
 import crucible.lens.ui.create.CreateDatasetScreen
+import crucible.lens.ui.metadata.MetadataEditorScreen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -104,6 +105,7 @@ sealed class Screen(val route: String) {
     object InstrumentDetail : Screen("instrument/{instrumentId}") {
         fun createRoute(id: String) = "instrument/${encodeRouteSegment(id)}"
     }
+    object MetadataEditor : Screen("metadata-editor")
 }
 
 
@@ -763,7 +765,8 @@ fun NavGraph(
                 onCreated = { uuid ->
                     navController.popBackStack()
                     navController.navigate(Screen.Detail.createRoute(uuid))
-                }
+                },
+                onOpenMetadataEditor = { navController.navigate(Screen.MetadataEditor.route) }
             )
         }
 
@@ -778,6 +781,19 @@ fun NavGraph(
                 onCreated = { uuid ->
                     navController.popBackStack()
                     navController.navigate(Screen.Detail.createRoute(uuid))
+                },
+                onOpenMetadataEditor = { navController.navigate(Screen.MetadataEditor.route) }
+            )
+        }
+
+        composable(Screen.MetadataEditor.route) {
+            MetadataEditorScreen(
+                onBack = { navController.popBackStack() },
+                onDone = {
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.set("metadata_updated", true)
+                    navController.popBackStack()
                 }
             )
         }

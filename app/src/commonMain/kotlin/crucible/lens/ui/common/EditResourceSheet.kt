@@ -105,7 +105,11 @@ private fun SampleEditFields(
     var timestamp by remember { mutableStateOf(resource.timestamp ?: "") }
     var selectedProjectId by remember { mutableStateOf(resource.projectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
+    var metadataEntries by remember { mutableStateOf(resource.scientificMetadata?.toMetadataEntries() ?: emptyList()) }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
+
+    // Section: Basic Info
+    Text("Basic Info", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
 
     OutlinedTextField(
         value = name,
@@ -155,6 +159,12 @@ private fun SampleEditFields(
         onValueChange = { timestamp = it },
         modifier = Modifier.fillMaxWidth()
     )
+
+    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+    // Section: Description
+    Text("Description", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+
     OutlinedTextField(
         value = description,
         onValueChange = { description = it },
@@ -163,6 +173,17 @@ private fun SampleEditFields(
         minLines = 2,
         maxLines = 4,
         leadingIcon = { Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = null) }
+    )
+
+    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+    // Section: Metadata
+    Text("Metadata", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+
+    MetadataEditor(
+        entries = metadataEntries,
+        onEntriesChange = { metadataEntries = it },
+        initialExpanded = false
     )
 
     SaveButton(enabled = name.isNotBlank() && !isSaving, isSaving = isSaving) {
@@ -176,7 +197,8 @@ private fun SampleEditFields(
                         sampleType = type.trim().ifBlank { null },
                         description = description.trim().ifBlank { null },
                         timestamp = timestamp.trim().ifBlank { null },
-                        projectId = selectedProjectId
+                        projectId = selectedProjectId,
+                        scientificMetadata = metadataEntries.toMetadataMap()
                     )
                 )) {
                     is ApiResult.Success -> {
@@ -221,6 +243,9 @@ private fun DatasetEditFields(
     var projectDropdownExpanded by remember { mutableStateOf(false) }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
 
+    // Section: Basic Info
+    Text("Basic Info", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+
     OutlinedTextField(
         value = name,
         onValueChange = { name = it },
@@ -264,6 +289,12 @@ private fun DatasetEditFields(
             }
         }
     }
+
+    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+    // Section: Scientific Details
+    Text("Scientific Details", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+
     OutlinedTextField(
         value = sessionName,
         onValueChange = { sessionName = it },
@@ -290,9 +321,16 @@ private fun DatasetEditFields(
         singleLine = true,
         leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) }
     )
+
+    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+    // Section: Metadata
+    Text("Metadata", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+
     MetadataEditor(
         entries = metadataEntries,
-        onEntriesChange = { metadataEntries = it }
+        onEntriesChange = { metadataEntries = it },
+        initialExpanded = false
     )
 
     SaveButton(enabled = name.isNotBlank() && !isSaving, isSaving = isSaving) {
