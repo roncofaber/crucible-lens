@@ -10,6 +10,7 @@ import com.multiplatform.webview.web.LoadingState
 import com.multiplatform.webview.web.WebView
 import com.multiplatform.webview.web.rememberWebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewState
+import crucible.lens.ui.common.AppScaffold
 
 private val KEY_REGEX = Regex(""""crucible_apikey"\s*:\s*"([a-f0-9]+)"""")
 
@@ -43,7 +44,7 @@ fun OrcidLoginScreen(
         }
     }
 
-    Scaffold(
+    AppScaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Sign in with ORCID") },
