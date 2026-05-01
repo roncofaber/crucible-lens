@@ -19,6 +19,9 @@ import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.ui.common.DateTimePickerField
 import crucible.lens.ui.common.InstrumentPickerField
+import crucible.lens.ui.common.MetadataEditor
+import crucible.lens.ui.common.toMetadataEntries
+import crucible.lens.ui.common.toMetadataMap
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.DatasetUpdateRequest
 import crucible.lens.data.model.Project
@@ -210,10 +213,8 @@ private fun DatasetEditFields(
     var instrumentName by remember { mutableStateOf(resource.instrumentName ?: "") }
     var sessionName by remember { mutableStateOf(resource.sessionName ?: "") }
     var dataType by remember { mutableStateOf(resource.dataType ?: "") }
-    var metadataText by remember {
-        mutableStateOf(
-            resource.scientificMetadata?.entries?.joinToString("\n") { (k, v) -> "$k: $v" } ?: ""
-        )
+    var metadataEntries by remember {
+        mutableStateOf(resource.scientificMetadata?.toMetadataEntries() ?: emptyList())
     }
     var timestamp by remember { mutableStateOf(resource.timestamp ?: "") }
     var selectedProjectId by remember { mutableStateOf(resource.projectId) }
@@ -289,15 +290,9 @@ private fun DatasetEditFields(
         singleLine = true,
         leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) }
     )
-    OutlinedTextField(
-        value = metadataText,
-        onValueChange = { metadataText = it },
-        label = { Text("Metadata") },
-        placeholder = { Text("key: value\nkey2: value2", style = MaterialTheme.typography.bodySmall) },
-        modifier = Modifier.fillMaxWidth(),
-        minLines = 2,
-        maxLines = 6,
-        leadingIcon = { Icon(Icons.Default.DataObject, contentDescription = null) }
+    MetadataEditor(
+        entries = metadataEntries,
+        onEntriesChange = { metadataEntries = it }
     )
 
     SaveButton(enabled = name.isNotBlank() && !isSaving, isSaving = isSaving) {
@@ -314,7 +309,7 @@ private fun DatasetEditFields(
                         timestamp = timestamp.trim().ifBlank { null },
                         projectId = selectedProjectId,
                         dataType = dataType.trim().ifBlank { null },
-                        scientificMetadata = parseMetadataText(metadataText)
+                        scientificMetadata = metadataEntries.toMetadataMap()
                     )
                 )) {
                     is ApiResult.Success -> {
@@ -334,18 +329,6 @@ private fun DatasetEditFields(
     }
 }
 
-private fun parseMetadataText(text: String): Map<String, String>? {
-    if (text.isBlank()) return null
-    return text.trim().lines()
-        .mapNotNull { line ->
-            val idx = line.indexOf(':')
-            if (idx < 0) return@mapNotNull null
-            val key = line.substring(0, idx).trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            key to line.substring(idx + 1).trim()
-        }
-        .toMap()
-        .ifEmpty { null }
-}
 
 @Composable
 private fun SaveButton(

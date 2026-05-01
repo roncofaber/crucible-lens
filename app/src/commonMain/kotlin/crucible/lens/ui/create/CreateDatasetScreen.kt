@@ -30,6 +30,8 @@ import crucible.lens.platform.currentIsoDateTime
 import crucible.lens.platform.rememberCameraPicker
 import crucible.lens.ui.common.DateTimePickerField
 import crucible.lens.ui.common.InstrumentPickerField
+import crucible.lens.ui.common.MetadataEditor
+import crucible.lens.ui.common.toMetadataMap
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,7 +47,7 @@ fun CreateDatasetScreen(
     var instrumentName by remember { mutableStateOf(prefill?.instrumentName ?: "") }
     var sessionName by remember { mutableStateOf(prefill?.sessionName ?: "") }
     var dataType by remember { mutableStateOf("") }
-    var metadataText by remember { mutableStateOf("") }
+    var metadataEntries by remember { mutableStateOf(listOf<Pair<String, String>>()) }
     var timestamp by remember { mutableStateOf(prefill?.timestamp ?: currentIsoDateTime()) }
     var selectedProjectId by remember { mutableStateOf(prefill?.projectId ?: initialProjectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
@@ -215,15 +217,9 @@ fun CreateDatasetScreen(
                 singleLine = true,
                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) }
             )
-            OutlinedTextField(
-                value = metadataText,
-                onValueChange = { metadataText = it },
-                label = { Text("Metadata") },
-                placeholder = { Text("key: value\nkey2: value2", style = MaterialTheme.typography.bodySmall) },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 2,
-                maxLines = 6,
-                leadingIcon = { Icon(Icons.Default.DataObject, contentDescription = null) }
+            MetadataEditor(
+                entries = metadataEntries,
+                onEntriesChange = { metadataEntries = it }
             )
 
             Button(
@@ -240,7 +236,7 @@ fun CreateDatasetScreen(
                                     sessionName = sessionName.trim().ifBlank { null },
                                     timestamp = timestamp.trim().ifBlank { null },
                                     dataType = dataType.trim().ifBlank { null },
-                                    scientificMetadata = parseMetadataText(metadataText)
+                                    scientificMetadata = metadataEntries.toMetadataMap()
                                 )
                             )
                             if (createResp !is ApiResult.Success) {
@@ -295,17 +291,4 @@ fun CreateDatasetScreen(
             }
         }
     }
-}
-
-private fun parseMetadataText(text: String): Map<String, String>? {
-    if (text.isBlank()) return null
-    return text.trim().lines()
-        .mapNotNull { line ->
-            val idx = line.indexOf(':')
-            if (idx < 0) return@mapNotNull null
-            val key = line.substring(0, idx).trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            key to line.substring(idx + 1).trim()
-        }
-        .toMap()
-        .ifEmpty { null }
 }
