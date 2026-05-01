@@ -5,6 +5,8 @@ import androidx.compose.runtime.Composable
 
 actual abstract class PlatformContext
 
+actual val isDebugBuild: Boolean = Platform.isDebugBinary
+
 private class IosPlatformContext : PlatformContext()
 
 @Composable

@@ -1,5 +1,6 @@
 package crucible.lens.data.api
 
+import crucible.lens.platform.isDebugBuild
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -35,7 +36,7 @@ object ApiClient {
             })
         }
         install(Logging) {
-            level = LogLevel.INFO  // shows method, URL, status — change to ALL for body
+            level = if (isDebugBuild) LogLevel.INFO else LogLevel.NONE
         }
         install(HttpTimeout) {
             requestTimeoutMillis = 30_000

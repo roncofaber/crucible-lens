@@ -10,6 +10,8 @@ import androidx.compose.ui.platform.LocalContext
 
 actual typealias PlatformContext = Context
 
+actual val isDebugBuild: Boolean = crucible.lens.BuildConfig.DEBUG
+
 @Composable
 actual fun getPlatformContext(): PlatformContext = LocalContext.current
 
