@@ -62,3 +62,4 @@ lint-results.xml
 iosApp/*.xcodeproj/
 iosApp/*.xcworkspace/
 iosApp/xcuserdata/
+*.jks
