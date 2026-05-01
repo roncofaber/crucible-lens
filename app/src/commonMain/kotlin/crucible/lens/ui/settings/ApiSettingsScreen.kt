@@ -21,7 +21,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
+import crucible.lens.data.model.HealthStatus
 import crucible.lens.data.model.UserLead
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,6 +55,36 @@ fun ApiSettingsScreen(
     val apiBaseUrlDirty = apiBaseUrlInput != currentApiBaseUrl
     val graphExplorerUrlDirty = graphExplorerUrlInput != currentGraphExplorerUrl
     val hasChanges = apiKeyDirty || apiBaseUrlDirty || graphExplorerUrlDirty
+
+    // Health check state — fires on URL change (debounced) and on manual tap
+    sealed interface HealthState {
+        object Idle : HealthState
+        object Checking : HealthState
+        data class Ok(val status: HealthStatus) : HealthState
+        data class Failed(val message: String) : HealthState
+    }
+    var healthState by remember { mutableStateOf<HealthState>(HealthState.Idle) }
+    var healthManualTrigger by remember { mutableStateOf(0) }
+
+    suspend fun runHealthCheck(url: String) {
+        if (url.isBlank()) { healthState = HealthState.Idle; return }
+        healthState = HealthState.Checking
+        healthState = when (val result = ApiClient.service.checkHealth(url)) {
+            is ApiResult.Success -> HealthState.Ok(result.data)
+            is ApiResult.Error   -> HealthState.Failed("HTTP ${result.code}: ${result.message}")
+        }
+    }
+
+    // Auto-check with 800 ms debounce when the URL changes
+    LaunchedEffect(apiBaseUrlInput) {
+        delay(800)
+        runHealthCheck(apiBaseUrlInput)
+    }
+
+    // Immediate check when the user taps "Test"
+    LaunchedEffect(healthManualTrigger) {
+        if (healthManualTrigger > 0) runHealthCheck(apiBaseUrlInput)
+    }
 
     var account by remember { mutableStateOf<UserLead?>(null) }
     var accountLoading by remember { mutableStateOf(false) }
@@ -269,15 +301,80 @@ fun ApiSettingsScreen(
 
             OutlinedTextField(
                 value = apiBaseUrlInput,
-                onValueChange = { apiBaseUrlInput = it },
+                onValueChange = { apiBaseUrlInput = it; healthState = HealthState.Idle },
                 label = { Text("API Base URL") },
                 placeholder = { Text("https://crucible.lbl.gov/api/v1/") },
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = { Icon(Icons.Default.Cloud, contentDescription = null) },
                 singleLine = true,
-                supportingText = { Text("REST API endpoint for fetching resources", style = MaterialTheme.typography.bodySmall) },
                 colors = if (apiBaseUrlDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
             )
+
+            // Health status row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                when (val hs = healthState) {
+                    is HealthState.Idle -> {
+                        Text(
+                            "REST API endpoint for fetching resources",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    is HealthState.Checking -> {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                        Text(
+                            "Checking server…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    is HealthState.Ok -> {
+                        val s = hs.status
+                        val color = if (s.status == "ok") MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.error
+                        Icon(
+                            if (s.status == "ok") Icons.Default.CheckCircle else Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = color
+                        )
+                        val latency = s.dbMs?.let { " · DB ${it.toInt()} ms" } ?: ""
+                        val ver = s.version?.let { " · v$it" } ?: ""
+                        Text(
+                            "Server ${s.status}, DB ${s.db ?: "?"}$latency$ver",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = color,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    is HealthState.Failed -> {
+                        Icon(
+                            Icons.Default.CloudOff,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            hs.message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                TextButton(
+                    onClick = { healthManualTrigger++ },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text("Test", style = MaterialTheme.typography.labelMedium)
+                }
+            }
 
             OutlinedTextField(
                 value = graphExplorerUrlInput,

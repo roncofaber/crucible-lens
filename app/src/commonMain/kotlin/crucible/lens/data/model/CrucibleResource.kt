@@ -213,3 +213,11 @@ data class DatasetUpdateRequest(
     @SerialName("data_type") val dataType: String? = null,
     @SerialName("scientific_metadata") val scientificMetadata: Map<String, String>? = null
 )
+
+@Serializable
+data class HealthStatus(
+    val status: String,                 // "ok" | "degraded"
+    val db: String? = null,             // "ok" | "error"
+    @SerialName("db_ms") val dbMs: Float? = null,
+    val version: String? = null
+)

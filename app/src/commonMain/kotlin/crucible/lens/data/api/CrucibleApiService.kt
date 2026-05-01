@@ -14,6 +14,7 @@ import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.model.ThumbnailCreateRequest
+import crucible.lens.data.model.HealthStatus
 import crucible.lens.data.model.PaginatedResponse
 import crucible.lens.data.model.UserLead
 import io.ktor.client.HttpClient
@@ -352,6 +353,15 @@ class CrucibleApiService(
     }
 
     // ── Pagination ───────────────────────────────────────────────────────────
+
+    /**
+     * Checks server health at the given base URL without authentication.
+     * Uses GET {baseUrl}health/ready — returns ok/degraded + DB latency.
+     * Pass baseUrl explicitly so callers can test an unsaved candidate URL.
+     */
+    suspend fun checkHealth(baseUrl: String): ApiResult<HealthStatus> = safeCall {
+        client.get("${baseUrl}health/ready").body()
+    }
 
     /**
      * Fetches all pages of a paginated envelope endpoint in parallel.
