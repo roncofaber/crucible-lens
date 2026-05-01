@@ -48,12 +48,11 @@ fun ErrorCard(
                 color = MaterialTheme.colorScheme.onErrorContainer
             )
             if (onRetry != null) {
-                Button(
+                TextButton(
                     onClick = onRetry,
                     modifier = Modifier.align(Alignment.End),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
                     )
                 ) {
                     Text("Retry")
