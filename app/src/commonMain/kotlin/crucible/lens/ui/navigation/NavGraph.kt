@@ -354,8 +354,7 @@ fun NavGraph(
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Home.route) { inclusive = false }
                     }
-                },
-                onSearch = { navController.navigate(Screen.Search.route) }
+                }
             )
         }
 
@@ -420,8 +419,7 @@ fun NavGraph(
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Home.route) { inclusive = false }
                     }
-                },
-                onSearch = { navController.navigate(Screen.Search.route) }
+                }
             )
         }
 
@@ -432,8 +430,7 @@ fun NavGraph(
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Home.route) { inclusive = false }
                     }
-                },
-                onSearch = { navController.navigate(Screen.Search.route) }
+                }
             )
         }
 

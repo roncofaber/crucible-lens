@@ -21,8 +21,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun CacheSettingsScreen(
     onBack: () -> Unit,
-    onHome: () -> Unit,
-    onSearch: () -> Unit
+    onHome: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -46,16 +45,6 @@ fun CacheSettingsScreen(
                 },
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        IconButton(
-                            onClick = onSearch,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = "Search",
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
                         IconButton(
                             onClick = onHome,
                             modifier = Modifier.size(40.dp)

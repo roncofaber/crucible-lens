@@ -24,8 +24,7 @@ import crucible.lens.platform.openUrl
 fun AboutSettingsScreen(
     isDarkTheme: Boolean,
     onBack: () -> Unit,
-    onHome: () -> Unit,
-    onSearch: () -> Unit
+    onHome: () -> Unit
 ) {
     val context = getPlatformContext()
 
@@ -40,16 +39,6 @@ fun AboutSettingsScreen(
                 },
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        IconButton(
-                            onClick = onSearch,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = "Search",
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
                         IconButton(
                             onClick = onHome,
                             modifier = Modifier.size(40.dp)

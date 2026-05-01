@@ -22,8 +22,7 @@ fun SettingsScreen(
     onNavigateToCache: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onBack: () -> Unit,
-    onHome: () -> Unit,
-    onSearch: () -> Unit
+    onHome: () -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -36,16 +35,6 @@ fun SettingsScreen(
                 },
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        IconButton(
-                            onClick = onSearch,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = "Search",
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
                         IconButton(
                             onClick = onHome,
                             modifier = Modifier.size(40.dp)

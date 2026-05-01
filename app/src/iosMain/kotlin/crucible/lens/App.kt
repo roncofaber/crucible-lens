@@ -9,6 +9,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.navigation.compose.rememberNavController
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.cache.PersistentProjectCache
+import crucible.lens.platform.getPlatformContext
 import crucible.lens.data.network.ConnectivityObserver
 import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.data.preferences.IosAppPreferences
@@ -21,6 +23,7 @@ actual fun App() {
     val prefs = remember { IosAppPreferences() }
     val scope = rememberCoroutineScope()
     val navController = rememberNavController()
+    val platformContext = getPlatformContext()
 
     ConnectivityObserver.init(Unit)
 
@@ -91,6 +94,7 @@ actual fun App() {
                     prefs.saveApiBaseUrl(url)
                     ApiClient.setBaseUrl(url)
                     CacheManager.clearAll()
+                    PersistentProjectCache.clear(platformContext)
                 }
             },
             onGraphExplorerUrlSave = { url ->
