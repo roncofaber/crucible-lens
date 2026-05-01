@@ -535,6 +535,51 @@ private fun HomePinnedProjects(
     onTogglePinnedProject: (String) -> Unit = {},
     onTogglePinnedInstrument: (String) -> Unit = {}
 ) {
+    var pendingUnpinProjectId by remember { mutableStateOf<String?>(null) }
+    var pendingUnpinInstrumentId by remember { mutableStateOf<String?>(null) }
+
+    // Confirmation dialog for unpin
+    val pendingProjectName = pendingUnpinProjectId?.let { id ->
+        pinnedList.find { it.projectId == id }?.title ?: id
+    }
+    val pendingInstrumentName = pendingUnpinInstrumentId?.let { id ->
+        pinnedInstrumentList.find { it.uniqueId == id }?.instrumentName ?: id
+    }
+    if (pendingProjectName != null) {
+        AlertDialog(
+            onDismissRequest = { pendingUnpinProjectId = null },
+            icon = { Icon(Icons.Default.BookmarkRemove, contentDescription = null) },
+            title = { Text("Unpin project?") },
+            text = { Text("Remove \"$pendingProjectName\" from pinned items?") },
+            confirmButton = {
+                Button(onClick = {
+                    onTogglePinnedProject(pendingUnpinProjectId!!)
+                    pendingUnpinProjectId = null
+                }) { Text("Unpin") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingUnpinProjectId = null }) { Text("Cancel") }
+            }
+        )
+    }
+    if (pendingInstrumentName != null) {
+        AlertDialog(
+            onDismissRequest = { pendingUnpinInstrumentId = null },
+            icon = { Icon(Icons.Default.BookmarkRemove, contentDescription = null) },
+            title = { Text("Unpin instrument?") },
+            text = { Text("Remove \"$pendingInstrumentName\" from pinned items?") },
+            confirmButton = {
+                Button(onClick = {
+                    onTogglePinnedInstrument(pendingUnpinInstrumentId!!)
+                    pendingUnpinInstrumentId = null
+                }) { Text("Unpin") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingUnpinInstrumentId = null }) { Text("Cancel") }
+            }
+        )
+    }
+
     val hasAny = pinnedList.isNotEmpty() || pinnedInstrumentList.isNotEmpty()
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -546,7 +591,7 @@ private fun HomePinnedProjects(
                 Card(
                     modifier = Modifier.fillMaxWidth().combinedClickable(
                         onClick = { onProjectClick(project.projectId) },
-                        onLongClick = { onTogglePinnedProject(project.projectId) }
+                        onLongClick = { pendingUnpinProjectId = project.projectId }
                     ),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
@@ -573,7 +618,7 @@ private fun HomePinnedProjects(
                 Card(
                     modifier = Modifier.fillMaxWidth().combinedClickable(
                         onClick = { onInstrumentClick(instrument.uniqueId) },
-                        onLongClick = { onTogglePinnedInstrument(instrument.uniqueId) }
+                        onLongClick = { pendingUnpinInstrumentId = instrument.uniqueId }
                     ),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
