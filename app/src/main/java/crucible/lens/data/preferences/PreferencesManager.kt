@@ -173,7 +173,7 @@ class PreferencesManager(private val context: Context) : AppPreferences {
             val projects = prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
             val instruments = prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
             if (id in projects) projects.remove(id)
-            else if (projects.size + instruments.size < 3) projects.add(id)
+            else projects.add(id)
             prefs[PINNED_PROJECTS] = projects.joinToString(",")
         }
     }
@@ -215,7 +215,7 @@ class PreferencesManager(private val context: Context) : AppPreferences {
             val instruments = prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
             val projects = prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
             if (id in instruments) instruments.remove(id)
-            else if (instruments.size + projects.size < 3) instruments.add(id)
+            else instruments.add(id)
             prefs[PINNED_INSTRUMENTS] = instruments.joinToString(",")
         }
     }

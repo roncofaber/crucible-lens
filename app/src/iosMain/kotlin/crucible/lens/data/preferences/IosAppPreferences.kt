@@ -152,11 +152,8 @@ class IosAppPreferences : AppPreferences {
             .filter { it.isNotBlank() }
             .toSet()
 
-        if (id in projects) {
-            projects.remove(id)
-        } else if (projects.size + instruments.size < 3) {
-            projects.add(id)
-        }
+        if (id in projects) projects.remove(id)
+        else projects.add(id)
 
         settings.putString("pinned_projects", projects.joinToString(","))
         (pinnedProjects as? MutableStateFlow)?.value = projects
@@ -192,11 +189,8 @@ class IosAppPreferences : AppPreferences {
             .filter { it.isNotBlank() }
             .toSet()
 
-        if (id in instruments) {
-            instruments.remove(id)
-        } else if (instruments.size + projects.size < 3) {
-            instruments.add(id)
-        }
+        if (id in instruments) instruments.remove(id)
+        else instruments.add(id)
 
         settings.putString("pinned_instruments", instruments.joinToString(","))
         (pinnedInstruments as? MutableStateFlow)?.value = instruments
