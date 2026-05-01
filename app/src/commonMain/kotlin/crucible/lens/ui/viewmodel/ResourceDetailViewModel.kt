@@ -151,15 +151,6 @@ class ResourceDetailViewModel : ViewModel() {
         }
     }
 
-    fun updateCurrentResource(resource: CrucibleResource) {
-        _uiState.update {
-            if (it is UiState.Success && it.resource.uniqueId != resource.uniqueId) {
-                val thumbnails = CacheManager.getThumbnails(resource.uniqueId) ?: emptyList()
-                it.copy(resource = resource, thumbnails = thumbnails)
-            } else it
-        }
-    }
-
     fun reset() {
         _uiState.value = UiState.Idle
     }
@@ -198,8 +189,20 @@ class ResourceDetailViewModel : ViewModel() {
                     if (syncWasActive) startBackgroundSync()
                 }
             } else {
-                fetchResource(trimmedUuid)
-                if (syncWasActive) startBackgroundSync()
+                // Refreshing a sibling: toggle isRefreshing, fetch+cache, never touch primary resource.
+                // The screen's LaunchedEffect(isRefreshing) increments siblingReloadTrigger when done,
+                // which causes the enrichment effect to pick up the fresh data from cache.
+                _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = true) else it }
+                try {
+                    when (val result = repository.fetchResourceByUuid(trimmedUuid)) {
+                        is ResourceResult.Success -> CacheManager.cacheResource(trimmedUuid, result.resource)
+                        else -> {}
+                    }
+                } catch (_: Exception) {
+                } finally {
+                    _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = false) else it }
+                    if (syncWasActive) startBackgroundSync()
+                }
             }
         }
     }

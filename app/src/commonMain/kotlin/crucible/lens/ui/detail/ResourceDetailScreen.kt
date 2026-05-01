@@ -152,7 +152,6 @@ fun ResourceDetailScreen(
     onSearch: () -> Unit = {},
     onHome: () -> Unit,
     onRefresh: (uuid: String) -> Unit,
-    onCurrentResourceChanged: (CrucibleResource) -> Unit = {},
     onDuplicate: (CrucibleResource) -> Unit = {},
     recentHistory: List<crucible.lens.data.preferences.HistoryItem> = emptyList(),
     onSaveToHistory: (uuid: String, name: String) -> Unit = { _, _ -> },
@@ -419,9 +418,11 @@ fun ResourceDetailScreen(
         siblingList.indexOfFirst { it.uniqueId == resource.uniqueId }
     }
 
-    // HorizontalPager state for seamless sibling navigation
+    // HorizontalPager state. initialPage uses siblingIndex directly so the pager
+    // opens at the right position without a post-composition scroll (cold-start
+    // fallback below handles the rare case where siblingList isn't ready yet).
     val pagerState = rememberPagerState(
-        initialPage = 0,
+        initialPage = siblingIndex.coerceAtLeast(0),
         pageCount = { siblingList.size.coerceAtLeast(1) }
     )
 
@@ -457,16 +458,14 @@ fun ResourceDetailScreen(
         }
     }
 
-    // Update the reference resource when the user swipes to a sibling and the scroll settles.
-    // Keying on isScrollInProgress ensures this fires even when currentPage changes mid-scroll.
-    LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
-        if (siblingList.isNotEmpty() && !pagerState.isScrollInProgress) {
-            val targetResource = siblingList.getOrNull(pagerState.currentPage)
-            if (targetResource != null && targetResource.uniqueId != resource.uniqueId) {
-                val full = loadedResources[targetResource.uniqueId] ?: targetResource
-                onCurrentResourceChanged(full)
-            }
-        }
+    // Seed the primary resource into local maps immediately so its page never shows
+    // a loading state. The enrichment LaunchedEffect would do this eventually, but
+    // doing it eagerly avoids a 1-frame flash on first composition.
+    LaunchedEffect(resource.uniqueId) {
+        loadedResources[resource.uniqueId] = resource
+        val hasLinks = (resource is Sample && resource.links != null) ||
+                       (resource is Dataset && resource.links != null)
+        if (hasLinks) enrichedUuids.add(resource.uniqueId)
     }
 
     // Incremented when a sibling PTR completes, forces lazy-load effects to re-run
@@ -691,7 +690,7 @@ fun ResourceDetailScreen(
     fun triggerRefresh() {
         val currentUuid = siblingList.getOrNull(pagerState.currentPage)?.uniqueId
             ?: resource.uniqueId
-        if (currentUuid != mfid) {
+        if (currentUuid != resource.uniqueId) {
             // Refreshing a sibling — clear stale local state so the pager
             // picks up the fresh data once the ViewModel signals isRefreshing=false.
             loadedResources.remove(currentUuid)
@@ -862,6 +861,11 @@ fun ResourceDetailScreen(
                         val pageGetCardState: (String) -> Boolean = { key -> getCardState("$pageId/$key") }
                         val pageSetCardState: (String, Boolean) -> Unit = { key, value -> onCardStateChange("$pageId/$key", value) }
 
+                        // Loading state is driven purely by per-page enrichment:
+                        // show spinner while this page's data is in flight, content once done.
+                        val isPageEnriched = enrichedUuids.contains(pageResource.uniqueId) ||
+                                             failedEnrichmentUuids.contains(pageResource.uniqueId)
+
                         val ptrFraction by animateFloatAsState(
                             targetValue = if (localRefreshState) 0f else pullRefreshState.distanceFraction,
                             label = "ptr"
@@ -869,18 +873,16 @@ fun ResourceDetailScreen(
                         Box(modifier = Modifier.fillMaxSize().offset {
                             IntOffset(0, (ptrFraction * 80.dp.toPx()).coerceAtMost(80.dp.toPx()).roundToInt())
                         }) {
-            // Show loading only when actually waiting for data
             AnimatedVisibility(
-                visible = isCurrentResource && pagerState.currentPage != siblingIndex && !isRefreshing,
+                visible = !isPageEnriched && !isRefreshing,
                 enter = fadeIn(animationSpec = tween(durationMillis = 300)),
                 exit = fadeOut(animationSpec = tween(durationMillis = 250))
             ) {
                 LoadingContent(title = "Loading Resource")
             }
 
-            // Show content: immediately when we have the resource data
             AnimatedVisibility(
-                visible = !isCurrentResource || pagerState.currentPage == siblingIndex,
+                visible = isPageEnriched,
                 enter = fadeIn(animationSpec = tween(durationMillis = 200)),
                 exit = fadeOut(animationSpec = tween(durationMillis = 150))
             ) {
@@ -1185,18 +1187,9 @@ fun ResourceDetailScreen(
                     } // end key() block
                 } // end HorizontalPager
             } else {
-                // Fallback when siblings haven't loaded yet
-                Box(
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    // Show loading or error state
-                    AnimatedVisibility(
-                        visible = pagerState.currentPage != siblingIndex || isRefreshing,
-                        enter = fadeIn(animationSpec = tween(durationMillis = 300)),
-                        exit = fadeOut(animationSpec = tween(durationMillis = 200))
-                    ) {
-                        LoadingContent(title = "Loading Resource")
-                    }
+                // Fallback: siblings haven't loaded yet — show loading unconditionally.
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LoadingContent(title = "Loading Resource")
                 }
             } // end else
         } // end PullToRefreshBox
