@@ -27,12 +27,10 @@ import kotlinx.coroutines.launch
 fun AppearanceSettingsScreen(
     currentThemeMode: String,
     currentAccentColor: String,
-    currentAppIcon: String,
     currentFloatingScanButton: Boolean,
     currentUseDynamicColor: Boolean = false,
     onThemeModeSave: (String) -> Unit,
     onAccentColorSave: (String) -> Unit,
-    onAppIconSave: (String) -> Unit,
     onFloatingScanButtonSave: (Boolean) -> Unit,
     onUseDynamicColorSave: (Boolean) -> Unit = {},
     onBack: () -> Unit,
@@ -41,16 +39,13 @@ fun AppearanceSettingsScreen(
     val dynamicColorSupported = supportsDynamicColor()
     var themeModeInput        by remember { mutableStateOf(currentThemeMode) }
     var accentColorInput      by remember { mutableStateOf(currentAccentColor) }
-    var appIconInput          by remember { mutableStateOf(currentAppIcon) }
     var floatingScanButtonInput by remember { mutableStateOf(currentFloatingScanButton) }
     var useDynamicColorInput  by remember { mutableStateOf(currentUseDynamicColor) }
     var showColorPicker       by remember { mutableStateOf(false) }
-    var pendingIconChange     by remember { mutableStateOf<String?>(null) }
 
     // Keep local inputs in sync with props (handles navigation-back and external changes)
     LaunchedEffect(currentThemeMode)        { themeModeInput        = currentThemeMode }
     LaunchedEffect(currentAccentColor)      { accentColorInput      = currentAccentColor }
-    LaunchedEffect(currentAppIcon)          { appIconInput          = currentAppIcon }
     LaunchedEffect(currentFloatingScanButton) { floatingScanButtonInput = currentFloatingScanButton }
     LaunchedEffect(currentUseDynamicColor)    { useDynamicColorInput    = currentUseDynamicColor }
 
@@ -132,69 +127,6 @@ fun AppearanceSettingsScreen(
                                 )
                             )
                         }
-                    }
-                }
-            }
-
-            // App Icon
-            Card {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Apps, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Text("App Icon", style = MaterialTheme.typography.titleMedium)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        val chipColors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f),
-                            selectedLabelColor = MaterialTheme.colorScheme.secondary,
-                            selectedLeadingIconColor = MaterialTheme.colorScheme.secondary
-                        )
-                        listOf("light" to "Light", "dark" to "Dark").forEach { (value, label) ->
-                            FilterChip(
-                                selected = appIconInput == value,
-                                onClick = {
-                                    if (appIconInput != value) pendingIconChange = value
-                                },
-                                label = { Text(label) },
-                                leadingIcon = if (appIconInput == value) {
-                                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                                } else null,
-                                modifier = Modifier.weight(1f),
-                                colors = chipColors,
-                                border = FilterChipDefaults.filterChipBorder(
-                                    borderColor = MaterialTheme.colorScheme.outline,
-                                    selectedBorderColor = MaterialTheme.colorScheme.secondary,
-                                    borderWidth = 1.dp,
-                                    selectedBorderWidth = 1.5.dp,
-                                    enabled = true,
-                                    selected = appIconInput == value
-                                )
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.Warning,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.tertiary
-                        )
-                        Text(
-                            "Changing the icon will restart the app",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.tertiary
-                        )
                     }
                 }
             }
@@ -340,7 +272,6 @@ fun AppearanceSettingsScreen(
                 onClick = {
                     themeModeInput = "system";       onThemeModeSave("system")
                     useDynamicColorInput = false;    onUseDynamicColorSave(false)
-                    appIconInput = "light";          onAppIconSave("light")
                     accentColorInput = "blue";       onAccentColorSave("blue")
                     floatingScanButtonInput = true;  onFloatingScanButtonSave(true)
                 },
@@ -355,27 +286,6 @@ fun AppearanceSettingsScreen(
                 Text("Reset to Defaults")
             }
         }
-    }
-
-    // Icon change confirmation
-    if (pendingIconChange != null) {
-        AlertDialog(
-            onDismissRequest = { pendingIconChange = null },
-            icon = { Icon(Icons.Default.Apps, contentDescription = null) },
-            title = { Text("Change App Icon") },
-            text = { Text("The app will restart to apply the new icon.") },
-            confirmButton = {
-                Button(onClick = {
-                    val icon = pendingIconChange!!
-                    appIconInput = icon
-                    onAppIconSave(icon)
-                    pendingIconChange = null
-                }) { Text("Restart") }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingIconChange = null }) { Text("Cancel") }
-            }
-        )
     }
 
     // Color picker

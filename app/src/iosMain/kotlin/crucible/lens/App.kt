@@ -32,7 +32,6 @@ actual fun App() {
     val graphExplorerUrl by prefs.graphExplorerUrl.collectAsState(initial = AppPreferences.DEFAULT_GRAPH_EXPLORER_URL)
     val themeMode by prefs.themeMode.collectAsState(initial = AppPreferences.THEME_MODE_SYSTEM)
     val accentColor by prefs.accentColor.collectAsState(initial = AppPreferences.DEFAULT_ACCENT_COLOR)
-    val appIcon by prefs.appIcon.collectAsState(initial = AppPreferences.APP_ICON_LIGHT)
     val lastVisitedResource by prefs.lastVisitedResource.collectAsState(initial = null)
     val lastVisitedResourceName by prefs.lastVisitedResourceName.collectAsState(initial = null)
     val floatingScanButton by prefs.floatingScanButton.collectAsState(initial = true)
@@ -66,7 +65,6 @@ actual fun App() {
             themeMode = themeMode,
             accentColor = accentColor,
             useDynamicColor = false,
-            appIcon = appIcon,
             darkTheme = darkTheme,
             lastVisitedResource = lastVisitedResource,
             lastVisitedResourceName = lastVisitedResourceName,
@@ -109,7 +107,6 @@ actual fun App() {
             onUseDynamicColorSave = { enabled ->
                 scope.launch { prefs.saveUseDynamicColor(enabled) }
             },
-            onAppIconSave = { /* no-op: dynamic app icons not supported on iOS */ },
             onLastVisitedResourceSave = { uuid, name ->
                 scope.launch { prefs.saveLastVisitedResource(uuid, name) }
             },

@@ -25,9 +25,6 @@ class IosAppPreferences : AppPreferences {
     override val accentColor: Flow<String> =
         MutableStateFlow(settings.getString("accent_color", AppPreferences.DEFAULT_ACCENT_COLOR))
 
-    override val appIcon: Flow<String> =
-        MutableStateFlow(settings.getString("app_icon", AppPreferences.APP_ICON_LIGHT))
-
     override val useDynamicColor: Flow<Boolean> =
         MutableStateFlow(settings.getBoolean("use_dynamic_color", false))
 
@@ -121,11 +118,6 @@ class IosAppPreferences : AppPreferences {
     override suspend fun saveAccentColor(color: String) {
         settings.putString("accent_color", color)
         (accentColor as? MutableStateFlow)?.value = color
-    }
-
-    override suspend fun saveAppIcon(icon: String) {
-        settings.putString("app_icon", icon)
-        (appIcon as? MutableStateFlow)?.value = icon
     }
 
     override suspend fun saveUseDynamicColor(enabled: Boolean) {

@@ -13,7 +13,6 @@ interface AppPreferences {
     val graphExplorerUrl: Flow<String>
     val themeMode: Flow<String>
     val accentColor: Flow<String>
-    val appIcon: Flow<String>
     val useDynamicColor: Flow<Boolean>
     val lastVisitedResource: Flow<String?>
     val lastVisitedResourceName: Flow<String?>
@@ -34,7 +33,6 @@ interface AppPreferences {
     suspend fun saveGraphExplorerUrl(url: String)
     suspend fun saveThemeMode(mode: String)
     suspend fun saveAccentColor(color: String)
-    suspend fun saveAppIcon(icon: String)
     suspend fun saveUseDynamicColor(enabled: Boolean)
     suspend fun saveLastVisitedResource(uuid: String, name: String)
     suspend fun saveFloatingScanButton(enabled: Boolean)
@@ -59,7 +57,5 @@ interface AppPreferences {
         const val THEME_MODE_LIGHT = "light"
         const val THEME_MODE_DARK = "dark"
         const val DEFAULT_ACCENT_COLOR = "blue"
-        const val APP_ICON_LIGHT = "light"
-        const val APP_ICON_DARK = "dark"
     }
 }

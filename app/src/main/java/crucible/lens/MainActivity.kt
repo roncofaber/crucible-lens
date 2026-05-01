@@ -1,8 +1,6 @@
 package crucible.lens
 
-import android.content.ComponentName
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -34,39 +32,6 @@ class MainActivity : ComponentActivity() {
     private var initialThemeMode by mutableStateOf(PreferencesManager.THEME_MODE_SYSTEM)
     private var initialAccentColor by mutableStateOf(PreferencesManager.DEFAULT_ACCENT_COLOR)
 
-    private fun switchAppIcon(icon: String) {
-        val packageManager = packageManager
-        val lightAlias = ComponentName(this, "$packageName.MainActivityLight")
-        val darkAlias = ComponentName(this, "$packageName.MainActivityDark")
-
-        // Enable new icon first, then disable old one
-        when (icon) {
-            PreferencesManager.APP_ICON_LIGHT -> {
-                packageManager.setComponentEnabledSetting(
-                    lightAlias,
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-                packageManager.setComponentEnabledSetting(
-                    darkAlias,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-            }
-            PreferencesManager.APP_ICON_DARK -> {
-                packageManager.setComponentEnabledSetting(
-                    darkAlias,
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-                packageManager.setComponentEnabledSetting(
-                    lightAlias,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-            }
-        }
-    }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -115,9 +80,6 @@ class MainActivity : ComponentActivity() {
                 initial = initialAccentColor
             )
             val useDynamicColor by preferencesManager.useDynamicColor.collectAsState(initial = false)
-            val appIcon by preferencesManager.appIcon.collectAsState(
-                initial = PreferencesManager.APP_ICON_LIGHT
-            )
             val lastVisitedResource by preferencesManager.lastVisitedResource.collectAsState(
                 initial = null
             )
@@ -169,7 +131,6 @@ class MainActivity : ComponentActivity() {
                     themeMode = themeMode,
                     accentColor = accentColor,
                     useDynamicColor = useDynamicColor,
-                    appIcon = appIcon,
                     darkTheme = darkTheme,
                     lastVisitedResource = lastVisitedResource,
                     lastVisitedResourceName = lastVisitedResourceName,
@@ -215,12 +176,6 @@ class MainActivity : ComponentActivity() {
                     },
                     onUseDynamicColorSave = { enabled ->
                         scope.launch { preferencesManager.saveUseDynamicColor(enabled) }
-                    },
-                    onAppIconSave = { icon ->
-                        scope.launch {
-                            preferencesManager.saveAppIcon(icon)
-                            switchAppIcon(icon)
-                        }
                     },
                     onLastVisitedResourceSave = { uuid, name ->
                         scope.launch {
