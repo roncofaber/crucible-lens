@@ -1,18 +1,34 @@
 #!/usr/bin/env bash
 # Sign and zipalign an already-built unsigned APK using apksigner (v1/v2/v3).
+#
 # Usage: ./scripts/sign_apk.sh [path/to/unsigned.apk] [output.apk]
 # Defaults: unsigned = app/build/.../composeApp-release-unsigned.apk
 #           signed   = ~/Desktop/crucible-lens-signed.apk
+#
+# Required env vars (or set defaults below):
+#   KEYSTORE    — path to the .jks keystore file
+#   KEY_ALIAS   — key alias inside the keystore
+#   BUILD_TOOLS — path to Android SDK build-tools directory
 
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-KEYSTORE="/home/roncofaber/WORK/Crucible/App/keystore/crucible-lens.jks"
-KEY_ALIAS="crucible-lens"
+
+# ── Configurable paths (override via env or edit here) ──────────────────────
+KEYSTORE="${KEYSTORE:-$HOME/crucible-lens.jks}"
+KEY_ALIAS="${KEY_ALIAS:-crucible-lens}"
+BUILD_TOOLS="${BUILD_TOOLS:-$HOME/Android/Sdk/build-tools/36.0.0}"
+# ────────────────────────────────────────────────────────────────────────────
+
 UNSIGNED_APK="${1:-$REPO_ROOT/app/build/outputs/apk/release/composeApp-release-unsigned.apk}"
 SIGNED_APK="${2:-$HOME/Desktop/crucible-lens-signed.apk}"
 ALIGNED_APK="/tmp/crucible-lens-aligned.apk"
-BUILD_TOOLS="$HOME/Android/Sdk/build-tools/36.0.0"
+
+if [ ! -f "$KEYSTORE" ]; then
+  echo "ERROR: keystore not found at $KEYSTORE"
+  echo "Set the KEYSTORE env var or place the file there."
+  exit 1
+fi
 
 echo "Input:  $UNSIGNED_APK"
 echo "Output: $SIGNED_APK"
