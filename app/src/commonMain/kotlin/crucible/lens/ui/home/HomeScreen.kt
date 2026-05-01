@@ -587,9 +587,11 @@ private fun HomePinnedProjects(
             Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
             Text("Pinned", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         }
-        // Scrollable cards area
+        // Scrollable cards area — fade at bottom signals more content
+        val pinnedScrollState = rememberScrollState()
+        Box(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth().verticalScroll(pinnedScrollState),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
         if (hasAny) {
@@ -662,6 +664,24 @@ private fun HomePinnedProjects(
             }
         }
         } // end scrollable inner Column
+        // Bottom fade — only shown when more content is below
+        if (pinnedScrollState.canScrollForward) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(32.dp)
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(
+                                androidx.compose.ui.graphics.Color.Transparent,
+                                MaterialTheme.colorScheme.background
+                            )
+                        )
+                    )
+            )
+        }
+        } // end Box
     } // end outer Column
 }
 
