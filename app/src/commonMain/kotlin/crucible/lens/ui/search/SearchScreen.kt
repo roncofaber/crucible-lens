@@ -17,7 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
-import ApiResult
+import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.MetadataSearchResult
