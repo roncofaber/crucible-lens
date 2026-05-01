@@ -26,6 +26,13 @@ import crucible.lens.data.model.UserLead
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+private sealed interface HealthState {
+    object Idle : HealthState
+    object Checking : HealthState
+    data class Ok(val status: HealthStatus) : HealthState
+    data class Failed(val message: String) : HealthState
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ApiSettingsScreen(
@@ -56,13 +63,6 @@ fun ApiSettingsScreen(
     val graphExplorerUrlDirty = graphExplorerUrlInput != currentGraphExplorerUrl
     val hasChanges = apiKeyDirty || apiBaseUrlDirty || graphExplorerUrlDirty
 
-    // Health check state — fires on URL change (debounced) and on manual tap
-    sealed interface HealthState {
-        object Idle : HealthState
-        object Checking : HealthState
-        data class Ok(val status: HealthStatus) : HealthState
-        data class Failed(val message: String) : HealthState
-    }
     var healthState by remember { mutableStateOf<HealthState>(HealthState.Idle) }
     var healthManualTrigger by remember { mutableStateOf(0) }
 
