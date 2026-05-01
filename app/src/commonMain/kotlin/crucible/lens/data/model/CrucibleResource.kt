@@ -80,12 +80,6 @@ data class DatasetReference(
 )
 
 @Serializable
-data class SampleReference(
-    @SerialName("unique_id") val uniqueId: String,
-    @SerialName("sample_name") val sampleName: String? = null
-)
-
-@Serializable
 data class Thumbnail(
     @SerialName("thumbnail_b64str") val thumbnailB64: String,
     @SerialName("thumbnail_name") val thumbnailName: String? = null,
@@ -112,18 +106,6 @@ data class GraphLink(
     @SerialName("source") val source: String,
     @SerialName("target") val target: String
 )
-
-@Serializable
-data class GraphResponse(
-    @SerialName("nodes") val nodes: List<GraphNode> = emptyList(),
-    // NetworkX < 3.4 uses "links", >= 3.4 uses "edges" — accept both
-    @SerialName("links") val links: List<GraphLink> = emptyList(),
-    @SerialName("edges") val edges: List<GraphLink> = emptyList()
-) {
-    // Normalises the two field names — call this instead of accessing links/edges directly
-    @Suppress("unused")
-    val allLinks: List<GraphLink> get() = links.ifEmpty { edges }
-}
 
 @Serializable
 data class UserLead(

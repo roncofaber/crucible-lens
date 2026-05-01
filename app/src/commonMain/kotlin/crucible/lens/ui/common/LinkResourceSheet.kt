@@ -1,5 +1,4 @@
 package crucible.lens.ui.common
-import crucible.lens.platform.*
 
 
 
@@ -60,7 +59,6 @@ fun LinkResourceSheet(
 
     // TODO: implement platform-specific camera permission (expect/actual)
     var hasCameraPermission by remember { mutableStateOf(true) }
-    val permissionLauncher: Any = Unit // stub
 
     val currentType = when (resource) {
         is Sample -> "sample"
@@ -107,7 +105,7 @@ fun LinkResourceSheet(
         isResolving = true
         resolvedType = try {
             when (val resp = ApiClient.service.getResourceType(trimmed)) {
-                is crucible.lens.data.api.ApiResult.Success -> {
+                is ApiResult.Success -> {
                     resolvedUuid = trimmed
                     val type = resp.data.resolvedType?.lowercase()
                     // Try to populate selectedResource from cache or project pool
@@ -117,7 +115,7 @@ fun LinkResourceSheet(
                     }
                     type
                 }
-                is crucible.lens.data.api.ApiResult.Error -> null
+                is ApiResult.Error -> null
             }
         } catch (_: Exception) { null }
         isResolving = false
@@ -469,5 +467,5 @@ private suspend fun performLink(
             api.linkDatasetSample(datasetUuid = current.uniqueId, sampleUuid = targetUuid)
         else -> return false
     }
-    return resp is crucible.lens.data.api.ApiResult.Success
+    return resp is ApiResult.Success
 }

@@ -5,9 +5,6 @@ import crucible.lens.platform.*
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -31,14 +28,10 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,7 +43,6 @@ import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
-import crucible.lens.data.util.MONTH_NAMES
 import crucible.lens.data.util.dateGroupKey
 import crucible.lens.data.util.SortField
 import crucible.lens.data.util.SortState
@@ -101,10 +93,10 @@ private fun rememberOwnerNames(
         if (!isOwnerGroupBy || ownerNames.isNotEmpty()) { ownerNamesReady = true; return@LaunchedEffect }
         try {
             when (val resp = ApiClient.service.getProjectUsers(projectId)) {
-                is crucible.lens.data.api.ApiResult.Success -> {
+                is ApiResult.Success -> {
                     resp.data.forEach { u -> u.uniqueId?.let { id -> ownerNames[id] = ownerDisplayName(u.firstName, u.lastName) } }
                 }
-                is crucible.lens.data.api.ApiResult.Error -> {
+                is ApiResult.Error -> {
                     // Fail silently
                 }
             }
@@ -266,8 +258,8 @@ fun ProjectDetailScreen(
                     s.await() to d.await()
                 }
 
-                val loadedSamples = (samplesResponse as? crucible.lens.data.api.ApiResult.Success)?.data
-                val loadedDatasets = (datasetsResponse as? crucible.lens.data.api.ApiResult.Success)?.data
+                val loadedSamples = (samplesResponse as? ApiResult.Success)?.data
+                val loadedDatasets = (datasetsResponse as? ApiResult.Success)?.data
 
                 if (loadedSamples != null && loadedDatasets != null) {
                     CacheManager.cacheProjectSamples(projectId, loadedSamples)

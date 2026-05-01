@@ -29,7 +29,6 @@ actual fun App() {
     val graphExplorerUrl by prefs.graphExplorerUrl.collectAsState(initial = AppPreferences.DEFAULT_GRAPH_EXPLORER_URL)
     val themeMode by prefs.themeMode.collectAsState(initial = AppPreferences.THEME_MODE_SYSTEM)
     val accentColor by prefs.accentColor.collectAsState(initial = AppPreferences.DEFAULT_ACCENT_COLOR)
-    val useDynamicColor by prefs.useDynamicColor.collectAsState(initial = false)
     val appIcon by prefs.appIcon.collectAsState(initial = AppPreferences.APP_ICON_LIGHT)
     val lastVisitedResource by prefs.lastVisitedResource.collectAsState(initial = null)
     val lastVisitedResourceName by prefs.lastVisitedResourceName.collectAsState(initial = null)

@@ -29,8 +29,8 @@ fun InstrumentPickerField(
     LaunchedEffect(Unit) {
         try {
             instruments = when (val resp = ApiClient.service.getInstruments()) {
-                is crucible.lens.data.api.ApiResult.Success -> resp.data
-                is crucible.lens.data.api.ApiResult.Error -> emptyList()
+                is ApiResult.Success -> resp.data
+                is ApiResult.Error -> emptyList()
             }
         } catch (_: Exception) {
             instruments = emptyList()

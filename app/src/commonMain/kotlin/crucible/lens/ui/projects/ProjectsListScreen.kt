@@ -16,7 +16,6 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -119,7 +118,7 @@ fun ProjectsListScreen(
                     error = null
                 }
                 when (val response = ApiClient.service.getProjects()) {
-                    is crucible.lens.data.api.ApiResult.Success -> {
+                    is ApiResult.Success -> {
                         val fetchedProjects = response.data
                         // Cache the projects
                         CacheManager.cacheProjects(fetchedProjects)
@@ -130,7 +129,7 @@ fun ProjectsListScreen(
                             projectCounts = projectCounts + newCounts
                         }
                     }
-                    is crucible.lens.data.api.ApiResult.Error -> {
+                    is ApiResult.Error -> {
                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                             error = "Failed to load projects: ${response.message}"
                         }
@@ -161,7 +160,7 @@ fun ProjectsListScreen(
         scope.launch(kotlinx.coroutines.Dispatchers.Default) {
             try {
                 // Build maps of samples and datasets
-                val samplesMap = mutableMapOf<String, List<crucible.lens.data.model.Sample>>()
+                val samplesMap = mutableMapOf<String, List<Sample>>()
                 val datasetsMap = mutableMapOf<String, List<Dataset>>()
 
                 currentProjects.forEach { project ->

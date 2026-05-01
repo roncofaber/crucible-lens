@@ -13,7 +13,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.CreationExtras
-import androidx.lifecycle.viewmodel.MutableCreationExtras
 import androidx.lifecycle.ViewModelProvider
 import kotlin.reflect.KClass
 import androidx.navigation.NavHostController
@@ -519,7 +518,6 @@ fun NavGraph(
                     ResourceDetailScreen(
                         resource = state.resource,
                         thumbnails = state.thumbnails,
-                        mfid = mfid,
                         isRefreshing = state.isRefreshing,
                         graphExplorerUrl = graphExplorerUrl,
                         siblingGroupBy = siblingGroupBy,

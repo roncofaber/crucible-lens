@@ -26,7 +26,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,8 +36,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import coil3.compose.AsyncImage
@@ -71,8 +68,6 @@ import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.graphicsLayer
-import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
@@ -90,7 +85,6 @@ import crucible.lens.data.model.Sample
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.util.MONTH_NAMES
 import crucible.lens.data.util.dateGroupKey
-import androidx.compose.runtime.snapshots.SnapshotStateSet
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.OpenInWebMenuItem
 import crucible.lens.ui.common.ShareMenuItem
@@ -140,7 +134,6 @@ fun ResourceDetailScreen(
     thumbnails: List<String>,
     graphExplorerUrl: String,
     modifier: Modifier = Modifier,
-    mfid: String = resource.uniqueId,
     isRefreshing: Boolean = false,
     siblingGroupBy: String? = null,
     onBack: () -> Unit,

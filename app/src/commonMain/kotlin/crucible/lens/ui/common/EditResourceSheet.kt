@@ -176,11 +176,11 @@ private fun SampleEditFields(
                         projectId = selectedProjectId
                     )
                 )) {
-                    is crucible.lens.data.api.ApiResult.Success -> {
+                    is ApiResult.Success -> {
                         showToast(ctx, "Saved")
                         onSaved()
                     }
-                    is crucible.lens.data.api.ApiResult.Error -> {
+                    is ApiResult.Error -> {
                         snackbarHostState.showSnackbar("Save failed (${resp.code})")
                     }
                 }
@@ -317,11 +317,11 @@ private fun DatasetEditFields(
                         scientificMetadata = parseMetadataText(metadataText)
                     )
                 )) {
-                    is crucible.lens.data.api.ApiResult.Success -> {
+                    is ApiResult.Success -> {
                         showToast(ctx, "Saved")
                         onSaved()
                     }
-                    is crucible.lens.data.api.ApiResult.Error -> {
+                    is ApiResult.Error -> {
                         snackbarHostState.showSnackbar("Save failed (${resp.code})")
                     }
                 }

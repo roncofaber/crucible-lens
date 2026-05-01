@@ -24,7 +24,6 @@ fun CacheSettingsScreen(
     onHome: () -> Unit,
     onSearch: () -> Unit
 ) {
-    val context = getPlatformContext()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var cacheAge by remember { mutableStateOf<Long?>(null) }

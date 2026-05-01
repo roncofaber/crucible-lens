@@ -3,9 +3,7 @@ package crucible.lens.data.preferences
 import com.russhwolf.settings.NSUserDefaultsSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.map
 import kotlin.time.Clock
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 class IosAppPreferences : AppPreferences {

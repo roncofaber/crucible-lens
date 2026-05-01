@@ -151,7 +151,7 @@ fun CreateSampleScreen(
                                     timestamp = timestamp.trim().ifBlank { null }
                                 )
                             )) {
-                                is crucible.lens.data.api.ApiResult.Success -> {
+                                is ApiResult.Success -> {
                                     val sample = resp.data
                                     val uuid = sample.uniqueId
                                     CacheManager.cacheResource(uuid, sample)
@@ -159,7 +159,7 @@ fun CreateSampleScreen(
                                     selectedProjectId?.let { CacheManager.clearProjectDetail(it) }
                                     onCreated(uuid)
                                 }
-                                is crucible.lens.data.api.ApiResult.Error -> {
+                                is ApiResult.Error -> {
                                     snackbarHostState.showSnackbar("Save failed (${resp.code})")
                                 }
                             }

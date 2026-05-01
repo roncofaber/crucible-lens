@@ -5,9 +5,6 @@ import crucible.lens.platform.*
 
 
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -23,13 +20,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,7 +33,6 @@ import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Instrument
-import crucible.lens.data.util.MONTH_NAMES
 import crucible.lens.data.util.dateGroupKey
 import crucible.lens.data.util.SortField
 import crucible.lens.data.util.SortState
@@ -124,9 +117,9 @@ fun InstrumentDetailScreen(
             try {
                 val resolvedInstrument = if (!forceRefresh) {
                     CacheManager.getInstruments()?.find { it.uniqueId == instrumentId }
-                        ?: (ApiClient.service.getInstrument(instrumentId) as? crucible.lens.data.api.ApiResult.Success)?.data
+                        ?: (ApiClient.service.getInstrument(instrumentId) as? ApiResult.Success)?.data
                 } else {
-                    (ApiClient.service.getInstrument(instrumentId) as? crucible.lens.data.api.ApiResult.Success)?.data
+                    (ApiClient.service.getInstrument(instrumentId) as? ApiResult.Success)?.data
                 }
                 if (resolvedInstrument == null) { error = "Instrument not found"; return@launch }
                 instrument = resolvedInstrument
@@ -137,12 +130,12 @@ fun InstrumentDetailScreen(
                 }
                 fromCache = false
                 when (val response = ApiClient.service.getDatasetsByInstrument(instrName)) {
-                    is crucible.lens.data.api.ApiResult.Success -> {
+                    is ApiResult.Success -> {
                         val body = response.data
                         CacheManager.cacheInstrumentDatasets(instrName, body)
                         datasets = body
                     }
-                    is crucible.lens.data.api.ApiResult.Error -> { error = "Failed to load datasets" }
+                    is ApiResult.Error -> { error = "Failed to load datasets" }
                 }
             } catch (e: Exception) {
                 error = "Connection error — check your network"
