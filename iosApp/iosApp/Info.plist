@@ -23,7 +23,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>This app needs camera access to scan QR codes.</string>
+	<string>Crucible Lens uses the camera to scan QR codes and to capture thumbnail photos for samples and datasets.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Crucible Lens accesses your photo library to attach images to samples and datasets.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>
