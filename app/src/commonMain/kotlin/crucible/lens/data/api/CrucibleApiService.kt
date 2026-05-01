@@ -360,7 +360,8 @@ class CrucibleApiService(
      * Pass baseUrl explicitly so callers can test an unsaved candidate URL.
      */
     suspend fun checkHealth(baseUrl: String): ApiResult<HealthStatus> = safeCall {
-        client.get("${baseUrl}health/ready").body()
+        val normalizedUrl = baseUrl.trim().trimEnd('/') + "/"
+        client.get("${normalizedUrl}health/ready").body()
     }
 
     /**

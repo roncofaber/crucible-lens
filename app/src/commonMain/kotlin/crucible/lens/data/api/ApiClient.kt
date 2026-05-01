@@ -19,7 +19,7 @@ object ApiClient {
     }
 
     fun setBaseUrl(url: String) {
-        baseUrl = url.trimEnd('/') + "/"
+        baseUrl = url.trim().trimEnd('/') + "/"
         _service = null // Force recreation with new URL
     }
 
