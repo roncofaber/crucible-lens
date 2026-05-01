@@ -186,27 +186,26 @@ fun InstrumentDetailScreen(
             onRefresh = { loadData(forceRefresh = true) },
             modifier = modifier.fillMaxSize().padding(padding)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Fixed header — stays in place during pull-to-refresh
-                instrument?.let { instr ->
-                    InstrumentHeader(
-                        instrument = instr,
-                        isPinned = isPinned,
-                        onTogglePin = onTogglePin,
-                        searchQuery = searchQuery,
-                        onSearchChange = { searchQuery = it },
-                        sortState = sortState,
-                        onSortStateChange = { sortState = it; showFeedback(platformCtx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
-                        groupBy = groupBy,
-                        onGroupByChange = { groupBy = it; showFeedback(platformCtx, "Grouped by ${it.label}") }
-                    )
-                }
-
-                Box(modifier = Modifier.weight(1f)) {
+            Box(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize()
                 ) {
+                    stickyHeader(key = "instrument_header") {
+                        instrument?.let { instr ->
+                            InstrumentHeader(
+                                instrument = instr,
+                                isPinned = isPinned,
+                                onTogglePin = onTogglePin,
+                                searchQuery = searchQuery,
+                                onSearchChange = { searchQuery = it },
+                                sortState = sortState,
+                                onSortStateChange = { sortState = it; showFeedback(platformCtx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
+                                groupBy = groupBy,
+                                onGroupByChange = { groupBy = it; showFeedback(platformCtx, "Grouped by ${it.label}") }
+                            )
+                        }
+                    }
 
                 // ── States ────────────────────────────────────────────────────
                 when {
@@ -276,8 +275,7 @@ fun InstrumentDetailScreen(
             }
                 LazyColumnScrollbar(listState = listState, modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd))
                 ScrollToTopButton(visible = showScrollToTop, onClick = { scope.launch { listState.animateScrollToItem(0) } }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp))
-                } // end offset Box
-            } // end Column
+            }
         }
     }
 

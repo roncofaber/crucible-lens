@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -334,24 +335,6 @@ fun ProjectDetailScreen(
                 .padding(padding)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // Fixed header — stays in place during pull-to-refresh
-                ProjectHeader(
-                project = project,
-                projectId = projectId,
-                searchQuery = searchQuery,
-                onSearchChange = { searchQuery = it },
-                isPinned = isPinned,
-                onTogglePin = onTogglePin,
-                currentPage = pagerState.currentPage,
-                sampleGroupBy = sampleGroupBy,
-                datasetGroupBy = datasetGroupBy,
-                onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
-                onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
-                sortState = sortState,
-                onSortStateChange = { sortState = it; showFeedback(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
-            )
-
-                Column(modifier = Modifier.weight(1f)) {
 
             // Tabs
             TabRow(selectedTabIndex = pagerState.currentPage) {
@@ -464,7 +447,26 @@ fun ProjectDetailScreen(
                                 graphExplorerUrl = graphExplorerUrl,
                                 groupBy = sampleGroupBy,
                                 sortState = sortState,
-                                onSampleClick = { uuid -> onResourceClick(uuid, sampleGroupBy.name) }
+                                onSampleClick = { uuid -> onResourceClick(uuid, sampleGroupBy.name) },
+                                leadingContent = {
+                                    stickyHeader(key = "project_header_samples") {
+                                        ProjectHeader(
+                                            project = project,
+                                            projectId = projectId,
+                                            searchQuery = searchQuery,
+                                            onSearchChange = { searchQuery = it },
+                                            isPinned = isPinned,
+                                            onTogglePin = onTogglePin,
+                                            currentPage = pagerState.currentPage,
+                                            sampleGroupBy = sampleGroupBy,
+                                            datasetGroupBy = datasetGroupBy,
+                                            onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
+                                            onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
+                                            sortState = sortState,
+                                            onSortStateChange = { sortState = it; showFeedback(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
+                                        )
+                                    }
+                                }
                             )
                             1 -> DatasetsList(
                                 datasets = filteredDatasets,
@@ -474,13 +476,31 @@ fun ProjectDetailScreen(
                                 graphExplorerUrl = graphExplorerUrl,
                                 groupBy = datasetGroupBy,
                                 sortState = sortState,
-                                onDatasetClick = { uuid -> onResourceClick(uuid, datasetGroupBy.name) }
+                                onDatasetClick = { uuid -> onResourceClick(uuid, datasetGroupBy.name) },
+                                leadingContent = {
+                                    stickyHeader(key = "project_header_datasets") {
+                                        ProjectHeader(
+                                            project = project,
+                                            projectId = projectId,
+                                            searchQuery = searchQuery,
+                                            onSearchChange = { searchQuery = it },
+                                            isPinned = isPinned,
+                                            onTogglePin = onTogglePin,
+                                            currentPage = pagerState.currentPage,
+                                            sampleGroupBy = sampleGroupBy,
+                                            datasetGroupBy = datasetGroupBy,
+                                            onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
+                                            onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
+                                            sortState = sortState,
+                                            onSortStateChange = { sortState = it; showFeedback(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
+                                        )
+                                    }
+                                }
                             )
                         }
                     }
                 }
             } // end when
-                } // end offset Column
             } // end outer Column
         }
     }
@@ -719,7 +739,8 @@ private fun SamplesList(
     graphExplorerUrl: String = "",
     groupBy: SampleGroupBy = SampleGroupBy.TYPE,
     sortState: SortState = SortState(),
-    onSampleClick: (String) -> Unit
+    onSampleClick: (String) -> Unit,
+    leadingContent: (LazyListScope.() -> Unit)? = null,
 ) {
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == SampleGroupBy.OWNER, projectId)
     if (samples.isEmpty()) {
@@ -751,6 +772,7 @@ private fun SamplesList(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
+                leadingContent?.invoke()
                 if (groupBy == SampleGroupBy.NONE) {
                     val sortedSamples = samples.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTime ?: "" })
                     items(sortedSamples, key = { it.uniqueId }) { sample ->
@@ -826,7 +848,8 @@ private fun DatasetsList(
     graphExplorerUrl: String = "",
     groupBy: DatasetGroupBy = DatasetGroupBy.MEASUREMENT,
     sortState: SortState = SortState(),
-    onDatasetClick: (String) -> Unit
+    onDatasetClick: (String) -> Unit,
+    leadingContent: (LazyListScope.() -> Unit)? = null,
 ) {
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == DatasetGroupBy.OWNER, projectId)
     if (datasets.isEmpty()) {
@@ -861,6 +884,7 @@ private fun DatasetsList(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
+                leadingContent?.invoke()
                 if (groupBy == DatasetGroupBy.NONE) {
                     val sortedDatasets = datasets.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTime ?: "" })
                     items(sortedDatasets, key = { it.uniqueId }) { dataset ->
