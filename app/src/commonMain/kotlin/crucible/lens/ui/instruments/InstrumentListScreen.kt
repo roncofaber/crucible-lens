@@ -25,6 +25,9 @@ import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Instrument
+import crucible.lens.data.util.SortField
+import crucible.lens.data.util.SortState
+import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.ui.common.AppScaffold
@@ -59,7 +62,7 @@ fun InstrumentListScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var hiddenExpanded by remember { mutableStateOf(false) }
     var sortMenuExpanded by remember { mutableStateOf(false) }
-    var sortOrder by rememberSaveable { mutableStateOf(0) } // 0=Name A-Z, 1=Name Z-A, 2=Type A-Z
+    var sortState by remember { mutableStateOf(SortState(SortField.NAME, true)) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
@@ -70,14 +73,15 @@ fun InstrumentListScreen(
         else list.filter { it.matchesSearch(searchQuery) }
     }
 
-    val activeInstruments = remember(filteredInstruments, hiddenInstruments, sortOrder) {
-        filteredInstruments.filter { it.uniqueId !in hiddenInstruments }.let { list ->
-            when (sortOrder) {
-                1 -> list.sortedByDescending { it.instrumentName?.lowercase() ?: "" }
-                2 -> list.sortedBy { it.instrumentType?.lowercase() ?: "" }
-                else -> list.sortedBy { it.instrumentName?.lowercase() ?: "" }
-            }
-        }
+    val activeInstruments = remember(filteredInstruments, hiddenInstruments, sortState) {
+        filteredInstruments
+            .filter { it.uniqueId !in hiddenInstruments }
+            .applySortState(
+                sortState,
+                name = { instrumentName?.lowercase() ?: uniqueId.lowercase() },
+                mfid = { instrumentType?.lowercase() ?: "" },
+                date = { "" }
+            )
     }
 
     val hiddenInstrumentsList = remember(instruments, hiddenInstruments) {
@@ -168,38 +172,47 @@ fun InstrumentListScreen(
                     stickyHeader(key = "search_bar") {
                         Surface(color = MaterialTheme.colorScheme.background) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 SearchBar(
                                     query = searchQuery,
                                     onQueryChange = { searchQuery = it },
                                     placeholder = "Search by name, type, manufacturer…",
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f),
+                                    accentStyle = true
                                 )
                                 Box {
-                                    IconButton(onClick = { sortMenuExpanded = true }) {
+                                    IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
                                         Icon(
                                             Icons.Default.SwapVert,
                                             contentDescription = "Sort",
-                                            tint = if (sortOrder != 0) MaterialTheme.colorScheme.primary
-                                                   else MaterialTheme.colorScheme.onSurfaceVariant
+                                            modifier = Modifier.size(20.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    DropdownMenu(
-                                        expanded = sortMenuExpanded,
-                                        onDismissRequest = { sortMenuExpanded = false }
-                                    ) {
-                                        listOf("Name A→Z", "Name Z→A", "Type A→Z").forEachIndexed { i, label ->
+                                    DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
+                                        // Name and Type (mapped to mfid slot) are the two meaningful instrument sort axes
+                                        listOf(SortField.NAME to "Name", SortField.MFID to "Type").forEach { (field, label) ->
                                             DropdownMenuItem(
                                                 text = { Text(label) },
                                                 leadingIcon = {
-                                                    if (sortOrder == i)
-                                                        Icon(Icons.Default.Check, contentDescription = null,
-                                                            tint = MaterialTheme.colorScheme.primary)
-                                                    else Spacer(Modifier.size(24.dp))
+                                                    if (sortState.field == field)
+                                                        Icon(
+                                                            if (sortState.ascending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(14.dp),
+                                                            tint = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    else Spacer(Modifier.size(14.dp))
                                                 },
-                                                onClick = { sortOrder = i; sortMenuExpanded = false }
+                                                onClick = {
+                                                    sortState = if (sortState.field == field)
+                                                        sortState.copy(ascending = !sortState.ascending)
+                                                    else SortState(field, true)
+                                                    sortMenuExpanded = false
+                                                }
                                             )
                                         }
                                     }

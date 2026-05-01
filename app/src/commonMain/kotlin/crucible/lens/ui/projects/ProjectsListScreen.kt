@@ -32,6 +32,9 @@ import crucible.lens.data.cache.ProjectSummary
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
+import crucible.lens.data.util.SortField
+import crucible.lens.data.util.SortState
+import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.RefreshMenuItem
@@ -69,7 +72,7 @@ fun ProjectsListScreen(
     var hiddenExpanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var sortMenuExpanded by remember { mutableStateOf(false) }
-    var sortOrder by remember { mutableStateOf(0) } // 0=Name A-Z, 1=Name Z-A, 2=Newest, 3=Recently modified
+    var sortState by remember { mutableStateOf(SortState(SortField.NAME, true)) }
     // Track which projects were manually unarchived (so we don't auto-archive them again)
     var manuallyShown by remember { mutableStateOf<Set<String>>(emptySet()) }
     // Trigger for forcing background reload - increments on refresh
@@ -297,38 +300,46 @@ fun ProjectsListScreen(
                     stickyHeader(key = "search_bar") {
                         Surface(color = MaterialTheme.colorScheme.background) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 SearchBar(
                                     query = searchQuery,
                                     onQueryChange = { searchQuery = it },
                                     placeholder = "Search by name, ID, or project lead…",
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f),
+                                    accentStyle = true
                                 )
                                 Box {
-                                    IconButton(onClick = { sortMenuExpanded = true }) {
+                                    IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
                                         Icon(
                                             Icons.Default.SwapVert,
                                             contentDescription = "Sort",
-                                            tint = if (sortOrder != 0) MaterialTheme.colorScheme.primary
-                                                   else MaterialTheme.colorScheme.onSurfaceVariant
+                                            modifier = Modifier.size(20.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    DropdownMenu(
-                                        expanded = sortMenuExpanded,
-                                        onDismissRequest = { sortMenuExpanded = false }
-                                    ) {
-                                        listOf("Name A→Z", "Name Z→A", "Newest first", "Recently modified").forEachIndexed { i, label ->
+                                    DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
+                                        listOf(SortField.NAME to "Name", SortField.DATE to "Date created").forEach { (field, label) ->
                                             DropdownMenuItem(
                                                 text = { Text(label) },
                                                 leadingIcon = {
-                                                    if (sortOrder == i)
-                                                        Icon(Icons.Default.Check, contentDescription = null,
-                                                            tint = MaterialTheme.colorScheme.primary)
-                                                    else Spacer(Modifier.size(24.dp))
+                                                    if (sortState.field == field)
+                                                        Icon(
+                                                            if (sortState.ascending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(14.dp),
+                                                            tint = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    else Spacer(Modifier.size(14.dp))
                                                 },
-                                                onClick = { sortOrder = i; sortMenuExpanded = false }
+                                                onClick = {
+                                                    sortState = if (sortState.field == field)
+                                                        sortState.copy(ascending = !sortState.ascending)
+                                                    else SortState(field, true)
+                                                    sortMenuExpanded = false
+                                                }
                                             )
                                         }
                                     }
@@ -421,18 +432,14 @@ fun ProjectsListScreen(
 
                             val activeProjects = filteredProjects
                                 .filter { it.projectId !in hiddenProjects }
-                                .let { list ->
-                                    when (sortOrder) {
-                                        1 -> list.sortedWith(compareByDescending<Project> { it.projectId in pinnedProjects }
-                                            .thenByDescending { it.title?.lowercase() ?: it.projectId.lowercase() })
-                                        2 -> list.sortedWith(compareByDescending<Project> { it.projectId in pinnedProjects }
-                                            .thenByDescending { it.createdAt ?: "" })
-                                        3 -> list.sortedWith(compareByDescending<Project> { it.projectId in pinnedProjects }
-                                            .thenByDescending { it.modifiedAt ?: it.createdAt ?: "" })
-                                        else -> list.sortedWith(compareByDescending<Project> { it.projectId in pinnedProjects }
-                                            .thenBy { it.title?.lowercase() ?: it.projectId.lowercase() })
-                                    }
-                                }
+                                .applySortState(
+                                    sortState,
+                                    name = { title?.lowercase() ?: projectId.lowercase() },
+                                    mfid = { projectId },
+                                    date = { createdAt ?: "" }
+                                )
+                                // Pinned always float to top regardless of sort
+                                .sortedByDescending { it.projectId in pinnedProjects }
                             val hiddenProjectsList = filteredProjects
                                 .filter { it.projectId in hiddenProjects }
 
