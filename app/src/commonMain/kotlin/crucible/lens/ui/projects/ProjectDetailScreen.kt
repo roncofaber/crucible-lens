@@ -772,7 +772,7 @@ private fun SamplesList(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
-                leadingContent?.invoke()
+                leadingContent?.invoke(this)
                 if (groupBy == SampleGroupBy.NONE) {
                     val sortedSamples = samples.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTime ?: "" })
                     items(sortedSamples, key = { it.uniqueId }) { sample ->
@@ -884,7 +884,7 @@ private fun DatasetsList(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
-                leadingContent?.invoke()
+                leadingContent?.invoke(this)
                 if (groupBy == DatasetGroupBy.NONE) {
                     val sortedDatasets = datasets.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTime ?: "" })
                     items(sortedDatasets, key = { it.uniqueId }) { dataset ->
