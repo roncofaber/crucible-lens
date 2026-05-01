@@ -215,16 +215,10 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(bottom = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Fixed content — always visible, never scrolls
                 HomeLogo(isDarkTheme = isDarkTheme)
                 HomeSearchPill(onClick = onSearch, onScan = onScanClick)
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -242,17 +236,18 @@ fun HomeScreen(
                     )
                 }
 
+                // Pinned section — takes remaining space and scrolls independently
                 HomePinnedProjects(
                     pinnedList = pinnedList,
                     onProjectClick = onProjectClick,
                     pinnedInstrumentList = pinnedInstrumentList,
                     onInstrumentClick = onInstrumentClick,
                     onTogglePinnedProject = onTogglePinnedProject,
-                    onTogglePinnedInstrument = onTogglePinnedInstrument
+                    onTogglePinnedInstrument = onTogglePinnedInstrument,
+                    modifier = Modifier.weight(1f)
                 )
-            }
 
-            HomeFooter(graphExplorerUrl = graphExplorerUrl)
+                HomeFooter(graphExplorerUrl = graphExplorerUrl)
             } // end outer Column
 
             // Error banner — slides in from top as an overlay
@@ -533,7 +528,8 @@ private fun HomePinnedProjects(
     pinnedInstrumentList: List<crucible.lens.data.model.Instrument> = emptyList(),
     onInstrumentClick: (String) -> Unit = {},
     onTogglePinnedProject: (String) -> Unit = {},
-    onTogglePinnedInstrument: (String) -> Unit = {}
+    onTogglePinnedInstrument: (String) -> Unit = {},
+    modifier: Modifier = Modifier
 ) {
     var pendingUnpinProjectId by remember { mutableStateOf<String?>(null) }
     var pendingUnpinInstrumentId by remember { mutableStateOf<String?>(null) }
@@ -581,7 +577,10 @@ private fun HomePinnedProjects(
     }
 
     val hasAny = pinnedList.isNotEmpty() || pinnedInstrumentList.isNotEmpty()
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(
+        modifier = modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
             Text("Pinned", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
