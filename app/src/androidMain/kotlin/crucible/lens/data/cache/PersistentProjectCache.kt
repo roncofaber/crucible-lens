@@ -8,7 +8,6 @@ import crucible.lens.platform.PlatformContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
-import kotlinx.datetime.Clock
 import kotlinx.serialization.json.Json
 import java.io.File
 
@@ -39,10 +38,10 @@ actual object PersistentProjectCache {
                     datasetCount = datasets.size,
                     sampleTypes = samples.mapNotNull { it.sampleType }.distinct().sorted(),
                     measurements = datasets.mapNotNull { it.measurement }.distinct().sorted(),
-                    lastUpdated = Clock.System.now().toEpochMilliseconds()
+                    lastUpdated = System.currentTimeMillis()
                 )
             }
-            val cacheData = CachedProjectData(summaries = summaries, cachedAt = Clock.System.now().toEpochMilliseconds())
+            val cacheData = CachedProjectData(summaries = summaries, cachedAt = System.currentTimeMillis())
             File(context.filesDir, CACHE_FILE).writeText(json.encodeToString(cacheData))
         } catch (e: Exception) {
             println("Failed to save project data: $e")
@@ -54,7 +53,7 @@ actual object PersistentProjectCache {
             val file = File(context.filesDir, CACHE_FILE)
             if (!file.exists()) return@withContext null
             val cacheData = json.decodeFromString<CachedProjectData>(file.readText())
-            if (Clock.System.now().toEpochMilliseconds() - cacheData.cachedAt > MAX_CACHE_AGE_MS) {
+            if (System.currentTimeMillis() - cacheData.cachedAt > MAX_CACHE_AGE_MS) {
                 file.delete(); return@withContext null
             }
             cacheData.summaries
@@ -74,7 +73,7 @@ actual object PersistentProjectCache {
             val file = File(context.filesDir, CACHE_FILE)
             if (!file.exists()) return@withContext null
             val cacheData = json.decodeFromString<CachedProjectData>(file.readText())
-            (Clock.System.now().toEpochMilliseconds() - cacheData.cachedAt) / 3_600_000L
+            (System.currentTimeMillis() - cacheData.cachedAt) / 3_600_000L
         } catch (e: Exception) { null }
     }
 }
