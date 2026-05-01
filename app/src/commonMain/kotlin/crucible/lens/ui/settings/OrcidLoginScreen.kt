@@ -36,7 +36,6 @@ fun OrcidLoginScreen(
     LaunchedEffect(loadingState) {
         if (loadingState is LoadingState.Finished) {
             navigator.evaluateJavaScript("(function(){ return document.body.innerText; })()") { result ->
-                if (result == null) return@evaluateJavaScript
                 val body = result
                     .removeSurrounding("\"")
                     .replace("\\\"", "\"")
