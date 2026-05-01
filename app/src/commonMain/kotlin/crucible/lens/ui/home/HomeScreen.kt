@@ -13,6 +13,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -243,7 +244,9 @@ fun HomeScreen(
                     pinnedList = pinnedList,
                     onProjectClick = onProjectClick,
                     pinnedInstrumentList = pinnedInstrumentList,
-                    onInstrumentClick = onInstrumentClick
+                    onInstrumentClick = onInstrumentClick,
+                    onTogglePinnedProject = onTogglePinnedProject,
+                    onTogglePinnedInstrument = onTogglePinnedInstrument
                 )
             }
 
@@ -526,7 +529,9 @@ private fun HomePinnedProjects(
     pinnedList: List<Project>,
     onProjectClick: (String) -> Unit,
     pinnedInstrumentList: List<crucible.lens.data.model.Instrument> = emptyList(),
-    onInstrumentClick: (String) -> Unit = {}
+    onInstrumentClick: (String) -> Unit = {},
+    onTogglePinnedProject: (String) -> Unit = {},
+    onTogglePinnedInstrument: (String) -> Unit = {}
 ) {
     val hasAny = pinnedList.isNotEmpty() || pinnedInstrumentList.isNotEmpty()
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -537,8 +542,10 @@ private fun HomePinnedProjects(
         if (hasAny) {
             pinnedList.forEach { project ->
                 Card(
-                    onClick = { onProjectClick(project.projectId) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().combinedClickable(
+                        onClick = { onProjectClick(project.projectId) },
+                        onLongClick = { onTogglePinnedProject(project.projectId) }
+                    ),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Row(
@@ -555,14 +562,17 @@ private fun HomePinnedProjects(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
+                        Icon(Icons.Default.BookmarkRemove, contentDescription = "Long press to unpin", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                         Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
             pinnedInstrumentList.forEach { instrument ->
                 Card(
-                    onClick = { onInstrumentClick(instrument.uniqueId) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().combinedClickable(
+                        onClick = { onInstrumentClick(instrument.uniqueId) },
+                        onLongClick = { onTogglePinnedInstrument(instrument.uniqueId) }
+                    ),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Row(
@@ -579,6 +589,7 @@ private fun HomePinnedProjects(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
+                        Icon(Icons.Default.BookmarkRemove, contentDescription = "Long press to unpin", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                         Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }

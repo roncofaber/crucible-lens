@@ -314,10 +314,12 @@ fun NavGraph(
                 onProjectClick = { projectId ->
                     navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                 },
+                onTogglePinnedProject = onTogglePinnedProject,
                 pinnedInstruments = pinnedInstruments,
                 onInstrumentClick = { id ->
                     navController.navigate(Screen.InstrumentDetail.createRoute(id))
                 },
+                onTogglePinnedInstrument = onTogglePinnedInstrument,
                 onCreateSample = {
                     navController.navigate(Screen.CreateSample.createRoute())
                 },
