@@ -172,7 +172,7 @@ fun InstrumentListScreen(
                     stickyHeader(key = "search_bar") {
                         Surface(color = MaterialTheme.colorScheme.background) {
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
