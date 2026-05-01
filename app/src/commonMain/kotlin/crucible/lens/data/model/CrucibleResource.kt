@@ -129,7 +129,9 @@ data class Project(
     @SerialName("organization") val organization: String? = null,
     @SerialName("project_lead_orcid") val projectLeadOrcid: String? = null,
     @SerialName("status") val status: String? = null,
-    @SerialName("lead") val lead: UserLead? = null
+    @SerialName("lead") val lead: UserLead? = null,
+    @SerialName("creation_time") val createdAt: String? = null,
+    @SerialName("modification_time") val modifiedAt: String? = null
 )
 
 @Serializable
