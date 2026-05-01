@@ -3,10 +3,12 @@ package crucible.lens.platform
 import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Composable
 
-actual class PlatformContext
+actual abstract class PlatformContext
+
+private class IosPlatformContext : PlatformContext()
 
 @Composable
-actual fun getPlatformContext(): PlatformContext = PlatformContext()
+actual fun getPlatformContext(): PlatformContext = IosPlatformContext()
 
 @Composable
 actual fun supportsDynamicColor(): Boolean = false
