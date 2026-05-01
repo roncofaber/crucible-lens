@@ -69,7 +69,7 @@ fun ProjectsListScreen(
     var hiddenExpanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var sortMenuExpanded by remember { mutableStateOf(false) }
-    var sortOrder by remember { mutableStateOf(0) } // 0=Name A-Z, 1=Name Z-A
+    var sortOrder by remember { mutableStateOf(0) } // 0=Name A-Z, 1=Name Z-A, 2=Newest, 3=Recently modified
     // Track which projects were manually unarchived (so we don't auto-archive them again)
     var manuallyShown by remember { mutableStateOf<Set<String>>(emptySet()) }
     // Trigger for forcing background reload - increments on refresh
@@ -319,7 +319,7 @@ fun ProjectsListScreen(
                                         expanded = sortMenuExpanded,
                                         onDismissRequest = { sortMenuExpanded = false }
                                     ) {
-                                        listOf("Name A→Z", "Name Z→A").forEachIndexed { i, label ->
+                                        listOf("Name A→Z", "Name Z→A", "Newest first", "Recently modified").forEachIndexed { i, label ->
                                             DropdownMenuItem(
                                                 text = { Text(label) },
                                                 leadingIcon = {
@@ -425,6 +425,10 @@ fun ProjectsListScreen(
                                     when (sortOrder) {
                                         1 -> list.sortedWith(compareByDescending<Project> { it.projectId in pinnedProjects }
                                             .thenByDescending { it.title?.lowercase() ?: it.projectId.lowercase() })
+                                        2 -> list.sortedWith(compareByDescending<Project> { it.projectId in pinnedProjects }
+                                            .thenByDescending { it.createdAt ?: "" })
+                                        3 -> list.sortedWith(compareByDescending<Project> { it.projectId in pinnedProjects }
+                                            .thenByDescending { it.modifiedAt ?: it.createdAt ?: "" })
                                         else -> list.sortedWith(compareByDescending<Project> { it.projectId in pinnedProjects }
                                             .thenBy { it.title?.lowercase() ?: it.projectId.lowercase() })
                                     }

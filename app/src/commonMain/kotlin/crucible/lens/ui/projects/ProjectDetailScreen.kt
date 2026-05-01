@@ -565,6 +565,34 @@ private fun ProjectHeader(
                             }
                         }
                     }
+                    // Creation / modification timestamps
+                    val created = project?.createdAt?.let { dateGroupKey(it) }
+                    val modified = project?.modifiedAt?.let { dateGroupKey(it) }
+                    if (created != null || modified != null) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (created != null) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Created $created", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            if (modified != null && modified != created) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Update, contentDescription = null, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Updated $modified", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
                     IconButton(onClick = onTogglePin, modifier = Modifier.size(32.dp)) {
                         Icon(
                             if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
