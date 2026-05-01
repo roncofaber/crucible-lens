@@ -1125,6 +1125,23 @@ fun ResourceDetailScreen(
                                 }
                             }
                         }
+                        item(key = "scientific_metadata_sample_$pageIndex") {
+                            AnimatedVisibility(
+                                visible = !displayResource.scientificMetadata.isNullOrEmpty(),
+                                enter = expandVertically() + fadeIn(),
+                                exit = ExitTransition.None
+                            ) {
+                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                                    ScientificMetadataCard(
+                                        metadata = displayResource.scientificMetadata ?: emptyMap(),
+                                        initialExpanded = pageGetCardState("sci_meta_expanded"),
+                                        initialExpandAll = pageGetCardState("sci_meta_expand_all"),
+                                        onExpandedChange = { pageSetCardState("sci_meta_expanded", it) },
+                                        onExpandAllChange = { pageSetCardState("sci_meta_expand_all", it) }
+                                    )
+                                }
+                            }
+                        }
                         item(key = "keywords_sample_$pageIndex") {
                             AnimatedVisibility(
                                 visible = !displayResource.keywords.isNullOrEmpty(),
