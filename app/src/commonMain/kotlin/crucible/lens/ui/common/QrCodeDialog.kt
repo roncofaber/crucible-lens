@@ -63,13 +63,19 @@ fun QrCodeDialog(mfid: String, name: String, onDismiss: () -> Unit) {
         },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Image(
-                    painter = rememberQrKitPainter(mfid),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(280.dp)
-                        .clip(MaterialTheme.shapes.medium)
-                )
+                Surface(
+                    color = Color.White,
+                    shape = MaterialTheme.shapes.medium,
+                    tonalElevation = 0.dp
+                ) {
+                    Image(
+                        painter = rememberQrKitPainter(mfid),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .size(256.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     mfid,
