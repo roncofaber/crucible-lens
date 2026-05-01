@@ -63,6 +63,7 @@ fun ProjectsListScreen(
     val platformContext = getPlatformContext()
     var projects by remember { mutableStateOf<List<Project>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var isUserRefreshing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     // Map of projectId -> Pair(sampleCount, datasetCount), null means still loading
     var projectCounts by remember { mutableStateOf<Map<String, Pair<Int?, Int?>>>(emptyMap()) }
@@ -91,6 +92,7 @@ fun ProjectsListScreen(
     }
 
     fun loadProjects(forceRefresh: Boolean = false) {
+        if (forceRefresh) isUserRefreshing = true
         scope.launch(kotlinx.coroutines.Dispatchers.Default) {
             try {
                 // Check cache first if not forcing refresh
@@ -146,6 +148,7 @@ fun ProjectsListScreen(
             } finally {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     isLoading = false
+                    isUserRefreshing = false
                 }
             }
         }
@@ -280,7 +283,7 @@ fun ProjectsListScreen(
         }
     ) { padding ->
         PullToRefreshBox(
-            isRefreshing = isLoading,
+            isRefreshing = isUserRefreshing,
             onRefresh = { loadProjects(forceRefresh = true) },
             state = pullRefreshState,
             modifier = modifier
@@ -296,7 +299,7 @@ fun ProjectsListScreen(
                 )
 
                 val ptrFraction by animateFloatAsState(
-                    targetValue = if (isLoading) 0f else pullRefreshState.distanceFraction,
+                    targetValue = if (isUserRefreshing) 0f else pullRefreshState.distanceFraction,
                     label = "ptr"
                 )
                 Box(modifier = Modifier.weight(1f).offset {

@@ -57,6 +57,7 @@ fun InstrumentListScreen(
     val platformContext = getPlatformContext()
     var instruments by remember { mutableStateOf<List<Instrument>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var isUserRefreshing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var hiddenExpanded by remember { mutableStateOf(false) }
@@ -80,6 +81,7 @@ fun InstrumentListScreen(
     }
 
     fun loadInstruments(forceRefresh: Boolean = false) {
+        if (forceRefresh) isUserRefreshing = true
         scope.launch {
             isLoading = true
             error = null
@@ -106,6 +108,7 @@ fun InstrumentListScreen(
                 error = "Error: ${e.message}"
             } finally {
                 isLoading = false
+                isUserRefreshing = false
             }
         }
     }
@@ -145,7 +148,7 @@ fun InstrumentListScreen(
         }
     ) { padding ->
         PullToRefreshBox(
-            isRefreshing = isLoading,
+            isRefreshing = isUserRefreshing,
             onRefresh = { loadInstruments(forceRefresh = true) },
             state = pullRefreshState,
             modifier = modifier
@@ -161,7 +164,7 @@ fun InstrumentListScreen(
                 )
 
                 val ptrFraction by animateFloatAsState(
-                    targetValue = if (isLoading) 0f else pullRefreshState.distanceFraction,
+                    targetValue = if (isUserRefreshing) 0f else pullRefreshState.distanceFraction,
                     label = "ptr"
                 )
                 Box(modifier = Modifier.weight(1f).offset {
