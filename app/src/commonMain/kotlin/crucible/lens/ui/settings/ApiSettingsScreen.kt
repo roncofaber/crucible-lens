@@ -303,9 +303,19 @@ fun ApiSettingsScreen(
                 value = apiBaseUrlInput,
                 onValueChange = { apiBaseUrlInput = it; healthState = HealthState.Idle },
                 label = { Text("API Base URL") },
-                placeholder = { Text("https://crucible.lbl.gov/api/v1/") },
+                placeholder = { Text(crucible.lens.data.preferences.AppPreferences.DEFAULT_API_BASE_URL) },
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = { Icon(Icons.Default.Cloud, contentDescription = null) },
+                trailingIcon = {
+                    if (apiBaseUrlInput != crucible.lens.data.preferences.AppPreferences.DEFAULT_API_BASE_URL) {
+                        IconButton(onClick = {
+                            apiBaseUrlInput = crucible.lens.data.preferences.AppPreferences.DEFAULT_API_BASE_URL
+                            healthState = HealthState.Idle
+                        }) {
+                            Icon(Icons.Default.RestartAlt, contentDescription = "Reset to default")
+                        }
+                    }
+                },
                 singleLine = true,
                 colors = if (apiBaseUrlDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
             )
