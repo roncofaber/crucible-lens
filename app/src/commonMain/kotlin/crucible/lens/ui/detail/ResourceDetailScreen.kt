@@ -871,7 +871,7 @@ fun ResourceDetailScreen(
                         }) {
             // Show loading only when actually waiting for data
             AnimatedVisibility(
-                visible = isCurrentResource && resource.uniqueId != mfid && !isRefreshing,
+                visible = isCurrentResource && pagerState.currentPage != siblingIndex && !isRefreshing,
                 enter = fadeIn(animationSpec = tween(durationMillis = 300)),
                 exit = fadeOut(animationSpec = tween(durationMillis = 250))
             ) {
@@ -880,7 +880,7 @@ fun ResourceDetailScreen(
 
             // Show content: immediately when we have the resource data
             AnimatedVisibility(
-                visible = !isCurrentResource || resource.uniqueId == mfid,
+                visible = !isCurrentResource || pagerState.currentPage == siblingIndex,
                 enter = fadeIn(animationSpec = tween(durationMillis = 200)),
                 exit = fadeOut(animationSpec = tween(durationMillis = 150))
             ) {
@@ -1191,7 +1191,7 @@ fun ResourceDetailScreen(
                 ) {
                     // Show loading or error state
                     AnimatedVisibility(
-                        visible = resource.uniqueId != mfid || isRefreshing,
+                        visible = pagerState.currentPage != siblingIndex || isRefreshing,
                         enter = fadeIn(animationSpec = tween(durationMillis = 300)),
                         exit = fadeOut(animationSpec = tween(durationMillis = 200))
                     ) {
