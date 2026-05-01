@@ -334,9 +334,9 @@ fun ProjectDetailScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-
-            // Tabs
+            // Capture TabRow as a lambda so it can be used as a stickyHeader
+            // in each page's LazyColumn, sitting between the header and the items.
+            val tabRowContent: @Composable () -> Unit = {
             TabRow(selectedTabIndex = pagerState.currentPage) {
                 Tab(
                     selected = pagerState.currentPage == 0,
@@ -407,7 +407,9 @@ fun ProjectDetailScreen(
                     icon = { Icon(Icons.Default.Dataset, contentDescription = null) }
                 )
             }
+            } // end tabRowContent lambda
 
+            Column(modifier = Modifier.fillMaxSize()) {
             when {
                 isLoading -> {
                     LoadingContent(
@@ -466,6 +468,7 @@ fun ProjectDetailScreen(
                                             onSortStateChange = { sortState = it; showFeedback(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
                                         )
                                     }
+                                    stickyHeader(key = "tab_row_samples") { tabRowContent() }
                                 }
                             )
                             1 -> DatasetsList(
@@ -495,6 +498,7 @@ fun ProjectDetailScreen(
                                             onSortStateChange = { sortState = it; showFeedback(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
                                         )
                                     }
+                                    stickyHeader(key = "tab_row_datasets") { tabRowContent() }
                                 }
                             )
                         }
