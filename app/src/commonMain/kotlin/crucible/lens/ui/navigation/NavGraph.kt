@@ -338,7 +338,8 @@ fun NavGraph(
                         else code
                     }.getOrDefault(code).trim()
                     navController.navigate(Screen.Detail.createRoute(uuid))
-                }
+                },
+                onBack = { navController.popBackStack() }
             )
         }
 
