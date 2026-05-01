@@ -150,31 +150,45 @@ fun InstrumentListScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Search bar — stays fixed during pull-to-refresh
-                SearchBar(
-                    query = searchQuery,
-                    onQueryChange = { searchQuery = it },
-                    placeholder = "Search by name, type, manufacturer…"
-                )
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    stickyHeader(key = "search_bar") {
+                        SearchBar(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            placeholder = "Search by name, type, manufacturer…"
+                        )
+                    }
 
-                Box(modifier = Modifier.weight(1f)) {
                     when {
-                        isLoading -> LoadingContent(title = "Loading Instruments")
-                        error != null -> {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        isLoading -> item(key = "__loading__") {
+                            Box(
+                                modifier = Modifier.fillParentMaxWidth().fillParentMaxHeight(0.85f),
+                                contentAlignment = Alignment.Center
+                            ) { LoadingContent(title = "Loading Instruments") }
+                        }
+                        error != null -> item(key = "__error__") {
+                            Box(modifier = Modifier.fillParentMaxWidth(), contentAlignment = Alignment.Center) {
                                 ErrorCard(
                                     title = "Error Loading Instruments",
                                     message = error ?: "Unknown error",
-                                    modifier = Modifier.padding(16.dp),
+                                    modifier = Modifier.padding(horizontal = 16.dp),
                                     onRetry = { loadInstruments(forceRefresh = true) }
                                 )
                             }
                         }
-                        activeInstruments.isEmpty() && hiddenInstrumentsList.isEmpty() -> {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        activeInstruments.isEmpty() && hiddenInstrumentsList.isEmpty() -> item(key = "__empty__") {
+                            Box(
+                                modifier = Modifier.fillParentMaxWidth().fillParentMaxHeight(0.7f),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Card(
-                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -200,157 +214,149 @@ fun InstrumentListScreen(
                             }
                         }
                         else -> {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                LazyColumn(
-                                    state = listState,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentPadding = PaddingValues(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                            // Active instruments with swipe-to-hide
+                            items(activeInstruments, key = { it.uniqueId }) { instrument ->
+                                val dismissState = rememberSwipeToDismissBoxState(
+                                    confirmValueChange = { value ->
+                                        if (value == SwipeToDismissBoxValue.EndToStart) {
+                                            showFeedback(platformContext, "Instrument hidden")
+                                            onToggleHide(instrument.uniqueId)
+                                            true
+                                        } else false
+                                    },
+                                    positionalThreshold = { it * 0.65f }
+                                )
+                                val hideIconScale by animateFloatAsState(
+                                    targetValue = 0.75f + 0.5f * dismissState.progress,
+                                    animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMedium),
+                                    label = "hideIconScale"
+                                )
+                                SwipeToDismissBox(
+                                    state = dismissState,
+                                    enableDismissFromStartToEnd = false,
+                                    enableDismissFromEndToStart = true,
+                                    modifier = Modifier
+                                        .padding(horizontal = 16.dp)
+                                        .animateItem(spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMediumLow)),
+                                    backgroundContent = {
+                                        val color = MaterialTheme.colorScheme.secondaryContainer
+                                        val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(color.copy(alpha = 0.4f + 0.6f * dismissState.progress), MaterialTheme.shapes.medium)
+                                                .padding(end = 20.dp),
+                                            contentAlignment = Alignment.CenterEnd
+                                        ) {
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                modifier = Modifier.scale(hideIconScale)
+                                            ) {
+                                                Icon(Icons.Default.VisibilityOff, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
+                                                Text("Hide", style = MaterialTheme.typography.labelSmall, color = contentColor)
+                                            }
+                                        }
+                                    }
                                 ) {
-                                    // Active instruments with swipe-to-hide
-                                    items(activeInstruments, key = { it.uniqueId }) { instrument ->
+                                    InstrumentCard(
+                                        instrument = instrument,
+                                        isPinned = instrument.uniqueId in pinnedInstruments,
+                                        onTogglePin = {
+                                            showFeedback(platformContext, if (instrument.uniqueId in pinnedInstruments) "Instrument unpinned" else "Instrument pinned")
+                                            onTogglePin(instrument.uniqueId)
+                                        },
+                                        onClick = { onInstrumentClick(instrument.uniqueId) }
+                                    )
+                                }
+                            }
+
+                            // Hidden instruments section
+                            if (hiddenInstrumentsList.isNotEmpty()) {
+                                item(key = "__hidden_header__") {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { hiddenExpanded = !hiddenExpanded }
+                                            .padding(vertical = 4.dp, horizontal = 20.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.VisibilityOff, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                                            Text("Hidden (${hiddenInstrumentsList.size})", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        Icon(
+                                            if (hiddenExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                if (hiddenExpanded) {
+                                    items(hiddenInstrumentsList, key = { "hidden_${it.uniqueId}" }) { instrument ->
                                         val dismissState = rememberSwipeToDismissBoxState(
                                             confirmValueChange = { value ->
-                                                if (value == SwipeToDismissBoxValue.EndToStart) {
-                                                    showFeedback(platformContext, "Instrument hidden")
+                                                if (value == SwipeToDismissBoxValue.StartToEnd) {
+                                                    showFeedback(platformContext, "Instrument shown")
                                                     onToggleHide(instrument.uniqueId)
                                                     true
                                                 } else false
                                             },
                                             positionalThreshold = { it * 0.65f }
                                         )
-                                        val hideIconScale by animateFloatAsState(
+                                        val showIconScale by animateFloatAsState(
                                             targetValue = 0.75f + 0.5f * dismissState.progress,
                                             animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMedium),
-                                            label = "hideIconScale"
+                                            label = "showIconScale"
                                         )
                                         SwipeToDismissBox(
                                             state = dismissState,
-                                            enableDismissFromStartToEnd = false,
-                                            enableDismissFromEndToStart = true,
-                                            modifier = Modifier.animateItem(spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMediumLow)),
+                                            enableDismissFromStartToEnd = true,
+                                            enableDismissFromEndToStart = false,
+                                            modifier = Modifier
+                                                .padding(horizontal = 16.dp)
+                                                .animateItem(spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMediumLow)),
                                             backgroundContent = {
-                                                val color = MaterialTheme.colorScheme.secondaryContainer
-                                                val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                                val color = MaterialTheme.colorScheme.primary
+                                                val contentColor = MaterialTheme.colorScheme.onPrimary
                                                 Box(
                                                     modifier = Modifier
                                                         .fillMaxSize()
                                                         .background(color.copy(alpha = 0.4f + 0.6f * dismissState.progress), MaterialTheme.shapes.medium)
-                                                        .padding(end = 20.dp),
-                                                    contentAlignment = Alignment.CenterEnd
+                                                        .padding(start = 20.dp),
+                                                    contentAlignment = Alignment.CenterStart
                                                 ) {
                                                     Column(
                                                         horizontalAlignment = Alignment.CenterHorizontally,
-                                                        modifier = Modifier.scale(hideIconScale)
+                                                        modifier = Modifier.scale(showIconScale)
                                                     ) {
-                                                        Icon(Icons.Default.VisibilityOff, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
-                                                        Text("Hide", style = MaterialTheme.typography.labelSmall, color = contentColor)
+                                                        Icon(Icons.Default.Visibility, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
+                                                        Text("Show", style = MaterialTheme.typography.labelSmall, color = contentColor)
                                                     }
                                                 }
                                             }
                                         ) {
                                             InstrumentCard(
                                                 instrument = instrument,
-                                                isPinned = instrument.uniqueId in pinnedInstruments,
-                                                onTogglePin = {
-                                                    showFeedback(platformContext, if (instrument.uniqueId in pinnedInstruments) "Instrument unpinned" else "Instrument pinned")
-                                                    onTogglePin(instrument.uniqueId)
-                                                },
+                                                isPinned = false,
+                                                isHidden = true,
+                                                onTogglePin = {},
                                                 onClick = { onInstrumentClick(instrument.uniqueId) }
                                             )
                                         }
                                     }
-
-                                    // Hidden instruments section
-                                    if (hiddenInstrumentsList.isNotEmpty()) {
-                                        item(key = "__hidden_header__") {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable { hiddenExpanded = !hiddenExpanded }
-                                                    .padding(vertical = 4.dp, horizontal = 4.dp),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Row(
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Icon(Icons.Default.VisibilityOff, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                                                    Text("Hidden (${hiddenInstrumentsList.size})", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                }
-                                                Icon(
-                                                    if (hiddenExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
-
-                                        if (hiddenExpanded) {
-                                            items(hiddenInstrumentsList, key = { "hidden_${it.uniqueId}" }) { instrument ->
-                                                val dismissState = rememberSwipeToDismissBoxState(
-                                                    confirmValueChange = { value ->
-                                                        if (value == SwipeToDismissBoxValue.StartToEnd) {
-                                                            showFeedback(platformContext, "Instrument shown")
-                                                            onToggleHide(instrument.uniqueId)
-                                                            true
-                                                        } else false
-                                                    },
-                                                    positionalThreshold = { it * 0.65f }
-                                                )
-                                                val showIconScale by animateFloatAsState(
-                                                    targetValue = 0.75f + 0.5f * dismissState.progress,
-                                                    animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMedium),
-                                                    label = "showIconScale"
-                                                )
-                                                SwipeToDismissBox(
-                                                    state = dismissState,
-                                                    enableDismissFromStartToEnd = true,
-                                                    enableDismissFromEndToStart = false,
-                                                    modifier = Modifier.animateItem(spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMediumLow)),
-                                                    backgroundContent = {
-                                                        val color = MaterialTheme.colorScheme.primary
-                                                        val contentColor = MaterialTheme.colorScheme.onPrimary
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .fillMaxSize()
-                                                                .background(color.copy(alpha = 0.4f + 0.6f * dismissState.progress), MaterialTheme.shapes.medium)
-                                                                .padding(start = 20.dp),
-                                                            contentAlignment = Alignment.CenterStart
-                                                        ) {
-                                                            Column(
-                                                                horizontalAlignment = Alignment.CenterHorizontally,
-                                                                modifier = Modifier.scale(showIconScale)
-                                                            ) {
-                                                                Icon(Icons.Default.Visibility, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
-                                                                Text("Show", style = MaterialTheme.typography.labelSmall, color = contentColor)
-                                                            }
-                                                        }
-                                                    }
-                                                ) {
-                                                    InstrumentCard(
-                                                        instrument = instrument,
-                                                        isPinned = false,
-                                                        isHidden = true,
-                                                        onTogglePin = {},
-                                                        onClick = { onInstrumentClick(instrument.uniqueId) }
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
                                 }
-                                LazyColumnScrollbar(listState = listState, modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd))
-                                ScrollToTopButton(
-                                    visible = showScrollToTop,
-                                    onClick = { scope.launch { listState.animateScrollToItem(0) } },
-                                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
-                                )
                             }
                         }
                     }
                 }
+                LazyColumnScrollbar(listState = listState, modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd))
+                ScrollToTopButton(
+                    visible = showScrollToTop,
+                    onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                )
             }
         }
     }

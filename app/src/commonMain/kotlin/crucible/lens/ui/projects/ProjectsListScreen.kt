@@ -285,276 +285,171 @@ fun ProjectsListScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Search bar — stays fixed during pull-to-refresh
-                SearchBar(
-                    query = searchQuery,
-                    onQueryChange = { searchQuery = it },
-                    placeholder = "Search by name, ID, or project lead…"
-                )
-
-                Box(modifier = Modifier.weight(1f)) {
-                when {
-                    isLoading && persistentSummaries == null -> {
-                    LoadingContent(
-                        title = "Loading Projects",
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                error != null -> {
-                    ErrorCard(
-                        title = "Error Loading Projects",
-                        message = error ?: "Unknown error",
-                        modifier = Modifier.padding(16.dp),
-                        onRetry = { loadProjects(forceRefresh = true) }
-                    )
-                }
-                projects?.isEmpty() == true -> {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    stickyHeader(key = "search_bar") {
+                        SearchBar(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            placeholder = "Search by name, ID, or project lead…"
                         )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    }
+
+                    when {
+                        isLoading && persistentSummaries == null -> item(key = "__loading__") {
+                            Box(
+                                modifier = Modifier.fillParentMaxWidth().fillParentMaxHeight(0.85f),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    Icons.Default.FolderOpen,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = "No Projects Found",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
+                                LoadingContent(title = "Loading Projects")
+                            }
+                        }
+                        error != null -> item(key = "__error__") {
+                            Box(modifier = Modifier.fillParentMaxWidth(), contentAlignment = Alignment.Center) {
+                                ErrorCard(
+                                    title = "Error Loading Projects",
+                                    message = error ?: "Unknown error",
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    onRetry = { loadProjects(forceRefresh = true) }
                                 )
                             }
-                            Text(
-                                text = "There are no projects available.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
-                    }
-                }
-                else -> {
-                    // Use real projects if available, otherwise convert persistent summaries
-                    val allProjects = projects ?: persistentSummaries?.map { summary ->
-                        Project(
-                            projectId = summary.projectId,
-                            title = summary.projectName
-                        )
-                    } ?: emptyList()
-
-                    // Filter projects based on search query (includes project, samples, and datasets with metadata)
-                    val filteredProjects = if (searchQuery.isBlank()) {
-                        allProjects
-                    } else {
-                        allProjects.filter { project ->
-                            // Search in project properties
-                            val matchesProject = project.title?.contains(searchQuery, ignoreCase = true) == true ||
-                                project.projectId.contains(searchQuery, ignoreCase = true) ||
-                                project.organization?.contains(searchQuery, ignoreCase = true) == true ||
-                                project.lead?.email?.contains(searchQuery, ignoreCase = true) == true
-
-                            // Search in cached samples
-                            val matchesSamples = CacheManager.getProjectSamples(project.projectId)
-                                ?.any { it.matchesSearch(searchQuery) } == true
-
-                            // Search in cached datasets (including metadata)
-                            val matchesDatasets = CacheManager.getProjectDatasets(project.projectId)
-                                ?.any { it.matchesSearch(searchQuery) } == true
-
-                            matchesProject || matchesSamples || matchesDatasets
-                        }
-                    }
-
-                    val activeProjects = filteredProjects
-                        .filter { it.projectId !in hiddenProjects }
-                        .sortedByDescending { it.projectId in pinnedProjects }
-                    val hiddenProjectsList = filteredProjects
-                        .filter { it.projectId in hiddenProjects }
-
-                    // Box to contain list + scrollbar
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        // Show message when search returns no results
-                        if (searchQuery.isNotBlank() && filteredProjects.isEmpty()) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                        projects?.isEmpty() == true -> item(key = "__empty__") {
+                            Box(
+                                modifier = Modifier.fillParentMaxWidth().fillParentMaxHeight(0.7f),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                                 ) {
-                                    Icon(
-                                        Icons.Default.SearchOff,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        text = "No Results Found",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Text(
-                                    text = "No projects match \"$searchQuery\"",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    } else LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(activeProjects, key = { it.projectId }) { project ->
-                            val dismissState = rememberSwipeToDismissBoxState(
-                                confirmValueChange = { value ->
-                                    if (value == SwipeToDismissBoxValue.EndToStart) {
-                                        showFeedback(platformContext, "Project hidden")
-                                        onToggleHide(project.projectId)
-                                        true
-                                    } else false
-                                },
-                                positionalThreshold = { totalDistance -> totalDistance * 0.65f }
-                            )
-                            val iconScale by animateFloatAsState(
-                                targetValue = 0.75f + 0.5f * dismissState.progress,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioNoBouncy,
-                                    stiffness = Spring.StiffnessMedium
-                                ),
-                                label = "hideIconScale"
-                            )
-                            SwipeToDismissBox(
-                                state = dismissState,
-                                enableDismissFromStartToEnd = false,
-                                enableDismissFromEndToStart = true,
-                                modifier = Modifier.animateItem(
-                                    spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-                                ),
-                                backgroundContent = {
-                                    val color = MaterialTheme.colorScheme.secondaryContainer
-                                    val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(
-                                                color.copy(alpha = 0.4f + 0.6f * dismissState.progress),
-                                                MaterialTheme.shapes.medium
+                                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Icon(
+                                                Icons.Default.FolderOpen,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
-                                            .padding(end = 20.dp),
-                                        contentAlignment = Alignment.CenterEnd
-                                    ) {
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier.scale(iconScale)
-                                        ) {
-                                            Icon(Icons.Default.VisibilityOff, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
-                                            Text("Hide", style = MaterialTheme.typography.labelSmall, color = contentColor)
+                                            Text(
+                                                text = "No Projects Found",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
                                         }
-                                    }
-                                }
-                            ) {
-                                ProjectCard(
-                                    project = project,
-                                    counts = projectCounts[project.projectId],
-                                    onClick = { onProjectClick(project.projectId) },
-                                    isPinned = project.projectId in pinnedProjects,
-                                    onTogglePin = {
-                                        showFeedback(platformContext, if (project.projectId in pinnedProjects) "Project unpinned" else "Project pinned")
-                                        onTogglePin(project.projectId)
-                                    }
-                                )
-                            }
-                        }
-
-                        if (hiddenProjectsList.isNotEmpty()) {
-                            item(key = "__hidden_header__") {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { hiddenExpanded = !hiddenExpanded }
-                                        .padding(vertical = 4.dp, horizontal = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            Icons.Default.VisibilityOff,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(18.dp)
-                                        )
                                         Text(
-                                            "Hidden (${hiddenProjectsList.size})",
-                                            style = MaterialTheme.typography.labelLarge,
+                                            text = "There are no projects available.",
+                                            style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    Icon(
-                                        if (hiddenExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                }
+                            }
+                        }
+                        else -> {
+                            // Use real projects if available, otherwise convert persistent summaries
+                            val allProjects = projects ?: persistentSummaries?.map { summary ->
+                                Project(
+                                    projectId = summary.projectId,
+                                    title = summary.projectName
+                                )
+                            } ?: emptyList()
+
+                            // Filter projects based on search query (includes project, samples, and datasets with metadata)
+                            val filteredProjects = if (searchQuery.isBlank()) {
+                                allProjects
+                            } else {
+                                allProjects.filter { project ->
+                                    // Search in project properties
+                                    val matchesProject = project.title?.contains(searchQuery, ignoreCase = true) == true ||
+                                        project.projectId.contains(searchQuery, ignoreCase = true) ||
+                                        project.organization?.contains(searchQuery, ignoreCase = true) == true ||
+                                        project.lead?.email?.contains(searchQuery, ignoreCase = true) == true
+
+                                    // Search in cached samples
+                                    val matchesSamples = CacheManager.getProjectSamples(project.projectId)
+                                        ?.any { it.matchesSearch(searchQuery) } == true
+
+                                    // Search in cached datasets (including metadata)
+                                    val matchesDatasets = CacheManager.getProjectDatasets(project.projectId)
+                                        ?.any { it.matchesSearch(searchQuery) } == true
+
+                                    matchesProject || matchesSamples || matchesDatasets
                                 }
                             }
 
-                            if (hiddenExpanded) {
-                                items(hiddenProjectsList, key = { "hidden_${it.projectId}" }) { project ->
+                            val activeProjects = filteredProjects
+                                .filter { it.projectId !in hiddenProjects }
+                                .sortedByDescending { it.projectId in pinnedProjects }
+                            val hiddenProjectsList = filteredProjects
+                                .filter { it.projectId in hiddenProjects }
+
+                            // Show message when search returns no results
+                            if (searchQuery.isNotBlank() && filteredProjects.isEmpty()) {
+                                item(key = "__no_search_results__") {
+                                    Box(modifier = Modifier.fillParentMaxWidth(), contentAlignment = Alignment.Center) {
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                        ) {
+                                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Icon(
+                                                        Icons.Default.SearchOff,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                    Text(
+                                                        text = "No Results Found",
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                                Text(
+                                                    text = "No projects match \"$searchQuery\"",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                items(activeProjects, key = { it.projectId }) { project ->
                                     val dismissState = rememberSwipeToDismissBoxState(
                                         confirmValueChange = { value ->
-                                            if (value == SwipeToDismissBoxValue.StartToEnd) {
-                                                // Mark as manually shown to prevent auto-hiding
-                                                manuallyShown = manuallyShown + project.projectId
-                                                showFeedback(platformContext, "Project shown")
+                                            if (value == SwipeToDismissBoxValue.EndToStart) {
+                                                showFeedback(platformContext, "Project hidden")
                                                 onToggleHide(project.projectId)
                                                 true
                                             } else false
                                         },
                                         positionalThreshold = { totalDistance -> totalDistance * 0.65f }
                                     )
-                                    val showIconScale by animateFloatAsState(
+                                    val iconScale by animateFloatAsState(
                                         targetValue = 0.75f + 0.5f * dismissState.progress,
                                         animationSpec = spring(
                                             dampingRatio = Spring.DampingRatioNoBouncy,
                                             stiffness = Spring.StiffnessMedium
                                         ),
-                                        label = "showIconScale"
+                                        label = "hideIconScale"
                                     )
                                     SwipeToDismissBox(
                                         state = dismissState,
-                                        enableDismissFromStartToEnd = true,
-                                        enableDismissFromEndToStart = false,
-                                        modifier = Modifier.animateItem(
-                                            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-                                        ),
+                                        enableDismissFromStartToEnd = false,
+                                        enableDismissFromEndToStart = true,
+                                        modifier = Modifier
+                                            .padding(horizontal = 16.dp)
+                                            .animateItem(
+                                                spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+                                            ),
                                         backgroundContent = {
-                                            val color = MaterialTheme.colorScheme.primary
-                                            val contentColor = MaterialTheme.colorScheme.onPrimary
+                                            val color = MaterialTheme.colorScheme.secondaryContainer
+                                            val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -562,15 +457,15 @@ fun ProjectsListScreen(
                                                         color.copy(alpha = 0.4f + 0.6f * dismissState.progress),
                                                         MaterialTheme.shapes.medium
                                                     )
-                                                    .padding(start = 20.dp),
-                                                contentAlignment = Alignment.CenterStart
+                                                    .padding(end = 20.dp),
+                                                contentAlignment = Alignment.CenterEnd
                                             ) {
                                                 Column(
                                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                                    modifier = Modifier.scale(showIconScale)
+                                                    modifier = Modifier.scale(iconScale)
                                                 ) {
-                                                    Icon(Icons.Default.Visibility, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
-                                                    Text("Show", style = MaterialTheme.typography.labelSmall, color = contentColor)
+                                                    Icon(Icons.Default.VisibilityOff, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
+                                                    Text("Hide", style = MaterialTheme.typography.labelSmall, color = contentColor)
                                                 }
                                             }
                                         }
@@ -579,42 +474,125 @@ fun ProjectsListScreen(
                                             project = project,
                                             counts = projectCounts[project.projectId],
                                             onClick = { onProjectClick(project.projectId) },
-                                            isPinned = false,
-                                            onTogglePin = {},
-                                            isHidden = true
+                                            isPinned = project.projectId in pinnedProjects,
+                                            onTogglePin = {
+                                                showFeedback(platformContext, if (project.projectId in pinnedProjects) "Project unpinned" else "Project pinned")
+                                                onTogglePin(project.projectId)
+                                            }
                                         )
+                                    }
+                                }
+
+                                if (hiddenProjectsList.isNotEmpty()) {
+                                    item(key = "__hidden_header__") {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { hiddenExpanded = !hiddenExpanded }
+                                                .padding(vertical = 4.dp, horizontal = 20.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    Icons.Default.VisibilityOff,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Text(
+                                                    "Hidden (${hiddenProjectsList.size})",
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            Icon(
+                                                if (hiddenExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    if (hiddenExpanded) {
+                                        items(hiddenProjectsList, key = { "hidden_${it.projectId}" }) { project ->
+                                            val dismissState = rememberSwipeToDismissBoxState(
+                                                confirmValueChange = { value ->
+                                                    if (value == SwipeToDismissBoxValue.StartToEnd) {
+                                                        manuallyShown = manuallyShown + project.projectId
+                                                        showFeedback(platformContext, "Project shown")
+                                                        onToggleHide(project.projectId)
+                                                        true
+                                                    } else false
+                                                },
+                                                positionalThreshold = { totalDistance -> totalDistance * 0.65f }
+                                            )
+                                            val showIconScale by animateFloatAsState(
+                                                targetValue = 0.75f + 0.5f * dismissState.progress,
+                                                animationSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                                    stiffness = Spring.StiffnessMedium
+                                                ),
+                                                label = "showIconScale"
+                                            )
+                                            SwipeToDismissBox(
+                                                state = dismissState,
+                                                enableDismissFromStartToEnd = true,
+                                                enableDismissFromEndToStart = false,
+                                                modifier = Modifier
+                                                    .padding(horizontal = 16.dp)
+                                                    .animateItem(
+                                                        spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+                                                    ),
+                                                backgroundContent = {
+                                                    val color = MaterialTheme.colorScheme.primary
+                                                    val contentColor = MaterialTheme.colorScheme.onPrimary
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .background(
+                                                                color.copy(alpha = 0.4f + 0.6f * dismissState.progress),
+                                                                MaterialTheme.shapes.medium
+                                                            )
+                                                            .padding(start = 20.dp),
+                                                        contentAlignment = Alignment.CenterStart
+                                                    ) {
+                                                        Column(
+                                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                                            modifier = Modifier.scale(showIconScale)
+                                                        ) {
+                                                            Icon(Icons.Default.Visibility, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
+                                                            Text("Show", style = MaterialTheme.typography.labelSmall, color = contentColor)
+                                                        }
+                                                    }
+                                                }
+                                            ) {
+                                                ProjectCard(
+                                                    project = project,
+                                                    counts = projectCounts[project.projectId],
+                                                    onClick = { onProjectClick(project.projectId) },
+                                                    isPinned = false,
+                                                    onTogglePin = {},
+                                                    isHidden = true
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-
-                        // Scrollbar for project list
-                        LazyColumnScrollbar(
-                            listState = listState,
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .align(Alignment.CenterEnd)
-                                .padding(end = 4.dp)
-                        )
-                    } // end Box
-                } // end else ->
-                } // end when
-            } // end offset Box
-            } // end Column
-
-            // Scroll-to-top button
-            ScrollToTopButton(
-                visible = showScrollToTop,
-                onClick = {
-                    scope.launch {
-                        listState.animateScrollToItem(0)
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-            )
+                }
+                LazyColumnScrollbar(
+                    listState = listState,
+                    modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd).padding(end = 4.dp)
+                )
+                ScrollToTopButton(
+                    visible = showScrollToTop,
+                    onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                )
+            }
         }
     }
 }
