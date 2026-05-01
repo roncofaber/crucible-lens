@@ -21,6 +21,7 @@ KEYSTORE="${KEYSTORE:-$HOME/crucible-lens.jks}"
 KEY_ALIAS="${KEY_ALIAS:-crucible-lens}"
 BUILD_TOOLS="${BUILD_TOOLS:-$HOME/Android/Sdk/build-tools/36.0.0}"
 JAVA_HOME="${JAVA_HOME:-/home/$(whoami)/software/android-studio/jbr}"
+export PATH="$JAVA_HOME/bin:$PATH"
 # ────────────────────────────────────────────────────────────────────────────
 
 UNSIGNED_APK="$REPO_ROOT/app/build/outputs/apk/release/composeApp-release-unsigned.apk"
