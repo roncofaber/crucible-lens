@@ -110,6 +110,7 @@ kotlin {
                 // Coil 3 (multiplatform)
                 implementation("io.coil-kt.coil3:coil-compose:3.0.4")
                 implementation("io.coil-kt.coil3:coil-network-ktor3:3.0.4")
+                implementation("io.coil-kt.coil3:coil-svg:3.0.4")
 
                 // Lifecycle / ViewModel
                 implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")

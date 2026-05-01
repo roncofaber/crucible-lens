@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import crucible.lens.composeapp.generated.resources.Res
 import crucible.lens.platform.appVersionName
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
@@ -76,12 +78,10 @@ fun AboutSettingsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // TODO: Load SVG icon from assets. For now, use fallback Icon.
-                        Icon(
-                            Icons.Default.DataObject,
+                        AsyncImage(
+                            model = Res.getUri("files/${if (isDarkTheme) "crucible_icon_dark.svg" else "crucible_icon_light.svg"}"),
                             contentDescription = "Crucible Lens",
-                            modifier = Modifier.size(28.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            modifier = Modifier.size(28.dp)
                         )
                         Text(
                             text = "Crucible Lens",
@@ -175,7 +175,11 @@ fun AboutSettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Language, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        AsyncImage(
+                            model = Res.getUri("files/crucible_old.svg"),
+                            contentDescription = "Crucible",
+                            modifier = Modifier.size(26.dp)
+                        )
                         Column {
                             Text("Crucible", style = MaterialTheme.typography.bodyLarge)
                             Text(
@@ -206,7 +210,11 @@ fun AboutSettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Code, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        AsyncImage(
+                            model = Res.getUri("files/${if (isDarkTheme) "crucible_icon_dark.svg" else "crucible_icon_light.svg"}"),
+                            contentDescription = "Crucible Lens",
+                            modifier = Modifier.size(26.dp)
+                        )
                         Column {
                             Text("Crucible Lens", style = MaterialTheme.typography.bodyLarge)
                             Text(
