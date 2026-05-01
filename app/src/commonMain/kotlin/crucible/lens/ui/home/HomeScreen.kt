@@ -220,20 +220,6 @@ fun HomeScreen(
             ) {
                 HomeLogo(isDarkTheme = isDarkTheme)
                 HomeSearchPill(onClick = onSearch, onScan = onScanClick)
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                HomeBrowseSection(
-                    onBrowseProjects = onBrowseProjects,
-                    onBrowseInstruments = onBrowseInstruments
-                )
-                HomeCreateSection(onCreateSample = onCreateSample, onCreateDataset = onCreateDataset)
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                if (lastVisitedResource != null && lastVisitedResourceName != null) {
-                    HomeLastVisited(
-                        name = lastVisitedResourceName,
-                        onClick = { onManualEntry(lastVisitedResource) },
-                        onHistory = onHistory
-                    )
-                }
                 AnimatedVisibility(
                     visible = fetchError != null,
                     enter = expandVertically() + fadeIn(),
@@ -281,6 +267,20 @@ fun HomeScreen(
                             }
                         }
                     }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                HomeBrowseSection(
+                    onBrowseProjects = onBrowseProjects,
+                    onBrowseInstruments = onBrowseInstruments
+                )
+                HomeCreateSection(onCreateSample = onCreateSample, onCreateDataset = onCreateDataset)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                if (lastVisitedResource != null && lastVisitedResourceName != null) {
+                    HomeLastVisited(
+                        name = lastVisitedResourceName,
+                        onClick = { onManualEntry(lastVisitedResource) },
+                        onHistory = onHistory
+                    )
                 }
 
                 HomePinnedProjects(
