@@ -154,12 +154,10 @@ fun CreateSampleScreen(
                                 is crucible.lens.data.api.ApiResult.Success -> {
                                     val sample = resp.data
                                     val uuid = sample.uniqueId
-                                    if (uuid != null) {
-                                        CacheManager.cacheResource(uuid, sample)
-                                        // Invalidate project list so the new sample appears immediately
-                                        selectedProjectId?.let { CacheManager.clearProjectDetail(it) }
-                                        onCreated(uuid)
-                                    } else snackbarHostState.showSnackbar("Created — couldn't retrieve the ID")
+                                    CacheManager.cacheResource(uuid, sample)
+                                    // Invalidate project list so the new sample appears immediately
+                                    selectedProjectId?.let { CacheManager.clearProjectDetail(it) }
+                                    onCreated(uuid)
                                 }
                                 is crucible.lens.data.api.ApiResult.Error -> {
                                     snackbarHostState.showSnackbar("Save failed (${resp.code})")

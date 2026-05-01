@@ -51,9 +51,8 @@ class CrucibleRepository {
 
     /** Returns true if the resource was loaded with links (i.e. from a detail fetch, not a list fetch). */
     private fun hasLinks(resource: CrucibleResource): Boolean = when (resource) {
-        is crucible.lens.data.model.Sample  -> resource.links != null
+        is crucible.lens.data.model.Sample -> resource.links != null
         is Dataset -> resource.links != null
-        is crucible.lens.data.model.Instrument -> true  // instruments don't have links
     }
 
     suspend fun fetchThumbnails(datasetUuid: String): List<String> = withContext(Dispatchers.Default) {

@@ -9,7 +9,7 @@ import androidx.core.net.toUri
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.ui.common.ShareCardGenerator
 import kotlin.math.roundToInt
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 

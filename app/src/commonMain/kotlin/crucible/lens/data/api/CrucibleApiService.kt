@@ -100,7 +100,6 @@ class CrucibleApiService(
         when (type) {
             "sample"     -> json.decodeFromJsonElement<Sample>(obj) as CrucibleResource
             "dataset"    -> json.decodeFromJsonElement<Dataset>(obj) as CrucibleResource
-            "instrument" -> json.decodeFromJsonElement<Instrument>(obj) as CrucibleResource
             else         -> throw IllegalStateException("Unknown resource_type: $type")
         }
     }

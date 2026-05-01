@@ -58,7 +58,6 @@ class ResourceDetailViewModel : ViewModel() {
 
     private fun getThumbnails(uuid: String): List<String>? =
         CacheManager.getThumbnails(uuid)
-            ?: null // L2 disk cache stubbed: PersistentThumbnailCache not available in commonMain
 
     private suspend fun fetchAndCacheThumbnails(uuid: String): List<String> {
         val fetched = repository.fetchThumbnails(uuid)

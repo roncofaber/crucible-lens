@@ -784,7 +784,7 @@ fun ResourceDetailScreen(
                                     is Sample -> currentDisplayResource.deletionRequest
                                     is Dataset -> currentDisplayResource.deletionRequest
                                 }
-                                val deletionStatus = deletionRequest?.get("status") as? String
+                                val deletionStatus = (deletionRequest?.get("status") as? kotlinx.serialization.json.JsonPrimitive)?.content
                                 DropdownMenuItem(
                                     text = { Text(if (deletionStatus != null) "Deletion ${deletionStatus.replaceFirstChar { it.uppercase() }}" else "Request deletion") },
                                     leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
@@ -1609,7 +1609,7 @@ private fun SampleDetailsCard(
             Spacer(modifier = Modifier.height(6.dp))
 
             // Deletion warning
-            val sampleDeletionStatus = sample.deletionRequest?.get("status") as? String
+            val sampleDeletionStatus = (sample.deletionRequest?.get("status") as? kotlinx.serialization.json.JsonPrimitive)?.content
             if (sampleDeletionStatus != null) {
                 Surface(
                     color = when (sampleDeletionStatus) {
@@ -1755,7 +1755,7 @@ private fun DatasetDetailsCard(
             Spacer(modifier = Modifier.height(6.dp))
 
             // Deletion warning
-            val datasetDeletionStatus = dataset.deletionRequest?.get("status") as? String
+            val datasetDeletionStatus = (dataset.deletionRequest?.get("status") as? kotlinx.serialization.json.JsonPrimitive)?.content
             if (datasetDeletionStatus != null) {
                 Surface(
                     color = when (datasetDeletionStatus) {

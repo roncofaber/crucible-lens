@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import kotlin.time.Clock
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
@@ -52,7 +52,7 @@ fun DateTimePickerField(
     var pendingDate by remember { mutableStateOf<LocalDate?>(null) }
 
     val displayText = parsedValue?.let { dt ->
-        "${dt.monthNumber.toString().padStart(2, '0')}/${dt.dayOfMonth.toString().padStart(2, '0')}/${dt.year} · " +
+        "${dt.month.number.toString().padStart(2, '0')}/${dt.day.toString().padStart(2, '0')}/${dt.year} · " +
         "${dt.hour.toString().padStart(2, '0')}:${dt.minute.toString().padStart(2, '0')}"
     } ?: ""
 

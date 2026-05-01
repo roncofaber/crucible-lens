@@ -250,10 +250,6 @@ fun CreateDatasetScreen(
                             }
                             val newDataset = createResp.data
                             val newUuid = newDataset.uniqueId
-                                ?: run {
-                                    snackbarHostState.showSnackbar("Created — couldn't retrieve the ID")
-                                    return@launch
-                                }
                             CacheManager.cacheResource(newUuid, newDataset)
                             selectedProjectId?.let { CacheManager.clearProjectDetail(it) }
 

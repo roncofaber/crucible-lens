@@ -99,7 +99,7 @@ object ShareCardGenerator {
 
         // ── Resource name — top-left of banner (no icon) ──────────────────
         val textX        = pad.toFloat()
-        val textMaxW     = (qrLeft - textX - 16).toFloat()
+        val textMaxW     = qrLeft - textX - 16
         val nameFontSize = 34f
         p.color    = colorWhite
         p.textSize = nameFontSize
