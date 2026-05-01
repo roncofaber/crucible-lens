@@ -52,7 +52,8 @@ fun DateTimePickerField(
     var pendingDate by remember { mutableStateOf<LocalDate?>(null) }
 
     val displayText = parsedValue?.let { dt ->
-        "${dt.month.number.toString().padStart(2, '0')}/${dt.day.toString().padStart(2, '0')}/${dt.year} · " +
+        @Suppress("DEPRECATION")
+        "${dt.monthNumber.toString().padStart(2, '0')}/${dt.dayOfMonth.toString().padStart(2, '0')}/${dt.year} · " +
         "${dt.hour.toString().padStart(2, '0')}:${dt.minute.toString().padStart(2, '0')}"
     } ?: ""
 
