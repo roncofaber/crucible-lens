@@ -9,6 +9,7 @@ import androidx.core.net.toUri
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.ui.common.ShareCardGenerator
 import kotlin.math.roundToInt
+import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
@@ -40,7 +41,7 @@ actual fun showToast(context: PlatformContext, message: String) {
 }
 
 actual fun currentIsoDateTime(): String {
-    val now = kotlinx.datetime.Clock.System.now()
+    val now = Clock.System.now()
     return now.toLocalDateTime(TimeZone.currentSystemDefault()).toString()
 }
 

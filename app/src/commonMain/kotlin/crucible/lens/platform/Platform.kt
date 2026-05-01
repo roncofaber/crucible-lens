@@ -3,7 +3,7 @@ package crucible.lens.platform
 import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Composable
 
-expect class PlatformContext
+expect abstract class PlatformContext
 
 @Composable
 expect fun getPlatformContext(): PlatformContext
