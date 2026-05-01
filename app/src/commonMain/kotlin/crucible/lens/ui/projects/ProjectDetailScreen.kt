@@ -11,6 +11,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.clickable
@@ -334,97 +337,97 @@ fun ProjectDetailScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Capture TabRow as a lambda so it can be used as a stickyHeader
-            // in each page's LazyColumn, sitting between the header and the items.
-            val tabRowContent: @Composable () -> Unit = {
-            TabRow(selectedTabIndex = pagerState.currentPage) {
-                Tab(
-                    selected = pagerState.currentPage == 0,
-                    onClick = {
-                        scope.launch {
-                            pagerState.animateScrollToPage(
-                                page = 0,
-                                animationSpec = tween(
-                                    durationMillis = 350,
-                                    easing = FastOutSlowInEasing
-                                )
-                            )
-                        }
-                    },
-                    text = {
-                        val count = filteredSamples.size
-                        val total = samples?.size
-                        val label = when {
-                            total == null -> "Samples (--)"
-                            searchQuery.isBlank() -> "Samples ($total)"
-                            else -> "Samples ($count/$total)"
-                        }
-                        AnimatedContent(
-                            targetState = label,
-                            transitionSpec = {
-                                fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith
-                                    fadeOut(animationSpec = tween(durationMillis = 200))
-                            },
-                            label = "samples_tab_label"
-                        ) { text ->
-                            Text(text)
-                        }
-                    },
-                    icon = { Icon(Icons.Default.Science, contentDescription = null) }
-                )
-                Tab(
-                    selected = pagerState.currentPage == 1,
-                    onClick = {
-                        scope.launch {
-                            pagerState.animateScrollToPage(
-                                page = 1,
-                                animationSpec = tween(
-                                    durationMillis = 350,
-                                    easing = FastOutSlowInEasing
-                                )
-                            )
-                        }
-                    },
-                    text = {
-                        val count = filteredDatasets.size
-                        val total = datasets?.size
-                        val label = when {
-                            total == null -> "Datasets (--)"
-                            searchQuery.isBlank() -> "Datasets ($total)"
-                            else -> "Datasets ($count/$total)"
-                        }
-                        AnimatedContent(
-                            targetState = label,
-                            transitionSpec = {
-                                fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith
-                                    fadeOut(animationSpec = tween(durationMillis = 200))
-                            },
-                            label = "datasets_tab_label"
-                        ) { text ->
-                            Text(text)
-                        }
-                    },
-                    icon = { Icon(Icons.Default.Dataset, contentDescription = null) }
-                )
-            }
-            } // end tabRowContent lambda
-
             Column(modifier = Modifier.fillMaxSize()) {
-            when {
-                isLoading -> {
-                    LoadingContent(
-                        title = "Loading Project Data",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
+
+                // ProjectHeader — fixed, not part of the pager.
+                // Modifier.scrollable with a no-op state forwards vertical drags
+                // upward through the nested scroll chain so PTR activates here too.
+                Box(
+                    modifier = Modifier.scrollable(
+                        state = rememberScrollableState { 0f },
+                        orientation = Orientation.Vertical
+                    )
+                ) {
+                    ProjectHeader(
+                        project = project,
+                        projectId = projectId,
+                        searchQuery = searchQuery,
+                        onSearchChange = { searchQuery = it },
+                        isPinned = isPinned,
+                        onTogglePin = onTogglePin,
+                        currentPage = pagerState.currentPage,
+                        sampleGroupBy = sampleGroupBy,
+                        datasetGroupBy = datasetGroupBy,
+                        onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
+                        onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
+                        sortState = sortState,
+                        onSortStateChange = { sortState = it; showFeedback(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
                     )
                 }
-                error != null -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    ) {
+
+                // TabRow — fixed below the header, above the pager
+                TabRow(selectedTabIndex = pagerState.currentPage) {
+                    Tab(
+                        selected = pagerState.currentPage == 0,
+                        onClick = {
+                            scope.launch {
+                                pagerState.animateScrollToPage(
+                                    page = 0,
+                                    animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
+                                )
+                            }
+                        },
+                        text = {
+                            val count = filteredSamples.size
+                            val total = samples?.size
+                            val label = when {
+                                total == null -> "Samples (--)"
+                                searchQuery.isBlank() -> "Samples ($total)"
+                                else -> "Samples ($count/$total)"
+                            }
+                            AnimatedContent(
+                                targetState = label,
+                                transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
+                                label = "samples_tab_label"
+                            ) { Text(it) }
+                        },
+                        icon = { Icon(Icons.Default.Science, contentDescription = null) }
+                    )
+                    Tab(
+                        selected = pagerState.currentPage == 1,
+                        onClick = {
+                            scope.launch {
+                                pagerState.animateScrollToPage(
+                                    page = 1,
+                                    animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
+                                )
+                            }
+                        },
+                        text = {
+                            val count = filteredDatasets.size
+                            val total = datasets?.size
+                            val label = when {
+                                total == null -> "Datasets (--)"
+                                searchQuery.isBlank() -> "Datasets ($total)"
+                                else -> "Datasets ($count/$total)"
+                            }
+                            AnimatedContent(
+                                targetState = label,
+                                transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
+                                label = "datasets_tab_label"
+                            ) { Text(it) }
+                        },
+                        icon = { Icon(Icons.Default.Dataset, contentDescription = null) }
+                    )
+                }
+
+                // Pager — only list content swipes, header+tabs stay fixed above
+                when {
+                    isLoading -> LoadingContent(
+                        title = "Loading Project Data",
+                        modifier = Modifier.fillMaxWidth().weight(1f)
+                    )
+                    error != null -> Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                         ErrorCard(
                             title = "Error Loading Data",
                             message = error ?: "Unknown error",
@@ -432,13 +435,9 @@ fun ProjectDetailScreen(
                             onRetry = { loadProjectData(forceRefresh = true) }
                         )
                     }
-                }
-                else -> {
-                    HorizontalPager(
+                    else -> HorizontalPager(
                         state = pagerState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
+                        modifier = Modifier.fillMaxWidth().weight(1f)
                     ) { page ->
                         when (page) {
                             0 -> SamplesList(
@@ -449,27 +448,7 @@ fun ProjectDetailScreen(
                                 graphExplorerUrl = graphExplorerUrl,
                                 groupBy = sampleGroupBy,
                                 sortState = sortState,
-                                onSampleClick = { uuid -> onResourceClick(uuid, sampleGroupBy.name) },
-                                leadingContent = {
-                                    stickyHeader(key = "project_header_samples") {
-                                        ProjectHeader(
-                                            project = project,
-                                            projectId = projectId,
-                                            searchQuery = searchQuery,
-                                            onSearchChange = { searchQuery = it },
-                                            isPinned = isPinned,
-                                            onTogglePin = onTogglePin,
-                                            currentPage = pagerState.currentPage,
-                                            sampleGroupBy = sampleGroupBy,
-                                            datasetGroupBy = datasetGroupBy,
-                                            onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
-                                            onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
-                                            sortState = sortState,
-                                            onSortStateChange = { sortState = it; showFeedback(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
-                                        )
-                                    }
-                                    stickyHeader(key = "tab_row_samples") { tabRowContent() }
-                                }
+                                onSampleClick = { uuid -> onResourceClick(uuid, sampleGroupBy.name) }
                             )
                             1 -> DatasetsList(
                                 datasets = filteredDatasets,
@@ -479,33 +458,12 @@ fun ProjectDetailScreen(
                                 graphExplorerUrl = graphExplorerUrl,
                                 groupBy = datasetGroupBy,
                                 sortState = sortState,
-                                onDatasetClick = { uuid -> onResourceClick(uuid, datasetGroupBy.name) },
-                                leadingContent = {
-                                    stickyHeader(key = "project_header_datasets") {
-                                        ProjectHeader(
-                                            project = project,
-                                            projectId = projectId,
-                                            searchQuery = searchQuery,
-                                            onSearchChange = { searchQuery = it },
-                                            isPinned = isPinned,
-                                            onTogglePin = onTogglePin,
-                                            currentPage = pagerState.currentPage,
-                                            sampleGroupBy = sampleGroupBy,
-                                            datasetGroupBy = datasetGroupBy,
-                                            onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
-                                            onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
-                                            sortState = sortState,
-                                            onSortStateChange = { sortState = it; showFeedback(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
-                                        )
-                                    }
-                                    stickyHeader(key = "tab_row_datasets") { tabRowContent() }
-                                }
+                                onDatasetClick = { uuid -> onResourceClick(uuid, datasetGroupBy.name) }
                             )
                         }
                     }
                 }
-            } // end when
-            } // end outer Column
+            } // end Column
         }
     }
 
