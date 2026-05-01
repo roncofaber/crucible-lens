@@ -577,14 +577,21 @@ private fun HomePinnedProjects(
     }
 
     val hasAny = pinnedList.isNotEmpty() || pinnedInstrumentList.isNotEmpty()
-    Column(
-        modifier = modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        // Fixed label — always visible even when cards scroll
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(bottom = 6.dp)
+        ) {
             Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
             Text("Pinned", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         }
+        // Scrollable cards area
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
         if (hasAny) {
             pinnedList.forEach { project ->
                 Card(
@@ -654,14 +661,15 @@ private fun HomePinnedProjects(
                 }
             }
         }
-    }
+        } // end scrollable inner Column
+    } // end outer Column
 }
 
 @Composable
 private fun HomeFooter(graphExplorerUrl: String) {
     val ctx = getPlatformContext()
     Column(
-        modifier = Modifier.padding(vertical = 8.dp),
+        modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
