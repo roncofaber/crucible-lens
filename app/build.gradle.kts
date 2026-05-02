@@ -4,7 +4,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
 
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
-    id("com.android.application")
+    id("com.android.library")
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
@@ -170,22 +170,8 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "crucible.lens"
         minSdk = 26
-        targetSdk = 36
-        versionCode = 4
-        versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    }
-
-    buildTypes {
-        release {
-            isMinifyEnabled = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-        }
     }
 
     compileOptions {
@@ -196,19 +182,5 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
-    }
-
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
-
-    // KMP: point Android manifest and resources at existing locations
-    sourceSets {
-        getByName("main") {
-            manifest.srcFile("src/main/AndroidManifest.xml")
-            res.setSrcDirs(listOf("src/main/res"))
-        }
     }
 }

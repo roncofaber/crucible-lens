@@ -45,7 +45,7 @@ fun MetadataEditorScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    val cameraPicker = rememberCameraPicker { bytes -> photoBytesList = photoBytesList + bytes }
+    val cameraPicker = rememberCameraPicker { bytes -> bytes?.let { photoBytesList = photoBytesList + it } }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },

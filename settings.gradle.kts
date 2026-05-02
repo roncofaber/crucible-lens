@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 rootProject.name = "Crucible Lens"
 include(":composeApp")
 project(":composeApp").projectDir = file("app")
+include(":androidApp")
