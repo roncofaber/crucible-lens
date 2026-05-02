@@ -26,6 +26,8 @@ interface AppPreferences {
     val sampleGroupBy: Flow<String>
     val datasetGroupBy: Flow<String>
     val defaultProjectTab: Flow<String>
+    val aiApiKey: Flow<String?>
+    val aiApiUrl: Flow<String>
 
     // Saves
     suspend fun saveApiKey(key: String)
@@ -47,6 +49,8 @@ interface AppPreferences {
     suspend fun saveSampleGroupBy(value: String)
     suspend fun saveDatasetGroupBy(value: String)
     suspend fun saveDefaultProjectTab(tab: String)
+    suspend fun saveAiApiKey(key: String)
+    suspend fun saveAiApiUrl(url: String)
 
     companion object {
         const val PROJECT_TAB_SAMPLES = "SAMPLES"
@@ -57,5 +61,6 @@ interface AppPreferences {
         const val THEME_MODE_LIGHT = "light"
         const val THEME_MODE_DARK = "dark"
         const val DEFAULT_ACCENT_COLOR = "blue"
+        const val DEFAULT_AI_API_URL = "https://api.cborg.lbl.gov"
     }
 }

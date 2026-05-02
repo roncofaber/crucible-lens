@@ -101,6 +101,10 @@ class MainActivity : ComponentActivity() {
             val pinnedInstruments by preferencesManager.pinnedInstruments.collectAsState(initial = emptySet())
             val hiddenInstruments by preferencesManager.hiddenInstruments.collectAsState(initial = emptySet())
             val userOrcid by preferencesManager.userOrcid.collectAsState(initial = null)
+            val aiApiKey by preferencesManager.aiApiKey.collectAsState(initial = null)
+            val aiApiUrl by preferencesManager.aiApiUrl.collectAsState(
+                initial = crucible.lens.data.preferences.AppPreferences.DEFAULT_AI_API_URL
+            )
             val scope = rememberCoroutineScope()
 
             // Set API key and base URL in client when they change
@@ -108,6 +112,8 @@ class MainActivity : ComponentActivity() {
                 ApiClient.setApiKey(key)
             }
             ApiClient.setBaseUrl(apiBaseUrl)
+            aiApiKey?.let { ApiClient.setAiApiKey(it) }
+            ApiClient.setAiApiUrl(aiApiUrl)
 
             // Determine dark theme based on theme mode
             val systemInDarkTheme = isSystemInDarkTheme()
@@ -164,6 +170,20 @@ class MainActivity : ComponentActivity() {
                     onGraphExplorerUrlSave = { url ->
                         scope.launch {
                             preferencesManager.saveGraphExplorerUrl(url)
+                        }
+                    },
+                    aiApiKey = aiApiKey,
+                    aiApiUrl = aiApiUrl,
+                    onAiApiKeySave = { key ->
+                        scope.launch {
+                            preferencesManager.saveAiApiKey(key)
+                            ApiClient.setAiApiKey(key)
+                        }
+                    },
+                    onAiApiUrlSave = { url ->
+                        scope.launch {
+                            preferencesManager.saveAiApiUrl(url)
+                            ApiClient.setAiApiUrl(url)
                         }
                     },
                     onThemeModeSave = { mode ->

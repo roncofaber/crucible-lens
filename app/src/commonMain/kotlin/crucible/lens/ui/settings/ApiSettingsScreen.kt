@@ -39,9 +39,13 @@ fun ApiSettingsScreen(
     currentApiKey: String?,
     currentApiBaseUrl: String,
     currentGraphExplorerUrl: String,
+    currentAiApiKey: String?,
+    currentAiApiUrl: String,
     onApiKeySave: (String) -> Unit,
     onApiBaseUrlSave: (String) -> Unit,
     onGraphExplorerUrlSave: (String) -> Unit,
+    onAiApiKeySave: (String) -> Unit,
+    onAiApiUrlSave: (String) -> Unit,
     onUserOrcidSave: (String?) -> Unit = {},
     onSignOut: () -> Unit = {},
     onSignIn: () -> Unit = {},
@@ -54,14 +58,19 @@ fun ApiSettingsScreen(
     }
     var apiBaseUrlInput by remember { mutableStateOf(currentApiBaseUrl) }
     var graphExplorerUrlInput by remember { mutableStateOf(currentGraphExplorerUrl) }
+    var aiApiKeyInput by remember { mutableStateOf(currentAiApiKey ?: "") }
+    var aiApiUrlInput by remember { mutableStateOf(currentAiApiUrl) }
     var isApiKeyVisible by remember { mutableStateOf(false) }
+    var isAiApiKeyVisible by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
     val apiKeyDirty = apiKeyInput != (currentApiKey ?: "")
     val apiBaseUrlDirty = apiBaseUrlInput != currentApiBaseUrl
     val graphExplorerUrlDirty = graphExplorerUrlInput != currentGraphExplorerUrl
-    val hasChanges = apiKeyDirty || apiBaseUrlDirty || graphExplorerUrlDirty
+    val aiApiKeyDirty = aiApiKeyInput != (currentAiApiKey ?: "")
+    val aiApiUrlDirty = aiApiUrlInput != currentAiApiUrl
+    val hasChanges = apiKeyDirty || apiBaseUrlDirty || graphExplorerUrlDirty || aiApiKeyDirty || aiApiUrlDirty
 
     var healthState by remember { mutableStateOf<HealthState>(HealthState.Idle) }
     var healthManualTrigger by remember { mutableStateOf(0) }
@@ -119,6 +128,8 @@ fun ApiSettingsScreen(
         if (apiKeyDirty) onApiKeySave(apiKeyInput)
         if (apiBaseUrlDirty) onApiBaseUrlSave(apiBaseUrlInput)
         if (graphExplorerUrlDirty) onGraphExplorerUrlSave(graphExplorerUrlInput)
+        if (aiApiKeyDirty) onAiApiKeySave(aiApiKeyInput)
+        if (aiApiUrlDirty) onAiApiUrlSave(aiApiUrlInput)
         scope.launch { snackbarHostState.showSnackbar("Settings saved", duration = SnackbarDuration.Short) }
     }
 
@@ -126,6 +137,8 @@ fun ApiSettingsScreen(
         apiKeyInput = currentApiKey ?: ""
         apiBaseUrlInput = currentApiBaseUrl
         graphExplorerUrlInput = currentGraphExplorerUrl
+        aiApiKeyInput = currentAiApiKey ?: ""
+        aiApiUrlInput = currentAiApiUrl
     }
 
     Scaffold(
@@ -396,6 +409,56 @@ fun ApiSettingsScreen(
                 singleLine = true,
                 supportingText = { Text("Web interface for viewing entity graphs", style = MaterialTheme.typography.bodySmall) },
                 colors = if (graphExplorerUrlDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+            Text("AI Extraction", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Used when extracting scientific metadata from notebook photos. " +
+                "Leave blank to use the server's default credentials.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            OutlinedTextField(
+                value = aiApiKeyInput,
+                onValueChange = { aiApiKeyInput = it },
+                label = { Text("AI API Key") },
+                placeholder = { Text("sk-...") },
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.SmartToy, contentDescription = null) },
+                trailingIcon = {
+                    IconButton(onClick = { isAiApiKeyVisible = !isAiApiKeyVisible }) {
+                        Icon(
+                            if (isAiApiKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = if (isAiApiKeyVisible) "Hide" else "Show"
+                        )
+                    }
+                },
+                visualTransformation = if (isAiApiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                singleLine = true,
+                colors = if (aiApiKeyDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
+            )
+
+            OutlinedTextField(
+                value = aiApiUrlInput,
+                onValueChange = { aiApiUrlInput = it },
+                label = { Text("AI API URL") },
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.Psychology, contentDescription = null) },
+                trailingIcon = {
+                    if (aiApiUrlInput != crucible.lens.data.preferences.AppPreferences.DEFAULT_AI_API_URL) {
+                        IconButton(onClick = {
+                            aiApiUrlInput = crucible.lens.data.preferences.AppPreferences.DEFAULT_AI_API_URL
+                        }) {
+                            Icon(Icons.Default.RestartAlt, contentDescription = "Reset to default")
+                        }
+                    }
+                },
+                singleLine = true,
+                supportingText = { Text("Default: ${crucible.lens.data.preferences.AppPreferences.DEFAULT_AI_API_URL}", style = MaterialTheme.typography.bodySmall) },
+                colors = if (aiApiUrlDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
             )
 
             // Extra bottom space so content isn't hidden behind the save bar

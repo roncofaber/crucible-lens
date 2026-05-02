@@ -32,6 +32,8 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         private val USER_ORCID = stringPreferencesKey("user_orcid")
         private val PINNED_INSTRUMENTS = stringPreferencesKey("pinned_instruments")
         private val USE_DYNAMIC_COLOR = stringPreferencesKey("use_dynamic_color")
+        private val AI_API_KEY = stringPreferencesKey("ai_api_key")
+        private val AI_API_URL = stringPreferencesKey("ai_api_url")
 
         const val PROJECT_TAB_SAMPLES = "SAMPLES"
         const val PROJECT_TAB_DATASETS = "DATASETS"
@@ -110,6 +112,14 @@ class PreferencesManager(private val context: Context) : AppPreferences {
 
     override val userOrcid: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[USER_ORCID]
+    }
+
+    override val aiApiKey: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[AI_API_KEY]
+    }
+
+    override val aiApiUrl: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[AI_API_URL] ?: AppPreferences.DEFAULT_AI_API_URL
     }
 
     override val resourceHistory: Flow<List<HistoryItem>> = context.dataStore.data.map { prefs ->
@@ -225,6 +235,14 @@ class PreferencesManager(private val context: Context) : AppPreferences {
             if (orcid != null) preferences[USER_ORCID] = orcid
             else preferences.remove(USER_ORCID)
         }
+    }
+
+    override suspend fun saveAiApiKey(key: String) {
+        context.dataStore.edit { preferences -> preferences[AI_API_KEY] = key }
+    }
+
+    override suspend fun saveAiApiUrl(url: String) {
+        context.dataStore.edit { preferences -> preferences[AI_API_URL] = url }
     }
 
     override suspend fun clearHistory() {

@@ -246,4 +246,20 @@ class IosAppPreferences : AppPreferences {
         settings.putString("default_project_tab", tab)
         (defaultProjectTab as? MutableStateFlow)?.value = tab
     }
+
+    override val aiApiKey: Flow<String?> =
+        MutableStateFlow(settings.getStringOrNull("ai_api_key"))
+
+    override val aiApiUrl: Flow<String> =
+        MutableStateFlow(settings.getString("ai_api_url", AppPreferences.DEFAULT_AI_API_URL))
+
+    override suspend fun saveAiApiKey(key: String) {
+        settings.putString("ai_api_key", key)
+        (aiApiKey as? MutableStateFlow)?.value = key
+    }
+
+    override suspend fun saveAiApiUrl(url: String) {
+        settings.putString("ai_api_url", url)
+        (aiApiUrl as? MutableStateFlow)?.value = url
+    }
 }
