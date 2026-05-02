@@ -45,10 +45,10 @@ fun QRCodeScannerView(
 
     LaunchedEffect(controller) {
         try {
-            if (!controller.isPermissionGranted(Permission.CAMERA)) {
-                controller.providePermission(Permission.CAMERA)
+            if (!controller.isPermissionGranted(Permission.Camera)) {
+                controller.providePermission(Permission.Camera)
             }
-            cameraGranted = controller.isPermissionGranted(Permission.CAMERA)
+            cameraGranted = controller.isPermissionGranted(Permission.Camera)
         } catch (_: Exception) {
             cameraGranted = false
         }
