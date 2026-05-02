@@ -18,7 +18,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
@@ -177,11 +180,19 @@ fun List<Pair<String, String>>.toMetadataMap(): Map<String, String>? =
         .associate { it.first.trim() to it.second.trim() }
         .ifEmpty { null }
 
-/** Convert an AI-extracted JsonObject to editable pairs, unquoting string primitives. */
+/** Convert an AI-extracted JsonObject to editable pairs.
+ *  Nested objects are flattened with dot-notation keys; arrays become comma-separated strings. */
 fun JsonObject.toMetadataEntries(): List<Pair<String, String>> =
-    entries.map { (k, v) ->
-        k to runCatching { v.jsonPrimitive.content }.getOrElse { v.toString() }
-    }
+    entries.flatMap { (k, v) -> v.flattenTo(k) }
+
+private fun JsonElement.flattenTo(key: String): List<Pair<String, String>> = when (this) {
+    is JsonPrimitive -> listOf(key to content)
+    is JsonObject    -> entries.flatMap { (k, v) -> v.flattenTo("$key.$k") }
+    is JsonArray     -> listOf(key to joinToString(", ") { elem ->
+        runCatching { elem.jsonPrimitive.content }.getOrElse { elem.toString() }
+    })
+    else             -> listOf(key to toString())
+}
 
 /** Merge extracted entries into existing ones, skipping keys that already exist. */
 fun mergeMetadataEntries(
