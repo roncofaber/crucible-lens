@@ -42,6 +42,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 
 class CrucibleApiService(
@@ -298,14 +299,24 @@ class CrucibleApiService(
             messages = listOf(AnthropicMessage(role = "user", content = contentBlocks))
         )
 
-        val response = client.post("$aiApiUrl/v1/messages") {
+        val responseObj = client.post("$aiApiUrl/v1/messages") {
             header("Authorization", "Bearer $aiApiKey")
             contentType(ContentType.Application.Json)
             setBody(request)
-        }.body<AnthropicMessagesResponse>()
+        }.body<JsonObject>()
 
-        var raw = response.content.firstOrNull()?.text?.trim()
-            ?: throw Exception("Empty response from AI")
+        // Handle Anthropic-style error bodies returned as 2xx (e.g. auth errors from some proxies)
+        if (responseObj["type"]?.jsonPrimitive?.content == "error") {
+            val msg = responseObj["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content
+                ?: "Unknown AI error"
+            throw Exception(msg)
+        }
+
+        var raw = responseObj["content"]
+            ?.jsonArray?.firstOrNull()
+            ?.jsonObject?.get("text")
+            ?.jsonPrimitive?.content?.trim()
+            ?: throw Exception("No content in AI response: $responseObj")
 
         // Strip markdown code fences if present (mirrors server-side logic)
         if (raw.startsWith("```")) {
