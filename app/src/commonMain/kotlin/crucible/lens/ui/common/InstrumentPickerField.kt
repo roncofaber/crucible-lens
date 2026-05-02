@@ -56,6 +56,7 @@ fun InstrumentPickerField(
                 .onFocusChanged { if (it.isFocused) expanded = true },
             singleLine = true,
             enabled = instruments != null,
+            textStyle = MaterialTheme.typography.bodyMedium,
             leadingIcon = { Icon(Icons.Default.Build, contentDescription = null) },
             trailingIcon = {
                 when {

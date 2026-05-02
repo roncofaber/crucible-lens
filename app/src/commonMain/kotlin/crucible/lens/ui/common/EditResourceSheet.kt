@@ -117,6 +117,7 @@ private fun SampleEditFields(
         label = { Text("Name *") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium,
         leadingIcon = { Icon(Icons.Default.Science, contentDescription = null) }
     )
     OutlinedTextField(
@@ -125,6 +126,7 @@ private fun SampleEditFields(
         label = { Text("Type") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium,
         leadingIcon = { Icon(Icons.Default.Category, contentDescription = null) }
     )
     if (projects.isNotEmpty()) {
@@ -139,7 +141,8 @@ private fun SampleEditFields(
                 label = { Text("Project") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = projectDropdownExpanded) },
                 leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                textStyle = MaterialTheme.typography.bodyMedium,
             )
             ExposedDropdownMenu(
                 expanded = projectDropdownExpanded,
@@ -172,6 +175,7 @@ private fun SampleEditFields(
         modifier = Modifier.fillMaxWidth(),
         minLines = 2,
         maxLines = 4,
+        textStyle = MaterialTheme.typography.bodyMedium,
         leadingIcon = { Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = null) }
     )
 
@@ -252,6 +256,7 @@ private fun DatasetEditFields(
         label = { Text("Name *") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium,
         leadingIcon = { Icon(Icons.Default.Dataset, contentDescription = null) }
     )
     OutlinedTextField(
@@ -260,6 +265,7 @@ private fun DatasetEditFields(
         label = { Text("Measurement") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium,
         leadingIcon = { Icon(Icons.Default.Science, contentDescription = null) }
     )
     if (projects.isNotEmpty()) {
@@ -274,7 +280,8 @@ private fun DatasetEditFields(
                 label = { Text("Project") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = projectDropdownExpanded) },
                 leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                textStyle = MaterialTheme.typography.bodyMedium,
             )
             ExposedDropdownMenu(
                 expanded = projectDropdownExpanded,
@@ -301,6 +308,7 @@ private fun DatasetEditFields(
         label = { Text("Session") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium,
         leadingIcon = { Icon(Icons.Default.PlayCircle, contentDescription = null) }
     )
     InstrumentPickerField(
@@ -319,6 +327,7 @@ private fun DatasetEditFields(
         label = { Text("Data Type") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium,
         leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) }
     )
 

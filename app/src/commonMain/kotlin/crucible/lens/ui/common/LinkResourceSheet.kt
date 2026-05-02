@@ -224,6 +224,7 @@ fun LinkResourceSheet(
                     label = { Text("Search by name or paste UUID") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium,
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
                         when {
@@ -309,7 +310,8 @@ fun LinkResourceSheet(
                             label = { Text("Relationship direction") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = directionExpanded) },
                             leadingIcon = { Icon(Icons.Default.AccountTree, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                            textStyle = MaterialTheme.typography.bodyMedium,
                         )
                         ExposedDropdownMenu(
                             expanded = directionExpanded,

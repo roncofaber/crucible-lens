@@ -152,6 +152,7 @@ fun CreateDatasetScreen(
                 label = { Text("Name *") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
                 leadingIcon = { Icon(Icons.Default.Dataset, contentDescription = null) }
             )
             OutlinedTextField(
@@ -160,6 +161,7 @@ fun CreateDatasetScreen(
                 label = { Text("Measurement") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
                 leadingIcon = { Icon(Icons.Default.Science, contentDescription = null) }
             )
 
@@ -175,7 +177,8 @@ fun CreateDatasetScreen(
                         label = { Text("Project") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = projectDropdownExpanded) },
                         leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                        textStyle = MaterialTheme.typography.bodyMedium,
                     )
                     ExposedDropdownMenu(
                         expanded = projectDropdownExpanded,
@@ -199,7 +202,8 @@ fun CreateDatasetScreen(
                     readOnly = true,
                     label = { Text("Project") },
                     leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodyMedium,
                 )
             }
 
@@ -214,6 +218,7 @@ fun CreateDatasetScreen(
                 label = { Text("Session") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
                 leadingIcon = { Icon(Icons.Default.PlayCircle, contentDescription = null) }
             )
             InstrumentPickerField(
@@ -232,6 +237,7 @@ fun CreateDatasetScreen(
                 label = { Text("Data Type") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) }
             )
 

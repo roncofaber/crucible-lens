@@ -86,6 +86,7 @@ fun CreateSampleScreen(
                 label = { Text("Name *") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
                 leadingIcon = { Icon(Icons.Default.Science, contentDescription = null) }
             )
             OutlinedTextField(
@@ -94,6 +95,7 @@ fun CreateSampleScreen(
                 label = { Text("Type") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
                 leadingIcon = { Icon(Icons.Default.Category, contentDescription = null) }
             )
 
@@ -109,7 +111,8 @@ fun CreateSampleScreen(
                         label = { Text("Project") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = projectDropdownExpanded) },
                         leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                        textStyle = MaterialTheme.typography.bodyMedium,
                     )
                     ExposedDropdownMenu(
                         expanded = projectDropdownExpanded,
@@ -133,7 +136,8 @@ fun CreateSampleScreen(
                     readOnly = true,
                     label = { Text("Project") },
                     leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodyMedium,
                 )
             }
 
@@ -155,6 +159,7 @@ fun CreateSampleScreen(
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2,
                 maxLines = 4,
+                textStyle = MaterialTheme.typography.bodyMedium,
                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = null) }
             )
 

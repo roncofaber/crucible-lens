@@ -2524,7 +2524,8 @@ private fun DeletionRequestDialog(
                     label = { Text("Reason (optional)") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
-                    maxLines = 4
+                    maxLines = 4,
+                    textStyle = MaterialTheme.typography.bodyMedium,
                 )
                 if (errorMsg != null) {
                     Text(errorMsg!!, color = MaterialTheme.colorScheme.error,
