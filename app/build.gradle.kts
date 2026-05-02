@@ -127,12 +127,6 @@ kotlin {
 
                 // QR code display/generation (qr-kit painter only)
                 implementation("network.chaintech:qr-kit:3.1.3")
-
-                // Image picking (gallery + camera)
-                implementation("dev.icerock.moko:media-compose:0.12.0")
-
-                // Camera permissions
-                implementation("dev.icerock.moko:permissions-compose:0.20.1")
             }
         }
 
@@ -155,10 +149,11 @@ compose.resources {
     packageOfResClass = "crucible.lens.composeapp.generated.resources"
 }
 
-// CMP 1.7.3 requires Material3 1.3.x, but transitive deps compiled against older versions
-// (notably moko-media/permissions 0.12.x/0.20.x) pull in an incompatible M3 with different
-// Compose-compiler-generated method signatures, causing NoSuchMethodError at runtime.
-// Forcing a single version here ensures only one M3 artifact ends up in the APK.
+// easyqrscan 0.7.1 was compiled against M3 1.4.x and pulls it in transitively.
+// CMP 1.7.3 compiles against M3 1.3.x — the mangled Compose function names differ between
+// 1.3.x and 1.4.x, so letting 1.4.x win at runtime would break our compiled code.
+// Force 1.3.1 so only the version our code was compiled against is in the final APK.
+// easyqrscan is therefore only used on iOS (its native stack has no AndroidX M3 dependency).
 configurations.configureEach {
     resolutionStrategy {
         force("androidx.compose.material3:material3:1.3.1")
