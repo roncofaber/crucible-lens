@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class AnthropicImageSource(
-    val type: String = "base64",
+    val type: String,           // no default — kotlinx.serialization skips fields with defaults (encodeDefaults=false)
     @SerialName("media_type") val mediaType: String,
     val data: String
 )

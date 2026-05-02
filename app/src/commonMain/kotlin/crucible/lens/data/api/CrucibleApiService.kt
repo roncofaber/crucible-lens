@@ -284,7 +284,7 @@ class CrucibleApiService(
         val contentBlocks = images.map { img ->
             AnthropicContentBlock(
                 type = "image",
-                source = AnthropicImageSource(mediaType = img.mediaType, data = img.data)
+                source = AnthropicImageSource(type = "base64", mediaType = img.mediaType, data = img.data)
             )
         } + AnthropicContentBlock(
             type = "text",
