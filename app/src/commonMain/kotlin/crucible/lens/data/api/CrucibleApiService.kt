@@ -261,7 +261,10 @@ class CrucibleApiService(
     }
 
     suspend fun extractMetadata(request: ExtractMetadataRequest): ApiResult<JsonObject> = safeCall {
-        post("extract_metadata", request)
+        post("extract_metadata", request.copy(
+            apiKey = apiKey,
+            apiUrl = "https://api.cborg.lbl.gov"
+        ))
     }
 
     suspend fun requestDeletion(

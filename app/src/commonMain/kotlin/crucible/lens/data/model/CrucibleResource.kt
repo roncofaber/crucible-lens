@@ -239,5 +239,13 @@ data class ExtractMetadataRequest(
     val images: List<MetadataImageData>,
     @OptIn(ExperimentalSerializationApi::class)
     @EncodeDefault(EncodeDefault.Mode.NEVER)
-    val context: String? = null
+    val context: String? = null,
+    @SerialName("api_key")
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val apiKey: String? = null,
+    @SerialName("api_url")
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val apiUrl: String? = null
 )
