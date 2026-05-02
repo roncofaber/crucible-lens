@@ -172,6 +172,7 @@ android {
     defaultConfig {
         minSdk = 26
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "VERSION_NAME", "\"0.3.0\"")
     }
 
     compileOptions {

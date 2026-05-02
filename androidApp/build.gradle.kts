@@ -10,7 +10,7 @@ configurations.configureEach {
 }
 
 android {
-    namespace = "crucible.lens"
+    namespace = "crucible.lens.app"
     compileSdk = 36
 
     defaultConfig {
