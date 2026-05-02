@@ -14,6 +14,7 @@ import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.model.ThumbnailCreateRequest
+import crucible.lens.data.model.ExtractMetadataRequest
 import crucible.lens.data.model.HealthStatus
 import crucible.lens.data.model.PaginatedResponse
 import crucible.lens.data.model.UserLead
@@ -257,6 +258,10 @@ class CrucibleApiService(
         request: ThumbnailCreateRequest
     ): ApiResult<Thumbnail> = safeCall {
         post("datasets/$uuid/thumbnails", request)
+    }
+
+    suspend fun extractMetadata(request: ExtractMetadataRequest): ApiResult<JsonObject> = safeCall {
+        post("extract_metadata", request)
     }
 
     suspend fun requestDeletion(

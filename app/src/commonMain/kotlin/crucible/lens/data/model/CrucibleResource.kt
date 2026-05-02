@@ -225,3 +225,15 @@ data class HealthStatus(
     @SerialName("db_ms") val dbMs: Float? = null,
     val version: String? = null
 )
+
+@Serializable
+data class MetadataImageData(
+    val data: String,
+    @SerialName("media_type") val mediaType: String
+)
+
+@Serializable
+data class ExtractMetadataRequest(
+    val images: List<MetadataImageData>,
+    val context: String? = null
+)

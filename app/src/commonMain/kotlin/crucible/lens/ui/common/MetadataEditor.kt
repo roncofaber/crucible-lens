@@ -18,6 +18,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Structured key-value metadata editor.
@@ -174,3 +176,18 @@ fun List<Pair<String, String>>.toMetadataMap(): Map<String, String>? =
     filter { it.first.isNotBlank() }
         .associate { it.first.trim() to it.second.trim() }
         .ifEmpty { null }
+
+/** Convert an AI-extracted JsonObject to editable pairs, unquoting string primitives. */
+fun JsonObject.toMetadataEntries(): List<Pair<String, String>> =
+    entries.map { (k, v) ->
+        k to runCatching { v.jsonPrimitive.content }.getOrElse { v.toString() }
+    }
+
+/** Merge extracted entries into existing ones, skipping keys that already exist. */
+fun mergeMetadataEntries(
+    existing: List<Pair<String, String>>,
+    extracted: List<Pair<String, String>>
+): List<Pair<String, String>> {
+    val existingKeys = existing.map { it.first.trim().lowercase() }.toSet()
+    return existing + extracted.filter { it.first.trim().lowercase() !in existingKeys }
+}
