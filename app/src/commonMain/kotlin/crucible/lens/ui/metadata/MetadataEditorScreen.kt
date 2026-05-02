@@ -28,6 +28,7 @@ import crucible.lens.data.model.MetadataImageData
 import crucible.lens.data.util.MetadataHolder
 import crucible.lens.platform.PlatformBase64
 import crucible.lens.platform.rememberCameraPicker
+import crucible.lens.platform.rememberGalleryPicker
 import crucible.lens.ui.common.mergeMetadataEntries
 import crucible.lens.ui.common.toMetadataEntries
 import kotlinx.coroutines.launch
@@ -40,18 +41,27 @@ fun MetadataEditorScreen(
 ) {
     var entries by remember { mutableStateOf(MetadataHolder.entries) }
     var photoBytesList by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
-    var extractionContext by remember { mutableStateOf("") }
+    var extractionContext by remember { mutableStateOf(MetadataHolder.resourceContext) }
     var isExtracting by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val cameraPicker = rememberCameraPicker { bytes -> bytes?.let { photoBytesList = photoBytesList + it } }
+    val galleryPicker = rememberGalleryPicker { bytes -> bytes?.let { photoBytesList = photoBytesList + it } }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(onClick = { cameraPicker() }) {
-                Icon(Icons.Default.AddAPhoto, contentDescription = "Add photo for extraction")
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SmallFloatingActionButton(onClick = { galleryPicker() }) {
+                    Icon(Icons.Default.PhotoLibrary, contentDescription = "Choose from gallery")
+                }
+                FloatingActionButton(onClick = { cameraPicker() }) {
+                    Icon(Icons.Default.AddAPhoto, contentDescription = "Take photo")
+                }
             }
         },
         topBar = {
@@ -141,23 +151,29 @@ fun MetadataEditorScreen(
                                     }
                                 }
                                 item {
+                                    // Camera tile
                                     Box(
                                         modifier = Modifier
                                             .size(96.dp)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .border(
-                                                width = 1.dp,
-                                                color = MaterialTheme.colorScheme.outline,
-                                                shape = RoundedCornerShape(8.dp)
-                                            )
+                                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
                                             .clickable { cameraPicker() },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(
-                                            Icons.Default.AddAPhoto,
-                                            contentDescription = "Add page",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                        Icon(Icons.Default.AddAPhoto, contentDescription = "Take photo", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                item {
+                                    // Gallery tile
+                                    Box(
+                                        modifier = Modifier
+                                            .size(96.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                                            .clickable { galleryPicker() },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.PhotoLibrary, contentDescription = "Choose from gallery", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
                             }
@@ -165,10 +181,11 @@ fun MetadataEditorScreen(
                             OutlinedTextField(
                                 value = extractionContext,
                                 onValueChange = { extractionContext = it },
-                                label = { Text("Context hint (optional)") },
+                                label = { Text("Context hint") },
                                 placeholder = { Text("e.g. XRD measurement notebook") },
                                 modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
+                                singleLine = false,
+                                maxLines = 3,
                                 textStyle = MaterialTheme.typography.bodyMedium,
                                 leadingIcon = {
                                     Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = null)
@@ -268,7 +285,7 @@ fun MetadataEditorScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                             Text(
-                                "Tap + to add a field, or use the camera button to extract from a notebook photo",
+                                "Tap + to add a field, or use the camera/gallery buttons to extract from a notebook photo",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                             )

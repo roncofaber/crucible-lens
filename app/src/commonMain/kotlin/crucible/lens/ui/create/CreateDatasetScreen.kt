@@ -29,6 +29,7 @@ import crucible.lens.data.util.MetadataHolder
 import crucible.lens.platform.PlatformBase64
 import crucible.lens.platform.currentIsoDateTime
 import crucible.lens.platform.rememberCameraPicker
+import crucible.lens.platform.rememberGalleryPicker
 import crucible.lens.ui.common.DateTimePickerField
 import crucible.lens.ui.common.InstrumentPickerField
 import crucible.lens.ui.common.MetadataEditor
@@ -63,6 +64,7 @@ fun CreateDatasetScreen(
     val scope = rememberCoroutineScope()
 
     val cameraPicker = rememberCameraPicker { bytes -> photoBytes = bytes }
+    val galleryPicker = rememberGalleryPicker { bytes -> photoBytes = bytes }
 
     // Receive metadata back from MetadataEditorScreen
     LaunchedEffect(MetadataHolder.isDirty) {
@@ -103,8 +105,7 @@ fun CreateDatasetScreen(
                         width = 1.dp,
                         color = MaterialTheme.colorScheme.outline,
                         shape = RoundedCornerShape(12.dp)
-                    )
-                    .clickable { cameraPicker() },
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 if (photoBytes != null) {
@@ -114,31 +115,50 @@ fun CreateDatasetScreen(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
-                    Box(
+                    Row(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(8.dp)
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        FilledTonalIconButton(onClick = { galleryPicker() }) {
+                            Icon(Icons.Default.PhotoLibrary, contentDescription = "Choose from gallery")
+                        }
                         FilledTonalIconButton(onClick = { cameraPicker() }) {
                             Icon(Icons.Default.CameraAlt, contentDescription = "Retake")
                         }
                     }
                 } else {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(32.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.AddAPhoto,
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            "Tap to take a photo",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.clickable { cameraPicker() }
+                        ) {
+                            Icon(
+                                Icons.Default.AddAPhoto,
+                                contentDescription = null,
+                                modifier = Modifier.size(36.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text("Camera", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.clickable { galleryPicker() }
+                        ) {
+                            Icon(
+                                Icons.Default.PhotoLibrary,
+                                contentDescription = null,
+                                modifier = Modifier.size(36.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text("Gallery", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
@@ -248,7 +268,14 @@ fun CreateDatasetScreen(
 
             OutlinedCard(
                 onClick = {
-                    MetadataHolder.put(metadataEntries)
+                    val ctx = listOfNotNull(
+                        name.trim().ifBlank { null }?.let { "Dataset: $it" },
+                        measurement.trim().ifBlank { null }?.let { "Measurement: $it" },
+                        instrumentName.trim().ifBlank { null }?.let { "Instrument: $it" },
+                        sessionName.trim().ifBlank { null }?.let { "Session: $it" },
+                        selectedProject?.title?.let { "Project: $it" }
+                    ).joinToString(", ")
+                    MetadataHolder.put(metadataEntries, ctx)
                     onOpenMetadataEditor()
                 },
                 modifier = Modifier.fillMaxWidth()

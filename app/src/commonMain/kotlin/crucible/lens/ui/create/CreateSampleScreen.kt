@@ -170,7 +170,13 @@ fun CreateSampleScreen(
 
             OutlinedCard(
                 onClick = {
-                    MetadataHolder.put(metadataEntries)
+                    val ctx = listOfNotNull(
+                        name.trim().ifBlank { null }?.let { "Sample: $it" },
+                        type.trim().ifBlank { null }?.let { "Type: $it" },
+                        description.trim().ifBlank { null }?.let { "Description: $it" },
+                        selectedProject?.title?.let { "Project: $it" }
+                    ).joinToString(", ")
+                    MetadataHolder.put(metadataEntries, ctx)
                     onOpenMetadataEditor()
                 },
                 modifier = Modifier.fillMaxWidth()
