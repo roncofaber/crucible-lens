@@ -73,7 +73,7 @@ class PreferencesManager(private val context: Context) : AppPreferences {
     }
 
     override val floatingScanButton: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[FLOATING_SCAN_BUTTON]?.toBoolean() ?: true // Default to enabled
+        preferences[FLOATING_SCAN_BUTTON]?.toBoolean() ?: false
     }
 
     override val pinnedProjects: Flow<Set<String>> = context.dataStore.data.map { prefs ->

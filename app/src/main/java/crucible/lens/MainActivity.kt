@@ -87,7 +87,7 @@ class MainActivity : ComponentActivity() {
                 initial = null
             )
             val floatingScanButton by preferencesManager.floatingScanButton.collectAsState(
-                initial = true
+                initial = false
             )
             val pinnedProjects by preferencesManager.pinnedProjects.collectAsState(
                 initial = emptySet()
