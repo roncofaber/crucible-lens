@@ -18,6 +18,8 @@ object ApiClient {
         private set
     var aiApiUrl: String = "https://api.cborg.lbl.gov"
         private set
+    var aiDirectMode: Boolean = false
+        private set
 
     fun setApiKey(key: String) {
         apiKey = key
@@ -35,6 +37,7 @@ object ApiClient {
 
     fun setAiApiKey(key: String) { aiApiKey = key.ifBlank { null } }
     fun setAiApiUrl(url: String) { if (url.isNotBlank()) aiApiUrl = url.trim().trimEnd('/') }
+    fun setAiDirectMode(enabled: Boolean) { aiDirectMode = enabled }
 
     private val httpClient: HttpClient = HttpClient {
         install(ContentNegotiation) {

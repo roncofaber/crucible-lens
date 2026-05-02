@@ -28,6 +28,7 @@ import crucible.lens.ui.scanner.QRCodeScannerView
 import crucible.lens.ui.search.SearchScreen
 import crucible.lens.ui.settings.SettingsScreen
 import crucible.lens.ui.settings.ApiSettingsScreen
+import crucible.lens.ui.settings.AiSettingsScreen
 import crucible.lens.ui.settings.OrcidLoginScreen
 import crucible.lens.ui.settings.AppearanceSettingsScreen
 import crucible.lens.ui.settings.CacheSettingsScreen
@@ -79,6 +80,7 @@ sealed class Screen(val route: String) {
     object Scanner : Screen("scanner")
     object Settings : Screen("settings")
     object SettingsApi : Screen("settings/api")
+    object SettingsAi : Screen("settings/ai")
     object SettingsAppearance : Screen("settings/appearance")
     object SettingsCache : Screen("settings/cache")
     object SettingsAbout : Screen("settings/about")
@@ -135,8 +137,10 @@ fun NavGraph(
     onGraphExplorerUrlSave: (String) -> Unit,
     aiApiKey: String? = null,
     aiApiUrl: String = crucible.lens.data.preferences.AppPreferences.DEFAULT_AI_API_URL,
+    aiDirectMode: Boolean = false,
     onAiApiKeySave: (String) -> Unit = {},
     onAiApiUrlSave: (String) -> Unit = {},
+    onAiDirectModeSave: (Boolean) -> Unit = {},
     onThemeModeSave: (String) -> Unit,
     onAccentColorSave: (String) -> Unit,
     onUseDynamicColorSave: (Boolean) -> Unit = {},
@@ -353,6 +357,7 @@ fun NavGraph(
             SettingsScreen(
                 currentApiKey = apiKey,
                 onNavigateToApi = { navController.navigate(Screen.SettingsApi.route) },
+                onNavigateToAi = { navController.navigate(Screen.SettingsAi.route) },
                 onNavigateToAppearance = { navController.navigate(Screen.SettingsAppearance.route) },
                 onNavigateToCache = { navController.navigate(Screen.SettingsCache.route) },
                 onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },
@@ -370,16 +375,29 @@ fun NavGraph(
                 currentApiKey = apiKey,
                 currentApiBaseUrl = apiBaseUrl,
                 currentGraphExplorerUrl = graphExplorerUrl,
-                currentAiApiKey = aiApiKey,
-                currentAiApiUrl = aiApiUrl,
                 onApiKeySave = onApiKeySave,
                 onApiBaseUrlSave = onApiBaseUrlSave,
                 onGraphExplorerUrlSave = onGraphExplorerUrlSave,
-                onAiApiKeySave = onAiApiKeySave,
-                onAiApiUrlSave = onAiApiUrlSave,
                 onUserOrcidSave = onUserOrcidSave,
                 onSignOut = onSignOut,
                 onSignIn = { navController.navigate(Screen.OrcidLogin.route) },
+                onBack = { navController.popBackStack() },
+                onHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = false }
+                    }
+                }
+            )
+        }
+
+        composable(Screen.SettingsAi.route) {
+            AiSettingsScreen(
+                currentAiDirectMode = aiDirectMode,
+                currentAiApiKey = aiApiKey,
+                currentAiApiUrl = aiApiUrl,
+                onAiDirectModeSave = onAiDirectModeSave,
+                onAiApiKeySave = onAiApiKeySave,
+                onAiApiUrlSave = onAiApiUrlSave,
                 onBack = { navController.popBackStack() },
                 onHome = {
                     navController.navigate(Screen.Home.route) {

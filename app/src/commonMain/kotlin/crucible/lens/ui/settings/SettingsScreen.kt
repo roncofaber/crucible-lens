@@ -18,6 +18,7 @@ import crucible.lens.platform.appVersionName
 fun SettingsScreen(
     currentApiKey: String?,
     onNavigateToApi: () -> Unit,
+    onNavigateToAi: () -> Unit,
     onNavigateToAppearance: () -> Unit,
     onNavigateToCache: () -> Unit,
     onNavigateToAbout: () -> Unit,
@@ -66,6 +67,13 @@ fun SettingsScreen(
                 else
                     MaterialTheme.colorScheme.error,
                 onClick = onNavigateToApi
+            )
+
+            SettingsRow(
+                icon = Icons.Default.AutoAwesome,
+                title = "AI Extraction",
+                subtitle = "Notebook metadata extraction mode and credentials",
+                onClick = onNavigateToAi
             )
 
             SettingsRow(

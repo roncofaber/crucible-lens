@@ -28,6 +28,7 @@ interface AppPreferences {
     val defaultProjectTab: Flow<String>
     val aiApiKey: Flow<String?>
     val aiApiUrl: Flow<String>
+    val aiDirectMode: Flow<Boolean>
 
     // Saves
     suspend fun saveApiKey(key: String)
@@ -51,6 +52,7 @@ interface AppPreferences {
     suspend fun saveDefaultProjectTab(tab: String)
     suspend fun saveAiApiKey(key: String)
     suspend fun saveAiApiUrl(url: String)
+    suspend fun saveAiDirectMode(enabled: Boolean)
 
     companion object {
         const val PROJECT_TAB_SAMPLES = "SAMPLES"

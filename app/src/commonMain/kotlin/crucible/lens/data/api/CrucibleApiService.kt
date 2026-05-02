@@ -15,6 +15,12 @@ import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.model.ExtractMetadataRequest
+import crucible.lens.data.model.AnthropicContentBlock
+import crucible.lens.data.model.AnthropicImageSource
+import crucible.lens.data.model.AnthropicMessage
+import crucible.lens.data.model.AnthropicMessagesRequest
+import crucible.lens.data.model.AnthropicMessagesResponse
+import crucible.lens.data.model.MetadataImageData
 import crucible.lens.data.model.HealthStatus
 import crucible.lens.data.model.PaginatedResponse
 import crucible.lens.data.model.UserLead
@@ -36,6 +42,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.parseToJsonElement
+import kotlinx.serialization.json.jsonObject
 
 class CrucibleApiService(
     private val client: HttpClient,
@@ -265,6 +273,57 @@ class CrucibleApiService(
             apiKey = ApiClient.aiApiKey?.ifBlank { null } ?: apiKey,
             apiUrl = ApiClient.aiApiUrl
         ))
+    }
+
+    suspend fun extractMetadataDirect(
+        images: List<MetadataImageData>,
+        context: String?,
+        aiApiKey: String,
+        aiApiUrl: String
+    ): ApiResult<JsonObject> = safeCall {
+        val contentBlocks = images.map { img ->
+            AnthropicContentBlock(
+                type = "image",
+                source = AnthropicImageSource(mediaType = img.mediaType, data = img.data)
+            )
+        } + AnthropicContentBlock(
+            type = "text",
+            text = "Extract metadata from these lab notebook page(s) as a JSON object." +
+                if (!context.isNullOrBlank()) " Additional context: $context" else ""
+        )
+
+        val request = AnthropicMessagesRequest(
+            model = "claude-haiku-4-5",
+            maxTokens = 2048,
+            system = ANTHROPIC_SYSTEM_PROMPT,
+            messages = listOf(AnthropicMessage(role = "user", content = contentBlocks))
+        )
+
+        val response = client.post("$aiApiUrl/v1/messages") {
+            header("Authorization", "Bearer $aiApiKey")
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }.body<AnthropicMessagesResponse>()
+
+        var raw = response.content.firstOrNull()?.text?.trim()
+            ?: throw Exception("Empty response from AI")
+
+        // Strip markdown code fences if present (mirrors server-side logic)
+        if (raw.startsWith("```")) {
+            raw = raw.split("\n", limit = 2).getOrElse(1) { "" }
+            raw = raw.substringBeforeLast("```").trim()
+        }
+
+        json.parseToJsonElement(raw).jsonObject
+    }
+
+    companion object {
+        const val ANTHROPIC_SYSTEM_PROMPT =
+            "You are a scientific metadata extractor specializing in laboratory notebooks. " +
+            "Analyze the provided image(s) and extract all relevant scientific metadata as a single JSON object. " +
+            "Include fields such as sample identifiers, dates, measurements, conditions, instrument settings, " +
+            "observations, and any other structured information visible in the notebook. " +
+            "Return only valid JSON with no additional text or markdown."
     }
 
     suspend fun requestDeletion(

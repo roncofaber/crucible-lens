@@ -262,4 +262,12 @@ class IosAppPreferences : AppPreferences {
         settings.putString("ai_api_url", url)
         (aiApiUrl as? MutableStateFlow)?.value = url
     }
+
+    override val aiDirectMode: Flow<Boolean> =
+        MutableStateFlow(settings.getBoolean("ai_direct_mode", false))
+
+    override suspend fun saveAiDirectMode(enabled: Boolean) {
+        settings.putBoolean("ai_direct_mode", enabled)
+        (aiDirectMode as? MutableStateFlow)?.value = enabled
+    }
 }

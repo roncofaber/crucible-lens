@@ -25,6 +25,7 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.ExtractMetadataRequest
 import crucible.lens.data.model.MetadataImageData
+import kotlinx.serialization.json.JsonObject
 import crucible.lens.data.util.MetadataHolder
 import crucible.lens.platform.PlatformBase64
 import crucible.lens.platform.rememberCameraPicker
@@ -196,12 +197,21 @@ fun MetadataEditorScreen(
                                                     mediaType = "image/jpeg"
                                                 )
                                             }
-                                            when (val resp = ApiClient.service.extractMetadata(
-                                                ExtractMetadataRequest(
-                                                    images = images,
-                                                    context = extractionContext.trim().ifBlank { null }
-                                                )
-                                            )) {
+                                            val ctx = extractionContext.trim().ifBlank { null }
+                                            val resp: ApiResult<JsonObject> =
+                                                if (ApiClient.aiDirectMode && !ApiClient.aiApiKey.isNullOrBlank()) {
+                                                    ApiClient.service.extractMetadataDirect(
+                                                        images = images,
+                                                        context = ctx,
+                                                        aiApiKey = ApiClient.aiApiKey!!,
+                                                        aiApiUrl = ApiClient.aiApiUrl
+                                                    )
+                                                } else {
+                                                    ApiClient.service.extractMetadata(
+                                                        ExtractMetadataRequest(images = images, context = ctx)
+                                                    )
+                                                }
+                                            when (resp) {
                                                 is ApiResult.Success -> {
                                                     val extracted = resp.data.toMetadataEntries()
                                                     if (extracted.isEmpty()) {

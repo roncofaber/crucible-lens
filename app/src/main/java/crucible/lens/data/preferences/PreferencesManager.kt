@@ -34,6 +34,7 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         private val USE_DYNAMIC_COLOR = stringPreferencesKey("use_dynamic_color")
         private val AI_API_KEY = stringPreferencesKey("ai_api_key")
         private val AI_API_URL = stringPreferencesKey("ai_api_url")
+        private val AI_DIRECT_MODE = stringPreferencesKey("ai_direct_mode")
 
         const val PROJECT_TAB_SAMPLES = "SAMPLES"
         const val PROJECT_TAB_DATASETS = "DATASETS"
@@ -120,6 +121,10 @@ class PreferencesManager(private val context: Context) : AppPreferences {
 
     override val aiApiUrl: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[AI_API_URL] ?: AppPreferences.DEFAULT_AI_API_URL
+    }
+
+    override val aiDirectMode: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[AI_DIRECT_MODE]?.toBoolean() ?: false
     }
 
     override val resourceHistory: Flow<List<HistoryItem>> = context.dataStore.data.map { prefs ->
@@ -243,6 +248,10 @@ class PreferencesManager(private val context: Context) : AppPreferences {
 
     override suspend fun saveAiApiUrl(url: String) {
         context.dataStore.edit { preferences -> preferences[AI_API_URL] = url }
+    }
+
+    override suspend fun saveAiDirectMode(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[AI_DIRECT_MODE] = enabled.toString() }
     }
 
     override suspend fun clearHistory() {

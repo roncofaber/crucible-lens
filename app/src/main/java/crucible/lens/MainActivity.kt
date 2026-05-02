@@ -105,6 +105,7 @@ class MainActivity : ComponentActivity() {
             val aiApiUrl by preferencesManager.aiApiUrl.collectAsState(
                 initial = crucible.lens.data.preferences.AppPreferences.DEFAULT_AI_API_URL
             )
+            val aiDirectMode by preferencesManager.aiDirectMode.collectAsState(initial = false)
             val scope = rememberCoroutineScope()
 
             // Set API key and base URL in client when they change
@@ -114,6 +115,7 @@ class MainActivity : ComponentActivity() {
             ApiClient.setBaseUrl(apiBaseUrl)
             aiApiKey?.let { ApiClient.setAiApiKey(it) }
             ApiClient.setAiApiUrl(aiApiUrl)
+            ApiClient.setAiDirectMode(aiDirectMode)
 
             // Determine dark theme based on theme mode
             val systemInDarkTheme = isSystemInDarkTheme()
@@ -174,6 +176,7 @@ class MainActivity : ComponentActivity() {
                     },
                     aiApiKey = aiApiKey,
                     aiApiUrl = aiApiUrl,
+                    aiDirectMode = aiDirectMode,
                     onAiApiKeySave = { key ->
                         scope.launch {
                             preferencesManager.saveAiApiKey(key)
@@ -184,6 +187,12 @@ class MainActivity : ComponentActivity() {
                         scope.launch {
                             preferencesManager.saveAiApiUrl(url)
                             ApiClient.setAiApiUrl(url)
+                        }
+                    },
+                    onAiDirectModeSave = { enabled ->
+                        scope.launch {
+                            preferencesManager.saveAiDirectMode(enabled)
+                            ApiClient.setAiDirectMode(enabled)
                         }
                     },
                     onThemeModeSave = { mode ->
