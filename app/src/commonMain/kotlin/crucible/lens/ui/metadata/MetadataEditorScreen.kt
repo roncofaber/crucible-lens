@@ -182,7 +182,7 @@ fun MetadataEditorScreen(
                                         try {
                                             val images = photoBytesList.map { bytes ->
                                                 MetadataImageData(
-                                                    data = PlatformBase64.encode(bytes),
+                                                    data = PlatformBase64.encode(bytes).trim(),
                                                     mediaType = "image/jpeg"
                                                 )
                                             }
