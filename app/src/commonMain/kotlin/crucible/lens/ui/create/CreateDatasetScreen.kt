@@ -45,14 +45,14 @@ fun CreateDatasetScreen(
     onOpenMetadataEditor: () -> Unit = {}
 ) {
     val prefill = remember { DuplicateHolder.takeDataset() }
-    var name by remember { mutableStateOf(prefill?.name?.let { "$it (copy)" } ?: "") }
-    var measurement by remember { mutableStateOf(prefill?.measurement ?: "") }
-    var instrumentName by remember { mutableStateOf(prefill?.instrumentName ?: "") }
-    var sessionName by remember { mutableStateOf(prefill?.sessionName ?: "") }
-    var dataType by remember { mutableStateOf("") }
+    var name by rememberSaveable { mutableStateOf(prefill?.name?.let { "$it (copy)" } ?: "") }
+    var measurement by rememberSaveable { mutableStateOf(prefill?.measurement ?: "") }
+    var instrumentName by rememberSaveable { mutableStateOf(prefill?.instrumentName ?: "") }
+    var sessionName by rememberSaveable { mutableStateOf(prefill?.sessionName ?: "") }
+    var dataType by rememberSaveable { mutableStateOf("") }
     var metadataEntries by remember { mutableStateOf(listOf<Pair<String, String>>()) }
-    var timestamp by remember { mutableStateOf(prefill?.timestamp ?: currentIsoDateTime()) }
-    var selectedProjectId by remember { mutableStateOf(prefill?.projectId ?: initialProjectId) }
+    var timestamp by rememberSaveable { mutableStateOf(prefill?.timestamp ?: currentIsoDateTime()) }
+    var selectedProjectId by rememberSaveable { mutableStateOf(prefill?.projectId ?: initialProjectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
     var photoBytes by remember { mutableStateOf<ByteArray?>(null) }
 

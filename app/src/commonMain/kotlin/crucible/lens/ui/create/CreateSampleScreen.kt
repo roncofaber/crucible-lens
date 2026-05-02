@@ -33,11 +33,11 @@ fun CreateSampleScreen(
     onOpenMetadataEditor: () -> Unit = {}
 ) {
     val prefill = remember { DuplicateHolder.takeSample() }
-    var name by remember { mutableStateOf(prefill?.name?.let { "$it (copy)" } ?: "") }
-    var type by remember { mutableStateOf(prefill?.type ?: "") }
-    var description by remember { mutableStateOf(prefill?.description ?: "") }
-    var timestamp by remember { mutableStateOf(prefill?.timestamp ?: currentIsoDateTime()) }
-    var selectedProjectId by remember { mutableStateOf(prefill?.projectId ?: initialProjectId) }
+    var name by rememberSaveable { mutableStateOf(prefill?.name?.let { "$it (copy)" } ?: "") }
+    var type by rememberSaveable { mutableStateOf(prefill?.type ?: "") }
+    var description by rememberSaveable { mutableStateOf(prefill?.description ?: "") }
+    var timestamp by rememberSaveable { mutableStateOf(prefill?.timestamp ?: currentIsoDateTime()) }
+    var selectedProjectId by rememberSaveable { mutableStateOf(prefill?.projectId ?: initialProjectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
     var metadataEntries by remember { mutableStateOf(listOf<Pair<String, String>>()) }
 
