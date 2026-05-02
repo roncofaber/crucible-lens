@@ -51,19 +51,6 @@ fun MetadataEditorScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SmallFloatingActionButton(onClick = { galleryPicker() }) {
-                    Icon(Icons.Default.PhotoLibrary, contentDescription = "Choose from gallery")
-                }
-                FloatingActionButton(onClick = { cameraPicker() }) {
-                    Icon(Icons.Default.AddAPhoto, contentDescription = "Take photo")
-                }
-            }
-        },
         topBar = {
             TopAppBar(
                 title = {
@@ -84,6 +71,12 @@ fun MetadataEditorScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { galleryPicker() }) {
+                        Icon(Icons.Default.PhotoLibrary, contentDescription = "Add from gallery")
+                    }
+                    IconButton(onClick = { cameraPicker() }) {
+                        Icon(Icons.Default.AddAPhoto, contentDescription = "Take photo")
+                    }
                     TextButton(onClick = {
                         MetadataHolder.entries = entries.filter { it.first.isNotBlank() }
                         MetadataHolder.isDirty = true
@@ -98,7 +91,7 @@ fun MetadataEditorScreen(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 88.dp),
+            contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Photo extraction card — shown as soon as the first photo is added
