@@ -194,11 +194,26 @@ fun MetadataEditorScreen(
                                             )) {
                                                 is ApiResult.Success -> {
                                                     val extracted = resp.data.toMetadataEntries()
-                                                    entries = mergeMetadataEntries(entries, extracted)
-                                                    snackbarHostState.showSnackbar("Extracted ${extracted.size} field(s)")
+                                                    if (extracted.isEmpty()) {
+                                                        snackbarHostState.showSnackbar("No metadata found — try a clearer photo or add a context hint")
+                                                    } else {
+                                                        val added = mergeMetadataEntries(entries, extracted)
+                                                        val newCount = added.size - entries.size
+                                                        entries = added
+                                                        snackbarHostState.showSnackbar(
+                                                            if (newCount > 0) "Extracted $newCount new field(s)"
+                                                            else "No new fields — all keys already present"
+                                                        )
+                                                    }
                                                 }
-                                                is ApiResult.Error ->
-                                                    snackbarHostState.showSnackbar("Extraction failed (${resp.code})")
+                                                is ApiResult.Error -> {
+                                                    val msg = when (resp.code) {
+                                                        422 -> "Could not extract metadata — try a clearer photo"
+                                                        503 -> "Extraction service unavailable — try again later"
+                                                        else -> "Extraction failed (${resp.code})"
+                                                    }
+                                                    snackbarHostState.showSnackbar(msg)
+                                                }
                                             }
                                         } catch (e: Exception) {
                                             snackbarHostState.showSnackbar("Connection error — check your network")
