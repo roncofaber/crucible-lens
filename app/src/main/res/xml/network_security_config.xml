@@ -5,6 +5,16 @@
             <certificates src="system"/>
         </trust-anchors>
     </base-config>
+    <!-- Trust user-installed certificates for LBL's AI API endpoint,
+         in case it uses an LBL internal CA not in the Android system store. -->
+    <domain-config>
+        <domain includeSubdomains="true">cborg.lbl.gov</domain>
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="user"/>
+        </trust-anchors>
+    </domain-config>
+
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">127.0.0.1</domain>
         <domain includeSubdomains="false">10.0.2.2</domain>

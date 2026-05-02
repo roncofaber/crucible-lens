@@ -230,6 +230,7 @@ fun MetadataEditorScreen(
                                                     val msg = when (resp.code) {
                                                         422 -> "Could not extract metadata — try a clearer photo"
                                                         503 -> "Extraction service unavailable — try again later"
+                                                        -1  -> "Extraction failed: ${resp.message}"
                                                         else -> "Extraction failed (${resp.code})"
                                                     }
                                                     snackbarHostState.showSnackbar(msg)
