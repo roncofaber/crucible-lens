@@ -8,7 +8,6 @@ import crucible.lens.data.model.DatasetUpdateRequest
 import crucible.lens.data.model.Instrument
 import crucible.lens.data.model.MetadataSearchResult
 import crucible.lens.data.model.Project
-import crucible.lens.data.model.ResourceType
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.model.SampleUpdateRequest
@@ -112,10 +111,6 @@ class CrucibleApiService(
             "dataset"    -> json.decodeFromJsonElement<Dataset>(obj) as CrucibleResource
             else         -> throw IllegalStateException("Unknown resource_type: $type")
         }
-    }
-
-    suspend fun getResourceType(uuid: String): ApiResult<ResourceType> = safeCall {
-        get("idtype/$uuid")
     }
 
     suspend fun getSample(

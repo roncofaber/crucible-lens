@@ -104,15 +104,16 @@ fun LinkResourceSheet(
         }
         isResolving = true
         resolvedType = try {
-            when (val resp = ApiClient.service.getResourceType(trimmed)) {
+            when (val resp = ApiClient.service.getResource(trimmed)) {
                 is ApiResult.Success -> {
                     resolvedUuid = trimmed
-                    val type = resp.data.resolvedType?.lowercase()
-                    // Try to populate selectedResource from cache or project pool
-                    if (type != null) {
-                        selectedResource = CacheManager.getResource(trimmed)
-                            ?: projectResources.find { it.uniqueId == trimmed }
+                    val resource = resp.data
+                    val type = when (resource) {
+                        is Sample  -> "sample"
+                        is Dataset -> "dataset"
+                        else       -> resource.resourceType?.lowercase()
                     }
+                    if (type != null) selectedResource = resource
                     type
                 }
                 is ApiResult.Error -> null
