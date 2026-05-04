@@ -10,6 +10,7 @@ sealed class CrucibleResource {
     abstract val uniqueId: String
     abstract val name: String
     abstract val description: String?
+    open val resourceType: String? get() = null
     // keywords are served by a separate endpoint; inline here for future API support
     open val keywords: List<String>? get() = null
 }

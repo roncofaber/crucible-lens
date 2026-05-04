@@ -108,11 +108,7 @@ fun LinkResourceSheet(
                 is ApiResult.Success -> {
                     resolvedUuid = trimmed
                     val resource = resp.data
-                    val type = when (resource) {
-                        is Sample  -> "sample"
-                        is Dataset -> "dataset"
-                        else       -> null
-                    }
+                    val type = resource.resourceType?.lowercase()
                     if (type != null) selectedResource = resource
                     type
                 }
