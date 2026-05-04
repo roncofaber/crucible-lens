@@ -22,6 +22,7 @@ data class Sample(
     @SerialName("sample_type") val sampleType: String? = null,
     @SerialName("owner_orcid") val ownerOrcid: String? = null,
     @SerialName("project_id") val projectId: String? = null,
+    @SerialName("public") val isPublic: Boolean? = null,
     @SerialName("timestamp") val timestamp: String? = null,
     @SerialName("creation_time") val creationTime: String? = null,
     @SerialName("modification_time") val modificationTime: String? = null,

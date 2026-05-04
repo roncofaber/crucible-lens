@@ -137,9 +137,9 @@ class CrucibleApiService(
         }.body()
     }
 
-    suspend fun getDatasetScientificMetadata(uuid: String): ApiResult<JsonObject> = safeCall {
-        // API returns { id, unique_id, scientific_metadata: {...} } — extract the inner field
-        val wrapper: JsonObject = get("datasets/$uuid/scientific_metadata")
+    suspend fun getResourceMetadata(uuid: String): ApiResult<JsonObject> = safeCall {
+        // Returns { unique_id, scientific_metadata: {...} } — extract the inner field
+        val wrapper: JsonObject = get("resources/$uuid/metadata")
         wrapper["scientific_metadata"] as? JsonObject ?: kotlinx.serialization.json.JsonObject(emptyMap())
     }
 
