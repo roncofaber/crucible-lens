@@ -174,7 +174,8 @@ data class SampleCreateRequest(
     @SerialName("description") val description: String? = null,
     @SerialName("project_id") val projectId: String? = null,
     @SerialName("timestamp") val timestamp: String? = null,
-    @SerialName("scientific_metadata") val scientificMetadata: Map<String, String>? = null
+    @SerialName("public") val public: Boolean = false,
+    @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null
 )
 
 @Serializable
@@ -188,7 +189,7 @@ data class DatasetCreateRequest(
     @SerialName("timestamp") val timestamp: String? = null,
     @SerialName("public") val public: Boolean = false,
     @SerialName("data_type") val dataType: String? = null,
-    @SerialName("scientific_metadata") val scientificMetadata: Map<String, String>? = null
+    @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null
 )
 
 @Serializable
@@ -204,7 +205,8 @@ data class SampleUpdateRequest(
     @SerialName("description") val description: String? = null,
     @SerialName("timestamp") val timestamp: String? = null,
     @SerialName("project_id") val projectId: String? = null,
-    @SerialName("scientific_metadata") val scientificMetadata: Map<String, String>? = null
+    @SerialName("public") val public: Boolean? = null,
+    @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null
 )
 
 @Serializable
@@ -218,7 +220,7 @@ data class DatasetUpdateRequest(
     @SerialName("project_id") val projectId: String? = null,
     @SerialName("public") val public: Boolean? = null,
     @SerialName("data_type") val dataType: String? = null,
-    @SerialName("scientific_metadata") val scientificMetadata: Map<String, String>? = null
+    @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null
 )
 
 @Serializable

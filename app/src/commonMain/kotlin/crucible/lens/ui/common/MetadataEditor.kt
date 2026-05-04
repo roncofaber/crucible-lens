@@ -22,7 +22,9 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 /**
  * Structured key-value metadata editor.
@@ -174,11 +176,19 @@ fun MetadataEditor(
 fun Map<String, *>.toMetadataEntries(): List<Pair<String, String>> =
     entries.map { (k, v) -> k to v.toString() }
 
-/** Convert the editable list back to a submission map, dropping blank keys. */
-fun List<Pair<String, String>>.toMetadataMap(): Map<String, String>? =
-    filter { it.first.isNotBlank() }
-        .associate { it.first.trim() to it.second.trim() }
-        .ifEmpty { null }
+/**
+ * Convert the editable list back to a JSON object for submission, dropping blank keys.
+ *
+ * Returns JsonObject({}) for an empty list rather than null so that PATCH requests
+ * explicitly send an empty object — telling the server to clear existing metadata —
+ * instead of omitting the field (which kotlinx.serialization does for null with
+ * encodeDefaults=false, causing the server to silently ignore the update).
+ */
+fun List<Pair<String, String>>.toMetadataMap(): JsonObject {
+    val filtered = filter { it.first.isNotBlank() }
+    if (filtered.isEmpty()) return JsonObject(emptyMap())
+    return buildJsonObject { filtered.forEach { (k, v) -> put(k.trim(), v.trim()) } }
+}
 
 /** Convert an AI-extracted JsonObject to editable pairs.
  *  Nested objects are flattened with dot-notation keys; arrays become comma-separated strings. */
