@@ -70,7 +70,7 @@ data class Dataset(
 @Serializable
 data class ResourceLink(
     @SerialName("unique_id") val uniqueId: String,
-    @SerialName("resource_type") override val resourceType: String,
+    @SerialName("resource_type") val resourceType: String,
     @SerialName("name") val name: String? = null,
     @SerialName("relationship") val relationship: String = "associated"
 )
@@ -155,7 +155,7 @@ data class Instrument(
     @SerialName("location") val location: String? = null,
     @SerialName("creation_time") val createdAt: String? = null,
     @SerialName("modification_time") val modifiedAt: String? = null,
-    @SerialName("resource_type") override val resourceType: String? = null
+    @SerialName("resource_type") val resourceType: String? = null
 )
 
 @Serializable
