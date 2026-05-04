@@ -113,7 +113,7 @@ private fun SampleEditFields(
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
 
     // Section: Basic Info
-    Text("Basic Info", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+    Text("Basic Info", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
     OutlinedTextField(
         value = name,
@@ -121,7 +121,6 @@ private fun SampleEditFields(
         label = { Text("Name *") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
-        textStyle = MaterialTheme.typography.bodyMedium,
         leadingIcon = { Icon(Icons.Default.Science, contentDescription = null) }
     )
     OutlinedTextField(
@@ -130,7 +129,6 @@ private fun SampleEditFields(
         label = { Text("Type") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
-        textStyle = MaterialTheme.typography.bodyMedium,
         leadingIcon = { Icon(Icons.Default.Category, contentDescription = null) }
     )
     if (projects.isNotEmpty()) {
@@ -146,7 +144,6 @@ private fun SampleEditFields(
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = projectDropdownExpanded) },
                 leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
-                textStyle = MaterialTheme.typography.bodyMedium,
             )
             ExposedDropdownMenu(
                 expanded = projectDropdownExpanded,
@@ -170,7 +167,7 @@ private fun SampleEditFields(
     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
     // Section: Description
-    Text("Description", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+    Text("Description", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
     OutlinedTextField(
         value = description,
@@ -179,14 +176,13 @@ private fun SampleEditFields(
         modifier = Modifier.fillMaxWidth(),
         minLines = 2,
         maxLines = 4,
-        textStyle = MaterialTheme.typography.bodyMedium,
         leadingIcon = { Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = null) }
     )
 
     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
     // Section: Metadata
-    Text("Metadata", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+    Text("Metadata", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
     OutlinedTextField(
         value = metadataJson,
@@ -271,7 +267,7 @@ private fun DatasetEditFields(
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
 
     // Section: Basic Info
-    Text("Basic Info", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+    Text("Basic Info", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
     OutlinedTextField(
         value = name,
@@ -279,7 +275,6 @@ private fun DatasetEditFields(
         label = { Text("Name *") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
-        textStyle = MaterialTheme.typography.bodyMedium,
         leadingIcon = { Icon(Icons.Default.Dataset, contentDescription = null) }
     )
     OutlinedTextField(
@@ -288,7 +283,6 @@ private fun DatasetEditFields(
         label = { Text("Measurement") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
-        textStyle = MaterialTheme.typography.bodyMedium,
         leadingIcon = { Icon(Icons.Default.Science, contentDescription = null) }
     )
     if (projects.isNotEmpty()) {
@@ -304,7 +298,6 @@ private fun DatasetEditFields(
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = projectDropdownExpanded) },
                 leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
-                textStyle = MaterialTheme.typography.bodyMedium,
             )
             ExposedDropdownMenu(
                 expanded = projectDropdownExpanded,
@@ -323,7 +316,7 @@ private fun DatasetEditFields(
     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
     // Section: Scientific Details
-    Text("Scientific Details", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+    Text("Scientific Details", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
     OutlinedTextField(
         value = sessionName,
@@ -331,7 +324,6 @@ private fun DatasetEditFields(
         label = { Text("Session") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
-        textStyle = MaterialTheme.typography.bodyMedium,
         leadingIcon = { Icon(Icons.Default.PlayCircle, contentDescription = null) }
     )
     InstrumentPickerField(
@@ -350,14 +342,13 @@ private fun DatasetEditFields(
         label = { Text("Data Type") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
-        textStyle = MaterialTheme.typography.bodyMedium,
         leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) }
     )
 
     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
     // Section: Metadata
-    Text("Metadata", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+    Text("Metadata", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
     OutlinedTextField(
         value = metadataJson,

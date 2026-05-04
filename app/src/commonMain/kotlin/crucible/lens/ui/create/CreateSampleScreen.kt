@@ -76,10 +76,10 @@ fun CreateSampleScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(12.dp)
                 .padding(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Section: Basic Info
-            Text("Basic Info", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+            Text("Basic Info", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
             OutlinedTextField(
                 value = name,
@@ -87,7 +87,6 @@ fun CreateSampleScreen(
                 label = { Text("Name *") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium,
                 leadingIcon = { Icon(Icons.Default.Science, contentDescription = null) }
             )
             OutlinedTextField(
@@ -96,7 +95,6 @@ fun CreateSampleScreen(
                 label = { Text("Type") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium,
                 leadingIcon = { Icon(Icons.Default.Category, contentDescription = null) }
             )
 
@@ -113,7 +111,6 @@ fun CreateSampleScreen(
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = projectDropdownExpanded) },
                         leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
-                        textStyle = MaterialTheme.typography.bodyMedium,
                     )
                     ExposedDropdownMenu(
                         expanded = projectDropdownExpanded,
@@ -138,7 +135,6 @@ fun CreateSampleScreen(
                     label = { Text("Project") },
                     leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
                     modifier = Modifier.fillMaxWidth(),
-                    textStyle = MaterialTheme.typography.bodyMedium,
                 )
             }
 
@@ -151,7 +147,7 @@ fun CreateSampleScreen(
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
             // Section: Description
-            Text("Description", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+            Text("Description", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
             OutlinedTextField(
                 value = description,
@@ -160,14 +156,13 @@ fun CreateSampleScreen(
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2,
                 maxLines = 4,
-                textStyle = MaterialTheme.typography.bodyMedium,
                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = null) }
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
             // Section: Metadata
-            Text("Metadata", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+            Text("Metadata", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
             OutlinedCard(
                 onClick = {

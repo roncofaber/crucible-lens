@@ -94,7 +94,7 @@ fun CreateDatasetScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(12.dp)
                 .padding(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Photo capture area
             Box(
@@ -165,7 +165,7 @@ fun CreateDatasetScreen(
             }
 
             // Section: Basic Info
-            Text("Basic Info", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+            Text("Basic Info", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
             OutlinedTextField(
                 value = name,
@@ -173,7 +173,6 @@ fun CreateDatasetScreen(
                 label = { Text("Name *") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium,
                 leadingIcon = { Icon(Icons.Default.Dataset, contentDescription = null) }
             )
             OutlinedTextField(
@@ -182,7 +181,6 @@ fun CreateDatasetScreen(
                 label = { Text("Measurement") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium,
                 leadingIcon = { Icon(Icons.Default.Science, contentDescription = null) }
             )
 
@@ -199,7 +197,6 @@ fun CreateDatasetScreen(
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = projectDropdownExpanded) },
                         leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
-                        textStyle = MaterialTheme.typography.bodyMedium,
                     )
                     ExposedDropdownMenu(
                         expanded = projectDropdownExpanded,
@@ -224,14 +221,13 @@ fun CreateDatasetScreen(
                     label = { Text("Project") },
                     leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
                     modifier = Modifier.fillMaxWidth(),
-                    textStyle = MaterialTheme.typography.bodyMedium,
                 )
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
             // Section: Scientific Details
-            Text("Scientific Details", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+            Text("Scientific Details", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
             OutlinedTextField(
                 value = sessionName,
@@ -239,7 +235,6 @@ fun CreateDatasetScreen(
                 label = { Text("Session") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium,
                 leadingIcon = { Icon(Icons.Default.PlayCircle, contentDescription = null) }
             )
             InstrumentPickerField(
@@ -258,14 +253,13 @@ fun CreateDatasetScreen(
                 label = { Text("Data Type") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium,
                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) }
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
             // Section: Metadata
-            Text("Metadata", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
+            Text("Metadata", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
             OutlinedCard(
                 onClick = {
