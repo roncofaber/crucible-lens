@@ -27,7 +27,7 @@ data class Sample(
     @SerialName("timestamp") val timestamp: String? = null,
     @SerialName("creation_time") val creationTime: String? = null,
     @SerialName("modification_time") val modificationTime: String? = null,
-    @SerialName("resource_type") val resourceType: String? = null,
+    @SerialName("resource_type") override val resourceType: String? = null,
     @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null,
     @SerialName("datasets") val datasets: List<DatasetReference>? = null,
     @SerialName("deletion_request") val deletionRequest: JsonObject? = null,
@@ -60,7 +60,7 @@ data class Dataset(
     @SerialName("ingestion_githash") val ingestionGithash: String? = null,
     @SerialName("ingestion_class") val ingestionClass: String? = null,
     @SerialName("keywords") override val keywords: List<String>? = null,
-    @SerialName("resource_type") val resourceType: String? = null,
+    @SerialName("resource_type") override val resourceType: String? = null,
     @SerialName("deletion_request") val deletionRequest: JsonObject? = null,
     @SerialName("links") val links: List<ResourceLink>? = null
 ) : CrucibleResource() {
@@ -70,7 +70,7 @@ data class Dataset(
 @Serializable
 data class ResourceLink(
     @SerialName("unique_id") val uniqueId: String,
-    @SerialName("resource_type") val resourceType: String,
+    @SerialName("resource_type") override val resourceType: String,
     @SerialName("name") val name: String? = null,
     @SerialName("relationship") val relationship: String = "associated"
 )
@@ -155,7 +155,7 @@ data class Instrument(
     @SerialName("location") val location: String? = null,
     @SerialName("creation_time") val createdAt: String? = null,
     @SerialName("modification_time") val modifiedAt: String? = null,
-    @SerialName("resource_type") val resourceType: String? = null
+    @SerialName("resource_type") override val resourceType: String? = null
 )
 
 @Serializable
