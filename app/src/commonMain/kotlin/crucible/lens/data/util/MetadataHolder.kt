@@ -1,18 +1,20 @@
 package crucible.lens.data.util
 
+import kotlinx.serialization.json.JsonObject
+
 object MetadataHolder {
-    var entries: List<Pair<String, String>> = emptyList()
+    var metadata: JsonObject? = null
     var isDirty: Boolean = false
     var resourceContext: String = ""
 
-    fun put(entries: List<Pair<String, String>>, resourceContext: String = "") {
-        this.entries = entries
+    fun put(metadata: JsonObject?, resourceContext: String = "") {
+        this.metadata = metadata
         this.resourceContext = resourceContext
         this.isDirty = false
     }
 
-    fun take(): List<Pair<String, String>> {
+    fun take(): JsonObject? {
         isDirty = false
-        return entries
+        return metadata
     }
 }

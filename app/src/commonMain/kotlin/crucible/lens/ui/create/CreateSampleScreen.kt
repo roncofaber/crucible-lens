@@ -22,7 +22,7 @@ import crucible.lens.data.util.DuplicateHolder
 import crucible.lens.data.util.MetadataHolder
 import crucible.lens.platform.currentIsoDateTime
 import crucible.lens.ui.common.DateTimePickerField
-import crucible.lens.ui.common.toMetadataMap
+import kotlinx.serialization.json.JsonObject
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,7 +40,7 @@ fun CreateSampleScreen(
     var timestamp by rememberSaveable { mutableStateOf(prefill?.timestamp ?: currentIsoDateTime()) }
     var selectedProjectId by rememberSaveable { mutableStateOf(prefill?.projectId ?: initialProjectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
-    var metadataEntries by remember { mutableStateOf(listOf<Pair<String, String>>()) }
+    var metadata by remember { mutableStateOf<JsonObject?>(null) }
 
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
@@ -52,7 +52,7 @@ fun CreateSampleScreen(
     // Receive metadata back from MetadataEditorScreen
     LaunchedEffect(MetadataHolder.isDirty) {
         if (MetadataHolder.isDirty) {
-            metadataEntries = MetadataHolder.take()
+            metadata = MetadataHolder.take()
         }
     }
 
@@ -177,7 +177,7 @@ fun CreateSampleScreen(
                         description.trim().ifBlank { null }?.let { "Description: $it" },
                         selectedProject?.title?.let { "Project: $it" }
                     ).joinToString(", ")
-                    MetadataHolder.put(metadataEntries, ctx)
+                    MetadataHolder.put(metadata, ctx)
                     onOpenMetadataEditor()
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -192,8 +192,8 @@ fun CreateSampleScreen(
                         Column {
                             Text("Scientific metadata", style = MaterialTheme.typography.bodyMedium)
                             Text(
-                                if (metadataEntries.isEmpty()) "No fields added"
-                                else "${metadataEntries.count { it.first.isNotBlank() }} field${if (metadataEntries.count { it.first.isNotBlank() } != 1) "s" else ""}",
+                                if ((metadata?.size ?: 0) == 0) "No fields added"
+                                else "${metadata!!.size} field${if (metadata!!.size != 1) "s" else ""}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -215,7 +215,7 @@ fun CreateSampleScreen(
                                     description = description.trim().ifBlank { null },
                                     projectId = selectedProjectId,
                                     timestamp = timestamp.trim().ifBlank { null },
-                                    scientificMetadata = metadataEntries.toMetadataMap()
+                                    scientificMetadata = metadata
                                 )
                             )) {
                                 is ApiResult.Success -> {

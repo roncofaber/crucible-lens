@@ -34,7 +34,7 @@ import crucible.lens.platform.rememberGalleryPicker
 import crucible.lens.ui.common.DateTimePickerField
 import crucible.lens.ui.common.InstrumentPickerField
 import crucible.lens.ui.common.MetadataEditor
-import crucible.lens.ui.common.toMetadataMap
+import kotlinx.serialization.json.JsonObject
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,7 +51,7 @@ fun CreateDatasetScreen(
     var instrumentName by rememberSaveable { mutableStateOf(prefill?.instrumentName ?: "") }
     var sessionName by rememberSaveable { mutableStateOf(prefill?.sessionName ?: "") }
     var dataType by rememberSaveable { mutableStateOf("") }
-    var metadataEntries by remember { mutableStateOf(listOf<Pair<String, String>>()) }
+    var metadata by remember { mutableStateOf<JsonObject?>(null) }
     var timestamp by rememberSaveable { mutableStateOf(prefill?.timestamp ?: currentIsoDateTime()) }
     var selectedProjectId by rememberSaveable { mutableStateOf(prefill?.projectId ?: initialProjectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
@@ -70,7 +70,7 @@ fun CreateDatasetScreen(
     // Receive metadata back from MetadataEditorScreen
     LaunchedEffect(MetadataHolder.isDirty) {
         if (MetadataHolder.isDirty) {
-            metadataEntries = MetadataHolder.take()
+            metadata = MetadataHolder.take()
         }
     }
 
@@ -276,7 +276,7 @@ fun CreateDatasetScreen(
                         sessionName.trim().ifBlank { null }?.let { "Session: $it" },
                         selectedProject?.title?.let { "Project: $it" }
                     ).joinToString(", ")
-                    MetadataHolder.put(metadataEntries, ctx)
+                    MetadataHolder.put(metadata, ctx)
                     onOpenMetadataEditor()
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -291,8 +291,8 @@ fun CreateDatasetScreen(
                         Column {
                             Text("Scientific metadata", style = MaterialTheme.typography.bodyMedium)
                             Text(
-                                if (metadataEntries.isEmpty()) "No fields added"
-                                else "${metadataEntries.count { it.first.isNotBlank() }} field${if (metadataEntries.count { it.first.isNotBlank() } != 1) "s" else ""}",
+                                if ((metadata?.size ?: 0) == 0) "No fields added"
+                                else "${metadata!!.size} field${if (metadata!!.size != 1) "s" else ""}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -316,7 +316,7 @@ fun CreateDatasetScreen(
                                     sessionName = sessionName.trim().ifBlank { null },
                                     timestamp = timestamp.trim().ifBlank { null },
                                     dataType = dataType.trim().ifBlank { null },
-                                    scientificMetadata = metadataEntries.toMetadataMap()
+                                    scientificMetadata = metadata
                                 )
                             )
                             if (createResp !is ApiResult.Success) {

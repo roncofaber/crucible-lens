@@ -3,36 +3,51 @@ package crucible.lens.ui.metadata
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.ExtractMetadataRequest
 import crucible.lens.data.model.MetadataImageData
-import kotlinx.serialization.json.JsonObject
 import crucible.lens.data.util.MetadataHolder
 import crucible.lens.platform.PlatformBase64
 import crucible.lens.platform.rememberCameraPicker
 import crucible.lens.platform.rememberGalleryPicker
-import crucible.lens.ui.common.mergeMetadataEntries
-import crucible.lens.ui.common.toMetadataEntries
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+
+private val prettyJson = Json { prettyPrint = true; ignoreUnknownKeys = true; isLenient = true }
+private val lenientJson = Json { ignoreUnknownKeys = true; isLenient = true }
+
+private fun JsonObject.toPrettyString(): String =
+    prettyJson.encodeToString(JsonObject.serializer(), this)
+
+private fun String.parseAsJsonObject(): JsonObject =
+    lenientJson.parseToJsonElement(this).let {
+        it as? JsonObject ?: throw IllegalArgumentException("Expected a JSON object, got ${it::class.simpleName}")
+    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,32 +55,57 @@ fun MetadataEditorScreen(
     onBack: () -> Unit,
     onDone: () -> Unit
 ) {
-    var entries by remember { mutableStateOf(MetadataHolder.entries) }
+    val initial = MetadataHolder.metadata
+    var jsonText by rememberSaveable {
+        mutableStateOf(
+            if (initial == null || initial.isEmpty()) "" else initial.toPrettyString()
+        )
+    }
+    var parseError by remember { mutableStateOf<String?>(null) }
     var photoBytesList by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
-    var extractionContext by remember { mutableStateOf(MetadataHolder.resourceContext) }
+    var extractionContext by rememberSaveable { mutableStateOf(MetadataHolder.resourceContext) }
     var isExtracting by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
     val cameraPicker = rememberCameraPicker { bytes -> bytes?.let { photoBytesList = photoBytesList + it } }
     val galleryPicker = rememberGalleryPicker { bytes -> bytes?.let { photoBytesList = photoBytesList + it } }
+
+    fun tryDone() {
+        val text = jsonText.trim()
+        if (text.isEmpty()) {
+            MetadataHolder.metadata = JsonObject(emptyMap())
+            MetadataHolder.isDirty = true
+            onDone()
+            return
+        }
+        try {
+            MetadataHolder.metadata = text.parseAsJsonObject()
+            MetadataHolder.isDirty = true
+            parseError = null
+            onDone()
+        } catch (e: Exception) {
+            parseError = e.message?.substringAfter(":")?.trim()?.ifBlank { null }
+                ?: "Invalid JSON — check for missing commas, quotes, or brackets"
+        }
+    }
+
+    fun formatJson() {
+        val text = jsonText.trim()
+        if (text.isEmpty()) return
+        try {
+            jsonText = text.parseAsJsonObject().toPrettyString()
+            parseError = null
+        } catch (e: Exception) {
+            parseError = e.message?.substringAfter(":")?.trim()?.ifBlank { null }
+                ?: "Cannot format — fix syntax errors first"
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text("Metadata")
-                        if (entries.isNotEmpty()) {
-                            Text(
-                                "${entries.count { it.first.isNotBlank() }} field${if (entries.count { it.first.isNotBlank() } != 1) "s" else ""}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                },
+                title = { Text("Metadata") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -78,319 +118,207 @@ fun MetadataEditorScreen(
                     IconButton(onClick = { cameraPicker() }) {
                         Icon(Icons.Default.AddAPhoto, contentDescription = "Take photo")
                     }
-                    TextButton(onClick = {
-                        MetadataHolder.entries = entries.filter { it.first.isNotBlank() }
-                        MetadataHolder.isDirty = true
-                        onDone()
-                    }) {
+                    IconButton(onClick = ::formatJson) {
+                        Icon(Icons.Default.Code, contentDescription = "Format JSON")
+                    }
+                    TextButton(onClick = ::tryDone) {
                         Text("Done", style = MaterialTheme.typography.labelLarge)
                     }
                 }
             )
         }
     ) { padding ->
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Photo extraction card — shown as soon as the first photo is added
+            // Photo extraction card
             if (photoBytesList.isNotEmpty()) {
-                item {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        )
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Text(
-                                "Extract from photos",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                        Text(
+                            "Extract from photos",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
 
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                itemsIndexed(photoBytesList) { index, bytes ->
-                                    Box(modifier = Modifier.size(96.dp)) {
-                                        AsyncImage(
-                                            model = bytes,
-                                            contentDescription = "Page ${index + 1}",
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .clip(RoundedCornerShape(8.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            itemsIndexed(photoBytesList) { index, bytes ->
+                                Box(modifier = Modifier.size(96.dp)) {
+                                    AsyncImage(
+                                        model = bytes,
+                                        contentDescription = "Page ${index + 1}",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp))
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            photoBytesList = photoBytesList.toMutableList().also { it.removeAt(index) }
+                                        },
+                                        modifier = Modifier.size(24.dp).align(Alignment.TopEnd)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Remove",
+                                            modifier = Modifier.size(14.dp),
+                                            tint = MaterialTheme.colorScheme.error
                                         )
-                                        IconButton(
-                                            onClick = {
-                                                photoBytesList = photoBytesList
-                                                    .toMutableList()
-                                                    .also { it.removeAt(index) }
-                                            },
-                                            modifier = Modifier
-                                                .size(24.dp)
-                                                .align(Alignment.TopEnd)
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Close,
-                                                contentDescription = "Remove page",
-                                                modifier = Modifier.size(14.dp),
-                                                tint = MaterialTheme.colorScheme.error
+                                    }
+                                }
+                            }
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .size(96.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                                        .clickable { cameraPicker() },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.AddAPhoto, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .size(96.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                                        .clickable { galleryPicker() },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.PhotoLibrary, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = extractionContext,
+                            onValueChange = { extractionContext = it },
+                            label = { Text("Context hint (optional)") },
+                            placeholder = { Text("e.g. XRD measurement notebook") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.Notes, null) }
+                        )
+
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    isExtracting = true
+                                    try {
+                                        val images = photoBytesList.map { bytes ->
+                                            MetadataImageData(
+                                                data = PlatformBase64.encode(bytes).trim(),
+                                                mediaType = "image/jpeg"
                                             )
                                         }
-                                    }
-                                }
-                                item {
-                                    // Camera tile
-                                    Box(
-                                        modifier = Modifier
-                                            .size(96.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-                                            .clickable { cameraPicker() },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Icons.Default.AddAPhoto, contentDescription = "Take photo", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                                item {
-                                    // Gallery tile
-                                    Box(
-                                        modifier = Modifier
-                                            .size(96.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-                                            .clickable { galleryPicker() },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Icons.Default.PhotoLibrary, contentDescription = "Choose from gallery", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                            }
-
-                            OutlinedTextField(
-                                value = extractionContext,
-                                onValueChange = { extractionContext = it },
-                                label = { Text("Context hint") },
-                                placeholder = { Text("e.g. XRD measurement notebook") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = false,
-                                maxLines = 3,
-                                textStyle = MaterialTheme.typography.bodyMedium,
-                                leadingIcon = {
-                                    Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = null)
-                                }
-                            )
-
-                            Button(
-                                onClick = {
-                                    scope.launch {
-                                        isExtracting = true
-                                        try {
-                                            val images = photoBytesList.map { bytes ->
-                                                MetadataImageData(
-                                                    data = PlatformBase64.encode(bytes).trim(),
-                                                    mediaType = "image/jpeg"
+                                        val ctx = extractionContext.trim().ifBlank { null }
+                                        val resp: ApiResult<JsonObject> =
+                                            if (ApiClient.aiDirectMode && !ApiClient.aiApiKey.isNullOrBlank()) {
+                                                ApiClient.service.extractMetadataDirect(
+                                                    images = images,
+                                                    context = ctx,
+                                                    aiApiKey = ApiClient.aiApiKey!!,
+                                                    aiApiUrl = ApiClient.aiApiUrl
+                                                )
+                                            } else {
+                                                ApiClient.service.extractMetadata(
+                                                    ExtractMetadataRequest(images = images, context = ctx)
                                                 )
                                             }
-                                            val ctx = extractionContext.trim().ifBlank { null }
-                                            val resp: ApiResult<JsonObject> =
-                                                if (ApiClient.aiDirectMode && !ApiClient.aiApiKey.isNullOrBlank()) {
-                                                    ApiClient.service.extractMetadataDirect(
-                                                        images = images,
-                                                        context = ctx,
-                                                        aiApiKey = ApiClient.aiApiKey!!,
-                                                        aiApiUrl = ApiClient.aiApiUrl
-                                                    )
-                                                } else {
-                                                    ApiClient.service.extractMetadata(
-                                                        ExtractMetadataRequest(images = images, context = ctx)
-                                                    )
+                                        when (resp) {
+                                            is ApiResult.Success -> {
+                                                val extracted = resp.data
+                                                val current = runCatching {
+                                                    jsonText.trim().ifBlank { null }?.parseAsJsonObject()
+                                                }.getOrNull() ?: JsonObject(emptyMap())
+                                                val merged = buildJsonObject {
+                                                    current.forEach { (k, v) -> put(k, v) }
+                                                    extracted.forEach { (k, v) -> if (k !in current) put(k, v) }
                                                 }
-                                            when (resp) {
-                                                is ApiResult.Success -> {
-                                                    val extracted = resp.data.toMetadataEntries()
-                                                    if (extracted.isEmpty()) {
-                                                        snackbarHostState.showSnackbar("No metadata found — try a clearer photo or add a context hint")
-                                                    } else {
-                                                        val added = mergeMetadataEntries(entries, extracted)
-                                                        val newCount = added.size - entries.size
-                                                        entries = added
-                                                        snackbarHostState.showSnackbar(
-                                                            if (newCount > 0) "Extracted $newCount new field(s)"
-                                                            else "No new fields — all keys already present"
-                                                        )
-                                                    }
-                                                }
-                                                is ApiResult.Error -> {
-                                                    val msg = when (resp.code) {
-                                                        422 -> "Could not extract metadata — try a clearer photo"
-                                                        503 -> "Extraction service unavailable — try again later"
-                                                        -1  -> "Extraction failed: ${resp.message}"
-                                                        else -> "Extraction failed (${resp.code})"
-                                                    }
-                                                    snackbarHostState.showSnackbar(msg)
-                                                }
+                                                jsonText = merged.toPrettyString()
+                                                val newKeys = extracted.keys.count { it !in current }
+                                                snackbarHostState.showSnackbar(
+                                                    if (newKeys > 0) "Extracted $newKeys new field(s)"
+                                                    else "No new fields — all keys already present"
+                                                )
                                             }
-                                        } catch (e: Exception) {
-                                            snackbarHostState.showSnackbar("Connection error — check your network")
-                                        } finally {
-                                            isExtracting = false
+                                            is ApiResult.Error -> snackbarHostState.showSnackbar(
+                                                when (resp.code) {
+                                                    422  -> "Could not extract metadata — try a clearer photo"
+                                                    503  -> "Extraction service unavailable — try again later"
+                                                    -1   -> "Extraction failed: ${resp.message}"
+                                                    else -> "Extraction failed (${resp.code})"
+                                                }
+                                            )
                                         }
+                                    } catch (_: Exception) {
+                                        snackbarHostState.showSnackbar("Connection error — check your network")
+                                    } finally {
+                                        isExtracting = false
                                     }
-                                },
-                                enabled = !isExtracting,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                if (isExtracting) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(18.dp),
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Icon(
-                                        Icons.Default.AutoAwesome,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("Extract metadata from photos")
                                 }
+                            },
+                            enabled = !isExtracting,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (isExtracting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Extract metadata from photos")
                             }
                         }
                     }
                 }
             }
 
-            if (entries.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.DataObject,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                            )
-                            Text(
-                                "No metadata yet",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            )
-                            Text(
-                                "Tap + to add a field, or use the camera/gallery buttons to extract from a notebook photo",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                            )
-                        }
-                    }
-                }
-            }
+            // JSON text editor — takes all remaining space
+            OutlinedTextField(
+                value = jsonText,
+                onValueChange = { jsonText = it; parseError = null },
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                label = { Text("Scientific Metadata (JSON)") },
+                placeholder = { Text("{\n  \"key\": \"value\"\n}") },
+                isError = parseError != null,
+                textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
+            )
 
-            itemsIndexed(entries, key = { index, _ -> index }) { index, (key, value) ->
-                MetadataEntryRow(
-                    key = key,
-                    value = value,
-                    onKeyChange = { newKey ->
-                        entries = entries.toMutableList().also { it[index] = newKey to value }
-                    },
-                    onValueChange = { newValue ->
-                        entries = entries.toMutableList().also { it[index] = key to newValue }
-                    },
-                    onDelete = {
-                        entries = entries.toMutableList().also { it.removeAt(index) }
-                    }
-                )
-            }
-
-            item {
-                OutlinedButton(
-                    onClick = {
-                        entries = entries + ("" to "")
-                    },
-                    modifier = Modifier.fillMaxWidth()
+            if (parseError != null) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Add field")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MetadataEntryRow(
-    key: String,
-    value: String,
-    onKeyChange: (String) -> Unit,
-    onValueChange: (String) -> Unit,
-    onDelete: () -> Unit
-) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Field",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.SemiBold
-                )
-                IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
                     Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Remove",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                        Icons.Default.ErrorOutline,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        parseError!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             }
-
-            OutlinedTextField(
-                value = key,
-                onValueChange = onKeyChange,
-                label = { Text("Key") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium
-            )
-
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                label = { Text("Value") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 1,
-                maxLines = 3,
-                textStyle = MaterialTheme.typography.bodyMedium,
-                supportingText = {
-                    Text(
-                        "Use commas for multiple values (e.g. XRD, TEM, SEM)",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    )
-                }
-            )
         }
     }
 }
