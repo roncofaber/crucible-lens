@@ -111,7 +111,7 @@ fun LinkResourceSheet(
                     val type = when (resource) {
                         is Sample  -> "sample"
                         is Dataset -> "dataset"
-                        else       -> resource.resourceType?.lowercase()
+                        else       -> null
                     }
                     if (type != null) selectedResource = resource
                     type
