@@ -30,24 +30,15 @@ import crucible.lens.data.model.ExtractMetadataRequest
 import crucible.lens.data.model.MetadataImageData
 import crucible.lens.data.util.MetadataHolder
 import crucible.lens.platform.PlatformBase64
+import crucible.lens.ui.common.parseAsJsonObject
+import crucible.lens.ui.common.toPrettyString
 import crucible.lens.platform.rememberCameraPicker
 import crucible.lens.platform.rememberGalleryPicker
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-private val prettyJson = Json { prettyPrint = true; ignoreUnknownKeys = true; isLenient = true }
-private val lenientJson = Json { ignoreUnknownKeys = true; isLenient = true }
-
-private fun JsonObject.toPrettyString(): String =
-    prettyJson.encodeToString(JsonObject.serializer(), this)
-
-private fun String.parseAsJsonObject(): JsonObject =
-    lenientJson.parseToJsonElement(this).let {
-        it as? JsonObject ?: throw IllegalArgumentException("Expected a JSON object, got ${it::class.simpleName}")
-    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

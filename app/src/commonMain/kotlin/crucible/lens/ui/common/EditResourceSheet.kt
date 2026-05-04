@@ -17,11 +17,13 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 
 import crucible.lens.data.cache.CacheManager
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.sp
 import crucible.lens.ui.common.DateTimePickerField
 import crucible.lens.ui.common.InstrumentPickerField
-import crucible.lens.ui.common.MetadataEditor
-import crucible.lens.ui.common.toMetadataEntries
-import crucible.lens.ui.common.toMetadataMap
+import crucible.lens.ui.common.parseAsJsonObject
+import crucible.lens.ui.common.toPrettyString
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.DatasetUpdateRequest
 import crucible.lens.data.model.Project
@@ -105,7 +107,9 @@ private fun SampleEditFields(
     var timestamp by remember { mutableStateOf(resource.timestamp ?: "") }
     var selectedProjectId by remember { mutableStateOf(resource.projectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
-    var metadataEntries by remember { mutableStateOf(resource.scientificMetadata?.toMetadataEntries() ?: emptyList()) }
+    var metadataJson by remember {
+        mutableStateOf(resource.scientificMetadata?.toPrettyString() ?: "")
+    }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
 
     // Section: Basic Info
@@ -184,15 +188,34 @@ private fun SampleEditFields(
     // Section: Metadata
     Text("Metadata", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
 
-    MetadataEditor(
-        entries = metadataEntries,
-        onEntriesChange = { metadataEntries = it },
-        initialExpanded = false
+    OutlinedTextField(
+        value = metadataJson,
+        onValueChange = { metadataJson = it },
+        label = { Text("Scientific Metadata (JSON)") },
+        placeholder = { Text("{\n  \"key\": \"value\"\n}") },
+        modifier = Modifier.fillMaxWidth(),
+        minLines = 4,
+        maxLines = 12,
+        textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
     )
 
     SaveButton(enabled = name.isNotBlank() && !isSaving, isSaving = isSaving) {
         scope.launch {
             onSavingChange(true)
+            val parsedMetadata = run {
+                val text = metadataJson.trim()
+                if (text.isBlank()) {
+                    kotlinx.serialization.json.JsonObject(emptyMap())
+                } else {
+                    try { text.parseAsJsonObject() } catch (e: Exception) {
+                        snackbarHostState.showSnackbar(
+                            "Invalid JSON: ${e.message?.substringAfter(":")?.trim() ?: "check syntax"}"
+                        )
+                        onSavingChange(false)
+                        return@launch
+                    }
+                }
+            }
             try {
                 when (val resp = ApiClient.service.updateSample(
                     resource.uniqueId,
@@ -202,7 +225,7 @@ private fun SampleEditFields(
                         description = description.trim().ifBlank { null },
                         timestamp = timestamp.trim().ifBlank { null },
                         projectId = selectedProjectId,
-                        scientificMetadata = metadataEntries.toMetadataMap()
+                        scientificMetadata = parsedMetadata
                     )
                 )) {
                     is ApiResult.Success -> {
@@ -239,8 +262,8 @@ private fun DatasetEditFields(
     var instrumentName by remember { mutableStateOf(resource.instrumentName ?: "") }
     var sessionName by remember { mutableStateOf(resource.sessionName ?: "") }
     var dataType by remember { mutableStateOf(resource.dataType ?: "") }
-    var metadataEntries by remember {
-        mutableStateOf(resource.scientificMetadata?.toMetadataEntries() ?: emptyList())
+    var metadataJson by remember {
+        mutableStateOf(resource.scientificMetadata?.toPrettyString() ?: "")
     }
     var timestamp by remember { mutableStateOf(resource.timestamp ?: "") }
     var selectedProjectId by remember { mutableStateOf(resource.projectId) }
@@ -336,15 +359,34 @@ private fun DatasetEditFields(
     // Section: Metadata
     Text("Metadata", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
 
-    MetadataEditor(
-        entries = metadataEntries,
-        onEntriesChange = { metadataEntries = it },
-        initialExpanded = false
+    OutlinedTextField(
+        value = metadataJson,
+        onValueChange = { metadataJson = it },
+        label = { Text("Scientific Metadata (JSON)") },
+        placeholder = { Text("{\n  \"key\": \"value\"\n}") },
+        modifier = Modifier.fillMaxWidth(),
+        minLines = 4,
+        maxLines = 12,
+        textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
     )
 
     SaveButton(enabled = name.isNotBlank() && !isSaving, isSaving = isSaving) {
         scope.launch {
             onSavingChange(true)
+            val parsedMetadata = run {
+                val text = metadataJson.trim()
+                if (text.isBlank()) {
+                    kotlinx.serialization.json.JsonObject(emptyMap())
+                } else {
+                    try { text.parseAsJsonObject() } catch (e: Exception) {
+                        snackbarHostState.showSnackbar(
+                            "Invalid JSON: ${e.message?.substringAfter(":")?.trim() ?: "check syntax"}"
+                        )
+                        onSavingChange(false)
+                        return@launch
+                    }
+                }
+            }
             try {
                 when (val resp = ApiClient.service.updateDataset(
                     resource.uniqueId,
@@ -356,7 +398,7 @@ private fun DatasetEditFields(
                         timestamp = timestamp.trim().ifBlank { null },
                         projectId = selectedProjectId,
                         dataType = dataType.trim().ifBlank { null },
-                        scientificMetadata = metadataEntries.toMetadataMap()
+                        scientificMetadata = parsedMetadata
                     )
                 )) {
                     is ApiResult.Success -> {

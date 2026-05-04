@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -203,6 +204,25 @@ private fun JsonElement.flattenTo(key: String): List<Pair<String, String>> = whe
     })
     else             -> listOf(key to toString())
 }
+
+// ── Shared JSON utilities ─────────────────────────────────────────────────────
+
+private val _prettyJson = Json { prettyPrint = true; ignoreUnknownKeys = true; isLenient = true }
+private val _lenientJson = Json { ignoreUnknownKeys = true; isLenient = true }
+
+/** Serialize a JsonObject as an indented, human-readable string. */
+fun JsonObject.toPrettyString(): String =
+    _prettyJson.encodeToString(JsonObject.serializer(), this)
+
+/**
+ * Parse a raw JSON string as a JsonObject.
+ * Throws IllegalArgumentException if the text is not a JSON object.
+ */
+fun String.parseAsJsonObject(): JsonObject =
+    _lenientJson.parseToJsonElement(this).let {
+        it as? JsonObject
+            ?: throw IllegalArgumentException("Expected a JSON object, got ${it::class.simpleName}")
+    }
 
 /** Merge extracted entries into existing ones, skipping keys that already exist. */
 fun mergeMetadataEntries(
