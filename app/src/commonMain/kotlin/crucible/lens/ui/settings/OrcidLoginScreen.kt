@@ -13,8 +13,21 @@ import com.multiplatform.webview.web.WebView
 import com.multiplatform.webview.web.rememberWebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewState
 import crucible.lens.ui.common.AppScaffold
+import kotlinx.coroutines.delay
 
-private val KEY_REGEX = Regex(""""crucible_apikey"\s*:\s*"([a-f0-9]+)"""")
+// Matches any non-empty, non-quote string as the key value so we don't
+// reject keys that contain uppercase hex or other characters.
+private val KEY_REGEX = Regex(""""crucible_apikey"\s*:\s*"([^"]+)"""")
+
+private fun extractKey(rawJsResult: String?): String? {
+    if (rawJsResult.isNullOrBlank() || rawJsResult == "null") return null
+    val body = rawJsResult
+        .removeSurrounding("\"")
+        .replace("\\n", "\n")
+        .replace("\\\"", "\"")
+        .replace("\\\\", "\\")
+    return KEY_REGEX.find(body)?.groupValues?.getOrNull(1)?.ifBlank { null }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,17 +44,22 @@ fun OrcidLoginScreen(
     // ORCID uses DOM storage for session state
     state.webSettings.androidWebSettings.domStorageEnabled = true
 
-    // Evaluate body text whenever a page finishes loading
     val loadingState = state.loadingState
     LaunchedEffect(loadingState) {
-        if (loadingState is LoadingState.Finished) {
-            navigator.evaluateJavaScript("(function(){ return document.body.innerText; })()") { result ->
-                val body = result
-                    .removeSurrounding("\"")
-                    .replace("\\\"", "\"")
-                val key = KEY_REGEX.find(body)?.groupValues?.getOrNull(1)
-                if (!key.isNullOrBlank()) onKeyFound(key)
-            }
+        if (loadingState !is LoadingState.Finished) return@LaunchedEffect
+
+        // First attempt immediately when the page reports finished.
+        navigator.evaluateJavaScript("(function(){ return document.body.innerText; })()") { result ->
+            val key = extractKey(result)
+            if (!key.isNullOrBlank()) { onKeyFound(key); return@evaluateJavaScript }
+        }
+
+        // The ORCID redirect chain can leave the WebView in a Finished state
+        // before the body is fully populated. Retry once after a short delay.
+        delay(600)
+        navigator.evaluateJavaScript("(function(){ return document.body.innerText; })()") { result ->
+            val key = extractKey(result)
+            if (!key.isNullOrBlank()) onKeyFound(key)
         }
     }
 
