@@ -239,6 +239,13 @@ data class MetadataImageData(
 )
 
 @Serializable
+data class AssociatedFileRequest(
+    val filename: String,
+    val size: Int,
+    @SerialName("sha256_hash") val sha256Hash: String
+)
+
+@Serializable
 data class ExtractMetadataRequest(
     val images: List<MetadataImageData>,
     @OptIn(ExperimentalSerializationApi::class)

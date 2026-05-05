@@ -10,6 +10,7 @@ import crucible.lens.data.model.DatasetUpdateRequest
 import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.ThumbnailCreateRequest
+import crucible.lens.data.util.sha256Hex
 import crucible.lens.platform.PlatformBase64
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -79,7 +80,18 @@ class CreateDatasetViewModel : ViewModel() {
 
                 if (photoBytes != null) {
                     val filename = "photo_${newUuid}.jpg"
-                    ApiClient.service.addFileToDataset(newUuid, photoBytes, filename)
+                    val size = photoBytes.size
+                    val sha256 = photoBytes.sha256Hex()
+
+                    // Step 1: upload bytes to GCS-mounted path
+                    val uploadResp = ApiClient.service.uploadFileToDataset(newUuid, photoBytes, filename)
+                    if (uploadResp is ApiResult.Success) {
+                        // Step 2: transform local mount path to cloud path, register + trigger ingestion
+                        val cloudPath = uploadResp.data.replace("./mnt/gcs", "crucible-uploads")
+                        ApiClient.service.addAssociatedFile(newUuid, cloudPath, size, sha256)
+                    }
+
+                    // Step 3 (optional): also register as thumbnail for in-app preview
                     if (setAsThumbnail) {
                         val b64 = PlatformBase64.encode(photoBytes)
                         ApiClient.service.addThumbnail(
@@ -87,7 +99,7 @@ class CreateDatasetViewModel : ViewModel() {
                             ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = b64)
                         )
                     }
-                    // Upload/thumbnail failures are non-fatal — dataset was already created.
+                    // All post-creation steps are non-fatal — dataset was already created.
                 }
 
                 SaveState.Success(newUuid)

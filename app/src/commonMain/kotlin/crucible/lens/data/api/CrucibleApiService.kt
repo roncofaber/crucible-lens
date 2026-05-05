@@ -11,6 +11,7 @@ import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.model.SampleUpdateRequest
+import crucible.lens.data.model.AssociatedFileRequest
 import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.model.ExtractMetadataRequest
@@ -267,7 +268,7 @@ class CrucibleApiService(
         post("datasets/$uuid/thumbnails", request)
     }
 
-    suspend fun addFileToDataset(uuid: String, bytes: ByteArray, filename: String): ApiResult<String> = safeCall {
+    suspend fun uploadFileToDataset(uuid: String, bytes: ByteArray, filename: String): ApiResult<String> = safeCall {
         client.post("${baseUrl}datasets/$uuid/upload") {
             header("Authorization", "Bearer $apiKey")
             setBody(MultiPartFormDataContent(formData {
@@ -276,6 +277,21 @@ class CrucibleApiService(
                     append(HttpHeaders.ContentType, "image/jpeg")
                 })
             }))
+        }.body()
+    }
+
+    suspend fun addAssociatedFile(
+        uuid: String,
+        cloudPath: String,
+        size: Int,
+        sha256Hash: String,
+        ingestionClass: String? = null
+    ): ApiResult<JsonObject> = safeCall {
+        client.post("${baseUrl}datasets/$uuid/associated_files") {
+            header("Authorization", "Bearer $apiKey")
+            if (ingestionClass != null) url.parameters.append("ingestion_class", ingestionClass)
+            contentType(ContentType.Application.Json)
+            setBody(AssociatedFileRequest(filename = cloudPath, size = size, sha256Hash = sha256Hash))
         }.body()
     }
 
