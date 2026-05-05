@@ -1,6 +1,7 @@
 package crucible.lens.ui.viewmodel
 
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -36,6 +37,29 @@ class ResourceDetailViewModel : ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    // ── Per-page resource/thumbnail caches ────────────────────────────────────
+    // These live in the ViewModel so they survive configuration changes and are
+    // not recreated on every recomposition of ResourceDetailScreen.
+
+    /** Enriched resources (with links + metadata) loaded during sibling navigation. */
+    val loadedResources = mutableStateMapOf<String, CrucibleResource>()
+
+    /** UUIDs whose full metadata+links have been fetched. Plain set — only read on main thread. */
+    val enrichedUuids = mutableSetOf<String>()
+
+    /** UUIDs whose enrichment fetch failed so we don't retry in a tight loop. */
+    val failedEnrichmentUuids = mutableStateSetOf<String>()
+
+    /** Thumbnail URL lists for displayed resources. */
+    val loadedThumbnails = mutableStateMapOf<String, List<String>>()
+
+    /** Seed thumbnails when they are already available (avoids a redundant network fetch). */
+    fun seedThumbnails(uuid: String, thumbnails: List<String>) {
+        if (thumbnails.isNotEmpty()) loadedThumbnails[uuid] = thumbnails
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     /** Persists expanded/collapsed state of detail screen cards across navigation. */
     private val resourceCardState = mutableStateMapOf<String, SnapshotStateMap<String, Boolean>>()
@@ -153,6 +177,10 @@ class ResourceDetailViewModel : ViewModel() {
 
     fun reset() {
         _uiState.value = UiState.Idle
+        loadedResources.clear()
+        enrichedUuids.clear()
+        failedEnrichmentUuids.clear()
+        loadedThumbnails.clear()
     }
 
     fun refreshResource(uuid: String) {

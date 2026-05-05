@@ -148,24 +148,24 @@ fun ResourceDetailScreen(
     onSaveToHistory: (uuid: String, name: String) -> Unit = { _, _ -> },
     getCardState: (key: String) -> Boolean = { false },
     onCardStateChange: (key: String, value: Boolean) -> Unit = { _, _ -> },
+    // Resource/thumbnail caches owned by the ViewModel so they survive config changes.
+    loadedResources: androidx.compose.runtime.snapshots.SnapshotStateMap<String, CrucibleResource> = remember { androidx.compose.runtime.mutableStateMapOf() },
+    enrichedUuids: MutableSet<String> = remember { mutableSetOf() },
+    failedEnrichmentUuids: androidx.compose.runtime.snapshots.SnapshotStateSet<String> = remember { androidx.compose.runtime.mutableStateSetOf() },
+    loadedThumbnails: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<String>> = remember { androidx.compose.runtime.mutableStateMapOf() },
+    onSeedThumbnails: (uuid: String, thumbnails: List<String>) -> Unit = { _, _ -> },
 ) {
     var showQrDialog by remember { mutableStateOf(false) }
     var showSiblingGroupDialog by remember { mutableStateOf(false) }
     // Local groupBy that can be changed while browsing; starts from the nav argument.
     var activeSiblingGroupBy by remember { mutableStateOf(siblingGroupBy) }
 
-    // Cache for loaded resources with full metadata and relationships
-    val loadedResources = remember { mutableStateMapOf<String, CrucibleResource>() }
-    // Tracks UUIDs that have been fetched with full metadata (links + scientificMetadata).
-    // Checked on the main thread to avoid SnapshotStateMap reads from IO dispatchers.
-    val enrichedUuids = remember { mutableSetOf<String>() }
-    val failedEnrichmentUuids = remember { mutableStateSetOf<String>() }
-    // Pre-seed only when thumbnails is non-empty. An empty list from the ViewModel means
-    // either the fetch failed or the thumbnail cache expired — in both cases we want the
-    // LaunchedEffect to retry. Only skip the fetch when we already have real images.
-    val loadedThumbnails = remember {
-        mutableStateMapOf<String, List<String>>().also { map ->
-            if (resource is Dataset && thumbnails.isNotEmpty()) map[resource.uniqueId] = thumbnails
+    // Seed thumbnails from ViewModel on first composition so they display immediately.
+    // The maps themselves are owned by the ViewModel (passed as parameters) so they survive
+    // configuration changes and don't lose enriched-resource state on rotation.
+    LaunchedEffect(resource.uniqueId) {
+        if (resource is Dataset && thumbnails.isNotEmpty()) {
+            onSeedThumbnails(resource.uniqueId, thumbnails)
         }
     }
 

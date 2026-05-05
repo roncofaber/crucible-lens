@@ -557,6 +557,11 @@ fun NavGraph(
                         },
                         getCardState = { key -> viewModel.getCardState(state.resource.uniqueId, key) },
                         onCardStateChange = { key, value -> viewModel.setCardState(state.resource.uniqueId, key, value) },
+                        loadedResources = viewModel.loadedResources,
+                        enrichedUuids = viewModel.enrichedUuids,
+                        failedEnrichmentUuids = viewModel.failedEnrichmentUuids,
+                        loadedThumbnails = viewModel.loadedThumbnails,
+                        onSeedThumbnails = viewModel::seedThumbnails,
                         recentHistory = resourceHistory,
                         onDuplicate = { resource ->
                             when (resource) {
