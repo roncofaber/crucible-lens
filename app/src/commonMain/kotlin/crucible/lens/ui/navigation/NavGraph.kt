@@ -206,6 +206,19 @@ fun NavGraph(
     var fabInitialized by remember { mutableStateOf(false) }
     val fabScope = rememberCoroutineScope()
 
+    // Stable navigation lambdas — hoisted so NavGraph recompositions (e.g. due to isSyncing,
+    // apiKey, etc.) don't create new lambda instances and force child screens to recompose.
+    val navigateBack: () -> Unit = remember(navController) { { navController.popBackStack() } }
+    val navigateHome = remember(navController) {
+        {
+            navController.navigate(Screen.Home.route) {
+                popUpTo(Screen.Home.route) { inclusive = false }
+            }
+        }
+    }
+    val navigateSearch = remember(navController) { { navController.navigate(Screen.Search.route) } }
+    val navigateSettings = remember(navController) { { navController.navigate(Screen.Settings.route) } }
+
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val density = LocalDensity.current
         val fabSizePx = with(density) { 56.dp.toPx() }
@@ -349,7 +362,7 @@ fun NavGraph(
                     }.getOrDefault(code).trim()
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 },
-                onBack = { navController.popBackStack() }
+                onBack = navigateBack
             )
         }
 
@@ -361,12 +374,8 @@ fun NavGraph(
                 onNavigateToAppearance = { navController.navigate(Screen.SettingsAppearance.route) },
                 onNavigateToCache = { navController.navigate(Screen.SettingsCache.route) },
                 onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },
-                onBack = { navController.popBackStack() },
-                onHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = false }
-                    }
-                }
+                onBack = navigateBack,
+                onHome = navigateHome
             )
         }
 
@@ -381,12 +390,8 @@ fun NavGraph(
                 onUserOrcidSave = onUserOrcidSave,
                 onSignOut = onSignOut,
                 onSignIn = { navController.navigate(Screen.OrcidLogin.route) },
-                onBack = { navController.popBackStack() },
-                onHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = false }
-                    }
-                }
+                onBack = navigateBack,
+                onHome = navigateHome
             )
         }
 
@@ -398,19 +403,15 @@ fun NavGraph(
                 onAiDirectModeSave = onAiDirectModeSave,
                 onAiApiKeySave = onAiApiKeySave,
                 onAiApiUrlSave = onAiApiUrlSave,
-                onBack = { navController.popBackStack() },
-                onHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = false }
-                    }
-                }
+                onBack = navigateBack,
+                onHome = navigateHome
             )
         }
 
         composable(Screen.OrcidLogin.route) {
             OrcidLoginScreen(
                 loginUrl = "${apiBaseUrl}user_apikey",
-                onBack = { navController.popBackStack() },
+                onBack = navigateBack,
                 onKeyFound = { key ->
                     onApiKeySave(key)
                     showToast(platformCtx, "API key saved")
@@ -429,35 +430,23 @@ fun NavGraph(
                 onAccentColorSave = onAccentColorSave,
                 onUseDynamicColorSave = onUseDynamicColorSave,
                 onFloatingScanButtonSave = onFloatingScanButtonSave,
-                onBack = { navController.popBackStack() },
-                onHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = false }
-                    }
-                }
+                onBack = navigateBack,
+                onHome = navigateHome
             )
         }
 
         composable(Screen.SettingsAbout.route) {
             AboutSettingsScreen(
                 isDarkTheme = darkTheme,
-                onBack = { navController.popBackStack() },
-                onHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = false }
-                    }
-                }
+                onBack = navigateBack,
+                onHome = navigateHome
             )
         }
 
         composable(Screen.SettingsCache.route) {
             CacheSettingsScreen(
-                onBack = { navController.popBackStack() },
-                onHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = false }
-                    }
-                }
+                onBack = navigateBack,
+                onHome = navigateHome
             )
         }
 
@@ -561,12 +550,8 @@ fun NavGraph(
                         onNavigateToInstrument = { instrumentId ->
                             navController.navigate(Screen.InstrumentDetail.createRoute(instrumentId))
                         },
-                        onSearch = { navController.navigate(Screen.Search.route) },
-                        onHome = {
-                            navController.navigate(Screen.Home.route) {
-                                popUpTo(Screen.Home.route) { inclusive = false }
-                            }
-                        },
+                        onSearch = navigateSearch,
+                        onHome = navigateHome,
                         onRefresh = { uuid ->
                             viewModel.refreshResource(uuid)
                         },
@@ -691,13 +676,9 @@ fun NavGraph(
 
         composable(Screen.Projects.route) {
             ProjectsListScreen(
-                onBack = { navController.popBackStack() },
-                onHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = false }
-                    }
-                },
-                onSearch = { navController.navigate(Screen.Search.route) },
+                onBack = navigateBack,
+                onHome = navigateHome,
+                onSearch = navigateSearch,
                 onProjectClick = { projectId ->
                     navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                 },
@@ -717,13 +698,9 @@ fun NavGraph(
             ProjectDetailScreen(
                 projectId = projectId,
                 graphExplorerUrl = graphExplorerUrl,
-                onBack = { navController.popBackStack() },
-                onHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = false }
-                    }
-                },
-                onSearch = { navController.navigate(Screen.Search.route) },
+                onBack = navigateBack,
+                onHome = navigateHome,
+                onSearch = navigateSearch,
                 onResourceClick = { mfid, groupBy ->
                     navController.navigate(Screen.Detail.createRoute(mfid, groupBy))
                 },
@@ -741,13 +718,9 @@ fun NavGraph(
 
         composable(Screen.Instruments.route) {
             InstrumentListScreen(
-                onBack = { navController.popBackStack() },
-                onHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = false }
-                    }
-                },
-                onSearch = { navController.navigate(Screen.Search.route) },
+                onBack = navigateBack,
+                onHome = navigateHome,
+                onSearch = navigateSearch,
                 onInstrumentClick = { id ->
                     navController.navigate(Screen.InstrumentDetail.createRoute(id))
                 },
@@ -767,13 +740,9 @@ fun NavGraph(
                 instrumentId = instrumentId,
                 isPinned = instrumentId in pinnedInstruments,
                 onTogglePin = { onTogglePinnedInstrument(instrumentId) },
-                onBack = { navController.popBackStack() },
-                onHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = false }
-                    }
-                },
-                onSearch = { navController.navigate(Screen.Search.route) },
+                onBack = navigateBack,
+                onHome = navigateHome,
+                onSearch = navigateSearch,
                 onDatasetClick = { mfid ->
                     navController.navigate(Screen.Detail.createRoute(mfid))
                 }
@@ -787,7 +756,7 @@ fun NavGraph(
             val projectId = backStackEntry.savedStateHandle.get<String>("projectId")?.ifBlank { null }
             CreateSampleScreen(
                 initialProjectId = projectId,
-                onBack = { navController.popBackStack() },
+                onBack = navigateBack,
                 onCreated = { uuid ->
                     navController.popBackStack()
                     navController.navigate(Screen.Detail.createRoute(uuid))
@@ -803,7 +772,7 @@ fun NavGraph(
             val projectId = backStackEntry.savedStateHandle.get<String>("projectId")?.ifBlank { null }
             CreateDatasetScreen(
                 initialProjectId = projectId,
-                onBack = { navController.popBackStack() },
+                onBack = navigateBack,
                 onCreated = { uuid ->
                     navController.popBackStack()
                     navController.navigate(Screen.Detail.createRoute(uuid))
@@ -814,7 +783,7 @@ fun NavGraph(
 
         composable(Screen.MetadataEditor.route) {
             MetadataEditorScreen(
-                onBack = { navController.popBackStack() },
+                onBack = navigateBack,
                 onDone = {
                     navController.previousBackStackEntry
                         ?.savedStateHandle
@@ -827,13 +796,9 @@ fun NavGraph(
         composable(Screen.History.route) {
             HistoryScreen(
                 history = resourceHistory,
-                onBack = { navController.popBackStack() },
-                onHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = false }
-                    }
-                },
-                onSearch = { navController.navigate(Screen.Search.route) },
+                onBack = navigateBack,
+                onHome = navigateHome,
+                onSearch = navigateSearch,
                 onItemClick = { uuid ->
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 },
@@ -846,12 +811,8 @@ fun NavGraph(
             SearchScreen(
                 apiKey = apiKey,
                 userOrcid = userOrcid,
-                onBack = { navController.popBackStack() },
-                onHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = false }
-                    }
-                },
+                onBack = navigateBack,
+                onHome = navigateHome,
                 onResourceClick = { uuid ->
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 },
