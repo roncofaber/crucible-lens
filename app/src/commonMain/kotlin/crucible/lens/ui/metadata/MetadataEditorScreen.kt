@@ -144,7 +144,7 @@ fun MetadataEditorScreen(
                         )
 
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            itemsIndexed(photoBytesList) { index, bytes ->
+                            itemsIndexed(photoBytesList, key = { index, _ -> index }) { index, bytes ->
                                 Box(modifier = Modifier.size(96.dp)) {
                                     AsyncImage(
                                         model = bytes,
