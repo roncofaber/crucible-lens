@@ -1,5 +1,8 @@
 package crucible.lens.ui.create
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -55,6 +58,7 @@ fun CreateDatasetScreen(
     var selectedProjectId by rememberSaveable { mutableStateOf(prefill?.projectId ?: initialProjectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
     var photoBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var setAsThumbnail by rememberSaveable { mutableStateOf(true) }
 
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
@@ -169,6 +173,27 @@ fun CreateDatasetScreen(
                             Text("Gallery", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
+                }
+            }
+
+            AnimatedVisibility(
+                visible = photoBytes != null,
+                enter = expandVertically(),
+                exit = shrinkVertically()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { setAsThumbnail = !setAsThumbnail }
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Set as thumbnail", style = MaterialTheme.typography.bodyMedium)
+                        Text("Show photo as preview in the app", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(checked = setAsThumbnail, onCheckedChange = { setAsThumbnail = it })
                 }
             }
 
@@ -330,7 +355,8 @@ fun CreateDatasetScreen(
                             public = isPublic,
                             scientificMetadata = metadata
                         ),
-                        photoBytes = photoBytes
+                        photoBytes = photoBytes,
+                        setAsThumbnail = setAsThumbnail
                     )
                 },
                 enabled = name.isNotBlank() && !isSaving,
