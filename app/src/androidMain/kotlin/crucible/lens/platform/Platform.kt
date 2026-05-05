@@ -2,6 +2,7 @@ package crucible.lens.platform
 
 import android.content.Context
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -23,4 +24,9 @@ actual fun resolveDynamicColorScheme(darkTheme: Boolean): ColorScheme? {
     if (Build.VERSION.SDK_INT < 31) return null
     val context = LocalContext.current
     return if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+}
+
+@Composable
+actual fun BackPressHandler(enabled: Boolean, onBack: () -> Unit) {
+    BackHandler(enabled = enabled, onBack = onBack)
 }

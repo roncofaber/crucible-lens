@@ -16,3 +16,7 @@ expect fun supportsDynamicColor(): Boolean
 
 @Composable
 expect fun resolveDynamicColorScheme(darkTheme: Boolean): ColorScheme?
+
+/** Intercepts the system back gesture/button. No-op on platforms with no system back. */
+@Composable
+expect fun BackPressHandler(enabled: Boolean = true, onBack: () -> Unit)

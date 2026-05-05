@@ -17,3 +17,8 @@ actual fun supportsDynamicColor(): Boolean = false
 
 @Composable
 actual fun resolveDynamicColorScheme(darkTheme: Boolean): ColorScheme? = null
+
+@Composable
+actual fun BackPressHandler(enabled: Boolean, onBack: () -> Unit) {
+    // iOS has no system back button — swipe-to-pop is handled by the navigation framework
+}

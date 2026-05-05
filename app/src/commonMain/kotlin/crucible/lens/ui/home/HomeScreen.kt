@@ -41,6 +41,7 @@ import crucible.lens.data.util.fetchProjectData
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.allLoadingMessages
 import crucible.lens.ui.common.fadeEndEdge
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
 
@@ -75,6 +76,18 @@ fun HomeScreen(
     var showEasterEggDialog by remember { mutableStateOf(false) }
     var clickCount by remember { mutableIntStateOf(0) }
     val platformContext = getPlatformContext()
+    var backPressedOnce by remember { mutableStateOf(false) }
+
+    BackPressHandler(enabled = !backPressedOnce) {
+        backPressedOnce = true
+        showToast(platformContext, "Press back again to exit")
+    }
+    LaunchedEffect(backPressedOnce) {
+        if (backPressedOnce) {
+            delay(2000)
+            backPressedOnce = false
+        }
+    }
 
     var allProjects by remember { mutableStateOf(CacheManager.getProjects() ?: emptyList()) }
     var fetchError by remember { mutableStateOf<String?>(null) }

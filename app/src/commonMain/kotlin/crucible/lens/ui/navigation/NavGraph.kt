@@ -212,7 +212,8 @@ fun NavGraph(
     val navigateHome = remember(navController) {
         {
             navController.navigate(Screen.Home.route) {
-                popUpTo(Screen.Home.route) { inclusive = false }
+                popUpTo(Screen.Home.route) { inclusive = true }
+                launchSingleTop = true
             }
         }
     }
