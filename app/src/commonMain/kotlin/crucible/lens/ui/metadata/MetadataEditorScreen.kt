@@ -1,13 +1,15 @@
 package crucible.lens.ui.metadata
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Notes
@@ -21,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -30,15 +33,14 @@ import crucible.lens.data.model.ExtractMetadataRequest
 import crucible.lens.data.model.MetadataImageData
 import crucible.lens.data.util.MetadataHolder
 import crucible.lens.platform.PlatformBase64
-import crucible.lens.ui.common.parseAsJsonObject
-import crucible.lens.ui.common.toPrettyString
 import crucible.lens.platform.rememberCameraPicker
 import crucible.lens.platform.rememberGalleryPicker
+import crucible.lens.ui.common.parseAsJsonObject
+import crucible.lens.ui.common.toPrettyString
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,12 +56,21 @@ fun MetadataEditorScreen(
     }
     var parseError by remember { mutableStateOf<String?>(null) }
     var photoBytesList by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
+    // Context hint is always visible so users can fill it before adding photos.
     var extractionContext by rememberSaveable { mutableStateOf(MetadataHolder.resourceContext) }
     var isExtracting by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val cameraPicker = rememberCameraPicker { bytes -> bytes?.let { photoBytesList = photoBytesList + it } }
     val galleryPicker = rememberGalleryPicker { bytes -> bytes?.let { photoBytesList = photoBytesList + it } }
+
+    // Derived field count — recomputed only when jsonText changes.
+    val fieldCount by remember {
+        derivedStateOf {
+            if (jsonText.isBlank()) 0
+            else runCatching { jsonText.trim().parseAsJsonObject().size }.getOrElse { -1 }
+        }
+    }
 
     fun tryDone() {
         val text = jsonText.trim()
@@ -109,8 +120,9 @@ fun MetadataEditorScreen(
                     IconButton(onClick = { cameraPicker() }) {
                         Icon(Icons.Default.AddAPhoto, contentDescription = "Take photo")
                     }
-                    IconButton(onClick = ::formatJson) {
-                        Icon(Icons.Default.Code, contentDescription = "Format JSON")
+                    // Text button is clearer than a Code icon for "pretty-print JSON".
+                    TextButton(onClick = ::formatJson) {
+                        Text("{ }", style = MaterialTheme.typography.labelLarge)
                     }
                     TextButton(onClick = ::tryDone) {
                         Text("Done", style = MaterialTheme.typography.labelLarge)
@@ -126,8 +138,12 @@ fun MetadataEditorScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Photo extraction card
-            if (photoBytesList.isNotEmpty()) {
+            // Photo extraction card — animates in/out smoothly when photos are added/removed.
+            AnimatedVisibility(
+                visible = photoBytesList.isNotEmpty(),
+                enter = expandVertically(),
+                exit = shrinkVertically()
+            ) {
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -192,17 +208,6 @@ fun MetadataEditorScreen(
                                 }
                             }
                         }
-
-                        OutlinedTextField(
-                            value = extractionContext,
-                            onValueChange = { extractionContext = it },
-                            label = { Text("Context hint (optional)") },
-                            placeholder = { Text("e.g. XRD measurement notebook") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            textStyle = MaterialTheme.typography.bodyMedium,
-                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.Notes, null) }
-                        )
 
                         Button(
                             onClick = {
@@ -281,7 +286,19 @@ fun MetadataEditorScreen(
                 }
             }
 
-            // JSON text editor — takes all remaining space
+            // Context hint — always visible so users can fill it before adding photos.
+            OutlinedTextField(
+                value = extractionContext,
+                onValueChange = { extractionContext = it },
+                label = { Text("Context hint for AI extraction (optional)") },
+                placeholder = { Text("e.g. XRD measurement notebook") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Notes, null) }
+            )
+
+            // JSON text editor — takes all remaining space.
             OutlinedTextField(
                 value = jsonText,
                 onValueChange = { jsonText = it; parseError = null },
@@ -290,26 +307,22 @@ fun MetadataEditorScreen(
                 placeholder = { Text("{\n  \"key\": \"value\"\n}") },
                 isError = parseError != null,
                 textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
-            )
-
-            if (parseError != null) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Default.ErrorOutline,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                    Text(
-                        parseError!!,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                supportingText = {
+                    when {
+                        parseError != null -> Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.ErrorOutline, null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.error)
+                            Text(parseError!!, color = MaterialTheme.colorScheme.error)
+                        }
+                        jsonText.isBlank() -> Text("Empty", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        fieldCount < 0    -> Text("Invalid JSON", color = MaterialTheme.colorScheme.error)
+                        else              -> Text("$fieldCount key${if (fieldCount != 1) "s" else ""}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
-            }
+            )
         }
     }
 }
