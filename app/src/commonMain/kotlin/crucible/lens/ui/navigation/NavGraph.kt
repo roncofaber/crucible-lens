@@ -109,7 +109,10 @@ sealed class Screen(val route: String) {
         fun createRoute(id: String) = "instrument/${encodeRouteSegment(id)}"
     }
     object MetadataEditor : Screen("metadata-editor")
-    object AddFiles : Screen("add-files")
+    object AddFiles : Screen("add-files?datasetId={datasetId}") {
+        fun createRoute(datasetId: String? = null) =
+            if (datasetId != null) "add-files?datasetId=$datasetId" else "add-files?datasetId="
+    }
 }
 
 
@@ -565,6 +568,9 @@ fun NavGraph(
                         failedEnrichmentUuids = viewModel.failedEnrichmentUuids,
                         loadedThumbnails = viewModel.loadedThumbnails,
                         onSeedThumbnails = viewModel::seedThumbnails,
+                        onNavigateToAddFiles = { datasetUuid ->
+                            navController.navigate(Screen.AddFiles.createRoute(datasetUuid))
+                        },
                         recentHistory = resourceHistory,
                         onDuplicate = { resource ->
                             when (resource) {
@@ -786,14 +792,19 @@ fun NavGraph(
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 },
                 onOpenMetadataEditor = { navController.navigate(Screen.MetadataEditor.route) },
-                onOpenFilesScreen = { navController.navigate(Screen.AddFiles.route) }
+                onOpenFilesScreen = { navController.navigate(Screen.AddFiles.createRoute()) }
             )
         }
 
-        composable(Screen.AddFiles.route) {
+        composable(
+            route = Screen.AddFiles.route,
+            arguments = listOf(navArgument("datasetId") { type = NavType.StringType; defaultValue = "" })
+        ) { backStackEntry ->
+            val datasetId = backStackEntry.savedStateHandle.get<String>("datasetId")?.ifBlank { null }
             AddFilesScreen(
                 onBack = navigateBack,
-                onDone = navigateBack
+                onDone = navigateBack,
+                datasetUuid = datasetId
             )
         }
 

@@ -15,17 +15,32 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
+import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.util.FilesHolder
+import crucible.lens.data.util.PlatformCrypto
+import crucible.lens.platform.PlatformBase64
+import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.rememberCameraPicker
 import crucible.lens.platform.rememberGalleryPicker
+import crucible.lens.platform.showToast
+import kotlin.time.Clock
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddFilesScreen(
     onBack: () -> Unit,
-    onDone: () -> Unit
+    onDone: () -> Unit,
+    // When non-null: upload mode — files are uploaded immediately on Done
+    datasetUuid: String? = null
 ) {
-    var files by remember { mutableStateOf(FilesHolder.files) }
+    val isUploadMode = datasetUuid != null
+    var files by remember { mutableStateOf(if (isUploadMode) emptyList() else FilesHolder.files) }
+    var isUploading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val platformContext = getPlatformContext()
 
     val cameraPicker = rememberCameraPicker { bytes ->
         if (bytes != null) files = files + Pair(bytes, true)
@@ -34,22 +49,57 @@ fun AddFilesScreen(
         if (bytes != null) files = files + Pair(bytes, true)
     }
 
+    fun onDoneClicked() {
+        if (isUploadMode) {
+            if (files.isEmpty()) { onDone(); return }
+            scope.launch {
+                isUploading = true
+                try {
+                    files.forEachIndexed { index, (bytes, asThumbnail) ->
+                        val filename = "file_${datasetUuid}_${Clock.System.now().toEpochMilliseconds()}_$index.jpg"
+                        val uploadResp = ApiClient.service.uploadFileToDataset(datasetUuid!!, bytes, filename)
+                        if (uploadResp is ApiResult.Success) {
+                            val cloudPath = uploadResp.data.replace("./mnt/gcs", "crucible-uploads")
+                            ApiClient.service.addAssociatedFile(datasetUuid, cloudPath, bytes.size, PlatformCrypto.sha256Hex(bytes))
+                        }
+                        if (asThumbnail) {
+                            ApiClient.service.addThumbnail(
+                                datasetUuid!!,
+                                ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
+                            )
+                        }
+                    }
+                    showToast(platformContext, if (files.size == 1) "File uploaded" else "${files.size} files uploaded")
+                } catch (_: Exception) {
+                    showToast(platformContext, "Upload failed — check your connection")
+                } finally {
+                    isUploading = false
+                }
+                onDone()
+            }
+        } else {
+            FilesHolder.files = files
+            FilesHolder.isDirty = true
+            onDone()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Attach files") },
+                title = { Text(if (isUploadMode) "Add files" else "Attach files") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, enabled = !isUploading) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    TextButton(onClick = {
-                        FilesHolder.files = files
-                        FilesHolder.isDirty = true
-                        onDone()
-                    }) {
-                        Text("Done", style = MaterialTheme.typography.labelLarge)
+                    TextButton(onClick = ::onDoneClicked, enabled = !isUploading) {
+                        if (isUploading) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text("Done", style = MaterialTheme.typography.labelLarge)
+                        }
                     }
                 }
             )
@@ -73,7 +123,7 @@ fun AddFilesScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("No files attached yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("No files added yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             } else {
@@ -113,7 +163,8 @@ fun AddFilesScreen(
                             }
                             IconButton(
                                 onClick = { files = files.toMutableList().also { it.removeAt(index) } },
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(36.dp),
+                                enabled = !isUploading
                             ) {
                                 Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
                             }
@@ -123,12 +174,12 @@ fun AddFilesScreen(
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { cameraPicker() }, modifier = Modifier.weight(1f)) {
+                OutlinedButton(onClick = { cameraPicker() }, modifier = Modifier.weight(1f), enabled = !isUploading) {
                     Icon(Icons.Default.AddAPhoto, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("Camera")
                 }
-                OutlinedButton(onClick = { galleryPicker() }, modifier = Modifier.weight(1f)) {
+                OutlinedButton(onClick = { galleryPicker() }, modifier = Modifier.weight(1f), enabled = !isUploading) {
                     Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("Attach file")

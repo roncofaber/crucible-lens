@@ -83,7 +83,6 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.ResourceLink
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.ThumbnailCreateRequest
-import crucible.lens.data.util.PlatformCrypto
 import crucible.lens.data.util.MONTH_NAMES
 import crucible.lens.data.util.dateGroupKey
 import crucible.lens.ui.common.AppScaffold
@@ -155,6 +154,7 @@ fun ResourceDetailScreen(
     failedEnrichmentUuids: androidx.compose.runtime.snapshots.SnapshotStateSet<String> = remember { androidx.compose.runtime.mutableStateSetOf() },
     loadedThumbnails: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<String>> = remember { androidx.compose.runtime.mutableStateMapOf() },
     onSeedThumbnails: (uuid: String, thumbnails: List<String>) -> Unit = { _, _ -> },
+    onNavigateToAddFiles: (datasetUuid: String) -> Unit = {},
 ) {
     var showQrDialog by remember { mutableStateOf(false) }
     var showSiblingGroupDialog by remember { mutableStateOf(false) }
@@ -437,10 +437,6 @@ fun ResourceDetailScreen(
     var showDeletionDialog by remember { mutableStateOf(false) }
     var pendingUnlink by remember { mutableStateOf<UnlinkRequest?>(null) }
     var overflowMenuExpanded by remember { mutableStateOf(false) }
-    var isUploadingFile by remember { mutableStateOf(false) }
-    var showAddFileSourcePicker by remember { mutableStateOf(false) }
-    var pendingFileBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var pendingFileAsThumbnail by remember { mutableStateOf(true) }
 
     // Track history continuously as user scrolls through pages
     LaunchedEffect(pagerState.currentPage, pagerState.targetPage) {
@@ -624,55 +620,6 @@ fun ResourceDetailScreen(
     val isDarkTheme = isSystemInDarkTheme()
     val primaryColorValue = MaterialTheme.colorScheme.primary.value.toLong()
 
-    suspend fun uploadFile(bytes: ByteArray, asThumbnail: Boolean, datasetUuid: String) {
-        isUploadingFile = true
-        try {
-            val filename = "file_${datasetUuid}_${Clock.System.now().toEpochMilliseconds()}.jpg"
-            val uploadResp = withContext(Dispatchers.Default) {
-                ApiClient.service.uploadFileToDataset(datasetUuid, bytes, filename)
-            }
-            if (uploadResp is ApiResult.Success) {
-                val cloudPath = uploadResp.data.replace("./mnt/gcs", "crucible-uploads")
-                withContext(Dispatchers.Default) {
-                    ApiClient.service.addAssociatedFile(datasetUuid, cloudPath, bytes.size, PlatformCrypto.sha256Hex(bytes))
-                }
-            }
-            if (asThumbnail) {
-                val b64 = PlatformBase64.encode(bytes)
-                val thumbResp = withContext(Dispatchers.Default) {
-                    ApiClient.service.addThumbnail(datasetUuid, ThumbnailCreateRequest(filename, b64))
-                }
-                if (thumbResp is ApiResult.Success) {
-                    CacheManager.clearThumbnail(datasetUuid)
-                    val listResp = withContext(Dispatchers.Default) { ApiClient.service.getThumbnails(datasetUuid) }
-                    if (listResp is ApiResult.Success) {
-                        val thumbs = listResp.data.map { "data:image/png;base64,${it.thumbnailB64}" }
-                        loadedThumbnails[datasetUuid] = thumbs
-                        CacheManager.cacheThumbnails(datasetUuid, thumbs)
-                    }
-                }
-            }
-            showToast(platformContext, "File uploaded")
-        } catch (_: Exception) {
-            showToast(platformContext, "Upload failed — try again")
-        } finally {
-            isUploadingFile = false
-            pendingFileBytes = null
-        }
-    }
-
-    val galleryPicker = rememberGalleryPicker { bytes ->
-        if (bytes != null && currentDisplayResource is Dataset) {
-            pendingFileBytes = bytes
-            pendingFileAsThumbnail = true
-        }
-    }
-    val cameraPicker = rememberCameraPicker { bytes ->
-        if (bytes != null && currentDisplayResource is Dataset) {
-            pendingFileBytes = bytes
-            pendingFileAsThumbnail = true
-        }
-    }
 
     // True only when a sibling (not the primary resource) was pull-to-refreshed.
     // Guards siblingReloadTrigger so it only fires on actual sibling PTRs.
@@ -755,15 +702,12 @@ fun ResourceDetailScreen(
                                 )
                                 if (currentDisplayResource is Dataset) {
                                     DropdownMenuItem(
-                                        text = { Text(if (isUploadingFile) "Uploading…" else "Add file") },
-                                        leadingIcon = {
-                                            if (isUploadingFile)
-                                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                            else
-                                                Icon(Icons.Default.AttachFile, contentDescription = null)
-                                        },
-                                        enabled = !isUploadingFile,
-                                        onClick = { overflowMenuExpanded = false; showAddFileSourcePicker = true }
+                                        text = { Text("Add file") },
+                                        leadingIcon = { Icon(Icons.Default.AttachFile, contentDescription = null) },
+                                        onClick = {
+                                            overflowMenuExpanded = false
+                                            onNavigateToAddFiles(currentDisplayResource.uniqueId)
+                                        }
                                     )
                                 }
                                 DropdownMenuItem(
@@ -1243,86 +1187,6 @@ fun ResourceDetailScreen(
                 TextButton(onClick = { showSiblingGroupDialog = false }) { Text("Cancel") }
             }
         )
-    }
-    if (showAddFileSourcePicker) {
-        AlertDialog(
-            onDismissRequest = { showAddFileSourcePicker = false },
-            icon = { Icon(Icons.Default.AttachFile, contentDescription = null) },
-            title = { Text("Add file") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = { showAddFileSourcePicker = false; galleryPicker() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.PhotoLibrary, null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Choose from gallery")
-                    }
-                    OutlinedButton(
-                        onClick = { showAddFileSourcePicker = false; cameraPicker() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Take a photo")
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { showAddFileSourcePicker = false }) { Text("Cancel") } }
-        )
-    }
-    if (pendingFileBytes != null) {
-        ModalBottomSheet(
-            onDismissRequest = { pendingFileBytes = null },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text("Upload file", style = MaterialTheme.typography.titleMedium)
-                AsyncImage(
-                    model = pendingFileBytes,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().height(200.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Set as thumbnail", style = MaterialTheme.typography.bodyLarge)
-                        Text("Show as preview in the app", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Switch(checked = pendingFileAsThumbnail, onCheckedChange = { pendingFileAsThumbnail = it })
-                }
-                Button(
-                    onClick = {
-                        val bytes = pendingFileBytes ?: return@Button
-                        val asThumbnail = pendingFileAsThumbnail
-                        val uuid = (currentDisplayResource as? Dataset)?.uniqueId ?: return@Button
-                        scope.launch { uploadFile(bytes, asThumbnail, uuid) }
-                    },
-                    enabled = !isUploadingFile,
-                    modifier = Modifier.fillMaxWidth().height(52.dp)
-                ) {
-                    if (isUploadingFile) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Default.Upload, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Upload")
-                    }
-                }
-                TextButton(onClick = { pendingFileBytes = null }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Cancel")
-                }
-            }
-        }
     }
     if (showEditSheet) {
         crucible.lens.ui.common.EditResourceSheet(
