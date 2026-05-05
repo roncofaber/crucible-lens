@@ -13,8 +13,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.api.ApiClient
-import crucible.lens.data.api.ApiResult
+import androidx.lifecycle.viewmodel.compose.viewModel
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.SampleCreateRequest
@@ -22,8 +21,9 @@ import crucible.lens.data.util.DuplicateHolder
 import crucible.lens.data.util.MetadataHolder
 import crucible.lens.platform.currentIsoDateTime
 import crucible.lens.ui.common.DateTimePickerField
+import crucible.lens.ui.viewmodel.CreateSampleViewModel
+import crucible.lens.ui.viewmodel.SaveState
 import kotlinx.serialization.json.JsonObject
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,9 +45,18 @@ fun CreateSampleScreen(
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
 
-    var isSaving by remember { mutableStateOf(false) }
+    val createViewModel: CreateSampleViewModel = viewModel()
+    val saveState by createViewModel.saveState.collectAsState()
+    val isSaving = saveState is SaveState.Saving
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(saveState) {
+        when (val s = saveState) {
+            is SaveState.Success -> { createViewModel.resetState(); onCreated(s.uuid) }
+            is SaveState.Error   -> { snackbarHostState.showSnackbar(s.message); createViewModel.resetState() }
+            else -> {}
+        }
+    }
 
     // Receive metadata back from MetadataEditorScreen
     LaunchedEffect(MetadataHolder.isDirty) {
@@ -200,37 +209,17 @@ fun CreateSampleScreen(
 
             Button(
                 onClick = {
-                    scope.launch {
-                        isSaving = true
-                        try {
-                            when (val resp = ApiClient.service.createSample(
-                                SampleCreateRequest(
-                                    sampleName = name.trim(),
-                                    sampleType = type.trim().ifBlank { null },
-                                    description = description.trim().ifBlank { null },
-                                    projectId = selectedProjectId,
-                                    timestamp = timestamp.trim().ifBlank { null },
-                                    scientificMetadata = metadata
-                                )
-                            )) {
-                                is ApiResult.Success -> {
-                                    val sample = resp.data
-                                    val uuid = sample.uniqueId
-                                    CacheManager.cacheResource(uuid, sample)
-                                    // Invalidate project list so the new sample appears immediately
-                                    selectedProjectId?.let { CacheManager.clearProjectDetail(it) }
-                                    onCreated(uuid)
-                                }
-                                is ApiResult.Error -> {
-                                    snackbarHostState.showSnackbar("Save failed (${resp.code})")
-                                }
-                            }
-                        } catch (e: Exception) {
-                            snackbarHostState.showSnackbar("Connection error — check your network")
-                        } finally {
-                            isSaving = false
-                        }
-                    }
+                    createViewModel.create(
+                        SampleCreateRequest(
+                            sampleName = name.trim(),
+                            sampleType = type.trim().ifBlank { null },
+                            description = description.trim().ifBlank { null },
+                            projectId = selectedProjectId,
+                            timestamp = timestamp.trim().ifBlank { null },
+                            scientificMetadata = metadata
+                        ),
+                        projectId = selectedProjectId
+                    )
                 },
                 enabled = name.isNotBlank() && !isSaving,
                 modifier = Modifier.fillMaxWidth().height(52.dp)

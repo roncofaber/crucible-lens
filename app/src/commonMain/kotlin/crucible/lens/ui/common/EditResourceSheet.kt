@@ -13,9 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.api.ApiClient
-import crucible.lens.data.api.ApiResult
-
+import androidx.lifecycle.viewmodel.compose.viewModel
 import crucible.lens.data.cache.CacheManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -30,7 +28,8 @@ import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.CrucibleResource
-import kotlinx.coroutines.launch
+import crucible.lens.ui.viewmodel.EditResourceViewModel
+import crucible.lens.ui.viewmodel.SaveState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,9 +38,19 @@ fun EditResourceSheet(
     onDismiss: () -> Unit,
     onSaved: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
+    val editViewModel: EditResourceViewModel = viewModel()
+    val saveState by editViewModel.saveState.collectAsState()
+    val isSaving = saveState is SaveState.Saving
     val snackbarHostState = remember { SnackbarHostState() }
-    var isSaving by remember { mutableStateOf(false) }
+    val ctx = getPlatformContext()
+
+    LaunchedEffect(saveState) {
+        when (val s = saveState) {
+            is SaveState.Success -> { editViewModel.resetState(); showToast(ctx, "Saved"); onSaved() }
+            is SaveState.Error   -> { snackbarHostState.showSnackbar(s.message); editViewModel.resetState() }
+            else -> {}
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -66,17 +75,13 @@ fun EditResourceSheet(
                         resource = resource,
                         isSaving = isSaving,
                         snackbarHostState = snackbarHostState,
-                        onSaved = onSaved,
-                        onSavingChange = { isSaving = it },
-                        scope = scope
+                        viewModel = editViewModel
                     )
                     is Dataset -> DatasetEditFields(
                         resource = resource,
                         isSaving = isSaving,
                         snackbarHostState = snackbarHostState,
-                        onSaved = onSaved,
-                        onSavingChange = { isSaving = it },
-                        scope = scope
+                        viewModel = editViewModel
                     )
                 }
             }
@@ -95,11 +100,8 @@ private fun SampleEditFields(
     resource: Sample,
     isSaving: Boolean,
     snackbarHostState: SnackbarHostState,
-    onSaved: () -> Unit,
-    onSavingChange: (Boolean) -> Unit,
-    scope: kotlinx.coroutines.CoroutineScope
+    viewModel: EditResourceViewModel
 ) {
-    val ctx = getPlatformContext()
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     var name by remember { mutableStateOf(resource.name) }
     var type by remember { mutableStateOf(resource.sampleType ?: "") }
@@ -110,6 +112,7 @@ private fun SampleEditFields(
     var metadataJson by remember {
         mutableStateOf(resource.scientificMetadata?.toPrettyString() ?: "")
     }
+    var metadataJsonError by remember { mutableStateOf<String?>(null) }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
 
     // Section: Basic Info
@@ -186,58 +189,40 @@ private fun SampleEditFields(
 
     OutlinedTextField(
         value = metadataJson,
-        onValueChange = { metadataJson = it },
+        onValueChange = { metadataJson = it; metadataJsonError = null },
         label = { Text("Scientific Metadata (JSON)") },
         placeholder = { Text("{\n  \"key\": \"value\"\n}") },
         modifier = Modifier.fillMaxWidth(),
+        isError = metadataJsonError != null,
         minLines = 4,
         maxLines = 12,
         textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
     )
+    if (metadataJsonError != null) {
+        Text(metadataJsonError!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+    }
 
     SaveButton(enabled = name.isNotBlank() && !isSaving, isSaving = isSaving) {
-        scope.launch {
-            onSavingChange(true)
-            val parsedMetadata = run {
-                val text = metadataJson.trim()
-                if (text.isBlank()) {
-                    kotlinx.serialization.json.JsonObject(emptyMap())
-                } else {
-                    try { text.parseAsJsonObject() } catch (e: Exception) {
-                        snackbarHostState.showSnackbar(
-                            "Invalid JSON: ${e.message?.substringAfter(":")?.trim() ?: "check syntax"}"
-                        )
-                        onSavingChange(false)
-                        return@launch
-                    }
-                }
-            }
-            try {
-                when (val resp = ApiClient.service.updateSample(
-                    resource.uniqueId,
-                    SampleUpdateRequest(
-                        sampleName = name.trim(),
-                        sampleType = type.trim().ifBlank { null },
-                        description = description.trim().ifBlank { null },
-                        timestamp = timestamp.trim().ifBlank { null },
-                        projectId = selectedProjectId,
-                        scientificMetadata = parsedMetadata
-                    )
-                )) {
-                    is ApiResult.Success -> {
-                        showToast(ctx, "Saved")
-                        onSaved()
-                    }
-                    is ApiResult.Error -> {
-                        snackbarHostState.showSnackbar("Save failed (${resp.code})")
-                    }
-                }
-            } catch (e: Exception) {
-                snackbarHostState.showSnackbar("Connection error — check your network")
-            } finally {
-                onSavingChange(false)
+        val text = metadataJson.trim()
+        val parsedMetadata = if (text.isBlank()) {
+            kotlinx.serialization.json.JsonObject(emptyMap())
+        } else {
+            try { text.parseAsJsonObject() } catch (e: Exception) {
+                metadataJsonError = e.message?.substringAfter(":")?.trim() ?: "Invalid JSON"
+                return@SaveButton
             }
         }
+        viewModel.updateSample(
+            resource.uniqueId,
+            SampleUpdateRequest(
+                sampleName = name.trim(),
+                sampleType = type.trim().ifBlank { null },
+                description = description.trim().ifBlank { null },
+                timestamp = timestamp.trim().ifBlank { null },
+                projectId = selectedProjectId,
+                scientificMetadata = parsedMetadata
+            )
+        )
     }
 }
 
@@ -247,11 +232,8 @@ private fun DatasetEditFields(
     resource: Dataset,
     isSaving: Boolean,
     snackbarHostState: SnackbarHostState,
-    onSaved: () -> Unit,
-    onSavingChange: (Boolean) -> Unit,
-    scope: kotlinx.coroutines.CoroutineScope
+    viewModel: EditResourceViewModel
 ) {
-    val ctx = getPlatformContext()
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     var name by remember { mutableStateOf(resource.name) }
     var measurement by remember { mutableStateOf(resource.measurement ?: "") }
@@ -261,6 +243,7 @@ private fun DatasetEditFields(
     var metadataJson by remember {
         mutableStateOf(resource.scientificMetadata?.toPrettyString() ?: "")
     }
+    var metadataJsonError by remember { mutableStateOf<String?>(null) }
     var timestamp by remember { mutableStateOf(resource.timestamp ?: "") }
     var selectedProjectId by remember { mutableStateOf(resource.projectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
@@ -352,60 +335,42 @@ private fun DatasetEditFields(
 
     OutlinedTextField(
         value = metadataJson,
-        onValueChange = { metadataJson = it },
+        onValueChange = { metadataJson = it; metadataJsonError = null },
         label = { Text("Scientific Metadata (JSON)") },
         placeholder = { Text("{\n  \"key\": \"value\"\n}") },
         modifier = Modifier.fillMaxWidth(),
+        isError = metadataJsonError != null,
         minLines = 4,
         maxLines = 12,
         textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
     )
+    if (metadataJsonError != null) {
+        Text(metadataJsonError!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+    }
 
     SaveButton(enabled = name.isNotBlank() && !isSaving, isSaving = isSaving) {
-        scope.launch {
-            onSavingChange(true)
-            val parsedMetadata = run {
-                val text = metadataJson.trim()
-                if (text.isBlank()) {
-                    kotlinx.serialization.json.JsonObject(emptyMap())
-                } else {
-                    try { text.parseAsJsonObject() } catch (e: Exception) {
-                        snackbarHostState.showSnackbar(
-                            "Invalid JSON: ${e.message?.substringAfter(":")?.trim() ?: "check syntax"}"
-                        )
-                        onSavingChange(false)
-                        return@launch
-                    }
-                }
-            }
-            try {
-                when (val resp = ApiClient.service.updateDataset(
-                    resource.uniqueId,
-                    DatasetUpdateRequest(
-                        datasetName = name.trim(),
-                        measurement = measurement.trim().ifBlank { null },
-                        instrumentName = instrumentName.trim().ifBlank { null },
-                        sessionName = sessionName.trim().ifBlank { null },
-                        timestamp = timestamp.trim().ifBlank { null },
-                        projectId = selectedProjectId,
-                        dataType = dataType.trim().ifBlank { null },
-                        scientificMetadata = parsedMetadata
-                    )
-                )) {
-                    is ApiResult.Success -> {
-                        showToast(ctx, "Saved")
-                        onSaved()
-                    }
-                    is ApiResult.Error -> {
-                        snackbarHostState.showSnackbar("Save failed (${resp.code})")
-                    }
-                }
-            } catch (e: Exception) {
-                snackbarHostState.showSnackbar("Connection error — check your network")
-            } finally {
-                onSavingChange(false)
+        val text = metadataJson.trim()
+        val parsedMetadata = if (text.isBlank()) {
+            kotlinx.serialization.json.JsonObject(emptyMap())
+        } else {
+            try { text.parseAsJsonObject() } catch (e: Exception) {
+                metadataJsonError = e.message?.substringAfter(":")?.trim() ?: "Invalid JSON"
+                return@SaveButton
             }
         }
+        viewModel.updateDataset(
+            resource.uniqueId,
+            DatasetUpdateRequest(
+                datasetName = name.trim(),
+                measurement = measurement.trim().ifBlank { null },
+                instrumentName = instrumentName.trim().ifBlank { null },
+                sessionName = sessionName.trim().ifBlank { null },
+                timestamp = timestamp.trim().ifBlank { null },
+                projectId = selectedProjectId,
+                dataType = dataType.trim().ifBlank { null },
+                scientificMetadata = parsedMetadata
+            )
+        )
     }
 }
 

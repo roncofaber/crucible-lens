@@ -19,23 +19,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import crucible.lens.data.api.ApiClient
-import crucible.lens.data.api.ApiResult
+import androidx.lifecycle.viewmodel.compose.viewModel
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.Project
-import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.util.DuplicateHolder
 import crucible.lens.data.util.MetadataHolder
-import crucible.lens.platform.PlatformBase64
 import crucible.lens.platform.currentIsoDateTime
 import crucible.lens.platform.rememberCameraPicker
 import crucible.lens.platform.rememberGalleryPicker
 import crucible.lens.ui.common.DateTimePickerField
 import crucible.lens.ui.common.InstrumentPickerField
 import crucible.lens.ui.common.MetadataEditor
+import crucible.lens.ui.viewmodel.CreateDatasetViewModel
+import crucible.lens.ui.viewmodel.SaveState
 import kotlinx.serialization.json.JsonObject
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,9 +58,18 @@ fun CreateDatasetScreen(
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
 
-    var isSaving by remember { mutableStateOf(false) }
+    val createViewModel: CreateDatasetViewModel = viewModel()
+    val saveState by createViewModel.saveState.collectAsState()
+    val isSaving = saveState is SaveState.Saving
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(saveState) {
+        when (val s = saveState) {
+            is SaveState.Success -> { createViewModel.resetState(); onCreated(s.uuid) }
+            is SaveState.Error   -> { snackbarHostState.showSnackbar(s.message); createViewModel.resetState() }
+            else -> {}
+        }
+    }
 
     val cameraPicker = rememberCameraPicker { bytes -> photoBytes = bytes }
     val galleryPicker = rememberGalleryPicker { bytes -> photoBytes = bytes }
@@ -298,55 +305,19 @@ fun CreateDatasetScreen(
 
             Button(
                 onClick = {
-                    scope.launch {
-                        isSaving = true
-                        try {
-                            val createResp = ApiClient.service.createDataset(
-                                DatasetCreateRequest(
-                                    datasetName = name.trim(),
-                                    projectId = selectedProjectId,
-                                    measurement = measurement.trim().ifBlank { null },
-                                    instrumentName = instrumentName.trim().ifBlank { null },
-                                    sessionName = sessionName.trim().ifBlank { null },
-                                    timestamp = timestamp.trim().ifBlank { null },
-                                    dataType = dataType.trim().ifBlank { null },
-                                    scientificMetadata = metadata
-                                )
-                            )
-                            if (createResp !is ApiResult.Success) {
-                                val code = (createResp as? ApiResult.Error)?.code ?: -1
-                                snackbarHostState.showSnackbar("Could not create dataset ($code)")
-                                return@launch
-                            }
-                            val newDataset = createResp.data
-                            val newUuid = newDataset.uniqueId
-                            CacheManager.cacheResource(newUuid, newDataset)
-                            selectedProjectId?.let { CacheManager.clearProjectDetail(it) }
-
-                            val bytes = photoBytes
-                            var thumbnailFailed = false
-                            if (bytes != null) {
-                                val b64 = PlatformBase64.encode(bytes)
-                                val thumbResp = ApiClient.service.addThumbnail(
-                                    newUuid,
-                                    ThumbnailCreateRequest(
-                                        thumbnailName = "photo.jpg",
-                                        thumbnailB64str = b64
-                                    )
-                                )
-                                if (thumbResp !is ApiResult.Success) thumbnailFailed = true
-                            }
-
-                            if (thumbnailFailed) {
-                                snackbarHostState.showSnackbar("Dataset created, but thumbnail could not be attached")
-                            }
-                            onCreated(newUuid)
-                        } catch (e: Exception) {
-                            snackbarHostState.showSnackbar("Connection error — check your network")
-                        } finally {
-                            isSaving = false
-                        }
-                    }
+                    createViewModel.create(
+                        DatasetCreateRequest(
+                            datasetName = name.trim(),
+                            projectId = selectedProjectId,
+                            measurement = measurement.trim().ifBlank { null },
+                            instrumentName = instrumentName.trim().ifBlank { null },
+                            sessionName = sessionName.trim().ifBlank { null },
+                            timestamp = timestamp.trim().ifBlank { null },
+                            dataType = dataType.trim().ifBlank { null },
+                            scientificMetadata = metadata
+                        ),
+                        photoBytes = photoBytes
+                    )
                 },
                 enabled = name.isNotBlank() && !isSaving,
                 modifier = Modifier.fillMaxWidth().height(52.dp)
