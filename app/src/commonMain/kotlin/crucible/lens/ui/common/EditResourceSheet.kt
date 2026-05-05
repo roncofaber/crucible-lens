@@ -107,6 +107,7 @@ private fun SampleEditFields(
     var type by remember { mutableStateOf(resource.sampleType ?: "") }
     var description by remember { mutableStateOf(resource.description ?: "") }
     var timestamp by remember { mutableStateOf(resource.timestamp ?: "") }
+    var isPublic by remember { mutableStateOf(resource.isPublic ?: false) }
     var selectedProjectId by remember { mutableStateOf(resource.projectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
     var metadataJson by remember {
@@ -166,6 +167,17 @@ private fun SampleEditFields(
         onValueChange = { timestamp = it },
         modifier = Modifier.fillMaxWidth()
     )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text("Public", style = MaterialTheme.typography.bodyLarge)
+            Text("Visible to all users", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked = isPublic, onCheckedChange = { isPublic = it })
+    }
 
     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
@@ -220,6 +232,7 @@ private fun SampleEditFields(
                 description = description.trim().ifBlank { null },
                 timestamp = timestamp.trim().ifBlank { null },
                 projectId = selectedProjectId,
+                public = isPublic,
                 scientificMetadata = parsedMetadata
             )
         )
@@ -240,6 +253,7 @@ private fun DatasetEditFields(
     var instrumentName by remember { mutableStateOf(resource.instrumentName ?: "") }
     var sessionName by remember { mutableStateOf(resource.sessionName ?: "") }
     var dataType by remember { mutableStateOf(resource.dataType ?: "") }
+    var isPublic by remember { mutableStateOf(resource.isPublic ?: false) }
     var metadataJson by remember {
         mutableStateOf(resource.scientificMetadata?.toPrettyString() ?: "")
     }
@@ -327,6 +341,17 @@ private fun DatasetEditFields(
         singleLine = true,
         leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) }
     )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text("Public", style = MaterialTheme.typography.bodyLarge)
+            Text("Visible to all users", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked = isPublic, onCheckedChange = { isPublic = it })
+    }
 
     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
@@ -368,6 +393,7 @@ private fun DatasetEditFields(
                 timestamp = timestamp.trim().ifBlank { null },
                 projectId = selectedProjectId,
                 dataType = dataType.trim().ifBlank { null },
+                public = isPublic,
                 scientificMetadata = parsedMetadata
             )
         )

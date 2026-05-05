@@ -41,6 +41,7 @@ fun CreateSampleScreen(
     var selectedProjectId by rememberSaveable { mutableStateOf(prefill?.projectId ?: initialProjectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
     var metadata by remember { mutableStateOf<JsonObject?>(null) }
+    var isPublic by rememberSaveable { mutableStateOf(false) }
 
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
@@ -153,6 +154,18 @@ fun CreateSampleScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Public", style = MaterialTheme.typography.bodyLarge)
+                    Text("Visible to all users", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = isPublic, onCheckedChange = { isPublic = it })
+            }
+
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
             // Section: Description
@@ -216,6 +229,7 @@ fun CreateSampleScreen(
                             description = description.trim().ifBlank { null },
                             projectId = selectedProjectId,
                             timestamp = timestamp.trim().ifBlank { null },
+                            public = isPublic,
                             scientificMetadata = metadata
                         ),
                         projectId = selectedProjectId

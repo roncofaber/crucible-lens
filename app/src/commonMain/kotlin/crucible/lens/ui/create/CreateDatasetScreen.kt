@@ -50,6 +50,7 @@ fun CreateDatasetScreen(
     var sessionName by rememberSaveable { mutableStateOf(prefill?.sessionName ?: "") }
     var dataType by rememberSaveable { mutableStateOf("") }
     var metadata by remember { mutableStateOf<JsonObject?>(null) }
+    var isPublic by rememberSaveable { mutableStateOf(false) }
     var timestamp by rememberSaveable { mutableStateOf(prefill?.timestamp ?: currentIsoDateTime()) }
     var selectedProjectId by rememberSaveable { mutableStateOf(prefill?.projectId ?: initialProjectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
@@ -231,6 +232,18 @@ fun CreateDatasetScreen(
                 )
             }
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Public", style = MaterialTheme.typography.bodyLarge)
+                    Text("Visible to all users", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = isPublic, onCheckedChange = { isPublic = it })
+            }
+
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
             // Section: Scientific Details
@@ -314,6 +327,7 @@ fun CreateDatasetScreen(
                             sessionName = sessionName.trim().ifBlank { null },
                             timestamp = timestamp.trim().ifBlank { null },
                             dataType = dataType.trim().ifBlank { null },
+                            public = isPublic,
                             scientificMetadata = metadata
                         ),
                         photoBytes = photoBytes
