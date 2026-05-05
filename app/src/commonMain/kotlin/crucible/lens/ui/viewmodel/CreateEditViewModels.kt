@@ -10,7 +10,7 @@ import crucible.lens.data.model.DatasetUpdateRequest
 import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.ThumbnailCreateRequest
-import crucible.lens.data.util.sha256Hex
+import crucible.lens.data.util.PlatformCrypto
 import crucible.lens.platform.PlatformBase64
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -81,7 +81,7 @@ class CreateDatasetViewModel : ViewModel() {
                 if (photoBytes != null) {
                     val filename = "photo_${newUuid}.jpg"
                     val size = photoBytes.size
-                    val sha256 = photoBytes.sha256Hex()
+                    val sha256 = PlatformCrypto.sha256Hex(photoBytes)
 
                     // Step 1: upload bytes to GCS-mounted path
                     val uploadResp = ApiClient.service.uploadFileToDataset(newUuid, photoBytes, filename)
