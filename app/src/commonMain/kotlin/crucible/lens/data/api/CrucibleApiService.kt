@@ -30,12 +30,16 @@ import kotlinx.coroutines.coroutineScope
 import kotlin.math.ceil
 import io.ktor.client.call.body
 import io.ktor.client.request.delete
+import io.ktor.client.request.forms.MultiPartFormDataContent
+import io.ktor.client.request.forms.formData
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
+import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -261,6 +265,18 @@ class CrucibleApiService(
         request: ThumbnailCreateRequest
     ): ApiResult<Thumbnail> = safeCall {
         post("datasets/$uuid/thumbnails", request)
+    }
+
+    suspend fun addFileToDataset(uuid: String, bytes: ByteArray, filename: String): ApiResult<String> = safeCall {
+        client.post("${baseUrl}datasets/$uuid/upload") {
+            header("Authorization", "Bearer $apiKey")
+            setBody(MultiPartFormDataContent(formData {
+                append("files", bytes, Headers.build {
+                    append(HttpHeaders.ContentDisposition, "form-data; name=\"files\"; filename=\"$filename\"")
+                    append(HttpHeaders.ContentType, "image/jpeg")
+                })
+            }))
+        }.body()
     }
 
     suspend fun extractMetadata(request: ExtractMetadataRequest): ApiResult<JsonObject> = safeCall {

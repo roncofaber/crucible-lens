@@ -9,8 +9,6 @@ import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.DatasetUpdateRequest
 import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.model.SampleUpdateRequest
-import crucible.lens.data.model.ThumbnailCreateRequest
-import crucible.lens.platform.PlatformBase64
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,12 +76,9 @@ class CreateDatasetViewModel : ViewModel() {
                 request.projectId?.let { CacheManager.clearProjectDetail(it) }
 
                 if (photoBytes != null) {
-                    val b64 = PlatformBase64.encode(photoBytes)
-                    ApiClient.service.addThumbnail(
-                        newUuid,
-                        ThumbnailCreateRequest(thumbnailName = "photo.jpg", thumbnailB64str = b64)
-                    )
-                    // Thumbnail failure is non-fatal — dataset was already created successfully.
+                    val filename = "photo_${newUuid}.jpg"
+                    ApiClient.service.addFileToDataset(newUuid, photoBytes, filename)
+                    // File upload failure is non-fatal — dataset was already created successfully.
                 }
 
                 SaveState.Success(newUuid)
