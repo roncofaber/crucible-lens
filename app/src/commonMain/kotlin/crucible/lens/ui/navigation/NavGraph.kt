@@ -46,6 +46,7 @@ import crucible.lens.data.model.Sample
 import crucible.lens.data.util.DuplicateHolder
 import crucible.lens.ui.create.CreateSampleScreen
 import crucible.lens.ui.create.CreateDatasetScreen
+import crucible.lens.ui.create.AddFilesScreen
 import crucible.lens.ui.metadata.MetadataEditorScreen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -108,6 +109,7 @@ sealed class Screen(val route: String) {
         fun createRoute(id: String) = "instrument/${encodeRouteSegment(id)}"
     }
     object MetadataEditor : Screen("metadata-editor")
+    object AddFiles : Screen("add-files")
 }
 
 
@@ -783,7 +785,15 @@ fun NavGraph(
                     navController.popBackStack()
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 },
-                onOpenMetadataEditor = { navController.navigate(Screen.MetadataEditor.route) }
+                onOpenMetadataEditor = { navController.navigate(Screen.MetadataEditor.route) },
+                onOpenFilesScreen = { navController.navigate(Screen.AddFiles.route) }
+            )
+        }
+
+        composable(Screen.AddFiles.route) {
+            AddFilesScreen(
+                onBack = navigateBack,
+                onDone = navigateBack
             )
         }
 

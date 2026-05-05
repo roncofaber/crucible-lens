@@ -1,13 +1,7 @@
 package crucible.lens.ui.create
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -18,22 +12,17 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import androidx.lifecycle.viewmodel.compose.viewModel
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.Project
 import crucible.lens.data.util.DuplicateHolder
+import crucible.lens.data.util.FilesHolder
 import crucible.lens.data.util.MetadataHolder
 import crucible.lens.platform.currentIsoDateTime
-import crucible.lens.platform.rememberCameraPicker
-import crucible.lens.platform.rememberGalleryPicker
 import crucible.lens.ui.common.DateTimePickerField
 import crucible.lens.ui.common.InstrumentPickerField
-import crucible.lens.ui.common.MetadataEditor
 import crucible.lens.ui.viewmodel.CreateDatasetViewModel
 import crucible.lens.ui.viewmodel.SaveState
 import kotlinx.serialization.json.JsonObject
@@ -44,7 +33,8 @@ fun CreateDatasetScreen(
     initialProjectId: String?,
     onBack: () -> Unit,
     onCreated: (uuid: String) -> Unit,
-    onOpenMetadataEditor: () -> Unit = {}
+    onOpenMetadataEditor: () -> Unit = {},
+    onOpenFilesScreen: () -> Unit = {}
 ) {
     val prefill = remember { DuplicateHolder.takeDataset() }
     var name by rememberSaveable { mutableStateOf(prefill?.name?.let { "$it (copy)" } ?: "") }
@@ -57,8 +47,7 @@ fun CreateDatasetScreen(
     var timestamp by rememberSaveable { mutableStateOf(prefill?.timestamp ?: currentIsoDateTime()) }
     var selectedProjectId by rememberSaveable { mutableStateOf(prefill?.projectId ?: initialProjectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
-    var photoBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var setAsThumbnail by rememberSaveable { mutableStateOf(true) }
+    var pendingFiles by remember { mutableStateOf<List<Pair<ByteArray, Boolean>>>(emptyList()) }
 
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
@@ -76,14 +65,11 @@ fun CreateDatasetScreen(
         }
     }
 
-    val cameraPicker = rememberCameraPicker { bytes -> photoBytes = bytes }
-    val galleryPicker = rememberGalleryPicker { bytes -> photoBytes = bytes }
-
-    // Receive metadata back from MetadataEditorScreen
     LaunchedEffect(MetadataHolder.isDirty) {
-        if (MetadataHolder.isDirty) {
-            metadata = MetadataHolder.take()
-        }
+        if (MetadataHolder.isDirty) metadata = MetadataHolder.take()
+    }
+    LaunchedEffect(FilesHolder.isDirty) {
+        if (FilesHolder.isDirty) pendingFiles = FilesHolder.take()
     }
 
     Scaffold(
@@ -108,92 +94,31 @@ fun CreateDatasetScreen(
                 .padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Photo capture area
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(140.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outline,
-                        shape = RoundedCornerShape(12.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                if (photoBytes != null) {
-                    AsyncImage(
-                        model = photoBytes,
-                        contentDescription = "Captured photo",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilledTonalIconButton(onClick = { galleryPicker() }) {
-                            Icon(Icons.Default.PhotoLibrary, contentDescription = "Choose from gallery")
-                        }
-                        FilledTonalIconButton(onClick = { cameraPicker() }) {
-                            Icon(Icons.Default.CameraAlt, contentDescription = "Retake")
-                        }
-                    }
-                } else {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(32.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.clickable { cameraPicker() }
-                        ) {
-                            Icon(
-                                Icons.Default.AddAPhoto,
-                                contentDescription = null,
-                                modifier = Modifier.size(36.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text("Camera", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.clickable { galleryPicker() }
-                        ) {
-                            Icon(
-                                Icons.Default.PhotoLibrary,
-                                contentDescription = null,
-                                modifier = Modifier.size(36.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text("Gallery", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-            }
-
-            AnimatedVisibility(
-                visible = photoBytes != null,
-                enter = expandVertically(),
-                exit = shrinkVertically()
+            OutlinedCard(
+                onClick = {
+                    FilesHolder.put(pendingFiles)
+                    onOpenFilesScreen()
+                },
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { setAsThumbnail = !setAsThumbnail }
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text("Set as thumbnail", style = MaterialTheme.typography.bodyMedium)
-                        Text("Show photo as preview in the app", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.AttachFile, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        Column {
+                            Text("Attached files", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                if (pendingFiles.isEmpty()) "No files attached"
+                                else "${pendingFiles.size} file${if (pendingFiles.size != 1) "s" else ""}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                    Switch(checked = setAsThumbnail, onCheckedChange = { setAsThumbnail = it })
+                    Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -238,10 +163,7 @@ fun CreateDatasetScreen(
                         projects.forEach { project ->
                             DropdownMenuItem(
                                 text = { Text(project.title ?: project.projectId) },
-                                onClick = {
-                                    selectedProjectId = project.projectId
-                                    projectDropdownExpanded = false
-                                }
+                                onClick = { selectedProjectId = project.projectId; projectDropdownExpanded = false }
                             )
                         }
                     }
@@ -271,7 +193,6 @@ fun CreateDatasetScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-            // Section: Scientific Details
             Text("Scientific Details", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
             OutlinedTextField(
@@ -282,16 +203,8 @@ fun CreateDatasetScreen(
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Default.PlayCircle, contentDescription = null) }
             )
-            InstrumentPickerField(
-                value = instrumentName,
-                onValueChange = { instrumentName = it },
-                modifier = Modifier.fillMaxWidth()
-            )
-            DateTimePickerField(
-                value = timestamp,
-                onValueChange = { timestamp = it },
-                modifier = Modifier.fillMaxWidth()
-            )
+            InstrumentPickerField(value = instrumentName, onValueChange = { instrumentName = it }, modifier = Modifier.fillMaxWidth())
+            DateTimePickerField(value = timestamp, onValueChange = { timestamp = it }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(
                 value = dataType,
                 onValueChange = { dataType = it },
@@ -303,7 +216,6 @@ fun CreateDatasetScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-            // Section: Metadata
             Text("Metadata", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
             OutlinedCard(
@@ -326,7 +238,7 @@ fun CreateDatasetScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.DataObject, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.DataObject, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                         Column {
                             Text("Scientific metadata", style = MaterialTheme.typography.bodyMedium)
                             Text(
@@ -337,7 +249,7 @@ fun CreateDatasetScreen(
                             )
                         }
                     }
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -355,21 +267,16 @@ fun CreateDatasetScreen(
                             public = isPublic,
                             scientificMetadata = metadata
                         ),
-                        photoBytes = photoBytes,
-                        setAsThumbnail = setAsThumbnail
+                        files = pendingFiles
                     )
                 },
                 enabled = name.isNotBlank() && !isSaving,
                 modifier = Modifier.fillMaxWidth().height(52.dp)
             ) {
                 if (isSaving) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
-                    )
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
                 } else {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Create Dataset")
                 }

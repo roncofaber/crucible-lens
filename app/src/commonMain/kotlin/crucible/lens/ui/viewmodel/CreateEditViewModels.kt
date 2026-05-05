@@ -63,7 +63,7 @@ class CreateDatasetViewModel : ViewModel() {
     private val _saveState = MutableStateFlow<SaveState>(SaveState.Idle)
     val saveState: StateFlow<SaveState> = _saveState.asStateFlow()
 
-    fun create(request: DatasetCreateRequest, photoBytes: ByteArray?, setAsThumbnail: Boolean = false) {
+    fun create(request: DatasetCreateRequest, files: List<Pair<ByteArray, Boolean>> = emptyList()) {
         if (_saveState.value is SaveState.Saving) return
         _saveState.value = SaveState.Saving
         viewModelScope.launch {
@@ -78,25 +78,17 @@ class CreateDatasetViewModel : ViewModel() {
                 CacheManager.cacheResource(newUuid, newDataset)
                 request.projectId?.let { CacheManager.clearProjectDetail(it) }
 
-                if (photoBytes != null) {
-                    val filename = "photo_${newUuid}.jpg"
-                    val size = photoBytes.size
-                    val sha256 = PlatformCrypto.sha256Hex(photoBytes)
-
-                    // Step 1: upload bytes to GCS-mounted path
-                    val uploadResp = ApiClient.service.uploadFileToDataset(newUuid, photoBytes, filename)
+                files.forEachIndexed { index, (bytes, asThumbnail) ->
+                    val filename = "file_${newUuid}_$index.jpg"
+                    val uploadResp = ApiClient.service.uploadFileToDataset(newUuid, bytes, filename)
                     if (uploadResp is ApiResult.Success) {
-                        // Step 2: transform local mount path to cloud path, register + trigger ingestion
                         val cloudPath = uploadResp.data.replace("./mnt/gcs", "crucible-uploads")
-                        ApiClient.service.addAssociatedFile(newUuid, cloudPath, size, sha256)
+                        ApiClient.service.addAssociatedFile(newUuid, cloudPath, bytes.size, PlatformCrypto.sha256Hex(bytes))
                     }
-
-                    // Step 3 (optional): also register as thumbnail for in-app preview
-                    if (setAsThumbnail) {
-                        val b64 = PlatformBase64.encode(photoBytes)
+                    if (asThumbnail) {
                         ApiClient.service.addThumbnail(
                             newUuid,
-                            ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = b64)
+                            ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
                         )
                     }
                     // All post-creation steps are non-fatal — dataset was already created.
