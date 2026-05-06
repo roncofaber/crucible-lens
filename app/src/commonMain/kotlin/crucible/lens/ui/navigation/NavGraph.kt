@@ -376,7 +376,6 @@ fun NavGraph(
             SettingsScreen(
                 currentApiKey = apiKey,
                 onNavigateToApi = { navController.navigate(Screen.SettingsApi.route) },
-                onNavigateToAi = { navController.navigate(Screen.SettingsAi.route) },
                 onNavigateToAppearance = { navController.navigate(Screen.SettingsAppearance.route) },
                 onNavigateToCache = { navController.navigate(Screen.SettingsCache.route) },
                 onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },
