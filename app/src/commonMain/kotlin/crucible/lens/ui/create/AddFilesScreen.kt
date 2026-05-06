@@ -21,10 +21,8 @@ import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.util.FilesHolder
 import crucible.lens.data.util.PlatformCrypto
 import crucible.lens.platform.PlatformBase64
-import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.rememberCameraPicker
 import crucible.lens.platform.rememberGalleryPicker
-import crucible.lens.platform.showToast
 import kotlin.time.Clock
 import kotlinx.coroutines.launch
 
@@ -40,7 +38,7 @@ fun AddFilesScreen(
     var files by remember { mutableStateOf(if (isUploadMode) emptyList() else FilesHolder.files) }
     var isUploading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val platformContext = getPlatformContext()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val cameraPicker = rememberCameraPicker { bytes ->
         if (bytes != null) files = files + Pair(bytes, true)
@@ -69,9 +67,9 @@ fun AddFilesScreen(
                             )
                         }
                     }
-                    showToast(platformContext, if (files.size == 1) "File uploaded" else "${files.size} files uploaded")
+                    snackbarHostState.showSnackbar(if (files.size == 1) "File uploaded" else "${files.size} files uploaded")
                 } catch (_: Exception) {
-                    showToast(platformContext, "Upload failed — check your connection")
+                    snackbarHostState.showSnackbar("Upload failed — check your connection")
                 } finally {
                     isUploading = false
                 }
@@ -85,6 +83,7 @@ fun AddFilesScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(if (isUploadMode) "Add files" else "Attach files") },
