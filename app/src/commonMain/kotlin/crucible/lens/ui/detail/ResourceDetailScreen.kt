@@ -1389,6 +1389,25 @@ private fun ThumbnailsSection(
     onDelete: (thumbnailId: Int) -> Unit = {}
 ) {
     thumbnails.forEachIndexed { index, thumbnail ->
+        var showDeleteDialog by remember { mutableStateOf(false) }
+
+        if (showDeleteDialog && thumbnail.id >= 0) {
+            AlertDialog(
+                onDismissRequest = { showDeleteDialog = false },
+                icon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
+                title = { Text("Delete thumbnail?") },
+                text = { Text("This thumbnail will be permanently removed from the dataset.") },
+                confirmButton = {
+                    TextButton(onClick = { showDeleteDialog = false; onDelete(thumbnail.id) }) {
+                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+                }
+            )
+        }
+
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1397,8 +1416,6 @@ private fun ThumbnailsSection(
         ) {
             var imageState by remember { mutableStateOf<String?>(null) }
 
-            // Decode base64 off the main thread, keyed by uuid+index (stable, cheap to compare)
-            // rather than the full thumbnail string (200KB+ equality check on every recomposition).
             var base64Data by remember(uuid, index) { mutableStateOf<ByteArray?>(null) }
             LaunchedEffect(uuid, index) {
                 base64Data = withContext(Dispatchers.Default) {
@@ -1409,7 +1426,12 @@ private fun ThumbnailsSection(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 200.dp, max = 400.dp),
+                    .heightIn(min = 200.dp, max = 400.dp)
+                    .then(
+                        if (thumbnail.id >= 0)
+                            Modifier.combinedClickable(onClick = {}, onLongClick = { showDeleteDialog = true })
+                        else Modifier
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 if (base64Data != null) {
@@ -1441,20 +1463,14 @@ private fun ThumbnailsSection(
                 }
 
                 if (thumbnail.id >= 0) {
-                    IconButton(
-                        onClick = { onDelete(thumbnail.id) },
+                    Text(
+                        "Hold to delete",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                         modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp)
-                            .size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.DeleteOutline,
-                            contentDescription = "Delete thumbnail",
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                    )
                 }
             }
         }
