@@ -1013,13 +1013,11 @@ fun ResourceDetailScreen(
                             }
                         }
                         item(key = "download_links_$pageIndex") {
-                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                                DownloadLinksCard(
-                                    datasetUuid = pageResource.uniqueId,
-                                    initialExpanded = pageGetCardState("download_links"),
-                                    onExpandedChange = { pageSetCardState("download_links", it) }
-                                )
-                            }
+                            DownloadLinksCard(
+                                datasetUuid = pageResource.uniqueId,
+                                initialExpanded = pageGetCardState("download_links"),
+                                onExpandedChange = { pageSetCardState("download_links", it) }
+                            )
                         }
                         item(key = "scientific_metadata_$pageIndex") {
                             AnimatedVisibility(
@@ -2644,86 +2642,79 @@ private fun DownloadLinksCard(
 ) {
     var expanded by remember { mutableStateOf(initialExpanded) }
     var state by remember { mutableStateOf<DownloadLinksState>(DownloadLinksState.Idle) }
+    var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val platformCtx = getPlatformContext()
 
-    fun fetch() {
+    fun fetch(isRefresh: Boolean = false) {
         scope.launch {
-            state = DownloadLinksState.Loading
-            state = when (val result = ApiClient.service.getDownloadLinks(datasetUuid)) {
+            if (isRefresh) isRefreshing = true else state = DownloadLinksState.Loading
+            val newState = when (val result = ApiClient.service.getDownloadLinks(datasetUuid)) {
                 is ApiResult.Success -> if (result.data.isEmpty()) DownloadLinksState.Empty
                                         else DownloadLinksState.Success(result.data)
                 is ApiResult.Error   -> if (result.code == 404) DownloadLinksState.Empty
                                         else DownloadLinksState.Err(result.message)
             }
+            isRefreshing = false
+            state = newState
         }
     }
 
-    Card {
-        Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        val new = !expanded
-                        expanded = new
-                        onExpandedChange(new)
-                        if (new && state is DownloadLinksState.Idle) fetch()
-                    },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.width(4.dp))
-                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Download Links", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                if (expanded) {
+    // Silently fetch on first composition — card only appears if files exist
+    LaunchedEffect(datasetUuid) { fetch() }
+
+    // Render nothing until we have confirmed files
+    val linksState = state
+    if (linksState !is DownloadLinksState.Success && !isRefreshing) return
+
+    Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        Card {
+            Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { val new = !expanded; expanded = new; onExpandedChange(new) },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Download Links", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     IconButton(
-                        onClick = { fetch() },
-                        modifier = Modifier.size(32.dp)
+                        onClick = { fetch(isRefresh = true) },
+                        modifier = Modifier.size(32.dp),
+                        enabled = !isRefreshing
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh links", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                        if (isRefreshing)
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        else
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                     }
                 }
-            }
 
-            if (expanded) {
-                Spacer(Modifier.height(8.dp))
-                when (val s = state) {
-                    is DownloadLinksState.Idle -> {}
-                    is DownloadLinksState.Loading -> {
-                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        }
-                    }
-                    is DownloadLinksState.Empty -> {
-                        Text("No files available for download.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    is DownloadLinksState.Err -> {
-                        Text("Could not load links: ${s.message}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                    }
-                    is DownloadLinksState.Success -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                            s.links.entries.sortedBy { it.key }.forEach { (path, url) ->
-                                val name = displayName(path)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(fileIcon(name), contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(name, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    IconButton(onClick = { openUrl(platformCtx, url) }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.OpenInNew, contentDescription = "Open", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                                    }
-                                    IconButton(onClick = { shareText(platformCtx, url, name) }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.Share, contentDescription = "Share link", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                                    }
+                if (expanded && linksState is DownloadLinksState.Success) {
+                    Spacer(Modifier.height(8.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        linksState.links.entries.sortedBy { it.key }.forEach { (path, url) ->
+                            val name = displayName(path)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(fileIcon(name), contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(name, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                IconButton(onClick = { openUrl(platformCtx, url) }, modifier = Modifier.size(32.dp)) {
+                                    Icon(Icons.Default.OpenInNew, contentDescription = "Open", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                }
+                                IconButton(onClick = { shareText(platformCtx, url, name) }, modifier = Modifier.size(32.dp)) {
+                                    Icon(Icons.Default.Share, contentDescription = "Share link", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }
