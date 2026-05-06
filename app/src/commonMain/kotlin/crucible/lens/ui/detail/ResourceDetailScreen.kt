@@ -480,7 +480,6 @@ fun ResourceDetailScreen(
 
     // Incremented when a sibling PTR completes, forces lazy-load effects to re-run
     var siblingReloadTrigger by remember { mutableIntStateOf(0) }
-    val forceReEnrichUuids = remember { mutableStateSetOf<String>() }
 
     // Lazy load relationships for ~20 neighbors (current ± 10)
     // Thumbnails loaded separately with more conservative strategy
@@ -501,8 +500,7 @@ fun ResourceDetailScreen(
         // Filter pages that still need enrichment — check on main thread (safe for SnapshotStateMap)
         val toEnrich = pagesToLoad.filter { pageIndex ->
             val uuid = siblingList[pageIndex].uniqueId
-            if (uuid in enrichedUuids && uuid !in forceReEnrichUuids) return@filter false
-            if (uuid in forceReEnrichUuids) return@filter true
+            if (uuid in enrichedUuids) return@filter false
             when (val existing = loadedResources[uuid]) {
                 is Sample  -> existing.links == null
                 is Dataset -> existing.links == null
@@ -530,7 +528,6 @@ fun ResourceDetailScreen(
                 ) {
                     withContext(Dispatchers.Main) {
                         enrichedUuids.add(uuid)
-                        forceReEnrichUuids.remove(uuid)
                         loadedResources[uuid] = cached
                     }
                     return@forEachIndexed
@@ -544,7 +541,6 @@ fun ResourceDetailScreen(
                     }
                     withContext(Dispatchers.Main) {
                         enrichedUuids.add(uuid)
-                        forceReEnrichUuids.remove(uuid)
                         if (enriched != null) {
                             loadedResources[uuid] = enriched
                             CacheManager.cacheResource(uuid, enriched)
@@ -556,10 +552,7 @@ fun ResourceDetailScreen(
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    withContext(Dispatchers.Main) {
-                        forceReEnrichUuids.remove(uuid)
-                        failedEnrichmentUuids.add(uuid)
-                    }
+                    withContext(Dispatchers.Main) { failedEnrichmentUuids.add(uuid) }
                 }
             }
         }
@@ -650,35 +643,44 @@ fun ResourceDetailScreen(
 
     // True only when a sibling (not the primary resource) was pull-to-refreshed.
     // Guards siblingReloadTrigger so it only fires on actual sibling PTRs.
-    var isSiblingRefreshPending by remember { mutableStateOf(false) }
     var localRefreshState by remember { mutableStateOf(false) }
 
     fun triggerRefresh() {
         val currentUuid = siblingList.getOrNull(pagerState.currentPage)?.uniqueId
             ?: resource.uniqueId
         if (currentUuid != resource.uniqueId) {
-            // Refreshing a sibling — keep loadedResources so links don't flash
-            // out. Mark UUID for forced re-enrichment so the enrichment loop
-            // doesn't skip it due to the existing links check.
-            loadedThumbnails.remove(currentUuid)
-            enrichedUuids.remove(currentUuid)
-            forceReEnrichUuids.add(currentUuid)
-            isSiblingRefreshPending = true
-        }
-        onRefresh(currentUuid)
-    }
-
-    LaunchedEffect(isRefreshing) {
-        if (!isRefreshing) {
-            localRefreshState = false
-            // Only re-trigger lazy loading when a sibling was actually refreshed
-            if (isSiblingRefreshPending) {
-                isSiblingRefreshPending = false
-                siblingReloadTrigger++
+            // Sibling refresh: fetch inline without ViewModel involvement.
+            // Old loadedResources/enrichedUuids are kept so links stay visible.
+            scope.launch {
+                localRefreshState = true
+                try {
+                    val pageResource = siblingList.firstOrNull { it.uniqueId == currentUuid }
+                    if (pageResource != null) {
+                        val fresh: CrucibleResource? = withContext(Dispatchers.Default) {
+                            when (pageResource) {
+                                is Sample  -> (ApiClient.service.getSample(currentUuid) as? ApiResult.Success)?.data
+                                is Dataset -> (ApiClient.service.getDataset(currentUuid, includeMetadata = true) as? ApiResult.Success)?.data
+                            }
+                        }
+                        if (fresh != null) {
+                            loadedResources[currentUuid] = fresh
+                            CacheManager.cacheResource(currentUuid, fresh)
+                        }
+                        loadedThumbnails.remove(currentUuid)
+                        siblingReloadTrigger++ // re-fetch thumbnails
+                    }
+                } finally {
+                    localRefreshState = false
+                }
             }
         } else {
-            localRefreshState = true
+            onRefresh(currentUuid)
         }
+    }
+
+    // Primary resource refresh only — sibling PTR is handled inline above.
+    LaunchedEffect(isRefreshing) {
+        localRefreshState = isRefreshing
     }
 
     AppScaffold(
@@ -839,7 +841,7 @@ fun ResourceDetailScreen(
             }
 
             AnimatedVisibility(
-                visible = isPageEnriched || localRefreshState,
+                visible = isPageEnriched,
                 enter = fadeIn(animationSpec = tween(durationMillis = 200)),
                 exit = fadeOut(animationSpec = tween(durationMillis = 150))
             ) {

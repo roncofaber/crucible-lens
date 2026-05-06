@@ -108,9 +108,14 @@ class ResourceDetailViewModel : ViewModel() {
     // ─────────────────────────────────────────────────────────────────────────
 
     fun fetchResource(uuid: String) {
+        // Navigating to a different resource — clear sibling memory so the pager
+        // opens at the requested resource, not whatever was last viewed.
+        val trimmedUuid = uuid.trim()
+        val currentUuid = (_uiState.value as? UiState.Success)?.resource?.uniqueId
+        if (currentUuid != null && currentUuid != trimmedUuid) lastViewedSiblingUuid = null
+
         activeFetchJob?.cancel()
         activeFetchJob = viewModelScope.launch {
-            val trimmedUuid = uuid.trim()
 
             val cachedResource = CacheManager.getResource(trimmedUuid)
             val cachedThumbnails = getThumbnails(trimmedUuid)
