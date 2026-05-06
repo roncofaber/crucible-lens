@@ -20,8 +20,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -44,6 +45,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
@@ -66,6 +69,7 @@ import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
@@ -806,8 +810,8 @@ fun ResourceDetailScreen(
 
                     key(pageResource.uniqueId) {
                         // Each page needs its own independent scroll state
-                        val listState = rememberLazyListState()
-                        val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+                        val scrollState = rememberScrollState()
+                        val showScrollToTop by remember { derivedStateOf { scrollState.value > 300 } }
                         // Scope card state to this page's resource so expanded/collapsed state
                         // doesn't leak across pages sharing the same callback origin.
                         val pageId = pageResource.uniqueId
@@ -833,14 +837,12 @@ fun ResourceDetailScreen(
                 enter = fadeIn(animationSpec = tween(durationMillis = 200)),
                 exit = fadeOut(animationSpec = tween(durationMillis = 150))
             ) {
-                LazyColumn(
-                    state = listState,
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.Top
+                        .verticalScroll(scrollState)
+                        .padding(16.dp)
                 ) {
-                    item(key = "basic_info_$pageIndex") {
                         val hasPrev = pageIndex > 0
                         val hasNext = pageIndex < siblingList.size - 1
 
@@ -866,7 +868,6 @@ fun ResourceDetailScreen(
                                 siblingsResolved = siblingsResolved
                             )
                         }
-                    }
 
                 // Use fully loaded resource if available, otherwise fall back to basic or current
                 val displayResource = loadedResources[pageResource.uniqueId]
@@ -874,227 +875,234 @@ fun ResourceDetailScreen(
                 val displayThumbnails = loadedThumbnails[pageResource.uniqueId]
                     ?: if (isCurrentResource) thumbnails else emptyList()
 
-                if (pageResource.uniqueId in failedEnrichmentUuids) {
-                    item(key = "enrich_error_$pageIndex") {
-                        ErrorCard(
-                            title = "Could not load full data",
-                            message = "Links and metadata may be incomplete.",
-                            modifier = Modifier.padding(bottom = 16.dp),
-                            onRetry = {
-                                enrichedUuids.remove(pageResource.uniqueId)
-                                failedEnrichmentUuids.remove(pageResource.uniqueId)
-                                siblingReloadTrigger++
+                AnimatedVisibility(
+                    visible = pageResource.uniqueId in failedEnrichmentUuids,
+                    enter = fadeIn(tween(200)) + expandVertically(),
+                    exit = fadeOut(tween(150)) + shrinkVertically()
+                ) {
+                    ErrorCard(
+                        title = "Could not load full data",
+                        message = "Links and metadata may be incomplete.",
+                        modifier = Modifier.padding(bottom = 16.dp),
+                        onRetry = {
+                            enrichedUuids.remove(pageResource.uniqueId)
+                            failedEnrichmentUuids.remove(pageResource.uniqueId)
+                            siblingReloadTrigger++
+                        }
+                    )
+                }
+
+                val typeDetailsBiv = remember { BringIntoViewRequester() }
+                when (displayResource) {
+                    is Sample -> Box(
+                        modifier = Modifier.padding(bottom = 16.dp).bringIntoViewRequester(typeDetailsBiv)
+                    ) {
+                        SampleDetailsCard(
+                            sample = displayResource,
+                            onProjectClick = onNavigateToProject,
+                            onShowQr = { showQrDialog = true },
+                            initialAdvanced = pageGetCardState("advanced"),
+                            onAdvancedChange = { exp ->
+                                pageSetCardState("advanced", exp)
+                                if (exp) scope.launch { delay(220); typeDetailsBiv.bringIntoView() }
+                            }
+                        )
+                    }
+                    is Dataset -> Box(
+                        modifier = Modifier.padding(bottom = 16.dp).bringIntoViewRequester(typeDetailsBiv)
+                    ) {
+                        DatasetDetailsCard(
+                            dataset = displayResource,
+                            onProjectClick = onNavigateToProject,
+                            onInstrumentClick = onNavigateToInstrument,
+                            onShowQr = { showQrDialog = true },
+                            initialAdvanced = pageGetCardState("advanced"),
+                            onAdvancedChange = { exp ->
+                                pageSetCardState("advanced", exp)
+                                if (exp) scope.launch { delay(220); typeDetailsBiv.bringIntoView() }
                             }
                         )
                     }
                 }
 
                 when (displayResource) {
-                    is Sample -> item(key = "type_details_$pageIndex") {
-                        Box(modifier = Modifier.padding(bottom = 16.dp)) {
-                            SampleDetailsCard(
-                                sample = displayResource,
-                                onProjectClick = onNavigateToProject,
-                                onShowQr = { showQrDialog = true },
-                                initialAdvanced = pageGetCardState("advanced"),
-                                onAdvancedChange = { pageSetCardState("advanced", it) }
-                            )
-                        }
-                    }
-                    is Dataset -> item(key = "type_details_$pageIndex") {
-                        Box(modifier = Modifier.padding(bottom = 16.dp)) {
-                            DatasetDetailsCard(
-                                dataset = displayResource,
-                                onProjectClick = onNavigateToProject,
-                                onInstrumentClick = onNavigateToInstrument,
-                                onShowQr = { showQrDialog = true },
-                                initialAdvanced = pageGetCardState("advanced"),
-                                onAdvancedChange = { pageSetCardState("advanced", it) }
-                            )
-                        }
-                    }
-                }
-
-                when (displayResource) {
                     is Dataset -> {
-                        if (displayThumbnails.isNotEmpty()) {
-                            item(key = "thumbnails_$pageIndex") {
-                                Box(
-                                    modifier = Modifier
-                                        .animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150))
-                                        .fillMaxWidth()
-                                        .padding(bottom = 16.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(modifier = Modifier.fillMaxWidth(0.9f)) {
-                                        ThumbnailsSection(
-                                            uuid = pageResource.uniqueId,
-                                            thumbnails = displayThumbnails,
-                                            onDelete = { thumbnailId ->
-                                                scope.launch {
-                                                    val resp = ApiClient.service.deleteThumbnail(pageResource.uniqueId, thumbnailId)
-                                                    if (resp is ApiResult.Success) {
-                                                        loadedThumbnails[pageResource.uniqueId] =
-                                                            loadedThumbnails[pageResource.uniqueId].orEmpty()
-                                                                .filter { it.id != thumbnailId }
-                                                        CacheManager.clearThumbnail(pageResource.uniqueId)
-                                                    }
+                        AnimatedVisibility(
+                            visible = displayThumbnails.isNotEmpty(),
+                            enter = fadeIn(tween(200)) + expandVertically(),
+                            exit = fadeOut(tween(150)) + shrinkVertically()
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), contentAlignment = Alignment.Center) {
+                                Column(modifier = Modifier.fillMaxWidth(0.9f)) {
+                                    ThumbnailsSection(
+                                        uuid = pageResource.uniqueId,
+                                        thumbnails = displayThumbnails,
+                                        onDelete = { thumbnailId ->
+                                            scope.launch {
+                                                val resp = ApiClient.service.deleteThumbnail(pageResource.uniqueId, thumbnailId)
+                                                if (resp is ApiResult.Success) {
+                                                    loadedThumbnails[pageResource.uniqueId] =
+                                                        loadedThumbnails[pageResource.uniqueId].orEmpty()
+                                                            .filter { it.id != thumbnailId }
+                                                    CacheManager.clearThumbnail(pageResource.uniqueId)
                                                 }
                                             }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        if (displayResource.links?.any { it.resourceType == "sample" && it.relationship == "associated" } == true) {
-                            item(key = "linked_samples_$pageIndex") {
-                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
-                                    LinkedSamplesCard(
-                                        samples = displayResource.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "associated" }.sortedBy { it.uniqueId },
-                                        onNavigateToResource = onNavigateToResource,
-                                        onUnlink = { uuid, name ->
-                                            pendingUnlink = UnlinkRequest(name, uuid) {
-                                                ApiClient.service.unlinkDatasetSample(displayResource.uniqueId, uuid)
-                                            }
-                                        },
-                                        initialExpanded = pageGetCardState("linked_samples"),
-                                        onExpandChange = { pageSetCardState("linked_samples", it) }
+                                        }
                                     )
                                 }
                             }
                         }
-                        if (displayResource.links?.any { it.resourceType == "dataset" && it.relationship == "parent" } == true) {
-                            item(key = "parent_datasets_$pageIndex") {
-                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
-                                    ParentDatasetsCard(
-                                        parents = displayResource.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "parent" }.sortedBy { it.uniqueId },
-                                        onNavigateToResource = onNavigateToResource,
-                                        onUnlink = { uuid, name ->
-                                            pendingUnlink = UnlinkRequest(name, uuid) {
-                                                ApiClient.service.unlinkDatasets(uuid, displayResource.uniqueId)
-                                            }
-                                        },
-                                        initialExpanded = pageGetCardState("parent_datasets"),
-                                        onExpandChange = { pageSetCardState("parent_datasets", it) }
-                                    )
-                                }
+                        val linkedSamplesBiv = remember { BringIntoViewRequester() }
+                        AnimatedVisibility(
+                            visible = displayResource.links?.any { it.resourceType == "sample" && it.relationship == "associated" } == true,
+                            enter = fadeIn(tween(200)) + expandVertically(),
+                            exit = fadeOut(tween(150)) + shrinkVertically()
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).bringIntoViewRequester(linkedSamplesBiv)) {
+                                LinkedSamplesCard(
+                                    samples = displayResource.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "associated" }.sortedBy { it.uniqueId },
+                                    onNavigateToResource = onNavigateToResource,
+                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { ApiClient.service.unlinkDatasetSample(displayResource.uniqueId, uuid) } },
+                                    initialExpanded = pageGetCardState("linked_samples"),
+                                    onExpandChange = { exp -> pageSetCardState("linked_samples", exp); if (exp) scope.launch { delay(220); linkedSamplesBiv.bringIntoView() } }
+                                )
                             }
                         }
-                        if (displayResource.links?.any { it.resourceType == "dataset" && it.relationship == "child" } == true) {
-                            item(key = "child_datasets_$pageIndex") {
-                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
-                                    ChildDatasetsCard(
-                                        children = displayResource.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "child" }.sortedBy { it.uniqueId },
-                                        onNavigateToResource = onNavigateToResource,
-                                        onUnlink = { uuid, name ->
-                                            pendingUnlink = UnlinkRequest(name, uuid) {
-                                                ApiClient.service.unlinkDatasets(displayResource.uniqueId, uuid)
-                                            }
-                                        },
-                                        initialExpanded = pageGetCardState("child_datasets"),
-                                        onExpandChange = { pageSetCardState("child_datasets", it) }
-                                    )
-                                }
+                        val parentDatasetsBiv = remember { BringIntoViewRequester() }
+                        AnimatedVisibility(
+                            visible = displayResource.links?.any { it.resourceType == "dataset" && it.relationship == "parent" } == true,
+                            enter = fadeIn(tween(200)) + expandVertically(),
+                            exit = fadeOut(tween(150)) + shrinkVertically()
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).bringIntoViewRequester(parentDatasetsBiv)) {
+                                ParentDatasetsCard(
+                                    parents = displayResource.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "parent" }.sortedBy { it.uniqueId },
+                                    onNavigateToResource = onNavigateToResource,
+                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { ApiClient.service.unlinkDatasets(uuid, displayResource.uniqueId) } },
+                                    initialExpanded = pageGetCardState("parent_datasets"),
+                                    onExpandChange = { exp -> pageSetCardState("parent_datasets", exp); if (exp) scope.launch { delay(220); parentDatasetsBiv.bringIntoView() } }
+                                )
                             }
                         }
-                        item(key = "download_links_$pageIndex") {
-                            DownloadLinksCard(
-                                datasetUuid = pageResource.uniqueId,
-                                initialExpanded = pageGetCardState("download_links"),
-                                onExpandedChange = { pageSetCardState("download_links", it) }
-                            )
-                        }
-                        if (!displayResource.scientificMetadata.isNullOrEmpty()) {
-                            item(key = "scientific_metadata_$pageIndex") {
-                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
-                                    ScientificMetadataCard(
-                                        metadata = displayResource.scientificMetadata ?: emptyMap(),
-                                        initialExpanded = pageGetCardState("sci_meta_expanded"),
-                                        initialExpandAll = pageGetCardState("sci_meta_expand_all"),
-                                        onExpandedChange = { pageSetCardState("sci_meta_expanded", it) },
-                                        onExpandAllChange = { pageSetCardState("sci_meta_expand_all", it) }
-                                    )
-                                }
+                        val childDatasetsBiv = remember { BringIntoViewRequester() }
+                        AnimatedVisibility(
+                            visible = displayResource.links?.any { it.resourceType == "dataset" && it.relationship == "child" } == true,
+                            enter = fadeIn(tween(200)) + expandVertically(),
+                            exit = fadeOut(tween(150)) + shrinkVertically()
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).bringIntoViewRequester(childDatasetsBiv)) {
+                                ChildDatasetsCard(
+                                    children = displayResource.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "child" }.sortedBy { it.uniqueId },
+                                    onNavigateToResource = onNavigateToResource,
+                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { ApiClient.service.unlinkDatasets(displayResource.uniqueId, uuid) } },
+                                    initialExpanded = pageGetCardState("child_datasets"),
+                                    onExpandChange = { exp -> pageSetCardState("child_datasets", exp); if (exp) scope.launch { delay(220); childDatasetsBiv.bringIntoView() } }
+                                )
                             }
                         }
-                        if (!displayResource.keywords.isNullOrEmpty()) {
-                            item(key = "keywords_dataset_$pageIndex") {
-                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
-                                    KeywordsCard(displayResource.keywords.orEmpty())
-                                }
+                        DownloadLinksCard(
+                            datasetUuid = pageResource.uniqueId,
+                            initialExpanded = pageGetCardState("download_links"),
+                            onExpandedChange = { pageSetCardState("download_links", it) }
+                        )
+                        val sciMetaDatasetBiv = remember { BringIntoViewRequester() }
+                        AnimatedVisibility(
+                            visible = !displayResource.scientificMetadata.isNullOrEmpty(),
+                            enter = fadeIn(tween(200)) + expandVertically(),
+                            exit = fadeOut(tween(150)) + shrinkVertically()
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).bringIntoViewRequester(sciMetaDatasetBiv)) {
+                                ScientificMetadataCard(
+                                    metadata = displayResource.scientificMetadata ?: emptyMap(),
+                                    initialExpanded = pageGetCardState("sci_meta_expanded"),
+                                    initialExpandAll = pageGetCardState("sci_meta_expand_all"),
+                                    onExpandedChange = { exp -> pageSetCardState("sci_meta_expanded", exp); if (exp) scope.launch { delay(220); sciMetaDatasetBiv.bringIntoView() } },
+                                    onExpandAllChange = { pageSetCardState("sci_meta_expand_all", it) }
+                                )
+                            }
+                        }
+                        AnimatedVisibility(
+                            visible = !displayResource.keywords.isNullOrEmpty(),
+                            enter = fadeIn(tween(200)) + expandVertically(),
+                            exit = fadeOut(tween(150)) + shrinkVertically()
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                                KeywordsCard(displayResource.keywords.orEmpty())
                             }
                         }
                     }
                     is Sample -> {
-                        if (displayResource.links?.any { it.resourceType == "sample" && it.relationship == "parent" } == true) {
-                            item(key = "parent_samples_$pageIndex") {
-                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
-                                    ParentSamplesCard(
-                                        parents = displayResource.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "parent" }.sortedBy { it.uniqueId },
-                                        onNavigateToResource = onNavigateToResource,
-                                        onUnlink = { uuid, name ->
-                                            pendingUnlink = UnlinkRequest(name, uuid) {
-                                                ApiClient.service.unlinkSamples(uuid, displayResource.uniqueId)
-                                            }
-                                        },
-                                        initialExpanded = pageGetCardState("parent_samples"),
-                                        onExpandChange = { pageSetCardState("parent_samples", it) }
-                                    )
-                                }
+                        val parentSamplesBiv = remember { BringIntoViewRequester() }
+                        AnimatedVisibility(
+                            visible = displayResource.links?.any { it.resourceType == "sample" && it.relationship == "parent" } == true,
+                            enter = fadeIn(tween(200)) + expandVertically(),
+                            exit = fadeOut(tween(150)) + shrinkVertically()
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).bringIntoViewRequester(parentSamplesBiv)) {
+                                ParentSamplesCard(
+                                    parents = displayResource.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "parent" }.sortedBy { it.uniqueId },
+                                    onNavigateToResource = onNavigateToResource,
+                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { ApiClient.service.unlinkSamples(uuid, displayResource.uniqueId) } },
+                                    initialExpanded = pageGetCardState("parent_samples"),
+                                    onExpandChange = { exp -> pageSetCardState("parent_samples", exp); if (exp) scope.launch { delay(220); parentSamplesBiv.bringIntoView() } }
+                                )
                             }
                         }
-                        if (displayResource.links?.any { it.resourceType == "sample" && it.relationship == "child" } == true) {
-                            item(key = "child_samples_$pageIndex") {
-                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
-                                    ChildSamplesCard(
-                                        children = displayResource.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "child" }.sortedBy { it.uniqueId },
-                                        onNavigateToResource = onNavigateToResource,
-                                        onUnlink = { uuid, name ->
-                                            pendingUnlink = UnlinkRequest(name, uuid) {
-                                                ApiClient.service.unlinkSamples(displayResource.uniqueId, uuid)
-                                            }
-                                        },
-                                        initialExpanded = pageGetCardState("child_samples"),
-                                        onExpandChange = { pageSetCardState("child_samples", it) }
-                                    )
-                                }
+                        val childSamplesBiv = remember { BringIntoViewRequester() }
+                        AnimatedVisibility(
+                            visible = displayResource.links?.any { it.resourceType == "sample" && it.relationship == "child" } == true,
+                            enter = fadeIn(tween(200)) + expandVertically(),
+                            exit = fadeOut(tween(150)) + shrinkVertically()
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).bringIntoViewRequester(childSamplesBiv)) {
+                                ChildSamplesCard(
+                                    children = displayResource.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "child" }.sortedBy { it.uniqueId },
+                                    onNavigateToResource = onNavigateToResource,
+                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { ApiClient.service.unlinkSamples(displayResource.uniqueId, uuid) } },
+                                    initialExpanded = pageGetCardState("child_samples"),
+                                    onExpandChange = { exp -> pageSetCardState("child_samples", exp); if (exp) scope.launch { delay(220); childSamplesBiv.bringIntoView() } }
+                                )
                             }
                         }
-                        if (displayResource.links?.any { it.resourceType == "dataset" && it.relationship == "associated" } == true) {
-                            item(key = "linked_datasets_$pageIndex") {
-                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
-                                    LinkedDatasetsCard(
-                                        datasets = displayResource.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "associated" }.sortedBy { it.uniqueId },
-                                        onNavigateToResource = onNavigateToResource,
-                                        onUnlink = { uuid, name ->
-                                            pendingUnlink = UnlinkRequest(name, uuid) {
-                                                ApiClient.service.unlinkDatasetSample(uuid, displayResource.uniqueId)
-                                            }
-                                        },
-                                        initialExpanded = pageGetCardState("linked_datasets"),
-                                        onExpandChange = { pageSetCardState("linked_datasets", it) }
-                                    )
-                                }
+                        val linkedDatasetsBiv = remember { BringIntoViewRequester() }
+                        AnimatedVisibility(
+                            visible = displayResource.links?.any { it.resourceType == "dataset" && it.relationship == "associated" } == true,
+                            enter = fadeIn(tween(200)) + expandVertically(),
+                            exit = fadeOut(tween(150)) + shrinkVertically()
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).bringIntoViewRequester(linkedDatasetsBiv)) {
+                                LinkedDatasetsCard(
+                                    datasets = displayResource.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "associated" }.sortedBy { it.uniqueId },
+                                    onNavigateToResource = onNavigateToResource,
+                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { ApiClient.service.unlinkDatasetSample(uuid, displayResource.uniqueId) } },
+                                    initialExpanded = pageGetCardState("linked_datasets"),
+                                    onExpandChange = { exp -> pageSetCardState("linked_datasets", exp); if (exp) scope.launch { delay(220); linkedDatasetsBiv.bringIntoView() } }
+                                )
                             }
                         }
-                        if (!displayResource.scientificMetadata.isNullOrEmpty()) {
-                            item(key = "scientific_metadata_sample_$pageIndex") {
-                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
-                                    ScientificMetadataCard(
-                                        metadata = displayResource.scientificMetadata ?: emptyMap(),
-                                        initialExpanded = pageGetCardState("sci_meta_expanded"),
-                                        initialExpandAll = pageGetCardState("sci_meta_expand_all"),
-                                        onExpandedChange = { pageSetCardState("sci_meta_expanded", it) },
-                                        onExpandAllChange = { pageSetCardState("sci_meta_expand_all", it) }
-                                    )
-                                }
+                        val sciMetaSampleBiv = remember { BringIntoViewRequester() }
+                        AnimatedVisibility(
+                            visible = !displayResource.scientificMetadata.isNullOrEmpty(),
+                            enter = fadeIn(tween(200)) + expandVertically(),
+                            exit = fadeOut(tween(150)) + shrinkVertically()
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).bringIntoViewRequester(sciMetaSampleBiv)) {
+                                ScientificMetadataCard(
+                                    metadata = displayResource.scientificMetadata ?: emptyMap(),
+                                    initialExpanded = pageGetCardState("sci_meta_expanded"),
+                                    initialExpandAll = pageGetCardState("sci_meta_expand_all"),
+                                    onExpandedChange = { exp -> pageSetCardState("sci_meta_expanded", exp); if (exp) scope.launch { delay(220); sciMetaSampleBiv.bringIntoView() } },
+                                    onExpandAllChange = { pageSetCardState("sci_meta_expand_all", it) }
+                                )
                             }
                         }
-                        if (!displayResource.keywords.isNullOrEmpty()) {
-                            item(key = "keywords_sample_$pageIndex") {
-                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
-                                    KeywordsCard(displayResource.keywords.orEmpty())
-                                }
+                        AnimatedVisibility(
+                            visible = !displayResource.keywords.isNullOrEmpty(),
+                            enter = fadeIn(tween(200)) + expandVertically(),
+                            exit = fadeOut(tween(150)) + shrinkVertically()
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                                KeywordsCard(displayResource.keywords.orEmpty())
                             }
                         }
                     }
@@ -1102,25 +1110,24 @@ fun ResourceDetailScreen(
 
                 val ageMin = CacheManager.getResourceAgeMinutes(resource.uniqueId)
                 if (ageMin != null) {
-                    item(key = "cache_age") {
-                        Text(
-                            text = "Cached ${ageMin}m ago",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center
-                        )
-                    }
+                    Text(
+                        text = "Cached ${ageMin}m ago",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
                 }
-                } // end LazyColumn items
-            } // end LazyColumn
+                Spacer(Modifier.height(16.dp))
+                } // end Column
+            } // end AnimatedVisibility (content)
 
                         // Scroll-to-top button
                         ScrollToTopButton(
                             visible = showScrollToTop,
                             onClick = {
                                 scope.launch {
-                                    listState.animateScrollToItem(0)
+                                    scrollState.animateScrollTo(0)
                                 }
                             },
                             modifier = Modifier
