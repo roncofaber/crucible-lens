@@ -20,7 +20,12 @@ actual fun copyToClipboard(context: PlatformContext, text: String, label: String
 }
 
 actual fun openUrl(context: PlatformContext, url: String) {
-    context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+    if (url.isBlank()) return
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+    } catch (_: android.content.ActivityNotFoundException) {
+        Toast.makeText(context, "No app found to open this link", Toast.LENGTH_SHORT).show()
+    }
 }
 
 actual fun shareText(context: PlatformContext, text: String, subject: String) {

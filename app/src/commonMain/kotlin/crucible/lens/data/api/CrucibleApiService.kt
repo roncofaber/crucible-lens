@@ -274,7 +274,11 @@ class CrucibleApiService(
 
     suspend fun getDownloadLinks(uuid: String): ApiResult<Map<String, String>> = safeCall {
         val obj: JsonObject = get("datasets/$uuid/download_links")
-        obj.mapValues { (_, v) -> v.jsonPrimitive.content }
+        // Filter to only genuine signed URLs — the server may return HTTP 200 with
+        // {"detail": "No files found..."} instead of a proper 404 in some cases.
+        obj.entries
+            .filter { (_, v) -> runCatching { v.jsonPrimitive.content.startsWith("https://") }.getOrElse { false } }
+            .associate { (k, v) -> k to v.jsonPrimitive.content }
     }
 
     suspend fun uploadFileToDataset(uuid: String, bytes: ByteArray, filename: String): ApiResult<String> = safeCall {
