@@ -571,6 +571,9 @@ fun NavGraph(
                         onNavigateToAddFiles = { datasetUuid ->
                             navController.navigate(Screen.AddFiles.createRoute(datasetUuid))
                         },
+                        onNavigateToMetadataEditor = {
+                            navController.navigate(Screen.MetadataEditor.route)
+                        },
                         recentHistory = resourceHistory,
                         onDuplicate = { resource ->
                             when (resource) {

@@ -86,6 +86,7 @@ import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.util.MONTH_NAMES
 import crucible.lens.data.util.dateGroupKey
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.parseAsJsonObject
 import crucible.lens.ui.common.OpenInWebMenuItem
 import crucible.lens.ui.common.ShareMenuItem
 import crucible.lens.ui.common.ErrorCard
@@ -155,6 +156,7 @@ fun ResourceDetailScreen(
     loadedThumbnails: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<crucible.lens.data.model.Thumbnail>> = remember { androidx.compose.runtime.mutableStateMapOf() },
     onSeedThumbnails: (uuid: String, thumbnails: List<crucible.lens.data.model.Thumbnail>) -> Unit = { _, _ -> },
     onNavigateToAddFiles: (datasetUuid: String) -> Unit = {},
+    onNavigateToMetadataEditor: () -> Unit = {},
 ) {
     var showQrDialog by remember { mutableStateOf(false) }
     var showSiblingGroupDialog by remember { mutableStateOf(false) }
@@ -433,6 +435,8 @@ fun ResourceDetailScreen(
 
     // Screen-level sheet/dialog state — operate on currentDisplayResource
     var showEditSheet by remember { mutableStateOf(false) }
+    var editSheetPendingMetadata by remember { mutableStateOf<kotlinx.serialization.json.JsonObject?>(null) }
+    var editSheetWaitingForMetadata by remember { mutableStateOf(false) }
     var showLinkSheet by remember { mutableStateOf(false) }
     var showDeletionDialog by remember { mutableStateOf(false) }
     var pendingUnlink by remember { mutableStateOf<UnlinkRequest?>(null) }
@@ -456,6 +460,15 @@ fun ResourceDetailScreen(
         val hasLinks = (resource is Sample && resource.links != null) ||
                        (resource is Dataset && resource.links != null)
         if (hasLinks) enrichedUuids.add(resource.uniqueId)
+    }
+
+    // Re-open edit sheet with updated metadata after returning from MetadataEditorScreen.
+    LaunchedEffect(crucible.lens.data.util.MetadataHolder.isDirty) {
+        if (crucible.lens.data.util.MetadataHolder.isDirty && editSheetWaitingForMetadata) {
+            editSheetPendingMetadata = crucible.lens.data.util.MetadataHolder.take()
+            editSheetWaitingForMetadata = false
+            showEditSheet = true
+        }
     }
 
     // Incremented when a sibling PTR completes, forces lazy-load effects to re-run
@@ -1205,8 +1218,19 @@ fun ResourceDetailScreen(
     if (showEditSheet) {
         crucible.lens.ui.common.EditResourceSheet(
             resource = currentDisplayResource,
-            onDismiss = { showEditSheet = false },
-            onSaved = { showEditSheet = false; onRefresh(currentDisplayResource.uniqueId) }
+            onDismiss = { showEditSheet = false; editSheetPendingMetadata = null },
+            onSaved = { showEditSheet = false; editSheetPendingMetadata = null; onRefresh(currentDisplayResource.uniqueId) },
+            overrideMetadata = editSheetPendingMetadata,
+            onOpenMetadataEditor = { currentJson ->
+                val current = runCatching {
+                    currentJson.trim().ifBlank { null }
+                        ?.parseAsJsonObject()
+                }.getOrNull() ?: kotlinx.serialization.json.JsonObject(emptyMap())
+                crucible.lens.data.util.MetadataHolder.put(current)
+                showEditSheet = false
+                editSheetWaitingForMetadata = true
+                onNavigateToMetadataEditor()
+            }
         )
     }
     if (showLinkSheet) {
@@ -1563,19 +1587,24 @@ private fun SampleDetailsCard(
                 }
             }
 
+            Spacer(modifier = Modifier.height(4.dp))
+
             // Basic fields
-            InfoRow(icon = Icons.Default.Category, label = "Type", value = sample.sampleType ?: "None")
-            if (projectId != null) {
-                ClickableInfoRow(icon = Icons.Default.Folder, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })
-            } else {
-                InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                InfoRow(icon = Icons.Default.Category, label = "Type", value = sample.sampleType ?: "None")
+                if (projectId != null) {
+                    ClickableInfoRow(icon = Icons.Default.Folder, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })
+                } else {
+                    InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
+                }
+                InfoRow(icon = Icons.Default.Schedule, label = "Timestamp", value = formatDateTime(sample.timestamp))
+                InfoRow(icon = Icons.AutoMirrored.Filled.Notes, label = "Description", value = sample.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
             }
-            InfoRow(icon = Icons.Default.Schedule, label = "Timestamp", value = formatDateTime(sample.timestamp))
-            InfoRow(icon = Icons.AutoMirrored.Filled.Notes, label = "Description", value = sample.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
 
             // Advanced fields
             if (advanced) {
-                Column {
+                Spacer(modifier = Modifier.height(4.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (sample.ownerOrcid != null) {
                         ClickableInfoRow(
                             icon = Icons.Default.Person,
@@ -1681,7 +1710,7 @@ private fun DatasetDetailsCard(
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Deletion warning
             val datasetDeletionStatus = (dataset.deletionRequest?.get("status") as? kotlinx.serialization.json.JsonPrimitive)?.content
@@ -1709,7 +1738,10 @@ private fun DatasetDetailsCard(
                 }
             }
 
+            Spacer(modifier = Modifier.height(4.dp))
+
             // Basic fields
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             InfoRow(icon = Icons.Default.Science, label = "Measurement", value = dataset.measurement ?: "None")
             InfoRow(icon = Icons.Default.PlayCircle, label = "Session", value = dataset.sessionName ?: "None")
             if (dataset.instrumentName != null) {
@@ -1741,10 +1773,12 @@ private fun DatasetDetailsCard(
                 InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
             }
             InfoRow(icon = Icons.Default.Schedule, label = "Timestamp", value = formatDateTime(dataset.timestamp))
+            } // end basic fields Column
 
             // Advanced fields
             if (advanced) {
-                Column {
+                Spacer(modifier = Modifier.height(4.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (dataset.ownerOrcid != null) {
                         ClickableInfoRow(
                             icon = Icons.Default.Person,
@@ -1875,7 +1909,7 @@ private fun ScientificMetadataCard(
 
 @Composable
 private fun MetadataTree(data: Map<String, Any?>, indentLevel: Int, expandAll: Boolean = false) {
-    val entries = data.entries.toList()
+    val entries = data.entries.sortedBy { it.key }
     for ((index, entry) in entries.withIndex()) {
         val (entryKey, entryValue) = entry
         key(entryKey) {

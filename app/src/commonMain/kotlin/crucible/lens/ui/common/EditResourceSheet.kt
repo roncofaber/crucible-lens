@@ -36,7 +36,12 @@ import crucible.lens.ui.viewmodel.SaveState
 fun EditResourceSheet(
     resource: CrucibleResource,
     onDismiss: () -> Unit,
-    onSaved: () -> Unit
+    onSaved: () -> Unit,
+    // When provided, the metadata section shows a card that navigates to MetadataEditorScreen.
+    // The callback receives the current JSON string so it can seed MetadataHolder before navigating.
+    onOpenMetadataEditor: ((currentJson: String) -> Unit)? = null,
+    // Overrides the resource's scientificMetadata (used when returning from MetadataEditorScreen).
+    overrideMetadata: kotlinx.serialization.json.JsonObject? = null
 ) {
     val editViewModel: EditResourceViewModel = viewModel()
     val saveState by editViewModel.saveState.collectAsState()
@@ -75,13 +80,17 @@ fun EditResourceSheet(
                         resource = resource,
                         isSaving = isSaving,
                         snackbarHostState = snackbarHostState,
-                        viewModel = editViewModel
+                        viewModel = editViewModel,
+                        onOpenMetadataEditor = onOpenMetadataEditor,
+                        overrideMetadata = overrideMetadata
                     )
                     is Dataset -> DatasetEditFields(
                         resource = resource,
                         isSaving = isSaving,
                         snackbarHostState = snackbarHostState,
-                        viewModel = editViewModel
+                        viewModel = editViewModel,
+                        onOpenMetadataEditor = onOpenMetadataEditor,
+                        overrideMetadata = overrideMetadata
                     )
                 }
             }
@@ -100,7 +109,9 @@ private fun SampleEditFields(
     resource: Sample,
     isSaving: Boolean,
     snackbarHostState: SnackbarHostState,
-    viewModel: EditResourceViewModel
+    viewModel: EditResourceViewModel,
+    onOpenMetadataEditor: ((currentJson: String) -> Unit)? = null,
+    overrideMetadata: kotlinx.serialization.json.JsonObject? = null
 ) {
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     var name by remember { mutableStateOf(resource.name) }
@@ -111,7 +122,7 @@ private fun SampleEditFields(
     var selectedProjectId by remember { mutableStateOf(resource.projectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
     var metadataJson by remember {
-        mutableStateOf(resource.scientificMetadata?.toPrettyString() ?: "")
+        mutableStateOf(overrideMetadata?.toPrettyString() ?: resource.scientificMetadata?.toPrettyString() ?: "")
     }
     var metadataJsonError by remember { mutableStateOf<String?>(null) }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
@@ -199,19 +210,43 @@ private fun SampleEditFields(
     // Section: Metadata
     Text("Metadata", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
-    OutlinedTextField(
-        value = metadataJson,
-        onValueChange = { metadataJson = it; metadataJsonError = null },
-        label = { Text("Scientific Metadata (JSON)") },
-        placeholder = { Text("{\n  \"key\": \"value\"\n}") },
-        modifier = Modifier.fillMaxWidth(),
-        isError = metadataJsonError != null,
-        minLines = 4,
-        maxLines = 12,
-        textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
-    )
-    if (metadataJsonError != null) {
-        Text(metadataJsonError!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+    if (onOpenMetadataEditor != null) {
+        val fieldCount = runCatching { metadataJson.trim().ifBlank { null }?.parseAsJsonObject()?.size }.getOrNull() ?: 0
+        OutlinedCard(onClick = { onOpenMetadataEditor(metadataJson) }, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.DataObject, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Column {
+                        Text("Scientific metadata", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (fieldCount == 0) "No fields" else "$fieldCount field${if (fieldCount != 1) "s" else ""}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    } else {
+        OutlinedTextField(
+            value = metadataJson,
+            onValueChange = { metadataJson = it; metadataJsonError = null },
+            label = { Text("Scientific Metadata (JSON)") },
+            placeholder = { Text("{\n  \"key\": \"value\"\n}") },
+            modifier = Modifier.fillMaxWidth(),
+            isError = metadataJsonError != null,
+            minLines = 4,
+            maxLines = 12,
+            textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+        )
+        if (metadataJsonError != null) {
+            Text(metadataJsonError!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
     }
 
     SaveButton(enabled = name.isNotBlank() && !isSaving, isSaving = isSaving) {
@@ -245,7 +280,9 @@ private fun DatasetEditFields(
     resource: Dataset,
     isSaving: Boolean,
     snackbarHostState: SnackbarHostState,
-    viewModel: EditResourceViewModel
+    viewModel: EditResourceViewModel,
+    onOpenMetadataEditor: ((currentJson: String) -> Unit)? = null,
+    overrideMetadata: kotlinx.serialization.json.JsonObject? = null
 ) {
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     var name by remember { mutableStateOf(resource.name) }
@@ -255,7 +292,7 @@ private fun DatasetEditFields(
     var dataType by remember { mutableStateOf(resource.dataType ?: "") }
     var isPublic by remember { mutableStateOf(resource.isPublic ?: false) }
     var metadataJson by remember {
-        mutableStateOf(resource.scientificMetadata?.toPrettyString() ?: "")
+        mutableStateOf(overrideMetadata?.toPrettyString() ?: resource.scientificMetadata?.toPrettyString() ?: "")
     }
     var metadataJsonError by remember { mutableStateOf<String?>(null) }
     var timestamp by remember { mutableStateOf(resource.timestamp ?: "") }
@@ -358,19 +395,43 @@ private fun DatasetEditFields(
     // Section: Metadata
     Text("Metadata", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
-    OutlinedTextField(
-        value = metadataJson,
-        onValueChange = { metadataJson = it; metadataJsonError = null },
-        label = { Text("Scientific Metadata (JSON)") },
-        placeholder = { Text("{\n  \"key\": \"value\"\n}") },
-        modifier = Modifier.fillMaxWidth(),
-        isError = metadataJsonError != null,
-        minLines = 4,
-        maxLines = 12,
-        textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
-    )
-    if (metadataJsonError != null) {
-        Text(metadataJsonError!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+    if (onOpenMetadataEditor != null) {
+        val fieldCount = runCatching { metadataJson.trim().ifBlank { null }?.parseAsJsonObject()?.size }.getOrNull() ?: 0
+        OutlinedCard(onClick = { onOpenMetadataEditor(metadataJson) }, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.DataObject, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Column {
+                        Text("Scientific metadata", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (fieldCount == 0) "No fields" else "$fieldCount field${if (fieldCount != 1) "s" else ""}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    } else {
+        OutlinedTextField(
+            value = metadataJson,
+            onValueChange = { metadataJson = it; metadataJsonError = null },
+            label = { Text("Scientific Metadata (JSON)") },
+            placeholder = { Text("{\n  \"key\": \"value\"\n}") },
+            modifier = Modifier.fillMaxWidth(),
+            isError = metadataJsonError != null,
+            minLines = 4,
+            maxLines = 12,
+            textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+        )
+        if (metadataJsonError != null) {
+            Text(metadataJsonError!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
     }
 
     SaveButton(enabled = name.isNotBlank() && !isSaving, isSaving = isSaving) {
