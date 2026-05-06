@@ -59,7 +59,11 @@ fun CreateDatasetScreen(
 
     LaunchedEffect(saveState) {
         when (val s = saveState) {
-            is SaveState.Success -> { createViewModel.resetState(); onCreated(s.uuid) }
+            is SaveState.Success -> {
+                createViewModel.resetState()
+                if (s.uploadWarning != null) snackbarHostState.showSnackbar(s.uploadWarning)
+                onCreated(s.uuid)
+            }
             is SaveState.Error   -> { snackbarHostState.showSnackbar(s.message); createViewModel.resetState() }
             else -> {}
         }

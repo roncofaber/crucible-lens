@@ -803,7 +803,10 @@ fun NavGraph(
             val datasetId = backStackEntry.savedStateHandle.get<String>("datasetId")?.ifBlank { null }
             AddFilesScreen(
                 onBack = navigateBack,
-                onDone = navigateBack,
+                onDone = {
+                    if (datasetId != null) viewModel.refreshThumbnails(datasetId)
+                    navigateBack()
+                },
                 datasetUuid = datasetId
             )
         }

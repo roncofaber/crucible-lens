@@ -96,6 +96,15 @@ class ResourceDetailViewModel : ViewModel() {
         // L2 disk cache stubbed: PersistentThumbnailCache not available in commonMain
     }
 
+    fun refreshThumbnails(uuid: String) {
+        viewModelScope.launch {
+            loadedThumbnails.remove(uuid)
+            evictThumbnails(uuid)
+            val fresh = fetchAndCacheThumbnails(uuid)
+            if (fresh.isNotEmpty()) loadedThumbnails[uuid] = fresh
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
 
     fun fetchResource(uuid: String) {

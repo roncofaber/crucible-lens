@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
 sealed class SaveState {
     object Idle : SaveState()
     object Saving : SaveState()
-    data class Success(val uuid: String) : SaveState()
+    data class Success(val uuid: String, val uploadWarning: String? = null) : SaveState()
     data class Error(val message: String) : SaveState()
 }
 
@@ -78,23 +78,34 @@ class CreateDatasetViewModel : ViewModel() {
                 CacheManager.cacheResource(newUuid, newDataset)
                 request.projectId?.let { CacheManager.clearProjectDetail(it) }
 
+                var uploadFailures = 0
+                var thumbnailFailures = 0
                 files.forEachIndexed { index, (bytes, asThumbnail) ->
                     val filename = "file_${newUuid}_$index.jpg"
                     val uploadResp = ApiClient.service.uploadFileToDataset(newUuid, bytes, filename)
                     if (uploadResp is ApiResult.Success) {
                         val cloudPath = uploadResp.data.replace("./mnt/gcs", "crucible-uploads")
                         ApiClient.service.addAssociatedFile(newUuid, cloudPath, bytes.size, PlatformCrypto.sha256Hex(bytes))
+                    } else {
+                        uploadFailures++
                     }
                     if (asThumbnail) {
-                        ApiClient.service.addThumbnail(
+                        val thumbResp = ApiClient.service.addThumbnail(
                             newUuid,
                             ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
                         )
+                        if (thumbResp is ApiResult.Error) thumbnailFailures++
                     }
-                    // All post-creation steps are non-fatal — dataset was already created.
                 }
 
-                SaveState.Success(newUuid)
+                val warning = when {
+                    uploadFailures > 0 && thumbnailFailures > 0 ->
+                        "Dataset created, but $uploadFailures file upload(s) and $thumbnailFailures thumbnail(s) failed"
+                    uploadFailures > 0 -> "Dataset created, but $uploadFailures file upload(s) failed"
+                    thumbnailFailures > 0 -> "Dataset created, but $thumbnailFailures thumbnail(s) failed to upload"
+                    else -> null
+                }
+                SaveState.Success(newUuid, uploadWarning = warning)
             } catch (_: Exception) {
                 SaveState.Error("Connection error — check your network")
             }
