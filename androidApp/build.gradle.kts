@@ -21,13 +21,41 @@ android {
         versionName = "0.3.0"
     }
 
+    signingConfigs {
+        create("release") {
+            // Set these via environment variables or local.properties — never hard-code.
+            // CI: export KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+            // Local: define them in local.properties (already git-ignored)
+            val keystorePath = System.getenv("KEYSTORE_PATH")
+                ?: project.findProperty("keystore.path") as String?
+            val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+                ?: project.findProperty("keystore.password") as String?
+            val keyAlias = System.getenv("KEY_ALIAS")
+                ?: project.findProperty("key.alias") as String?
+            val keyPassword = System.getenv("KEY_PASSWORD")
+                ?: project.findProperty("key.password") as String?
+
+            if (keystorePath != null) {
+                storeFile = file(keystorePath)
+                storePassword = keystorePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            val releaseSigning = signingConfigs.getByName("release")
+            if (releaseSigning.storeFile != null) {
+                signingConfig = releaseSigning
+            }
         }
     }
 

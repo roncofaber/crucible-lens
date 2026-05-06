@@ -16,6 +16,8 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_FILE: iosApp/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""  # Set your Apple Team ID here, e.g. "ABC123XYZ"
       configs:
         debug:
           FRAMEWORK_SEARCH_PATHS: $(inherited) $(SRCROOT)/../app/build/XCFrameworks/debug
