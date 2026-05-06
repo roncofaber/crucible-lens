@@ -15,10 +15,12 @@ data class CachedItem<T>(
 
 object CacheManager {
     private const val CACHE_TTL = 10 * 60 * 1000L // 10 minutes
+    private const val DOWNLOAD_LINKS_TTL = 55 * 60 * 1000L // 55 min — just under the 1-hour signed URL expiry
     private const val MAX_RESOURCE_CACHE_SIZE = 50
     private const val MAX_THUMBNAIL_CACHE_SIZE = 20
     private const val MAX_PROJECT_DETAIL_CACHE_SIZE = 30
     private const val MAX_INSTRUMENT_DATASETS_CACHE_SIZE = 15
+    private const val MAX_DOWNLOAD_LINKS_CACHE_SIZE = 50
 
     private fun <V : CachedItem<*>> LinkedHashMap<String, V>.evictOldestIfOver(limit: Int) {
         if (size >= limit) {
@@ -37,6 +39,7 @@ object CacheManager {
     private val instrumentDatasetsCache = LinkedHashMap<String, CachedItem<List<Dataset>>>()
     private val projectSamplesCache = LinkedHashMap<String, CachedItem<List<Sample>>>()
     private val projectDatasetsCache = LinkedHashMap<String, CachedItem<List<Dataset>>>()
+    private val downloadLinksCache = LinkedHashMap<String, CachedItem<Map<String, String>>>()
 
     // Resource caching
     fun cacheResource(uuid: String, resource: CrucibleResource) {
@@ -144,6 +147,23 @@ object CacheManager {
     fun clearThumbnail(uuid: String) {
         thumbnailCache.remove(uuid)
     }
+
+    // Download links caching (55-min TTL matching signed URL expiry)
+    fun cacheDownloadLinks(uuid: String, links: Map<String, String>) {
+        downloadLinksCache.evictOldestIfOver(MAX_DOWNLOAD_LINKS_CACHE_SIZE)
+        downloadLinksCache[uuid] = CachedItem(links, Clock.System.now().toEpochMilliseconds())
+    }
+
+    fun getDownloadLinks(uuid: String): Map<String, String>? {
+        val cached = downloadLinksCache[uuid] ?: return null
+        if (Clock.System.now().toEpochMilliseconds() - cached.timestamp > DOWNLOAD_LINKS_TTL) {
+            downloadLinksCache.remove(uuid)
+            return null
+        }
+        return cached.data
+    }
+
+    fun clearDownloadLinks(uuid: String) { downloadLinksCache.remove(uuid) }
 
     // Project detail caching (samples and datasets per project)
     fun cacheProjectSamples(projectId: String, samples: List<Sample>) {

@@ -2594,18 +2594,28 @@ private fun DownloadLinksCard(
     fun fetch(isRefresh: Boolean = false) {
         scope.launch {
             if (isRefresh) isRefreshing = true else state = DownloadLinksState.Loading
-            val newState = when (val result = ApiClient.service.getDownloadLinks(datasetUuid)) {
-                is ApiResult.Success -> if (result.data.isEmpty()) DownloadLinksState.Empty
-                                        else DownloadLinksState.Success(result.data)
-                is ApiResult.Error   -> if (result.code == 404) DownloadLinksState.Empty
-                                        else DownloadLinksState.Err(result.message)
+            // Check in-memory cache first (55-min TTL matches signed URL expiry)
+            val cached = if (!isRefresh) CacheManager.getDownloadLinks(datasetUuid) else null
+            val newState = if (cached != null) {
+                if (cached.isEmpty()) DownloadLinksState.Empty else DownloadLinksState.Success(cached)
+            } else {
+                when (val result = ApiClient.service.getDownloadLinks(datasetUuid)) {
+                    is ApiResult.Success -> {
+                        if (result.data.isEmpty()) DownloadLinksState.Empty
+                        else DownloadLinksState.Success(result.data).also {
+                            CacheManager.cacheDownloadLinks(datasetUuid, result.data)
+                        }
+                    }
+                    is ApiResult.Error -> if (result.code == 404) DownloadLinksState.Empty
+                                         else DownloadLinksState.Err(result.message)
+                }
             }
             isRefreshing = false
             state = newState
         }
     }
 
-    // Silently fetch on first composition — card only appears if files exist
+    // Silently fetch on first composition — cache hit is instant, API call is once per hour
     LaunchedEffect(datasetUuid) { fetch() }
 
     // Render nothing until we have confirmed files
