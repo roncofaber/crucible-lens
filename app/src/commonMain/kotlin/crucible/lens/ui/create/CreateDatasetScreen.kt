@@ -47,7 +47,9 @@ fun CreateDatasetScreen(
     var timestamp by rememberSaveable { mutableStateOf(prefill?.timestamp ?: currentIsoDateTime()) }
     var selectedProjectId by rememberSaveable { mutableStateOf(prefill?.projectId ?: initialProjectId) }
     var projectDropdownExpanded by remember { mutableStateOf(false) }
-    var pendingFiles by remember { mutableStateOf<List<Pair<ByteArray, Boolean>>>(emptyList()) }
+    // Initialised from FilesHolder so the list survives navigation away and back
+    // (remember is wiped when the screen leaves composition; FilesHolder bridges the gap).
+    var pendingFiles by remember { mutableStateOf(FilesHolder.files) }
 
     val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
@@ -224,6 +226,7 @@ fun CreateDatasetScreen(
 
             OutlinedCard(
                 onClick = {
+                    FilesHolder.put(pendingFiles)
                     val ctx = listOfNotNull(
                         name.trim().ifBlank { null }?.let { "Dataset: $it" },
                         measurement.trim().ifBlank { null }?.let { "Measurement: $it" },
