@@ -43,8 +43,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -919,14 +917,13 @@ fun ResourceDetailScreen(
 
                 when (displayResource) {
                     is Dataset -> {
-                        item(key = "thumbnails_$pageIndex") {
-                            AnimatedVisibility(
-                                visible = displayThumbnails.isNotEmpty(),
-                                enter = expandVertically() + fadeIn(animationSpec = tween(300)),
-                                exit = ExitTransition.None
-                            ) {
+                        if (displayThumbnails.isNotEmpty()) {
+                            item(key = "thumbnails_$pageIndex") {
                                 Box(
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                                    modifier = Modifier
+                                        .animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150))
+                                        .fillMaxWidth()
+                                        .padding(bottom = 16.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Column(modifier = Modifier.fillMaxWidth(0.9f)) {
@@ -949,13 +946,9 @@ fun ResourceDetailScreen(
                                 }
                             }
                         }
-                        item(key = "linked_samples_$pageIndex") {
-                            AnimatedVisibility(
-                                visible = displayResource.links?.any { it.resourceType == "sample" && it.relationship == "associated" } == true,
-                                enter = expandVertically() + fadeIn(),
-                                exit = ExitTransition.None
-                            ) {
-                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                        if (displayResource.links?.any { it.resourceType == "sample" && it.relationship == "associated" } == true) {
+                            item(key = "linked_samples_$pageIndex") {
+                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
                                     LinkedSamplesCard(
                                         samples = displayResource.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "associated" }.sortedBy { it.uniqueId },
                                         onNavigateToResource = onNavigateToResource,
@@ -970,13 +963,9 @@ fun ResourceDetailScreen(
                                 }
                             }
                         }
-                        item(key = "parent_datasets_$pageIndex") {
-                            AnimatedVisibility(
-                                visible = displayResource.links?.any { it.resourceType == "dataset" && it.relationship == "parent" } == true,
-                                enter = expandVertically() + fadeIn(),
-                                exit = ExitTransition.None
-                            ) {
-                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                        if (displayResource.links?.any { it.resourceType == "dataset" && it.relationship == "parent" } == true) {
+                            item(key = "parent_datasets_$pageIndex") {
+                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
                                     ParentDatasetsCard(
                                         parents = displayResource.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "parent" }.sortedBy { it.uniqueId },
                                         onNavigateToResource = onNavigateToResource,
@@ -991,13 +980,9 @@ fun ResourceDetailScreen(
                                 }
                             }
                         }
-                        item(key = "child_datasets_$pageIndex") {
-                            AnimatedVisibility(
-                                visible = displayResource.links?.any { it.resourceType == "dataset" && it.relationship == "child" } == true,
-                                enter = expandVertically() + fadeIn(),
-                                exit = ExitTransition.None
-                            ) {
-                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                        if (displayResource.links?.any { it.resourceType == "dataset" && it.relationship == "child" } == true) {
+                            item(key = "child_datasets_$pageIndex") {
+                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
                                     ChildDatasetsCard(
                                         children = displayResource.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "child" }.sortedBy { it.uniqueId },
                                         onNavigateToResource = onNavigateToResource,
@@ -1019,13 +1004,9 @@ fun ResourceDetailScreen(
                                 onExpandedChange = { pageSetCardState("download_links", it) }
                             )
                         }
-                        item(key = "scientific_metadata_$pageIndex") {
-                            AnimatedVisibility(
-                                visible = !displayResource.scientificMetadata.isNullOrEmpty(),
-                                enter = expandVertically() + fadeIn(),
-                                exit = ExitTransition.None
-                            ) {
-                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                        if (!displayResource.scientificMetadata.isNullOrEmpty()) {
+                            item(key = "scientific_metadata_$pageIndex") {
+                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
                                     ScientificMetadataCard(
                                         metadata = displayResource.scientificMetadata ?: emptyMap(),
                                         initialExpanded = pageGetCardState("sci_meta_expanded"),
@@ -1036,26 +1017,18 @@ fun ResourceDetailScreen(
                                 }
                             }
                         }
-                        item(key = "keywords_dataset_$pageIndex") {
-                            AnimatedVisibility(
-                                visible = !displayResource.keywords.isNullOrEmpty(),
-                                enter = expandVertically() + fadeIn(),
-                                exit = ExitTransition.None
-                            ) {
-                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                        if (!displayResource.keywords.isNullOrEmpty()) {
+                            item(key = "keywords_dataset_$pageIndex") {
+                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
                                     KeywordsCard(displayResource.keywords.orEmpty())
                                 }
                             }
                         }
                     }
                     is Sample -> {
-                        item(key = "parent_samples_$pageIndex") {
-                            AnimatedVisibility(
-                                visible = displayResource.links?.any { it.resourceType == "sample" && it.relationship == "parent" } == true,
-                                enter = expandVertically() + fadeIn(),
-                                exit = ExitTransition.None
-                            ) {
-                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                        if (displayResource.links?.any { it.resourceType == "sample" && it.relationship == "parent" } == true) {
+                            item(key = "parent_samples_$pageIndex") {
+                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
                                     ParentSamplesCard(
                                         parents = displayResource.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "parent" }.sortedBy { it.uniqueId },
                                         onNavigateToResource = onNavigateToResource,
@@ -1070,13 +1043,9 @@ fun ResourceDetailScreen(
                                 }
                             }
                         }
-                        item(key = "child_samples_$pageIndex") {
-                            AnimatedVisibility(
-                                visible = displayResource.links?.any { it.resourceType == "sample" && it.relationship == "child" } == true,
-                                enter = expandVertically() + fadeIn(),
-                                exit = ExitTransition.None
-                            ) {
-                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                        if (displayResource.links?.any { it.resourceType == "sample" && it.relationship == "child" } == true) {
+                            item(key = "child_samples_$pageIndex") {
+                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
                                     ChildSamplesCard(
                                         children = displayResource.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "child" }.sortedBy { it.uniqueId },
                                         onNavigateToResource = onNavigateToResource,
@@ -1091,13 +1060,9 @@ fun ResourceDetailScreen(
                                 }
                             }
                         }
-                        item(key = "linked_datasets_$pageIndex") {
-                            AnimatedVisibility(
-                                visible = displayResource.links?.any { it.resourceType == "dataset" && it.relationship == "associated" } == true,
-                                enter = expandVertically() + fadeIn(),
-                                exit = ExitTransition.None
-                            ) {
-                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                        if (displayResource.links?.any { it.resourceType == "dataset" && it.relationship == "associated" } == true) {
+                            item(key = "linked_datasets_$pageIndex") {
+                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
                                     LinkedDatasetsCard(
                                         datasets = displayResource.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "associated" }.sortedBy { it.uniqueId },
                                         onNavigateToResource = onNavigateToResource,
@@ -1112,13 +1077,9 @@ fun ResourceDetailScreen(
                                 }
                             }
                         }
-                        item(key = "scientific_metadata_sample_$pageIndex") {
-                            AnimatedVisibility(
-                                visible = !displayResource.scientificMetadata.isNullOrEmpty(),
-                                enter = expandVertically() + fadeIn(),
-                                exit = ExitTransition.None
-                            ) {
-                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                        if (!displayResource.scientificMetadata.isNullOrEmpty()) {
+                            item(key = "scientific_metadata_sample_$pageIndex") {
+                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
                                     ScientificMetadataCard(
                                         metadata = displayResource.scientificMetadata ?: emptyMap(),
                                         initialExpanded = pageGetCardState("sci_meta_expanded"),
@@ -1129,13 +1090,9 @@ fun ResourceDetailScreen(
                                 }
                             }
                         }
-                        item(key = "keywords_sample_$pageIndex") {
-                            AnimatedVisibility(
-                                visible = !displayResource.keywords.isNullOrEmpty(),
-                                enter = expandVertically() + fadeIn(),
-                                exit = ExitTransition.None
-                            ) {
-                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                        if (!displayResource.keywords.isNullOrEmpty()) {
+                            item(key = "keywords_sample_$pageIndex") {
+                                Box(modifier = Modifier.animateItem(fadeInSpec = tween(200), fadeOutSpec = tween(150)).fillMaxWidth().padding(bottom = 16.dp)) {
                                     KeywordsCard(displayResource.keywords.orEmpty())
                                 }
                             }
