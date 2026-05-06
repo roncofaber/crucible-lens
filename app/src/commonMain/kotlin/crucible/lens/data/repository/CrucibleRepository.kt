@@ -5,6 +5,7 @@ import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
+import crucible.lens.data.model.Thumbnail
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -55,11 +56,10 @@ class CrucibleRepository {
         is Dataset -> resource.links != null
     }
 
-    suspend fun fetchThumbnails(datasetUuid: String): List<String> = withContext(Dispatchers.Default) {
+    suspend fun fetchThumbnails(datasetUuid: String): List<Thumbnail> = withContext(Dispatchers.Default) {
         try {
-            val result = api.getThumbnails(datasetUuid)
-            when (result) {
-                is ApiResult.Success -> result.data.map { thumb -> "data:image/png;base64,${thumb.thumbnailB64}" }
+            when (val result = api.getThumbnails(datasetUuid)) {
+                is ApiResult.Success -> result.data
                 is ApiResult.Error -> emptyList()
             }
         } catch (e: Exception) {

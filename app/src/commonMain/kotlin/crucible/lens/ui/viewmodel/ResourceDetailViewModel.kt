@@ -9,6 +9,7 @@ import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
+import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.repository.ResourceResult
 import crucible.lens.data.sync.DataSyncManager
@@ -22,7 +23,7 @@ import kotlinx.coroutines.launch
 sealed class UiState {
     object Idle : UiState()
     object Loading : UiState()
-    data class Success(val resource: CrucibleResource, val thumbnails: List<String> = emptyList(), val isRefreshing: Boolean = false) : UiState()
+    data class Success(val resource: CrucibleResource, val thumbnails: List<Thumbnail> = emptyList(), val isRefreshing: Boolean = false) : UiState()
     data class Error(val message: String) : UiState()
 }
 
@@ -52,10 +53,10 @@ class ResourceDetailViewModel : ViewModel() {
     val failedEnrichmentUuids = mutableStateSetOf<String>()
 
     /** Thumbnail URL lists for displayed resources. */
-    val loadedThumbnails = mutableStateMapOf<String, List<String>>()
+    val loadedThumbnails = mutableStateMapOf<String, List<Thumbnail>>()
 
     /** Seed thumbnails when they are already available (avoids a redundant network fetch). */
-    fun seedThumbnails(uuid: String, thumbnails: List<String>) {
+    fun seedThumbnails(uuid: String, thumbnails: List<Thumbnail>) {
         if (thumbnails.isNotEmpty()) loadedThumbnails[uuid] = thumbnails
     }
 
@@ -80,10 +81,10 @@ class ResourceDetailViewModel : ViewModel() {
 
     // ── Thumbnail helpers (L1 memory → L2 disk → network) ────────────────────
 
-    private fun getThumbnails(uuid: String): List<String>? =
+    private fun getThumbnails(uuid: String): List<Thumbnail>? =
         CacheManager.getThumbnails(uuid)
 
-    private suspend fun fetchAndCacheThumbnails(uuid: String): List<String> {
+    private suspend fun fetchAndCacheThumbnails(uuid: String): List<Thumbnail> {
         val fetched = repository.fetchThumbnails(uuid)
         CacheManager.cacheThumbnails(uuid, fetched)
         // L2 disk cache stubbed: PersistentThumbnailCache not available in commonMain

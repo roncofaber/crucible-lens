@@ -85,6 +85,7 @@ data class DatasetReference(
 
 @Serializable
 data class Thumbnail(
+    val id: Int = -1,
     @SerialName("thumbnail_b64str") val thumbnailB64: String,
     @SerialName("thumbnail_name") val thumbnailName: String? = null,
     @SerialName("dataset_id") val datasetId: Int? = null

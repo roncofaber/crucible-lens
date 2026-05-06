@@ -131,7 +131,7 @@ private fun siblingGroupLabel(groupBy: String?, resource: CrucibleResource): Str
 @Composable
 fun ResourceDetailScreen(
     resource: CrucibleResource,
-    thumbnails: List<String>,
+    thumbnails: List<crucible.lens.data.model.Thumbnail>,
     graphExplorerUrl: String,
     modifier: Modifier = Modifier,
     isRefreshing: Boolean = false,
@@ -152,8 +152,8 @@ fun ResourceDetailScreen(
     loadedResources: androidx.compose.runtime.snapshots.SnapshotStateMap<String, CrucibleResource> = remember { androidx.compose.runtime.mutableStateMapOf() },
     enrichedUuids: MutableSet<String> = remember { mutableSetOf() },
     failedEnrichmentUuids: androidx.compose.runtime.snapshots.SnapshotStateSet<String> = remember { androidx.compose.runtime.mutableStateSetOf() },
-    loadedThumbnails: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<String>> = remember { androidx.compose.runtime.mutableStateMapOf() },
-    onSeedThumbnails: (uuid: String, thumbnails: List<String>) -> Unit = { _, _ -> },
+    loadedThumbnails: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<crucible.lens.data.model.Thumbnail>> = remember { androidx.compose.runtime.mutableStateMapOf() },
+    onSeedThumbnails: (uuid: String, thumbnails: List<crucible.lens.data.model.Thumbnail>) -> Unit = { _, _ -> },
     onNavigateToAddFiles: (datasetUuid: String) -> Unit = {},
 ) {
     var showQrDialog by remember { mutableStateOf(false) }
@@ -582,7 +582,7 @@ fun ResourceDetailScreen(
                 try {
                     val thumbResp = ApiClient.service.getThumbnails(uuid)
                     val thumbs = when (thumbResp) {
-                        is ApiResult.Success -> thumbResp.data.map { "data:image/png;base64,${it.thumbnailB64}" }
+                        is ApiResult.Success -> thumbResp.data
                         is ApiResult.Error -> emptyList()
                     }
                     withContext(Dispatchers.Main) {
@@ -910,7 +910,21 @@ fun ResourceDetailScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Column(modifier = Modifier.fillMaxWidth(0.9f)) {
-                                        ThumbnailsSection(pageResource.uniqueId, displayThumbnails)
+                                        ThumbnailsSection(
+                                            uuid = pageResource.uniqueId,
+                                            thumbnails = displayThumbnails,
+                                            onDelete = { thumbnailId ->
+                                                scope.launch {
+                                                    val resp = ApiClient.service.deleteThumbnail(pageResource.uniqueId, thumbnailId)
+                                                    if (resp is ApiResult.Success) {
+                                                        loadedThumbnails[pageResource.uniqueId] =
+                                                            loadedThumbnails[pageResource.uniqueId].orEmpty()
+                                                                .filter { it.id != thumbnailId }
+                                                        CacheManager.clearThumbnail(pageResource.uniqueId)
+                                                    }
+                                                }
+                                            }
+                                        )
                                     }
                                 }
                             }
@@ -1369,7 +1383,11 @@ private fun BasicInfoCard(
 }
 
 @Composable
-private fun ThumbnailsSection(uuid: String, thumbnails: List<String>) {
+private fun ThumbnailsSection(
+    uuid: String,
+    thumbnails: List<crucible.lens.data.model.Thumbnail>,
+    onDelete: (thumbnailId: Int) -> Unit = {}
+) {
     thumbnails.forEachIndexed { index, thumbnail ->
         Card(
             modifier = Modifier
@@ -1384,11 +1402,7 @@ private fun ThumbnailsSection(uuid: String, thumbnails: List<String>) {
             var base64Data by remember(uuid, index) { mutableStateOf<ByteArray?>(null) }
             LaunchedEffect(uuid, index) {
                 base64Data = withContext(Dispatchers.Default) {
-                    try {
-                        if (thumbnail.startsWith("data:image/"))
-                            PlatformBase64.decode(thumbnail.substringAfter("base64,"))
-                        else null
-                    } catch (e: Exception) { null }
+                    try { PlatformBase64.decode(thumbnail.thumbnailB64) } catch (_: Exception) { null }
                 }
             }
 
@@ -1407,42 +1421,39 @@ private fun ThumbnailsSection(uuid: String, thumbnails: List<String>) {
                             .heightIn(min = 200.dp, max = 400.dp)
                             .padding(8.dp),
                         contentScale = ContentScale.Fit,
-                        onLoading = {
-                            imageState = "loading"
-                        },
-                        onSuccess = {
-                            imageState = null
-                        },
-                        onError = {
-                            imageState = "error: ${it.result.throwable.message}"
-                        }
+                        onLoading = { imageState = "loading" },
+                        onSuccess = { imageState = null },
+                        onError = { imageState = "error: ${it.result.throwable.message}" }
                     )
                 } else {
                     imageState = "error: Failed to decode base64"
                 }
 
-                // Show loading/error overlay
                 when {
-                    imageState == "loading" -> {
-                        CircularProgressIndicator()
+                    imageState == "loading" -> CircularProgressIndicator()
+                    imageState?.startsWith("error") == true -> Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.ErrorOutline, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.error)
+                        Text("Failed to load image", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                     }
-                    imageState?.startsWith("error") == true -> {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.ErrorOutline,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                            Text(
-                                text = "Failed to load image",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
+                }
+
+                if (thumbnail.id >= 0) {
+                    IconButton(
+                        onClick = { onDelete(thumbnail.id) },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                            .size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.DeleteOutline,
+                            contentDescription = "Delete thumbnail",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             }

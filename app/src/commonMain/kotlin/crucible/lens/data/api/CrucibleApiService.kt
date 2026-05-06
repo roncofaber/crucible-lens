@@ -268,6 +268,10 @@ class CrucibleApiService(
         post("datasets/$uuid/thumbnails", request)
     }
 
+    suspend fun deleteThumbnail(uuid: String, thumbnailId: Int): ApiResult<Boolean> = safeCall {
+        delete("datasets/$uuid/thumbnails/$thumbnailId")
+    }
+
     suspend fun uploadFileToDataset(uuid: String, bytes: ByteArray, filename: String): ApiResult<String> = safeCall {
         client.post("${baseUrl}datasets/$uuid/upload") {
             header("Authorization", "Bearer $apiKey")

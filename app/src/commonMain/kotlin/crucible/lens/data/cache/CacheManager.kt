@@ -5,6 +5,7 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Instrument
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
+import crucible.lens.data.model.Thumbnail
 import kotlin.time.Clock
 
 data class CachedItem<T>(
@@ -30,7 +31,7 @@ object CacheManager {
 
     private val resourceCache = LinkedHashMap<String, CachedItem<CrucibleResource>>()
     private val resourceTypeCache = LinkedHashMap<String, String>() // UUID -> "sample" or "dataset"
-    private val thumbnailCache = LinkedHashMap<String, CachedItem<List<String>>>()
+    private val thumbnailCache = LinkedHashMap<String, CachedItem<List<Thumbnail>>>()
     private var projectsCache: CachedItem<List<Project>>? = null
     private var instrumentsCache: CachedItem<List<Instrument>>? = null
     private val instrumentDatasetsCache = LinkedHashMap<String, CachedItem<List<Dataset>>>()
@@ -85,12 +86,12 @@ object CacheManager {
     }
 
     // Thumbnail caching
-    fun cacheThumbnails(uuid: String, thumbnails: List<String>) {
+    fun cacheThumbnails(uuid: String, thumbnails: List<Thumbnail>) {
         thumbnailCache.evictOldestIfOver(MAX_THUMBNAIL_CACHE_SIZE)
         thumbnailCache[uuid] = CachedItem(thumbnails, Clock.System.now().toEpochMilliseconds())
     }
 
-    fun getThumbnails(uuid: String): List<String>? {
+    fun getThumbnails(uuid: String): List<Thumbnail>? {
         val cached = thumbnailCache[uuid] ?: return null
         if (cached.isExpired()) { thumbnailCache.remove(uuid); return null }
         return cached.data
@@ -211,9 +212,8 @@ object CacheManager {
     fun getDetailedStats(): CacheStats {
         val cachedSampleCount = projectSamplesCache.values.sumOf { it.data.size }
         val cachedDatasetCount = projectDatasetsCache.values.sumOf { it.data.size }
-        // Thumbnails are base64 strings — each char ~1 byte of actual data
         val thumbnailSizeBytes = thumbnailCache.values.sumOf { cached ->
-            cached.data.sumOf { it.length.toLong() }
+            cached.data.sumOf { it.thumbnailB64.length.toLong() }
         }
         val estimatedSizeKB =
             resourceCache.size * 3L +              // ~3 KB per resource (metadata + relationships)
