@@ -1005,6 +1005,15 @@ fun ResourceDetailScreen(
                                 }
                             }
                         }
+                        item(key = "download_links_$pageIndex") {
+                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                                DownloadLinksCard(
+                                    datasetUuid = pageResource.uniqueId,
+                                    initialExpanded = pageGetCardState("download_links"),
+                                    onExpandedChange = { pageSetCardState("download_links", it) }
+                                )
+                            }
+                        }
                         item(key = "scientific_metadata_$pageIndex") {
                             AnimatedVisibility(
                                 visible = !displayResource.scientificMetadata.isNullOrEmpty(),
@@ -2592,6 +2601,130 @@ private fun formatFileSize(bytes: Long): String = when {
     bytes >= 1_048_576     -> formatDecimal(bytes / 1_048_576.0, 2) + " MB"
     bytes >= 1_024         -> formatDecimal(bytes / 1_024.0, 1) + " KB"
     else                   -> "$bytes B"
+}
+
+// ── Download Links ────────────────────────────────────────────────────────────
+
+private sealed class DownloadLinksState {
+    object Idle    : DownloadLinksState()
+    object Loading : DownloadLinksState()
+    object Empty   : DownloadLinksState()
+    data class Success(val links: Map<String, String>) : DownloadLinksState()
+    data class Err(val message: String) : DownloadLinksState()
+}
+
+private fun displayName(path: String): String =
+    path.split("/").drop(1).joinToString("/").ifBlank { path }
+
+private fun fileIcon(name: String): androidx.compose.ui.graphics.vector.ImageVector {
+    val ext = name.substringAfterLast('.', "").lowercase()
+    return when (ext) {
+        "h5", "hdf5", "nc", "netcdf", "nxs" -> Icons.Default.Storage
+        "tiff", "tif", "png", "jpg", "jpeg", "bmp", "gif" -> Icons.Default.Image
+        "pdf" -> Icons.Default.Description
+        "csv", "tsv", "txt", "dat", "log" -> Icons.AutoMirrored.Filled.Notes
+        "json", "yaml", "yml", "xml", "toml" -> Icons.Default.DataObject
+        "zip", "tar", "gz", "bz2", "xz" -> Icons.Default.FolderZip
+        else -> Icons.Default.InsertDriveFile
+    }
+}
+
+@Composable
+private fun DownloadLinksCard(
+    datasetUuid: String,
+    initialExpanded: Boolean = false,
+    onExpandedChange: (Boolean) -> Unit = {}
+) {
+    var expanded by remember { mutableStateOf(initialExpanded) }
+    var state by remember { mutableStateOf<DownloadLinksState>(DownloadLinksState.Idle) }
+    val scope = rememberCoroutineScope()
+    val platformCtx = getPlatformContext()
+
+    fun fetch() {
+        scope.launch {
+            state = DownloadLinksState.Loading
+            state = when (val result = ApiClient.service.getDownloadLinks(datasetUuid)) {
+                is ApiResult.Success -> if (result.data.isEmpty()) DownloadLinksState.Empty
+                                        else DownloadLinksState.Success(result.data)
+                is ApiResult.Error   -> if (result.code == 404) DownloadLinksState.Empty
+                                        else DownloadLinksState.Err(result.message)
+            }
+        }
+    }
+
+    Card {
+        Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        val new = !expanded
+                        expanded = new
+                        onExpandedChange(new)
+                        if (new && state is DownloadLinksState.Idle) fetch()
+                    },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Download Links", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                if (expanded) {
+                    IconButton(
+                        onClick = { fetch() },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh links", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+
+            if (expanded) {
+                Spacer(Modifier.height(8.dp))
+                when (val s = state) {
+                    is DownloadLinksState.Idle -> {}
+                    is DownloadLinksState.Loading -> {
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        }
+                    }
+                    is DownloadLinksState.Empty -> {
+                        Text("No files available for download.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    is DownloadLinksState.Err -> {
+                        Text("Could not load links: ${s.message}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
+                    is DownloadLinksState.Success -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            s.links.entries.sortedBy { it.key }.forEach { (path, url) ->
+                                val name = displayName(path)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(fileIcon(name), contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(name, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    IconButton(onClick = { openUrl(platformCtx, url) }, modifier = Modifier.size(32.dp)) {
+                                        Icon(Icons.Default.OpenInNew, contentDescription = "Open", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                    IconButton(onClick = { shareText(platformCtx, url, name) }, modifier = Modifier.size(32.dp)) {
+                                        Icon(Icons.Default.Share, contentDescription = "Share link", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

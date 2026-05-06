@@ -272,6 +272,11 @@ class CrucibleApiService(
         delete("datasets/$uuid/thumbnails/$thumbnailId")
     }
 
+    suspend fun getDownloadLinks(uuid: String): ApiResult<Map<String, String>> = safeCall {
+        val obj: JsonObject = get("datasets/$uuid/download_links")
+        obj.mapValues { (_, v) -> v.jsonPrimitive.content }
+    }
+
     suspend fun uploadFileToDataset(uuid: String, bytes: ByteArray, filename: String): ApiResult<String> = safeCall {
         client.post("${baseUrl}datasets/$uuid/upload") {
             header("Authorization", "Bearer $apiKey")
