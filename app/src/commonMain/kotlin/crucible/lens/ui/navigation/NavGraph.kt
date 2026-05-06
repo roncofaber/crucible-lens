@@ -574,8 +574,6 @@ fun NavGraph(
                         onNavigateToMetadataEditor = {
                             navController.navigate(Screen.MetadataEditor.route)
                         },
-                        lastViewedSiblingUuid = viewModel.lastViewedSiblingUuid,
-                        onSiblingChanged = viewModel::setCurrentSibling,
                         recentHistory = resourceHistory,
                         onDuplicate = { resource ->
                             when (resource) {

@@ -157,8 +157,6 @@ fun ResourceDetailScreen(
     onSeedThumbnails: (uuid: String, thumbnails: List<crucible.lens.data.model.Thumbnail>) -> Unit = { _, _ -> },
     onNavigateToAddFiles: (datasetUuid: String) -> Unit = {},
     onNavigateToMetadataEditor: () -> Unit = {},
-    lastViewedSiblingUuid: String? = null,
-    onSiblingChanged: (uuid: String) -> Unit = {},
 ) {
     var showQrDialog by remember { mutableStateOf(false) }
     var showSiblingGroupDialog by remember { mutableStateOf(false) }
@@ -411,12 +409,7 @@ fun ResourceDetailScreen(
         is Dataset -> sameTypeDatasets
     }
     val siblingIndex = remember(siblingList, resource) {
-        // Restore the last-swiped position if the UUID is still in this sibling list,
-        // otherwise fall back to the route's own resource.
-        val restoredIndex = lastViewedSiblingUuid
-            ?.let { uuid -> siblingList.indexOfFirst { it.uniqueId == uuid } }
-            ?.takeIf { it >= 0 }
-        restoredIndex ?: siblingList.indexOfFirst { it.uniqueId == resource.uniqueId }
+        siblingList.indexOfFirst { it.uniqueId == resource.uniqueId }
     }
 
     // HorizontalPager state. initialPage uses siblingIndex directly so the pager
@@ -455,7 +448,6 @@ fun ResourceDetailScreen(
         val targetResource = siblingList.getOrNull(targetPage)
         if (targetResource != null) {
             onSaveToHistory(targetResource.uniqueId, targetResource.name)
-            onSiblingChanged(targetResource.uniqueId)
         }
     }
 
