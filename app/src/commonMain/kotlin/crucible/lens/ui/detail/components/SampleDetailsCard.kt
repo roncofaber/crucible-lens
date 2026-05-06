@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.Sample
+import crucible.lens.data.util.formatDateTime
 import crucible.lens.data.util.formatFileSize
 import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext

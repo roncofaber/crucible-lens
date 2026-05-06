@@ -38,7 +38,7 @@ import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.SearchBar
-import crucible.lens.ui.common.showFeedback
+import crucible.lens.platform.showToast
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -275,7 +275,7 @@ fun InstrumentListScreen(
                                 val dismissState = rememberSwipeToDismissBoxState(
                                     confirmValueChange = { value ->
                                         if (value == SwipeToDismissBoxValue.EndToStart) {
-                                            showFeedback(platformContext, "Instrument hidden")
+                                            showToast(platformContext, "Instrument hidden")
                                             onToggleHide(instrument.uniqueId)
                                             true
                                         } else false
@@ -318,7 +318,7 @@ fun InstrumentListScreen(
                                         instrument = instrument,
                                         isPinned = instrument.uniqueId in pinnedInstruments,
                                         onTogglePin = {
-                                            showFeedback(platformContext, if (instrument.uniqueId in pinnedInstruments) "Instrument unpinned" else "Instrument pinned")
+                                            showToast(platformContext, if (instrument.uniqueId in pinnedInstruments) "Instrument unpinned" else "Instrument pinned")
                                             onTogglePin(instrument.uniqueId)
                                         },
                                         onClick = { onInstrumentClick(instrument.uniqueId) }
@@ -354,7 +354,7 @@ fun InstrumentListScreen(
                                         val dismissState = rememberSwipeToDismissBoxState(
                                             confirmValueChange = { value ->
                                                 if (value == SwipeToDismissBoxValue.StartToEnd) {
-                                                    showFeedback(platformContext, "Instrument shown")
+                                                    showToast(platformContext, "Instrument shown")
                                                     onToggleHide(instrument.uniqueId)
                                                     true
                                                 } else false

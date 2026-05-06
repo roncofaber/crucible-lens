@@ -39,7 +39,7 @@ import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.RefreshMenuItem
 import crucible.lens.ui.common.ToggleHiddenMenuItem
-import crucible.lens.ui.common.showFeedback
+import crucible.lens.platform.showToast
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.AppScaffold
@@ -478,7 +478,7 @@ fun ProjectsListScreen(
                                     val dismissState = rememberSwipeToDismissBoxState(
                                         confirmValueChange = { value ->
                                             if (value == SwipeToDismissBoxValue.EndToStart) {
-                                                showFeedback(platformContext, "Project hidden")
+                                                showToast(platformContext, "Project hidden")
                                                 onToggleHide(project.projectId)
                                                 true
                                             } else false
@@ -531,7 +531,7 @@ fun ProjectsListScreen(
                                             onClick = { onProjectClick(project.projectId) },
                                             isPinned = project.projectId in pinnedProjects,
                                             onTogglePin = {
-                                                showFeedback(platformContext, if (project.projectId in pinnedProjects) "Project unpinned" else "Project pinned")
+                                                showToast(platformContext, if (project.projectId in pinnedProjects) "Project unpinned" else "Project pinned")
                                                 onTogglePin(project.projectId)
                                             }
                                         )
@@ -575,7 +575,7 @@ fun ProjectsListScreen(
                                                 confirmValueChange = { value ->
                                                     if (value == SwipeToDismissBoxValue.StartToEnd) {
                                                         manuallyShown = manuallyShown + project.projectId
-                                                        showFeedback(platformContext, "Project shown")
+                                                        showToast(platformContext, "Project shown")
                                                         onToggleHide(project.projectId)
                                                         true
                                                     } else false

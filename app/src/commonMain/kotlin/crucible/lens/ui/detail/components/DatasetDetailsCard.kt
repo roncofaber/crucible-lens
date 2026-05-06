@@ -24,6 +24,7 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
+import crucible.lens.data.util.formatDateTime
 import crucible.lens.data.util.formatFileSize
 import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext

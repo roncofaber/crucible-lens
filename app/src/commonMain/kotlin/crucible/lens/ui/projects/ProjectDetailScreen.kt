@@ -57,7 +57,7 @@ import crucible.lens.ui.common.CopyIdMenuItem
 import crucible.lens.ui.common.OpenInWebMenuItem
 import crucible.lens.ui.common.RefreshMenuItem
 import crucible.lens.ui.common.ShareMenuItem
-import crucible.lens.ui.common.showFeedback
+import crucible.lens.platform.showToast
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.fadeEndEdge
 import crucible.lens.ui.common.LazyColumnScrollbar
@@ -358,10 +358,10 @@ fun ProjectDetailScreen(
                         currentPage = pagerState.currentPage,
                         sampleGroupBy = sampleGroupBy,
                         datasetGroupBy = datasetGroupBy,
-                        onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
-                        onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) }; showFeedback(ctx, "Grouped by ${it.label}") },
+                        onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) }; showToast(ctx, "Grouped by ${it.label}") },
+                        onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) }; showToast(ctx, "Grouped by ${it.label}") },
                         sortState = sortState,
-                        onSortStateChange = { sortState = it; showFeedback(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
+                        onSortStateChange = { sortState = it; showToast(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
                     )
                 }
 

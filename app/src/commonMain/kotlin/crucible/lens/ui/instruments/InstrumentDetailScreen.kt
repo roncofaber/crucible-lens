@@ -44,7 +44,7 @@ import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingItem
 import crucible.lens.ui.common.RefreshMenuItem
 import crucible.lens.ui.common.ShareMenuItem
-import crucible.lens.ui.common.showFeedback
+import crucible.lens.platform.showToast
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.fadeEndEdge
@@ -164,7 +164,7 @@ fun InstrumentDetailScreen(
                                     CopyIdMenuItem {
                                         overflowMenuExpanded = false
                                         copyToClipboard(platformCtx, instr.uniqueId)
-                                        showFeedback(platformCtx, "ID copied")
+                                        showToast(platformCtx, "ID copied")
                                     }
                                     ShareMenuItem {
                                         overflowMenuExpanded = false
@@ -200,9 +200,9 @@ fun InstrumentDetailScreen(
                                 searchQuery = searchQuery,
                                 onSearchChange = { searchQuery = it },
                                 sortState = sortState,
-                                onSortStateChange = { sortState = it; showFeedback(platformCtx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
+                                onSortStateChange = { sortState = it; showToast(platformCtx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
                                 groupBy = groupBy,
-                                onGroupByChange = { groupBy = it; showFeedback(platformCtx, "Grouped by ${it.label}") }
+                                onGroupByChange = { groupBy = it; showToast(platformCtx, "Grouped by ${it.label}") }
                             )
                         }
                     }
