@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 
 actual abstract class PlatformContext
 
+@OptIn(kotlin.experimental.ExperimentalNativeApi::class)
 actual val isDebugBuild: Boolean = Platform.isDebugBinary
 
 private class IosPlatformContext : PlatformContext()
