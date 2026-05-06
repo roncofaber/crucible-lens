@@ -1,4 +1,4 @@
-package crucible.lens.ui.common
+package crucible.lens.ui.detail
 
 
 

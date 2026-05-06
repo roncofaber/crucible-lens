@@ -1,4 +1,4 @@
-package crucible.lens.data.util
+package crucible.lens.ui.create
 
 /**
  * Transient store for pre-filling create screens when duplicating a resource.

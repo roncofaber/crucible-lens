@@ -1,4 +1,4 @@
-package crucible.lens.ui.viewmodel
+package crucible.lens.ui.create
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

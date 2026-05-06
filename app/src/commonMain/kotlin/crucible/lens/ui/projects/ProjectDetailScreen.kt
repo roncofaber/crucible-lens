@@ -63,7 +63,7 @@ import crucible.lens.ui.common.fadeEndEdge
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.ScrollToTopButton
-import crucible.lens.ui.common.openUrlInBrowser
+import crucible.lens.platform.openUrl
 import androidx.compose.ui.graphics.SolidColor
 import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.data.preferences.createAppPreferences
@@ -319,7 +319,7 @@ fun ProjectDetailScreen(
                                     leadingIcon = { Icon(Icons.Default.Dataset, contentDescription = null) },
                                     onClick = { topBarMenuExpanded = false; onCreateDataset() }
                                 )
-                                OpenInWebMenuItem { topBarMenuExpanded = false; openUrlInBrowser(ctx, "$graphExplorerUrl/$projectId") }
+                                OpenInWebMenuItem { topBarMenuExpanded = false; openUrl(ctx, "$graphExplorerUrl/$projectId") }
                                 ShareMenuItem { topBarMenuExpanded = false; shareText(ctx, "$graphExplorerUrl/$projectId", project?.title ?: projectId) }
                                 HorizontalDivider()
                                 RefreshMenuItem { topBarMenuExpanded = false; loadProjectData(forceRefresh = true) }

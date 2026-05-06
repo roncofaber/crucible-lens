@@ -17,14 +17,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.Project
-import crucible.lens.data.util.DuplicateHolder
-import crucible.lens.data.util.FilesHolder
-import crucible.lens.data.util.MetadataHolder
+import crucible.lens.ui.create.DuplicateHolder
+import crucible.lens.ui.create.FilesHolder
+import crucible.lens.ui.metadata.MetadataHolder
 import crucible.lens.platform.currentIsoDateTime
 import crucible.lens.ui.common.DateTimePickerField
 import crucible.lens.ui.common.InstrumentPickerField
-import crucible.lens.ui.viewmodel.CreateDatasetViewModel
-import crucible.lens.ui.viewmodel.SaveState
+import crucible.lens.ui.create.CreateDatasetViewModel
+import crucible.lens.ui.create.SaveState
 import kotlinx.serialization.json.JsonObject
 
 @OptIn(ExperimentalMaterial3Api::class)

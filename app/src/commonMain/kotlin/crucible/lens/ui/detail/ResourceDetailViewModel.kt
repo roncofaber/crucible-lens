@@ -1,4 +1,4 @@
-package crucible.lens.ui.viewmodel
+package crucible.lens.ui.detail
 
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateSetOf

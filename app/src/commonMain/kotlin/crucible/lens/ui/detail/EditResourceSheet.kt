@@ -1,4 +1,4 @@
-package crucible.lens.ui.common
+package crucible.lens.ui.detail
 import crucible.lens.platform.*
 
 import androidx.compose.foundation.layout.*
@@ -28,8 +28,8 @@ import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.CrucibleResource
-import crucible.lens.ui.viewmodel.EditResourceViewModel
-import crucible.lens.ui.viewmodel.SaveState
+import crucible.lens.ui.create.EditResourceViewModel
+import crucible.lens.ui.create.SaveState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

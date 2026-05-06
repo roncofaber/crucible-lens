@@ -14,7 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.platform.getPlatformContext
-import crucible.lens.platform.formatDecimal
+import crucible.lens.data.util.formatDecimal
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -1,4 +1,4 @@
-package crucible.lens.platform
+package crucible.lens.data.util
 
 import kotlin.math.pow
 import kotlin.math.round

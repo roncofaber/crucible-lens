@@ -1,4 +1,4 @@
-package crucible.lens.data.util
+package crucible.lens.ui.create
 
 object FilesHolder {
     var files: List<Pair<ByteArray, Boolean>> = emptyList()

@@ -1,4 +1,4 @@
-package crucible.lens.data.util
+package crucible.lens.ui.metadata
 
 import kotlinx.serialization.json.JsonObject
 

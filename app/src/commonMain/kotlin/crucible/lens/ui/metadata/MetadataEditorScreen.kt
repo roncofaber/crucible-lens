@@ -31,7 +31,7 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.ExtractMetadataRequest
 import crucible.lens.data.model.MetadataImageData
-import crucible.lens.data.util.MetadataHolder
+import crucible.lens.ui.metadata.MetadataHolder
 import crucible.lens.platform.PlatformBase64
 import crucible.lens.platform.rememberCameraPicker
 import crucible.lens.platform.rememberGalleryPicker

@@ -18,7 +18,7 @@ import coil3.compose.AsyncImage
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.ThumbnailCreateRequest
-import crucible.lens.data.util.FilesHolder
+import crucible.lens.ui.create.FilesHolder
 import crucible.lens.data.util.PlatformCrypto
 import crucible.lens.platform.PlatformBase64
 import crucible.lens.platform.rememberCameraPicker
