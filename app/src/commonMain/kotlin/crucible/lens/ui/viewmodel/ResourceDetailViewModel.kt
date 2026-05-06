@@ -185,12 +185,19 @@ class ResourceDetailViewModel : ViewModel() {
         }
     }
 
+    /** UUID of the sibling the user last scrolled to — survives navigation to sub-screens. */
+    var lastViewedSiblingUuid: String? = null
+        private set
+
+    fun setCurrentSibling(uuid: String) { lastViewedSiblingUuid = uuid }
+
     fun reset() {
         _uiState.value = UiState.Idle
         loadedResources.clear()
         enrichedUuids.clear()
         failedEnrichmentUuids.clear()
         loadedThumbnails.clear()
+        lastViewedSiblingUuid = null
     }
 
     fun refreshResource(uuid: String) {
