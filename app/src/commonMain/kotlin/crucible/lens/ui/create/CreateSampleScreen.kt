@@ -117,7 +117,7 @@ fun CreateSampleScreen(
                         value = selectedProject?.title ?: selectedProjectId ?: "",
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Project") },
+                        label = { Text("Project *") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = projectDropdownExpanded) },
                         leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
@@ -142,7 +142,7 @@ fun CreateSampleScreen(
                     value = selectedProject?.title ?: initialProjectId,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Project") },
+                    label = { Text("Project *") },
                     leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -235,7 +235,7 @@ fun CreateSampleScreen(
                         projectId = selectedProjectId
                     )
                 },
-                enabled = name.isNotBlank() && !isSaving,
+                enabled = name.isNotBlank() && !selectedProjectId.isNullOrBlank() && !isSaving,
                 modifier = Modifier.fillMaxWidth().height(52.dp)
             ) {
                 if (isSaving) {
