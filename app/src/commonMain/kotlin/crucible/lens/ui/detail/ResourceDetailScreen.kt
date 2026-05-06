@@ -1590,36 +1590,48 @@ private fun SampleDetailsCard(
             Spacer(modifier = Modifier.height(4.dp))
 
             // Basic fields
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                InfoRow(icon = Icons.Default.Category, label = "Type", value = sample.sampleType ?: "None")
-                if (projectId != null) {
-                    ClickableInfoRow(icon = Icons.Default.Folder, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })
-                } else {
-                    InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
-                }
-                InfoRow(icon = Icons.Default.Schedule, label = "Timestamp", value = formatDateTime(sample.timestamp))
-                InfoRow(icon = Icons.AutoMirrored.Filled.Notes, label = "Description", value = sample.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
+            InfoRow(icon = Icons.Default.Category, label = "Type", value = sample.sampleType ?: "None")
+            DetailDivider()
+            if (projectId != null) {
+                ClickableInfoRow(icon = Icons.Default.Folder, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })
+            } else {
+                InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
             }
+            DetailDivider()
+            InfoRow(icon = Icons.Default.Schedule, label = "Timestamp", value = formatDateTime(sample.timestamp))
+            DetailDivider()
+            InfoRow(icon = Icons.AutoMirrored.Filled.Notes, label = "Description", value = sample.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
 
             // Advanced fields
             if (advanced) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    if (sample.ownerOrcid != null) {
-                        ClickableInfoRow(
-                            icon = Icons.Default.Person,
-                            label = "Owner ORCID",
-                            value = sample.ownerOrcid,
-                            onClick = {
-                                openUrl(platformCtx, "https://orcid.org/${sample.ownerOrcid}")
-                            }
-                        )
-                    } else {
-                        InfoRow(icon = Icons.Default.Person, label = "Owner ORCID", value = "None")
-                    }
-                    InfoRow(icon = Icons.Default.Schedule, label = "Created at", value = formatDateTime(sample.creationTime))
-                    InfoRow(icon = Icons.Default.Update, label = "Modified at", value = formatDateTime(sample.modificationTime))
+                HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+
+                AdvancedGroupLabel("Ownership")
+                InfoRow(
+                    icon = when (sample.isPublic) {
+                        true -> Icons.Default.Public
+                        false -> Icons.Default.Lock
+                        null -> Icons.AutoMirrored.Filled.HelpOutline
+                    },
+                    label = "Visibility",
+                    value = when (sample.isPublic) { true -> "Public"; false -> "Private"; null -> "None" }
+                )
+                DetailDivider()
+                if (sample.ownerOrcid != null) {
+                    ClickableInfoRow(
+                        icon = Icons.Default.Person, label = "Owner ORCID", value = sample.ownerOrcid,
+                        onClick = { openUrl(platformCtx, "https://orcid.org/${sample.ownerOrcid}") }
+                    )
+                } else {
+                    InfoRow(icon = Icons.Default.Person, label = "Owner ORCID", value = "None")
                 }
+
+                HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+
+                AdvancedGroupLabel("Dates")
+                InfoRow(icon = Icons.Default.Schedule, label = "Created", value = formatDateTime(sample.creationTime))
+                DetailDivider()
+                InfoRow(icon = Icons.Default.Update, label = "Modified", value = formatDateTime(sample.modificationTime))
             }
 
             // Advanced/Basic toggle at bottom right
@@ -1741,9 +1753,10 @@ private fun DatasetDetailsCard(
             Spacer(modifier = Modifier.height(4.dp))
 
             // Basic fields
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             InfoRow(icon = Icons.Default.Science, label = "Measurement", value = dataset.measurement ?: "None")
+            DetailDivider()
             InfoRow(icon = Icons.Default.PlayCircle, label = "Session", value = dataset.sessionName ?: "None")
+            DetailDivider()
             if (dataset.instrumentName != null) {
                 val instrumentScope = rememberCoroutineScope()
                 ClickableInfoRow(
@@ -1767,51 +1780,58 @@ private fun DatasetDetailsCard(
             } else {
                 InfoRow(icon = Icons.Default.Build, label = "Instrument", value = "None")
             }
+            DetailDivider()
             if (projectId != null) {
                 ClickableInfoRow(icon = Icons.Default.Folder, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })
             } else {
                 InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
             }
+            DetailDivider()
             InfoRow(icon = Icons.Default.Schedule, label = "Timestamp", value = formatDateTime(dataset.timestamp))
-            } // end basic fields Column
 
             // Advanced fields
             if (advanced) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    if (dataset.ownerOrcid != null) {
-                        ClickableInfoRow(
-                            icon = Icons.Default.Person,
-                            label = "Owner ORCID",
-                            value = dataset.ownerOrcid,
-                            onClick = {
-                                openUrl(platformCtx, "https://orcid.org/${dataset.ownerOrcid}")
-                            }
-                        )
-                    } else {
-                        InfoRow(icon = Icons.Default.Person, label = "Owner ORCID", value = "None")
-                    }
-                    InfoRow(
-                        icon = when (dataset.isPublic) {
-                            true  -> Icons.Default.Public
-                            false -> Icons.Default.Lock
-                            null  -> Icons.AutoMirrored.Filled.HelpOutline
-                        },
-                        label = "Visibility",
-                        value = when (dataset.isPublic) {
-                            true  -> "Public"
-                            false -> "Private"
-                            null  -> "None"
-                        }
+                HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+
+                AdvancedGroupLabel("Ownership")
+                InfoRow(
+                    icon = when (dataset.isPublic) {
+                        true  -> Icons.Default.Public
+                        false -> Icons.Default.Lock
+                        null  -> Icons.AutoMirrored.Filled.HelpOutline
+                    },
+                    label = "Visibility",
+                    value = when (dataset.isPublic) { true -> "Public"; false -> "Private"; null -> "None" }
+                )
+                DetailDivider()
+                if (dataset.ownerOrcid != null) {
+                    ClickableInfoRow(
+                        icon = Icons.Default.Person, label = "Owner ORCID", value = dataset.ownerOrcid,
+                        onClick = { openUrl(platformCtx, "https://orcid.org/${dataset.ownerOrcid}") }
                     )
-                    InfoRow(icon = Icons.Default.Description, label = "Format", value = dataset.dataFormat ?: "None")
-                    InfoRow(icon = Icons.AutoMirrored.Filled.Label, label = "Data Type", value = dataset.dataType ?: "None")
-                    InfoRow(icon = Icons.Default.Storage, label = "Size", value = dataset.size?.let { formatFileSize(it) } ?: "None")
-                    InfoRow(icon = Icons.Default.FolderOpen, label = "Source Folder", value = dataset.sourceFolder?.takeIf { it.isNotBlank() } ?: "None")
-                    InfoRow(icon = Icons.Default.Security, label = "SHA-256", value = dataset.sha256Hash ?: "None")
-                    InfoRow(icon = Icons.Default.Schedule, label = "Created at", value = formatDateTime(dataset.creationTime))
-                    InfoRow(icon = Icons.Default.Update, label = "Modified at", value = formatDateTime(dataset.modificationTime))
+                } else {
+                    InfoRow(icon = Icons.Default.Person, label = "Owner ORCID", value = "None")
                 }
+
+                HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+
+                AdvancedGroupLabel("Files")
+                InfoRow(icon = Icons.Default.Description, label = "Format", value = dataset.dataFormat ?: "None")
+                DetailDivider()
+                InfoRow(icon = Icons.AutoMirrored.Filled.Label, label = "Data Type", value = dataset.dataType ?: "None")
+                DetailDivider()
+                InfoRow(icon = Icons.Default.Storage, label = "Size", value = dataset.size?.let { formatFileSize(it) } ?: "None")
+                DetailDivider()
+                InfoRow(icon = Icons.Default.FolderOpen, label = "Source Folder", value = dataset.sourceFolder?.takeIf { it.isNotBlank() } ?: "None")
+                DetailDivider()
+                InfoRow(icon = Icons.Default.Security, label = "SHA-256", value = dataset.sha256Hash ?: "None")
+
+                HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+
+                AdvancedGroupLabel("Dates")
+                InfoRow(icon = Icons.Default.Schedule, label = "Created", value = formatDateTime(dataset.creationTime))
+                DetailDivider()
+                InfoRow(icon = Icons.Default.Update, label = "Modified", value = formatDateTime(dataset.modificationTime))
             }
 
             // Advanced/Basic toggle at bottom right
@@ -2573,6 +2593,22 @@ private fun formatFileSize(bytes: Long): String = when {
     bytes >= 1_048_576     -> formatDecimal(bytes / 1_048_576.0, 2) + " MB"
     bytes >= 1_024         -> formatDecimal(bytes / 1_024.0, 1) + " KB"
     else                   -> "$bytes B"
+}
+
+@Composable
+private fun DetailDivider() = HorizontalDivider(
+    thickness = 1.dp,
+    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+)
+
+@Composable
+private fun AdvancedGroupLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 10.dp, bottom = 2.dp)
+    )
 }
 
 @Composable
