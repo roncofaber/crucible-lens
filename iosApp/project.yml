@@ -11,8 +11,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: crucible.lens
-        MARKETING_VERSION: 0.3.0
-        CURRENT_PROJECT_VERSION: 4
+        MARKETING_VERSION: 0.4.0
+        CURRENT_PROJECT_VERSION: 5
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_FILE: iosApp/Info.plist
