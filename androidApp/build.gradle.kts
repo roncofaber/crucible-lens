@@ -17,8 +17,8 @@ android {
         applicationId = "crucible.lens"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.4.0"
+        versionCode = (project.findProperty("app.versionCode") as String).toInt()
+        versionName = project.findProperty("app.versionName") as String
     }
 
     signingConfigs {

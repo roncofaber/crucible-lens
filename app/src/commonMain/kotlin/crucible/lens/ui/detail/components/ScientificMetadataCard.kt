@@ -171,13 +171,7 @@ internal fun MetadataTree(data: Map<String, Any?>, indentLevel: Int, expandAll: 
     }
 }
 
-internal fun formatKey(key: String): String {
-    return key.replace("_", " ")
-        .split(" ")
-        .joinToString(" ") { word ->
-            word.replaceFirstChar { it.uppercase() }
-        }
-}
+internal fun formatKey(key: String): String = key
 
 internal fun formatValue(value: Any?): String {
     return when (value) {
