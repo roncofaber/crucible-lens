@@ -141,7 +141,8 @@ data class Project(
 
 @Serializable
 data class MetadataSearchResult(
-    @SerialName("dataset_mfid") val datasetMfid: String,
+    val id: Int? = null,
+    @SerialName("unique_id") val uniqueId: String,
     @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null
 )
 

@@ -332,17 +332,17 @@ fun SearchScreen(
                                     color = MaterialTheme.colorScheme.primary
                                 )
                                 metadataResults?.forEach { result ->
-                                    val cachedDataset = CacheManager.getResource(result.datasetMfid) as? Dataset
-                                    val displayName = cachedDataset?.name ?: result.datasetMfid
+                                    val cachedDataset = CacheManager.getResource(result.uniqueId) as? Dataset
+                                    val displayName = cachedDataset?.name ?: result.uniqueId
                                     val snippet = result.scientificMetadata
                                         ?.entries?.take(2)
                                         ?.joinToString(" · ") { (k, v) -> "$k: $v" }
                                     SearchResultCard(
                                         name = displayName,
-                                        uuid = result.datasetMfid,
+                                        uuid = result.uniqueId,
                                         type = "Dataset",
                                         subtitle = snippet,
-                                        onClick = { onResourceClick(result.datasetMfid) }
+                                        onClick = { onResourceClick(result.uniqueId) }
                                     )
                                 }
                             }
@@ -456,18 +456,18 @@ fun SearchScreen(
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
-                        items(metadataResults ?: emptyList(), key = { it.datasetMfid }) { result ->
-                            val cachedDataset = CacheManager.getResource(result.datasetMfid) as? Dataset
-                            val displayName = cachedDataset?.name ?: result.datasetMfid
+                        items(metadataResults ?: emptyList(), key = { it.uniqueId }) { result ->
+                            val cachedDataset = CacheManager.getResource(result.uniqueId) as? Dataset
+                            val displayName = cachedDataset?.name ?: result.uniqueId
                             val snippet = result.scientificMetadata
                                 ?.entries?.take(2)
                                 ?.joinToString(" · ") { (k, v) -> "$k: $v" }
                             SearchResultCard(
                                 name = displayName,
-                                uuid = result.datasetMfid,
+                                uuid = result.uniqueId,
                                 type = "Dataset",
                                 subtitle = snippet,
-                                onClick = { onResourceClick(result.datasetMfid) }
+                                onClick = { onResourceClick(result.uniqueId) }
                             )
                         }
                     }

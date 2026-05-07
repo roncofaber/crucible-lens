@@ -399,7 +399,7 @@ class CrucibleApiService(
         query: String,
         limit: Int = 50
     ): ApiResult<List<MetadataSearchResult>> = safeCall {
-        client.get("${baseUrl}scientific_metadata/search") {
+        client.get("${baseUrl}resources/metadata/search") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("q", query)
             url.parameters.append("limit", limit.toString())
