@@ -174,7 +174,7 @@ fun HomeScreen(
                 }
                 PersistentProjectCache.saveProjectData(platformContext, allProjects, samplesMap, datasetsMap)
             } catch (e: Exception) {
-                println("Failed to save project cache to disk: $e")
+
             }
         }
         } finally {
