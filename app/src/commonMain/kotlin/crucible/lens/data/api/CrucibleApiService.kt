@@ -11,7 +11,9 @@ import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.model.SampleUpdateRequest
-import crucible.lens.data.model.AssociatedFileRequest
+import crucible.lens.data.model.UploadInitiateRequest
+import crucible.lens.data.model.UploadInitiateResponse
+import crucible.lens.data.model.UploadCompleteRequest
 import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.model.ExtractMetadataRequest
@@ -31,12 +33,11 @@ import kotlinx.coroutines.coroutineScope
 import kotlin.math.ceil
 import io.ktor.client.call.body
 import io.ktor.client.request.delete
-import io.ktor.client.request.forms.MultiPartFormDataContent
-import io.ktor.client.request.forms.formData
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.patch
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.Headers
@@ -51,6 +52,7 @@ import kotlinx.serialization.json.jsonObject
 
 class CrucibleApiService(
     private val client: HttpClient,
+    private val gcsClient: HttpClient,
     private val baseUrl: String,
     private val apiKey: String
 ) {
@@ -281,31 +283,56 @@ class CrucibleApiService(
             .associate { (k, v) -> k to v.jsonPrimitive.content }
     }
 
-    suspend fun uploadFileToDataset(uuid: String, bytes: ByteArray, filename: String): ApiResult<String> = safeCall {
-        client.post("${baseUrl}datasets/$uuid/upload") {
-            header("Authorization", "Bearer $apiKey")
-            setBody(MultiPartFormDataContent(formData {
-                append("files", bytes, Headers.build {
-                    append(HttpHeaders.ContentDisposition, "form-data; name=\"files\"; filename=\"$filename\"")
-                    append(HttpHeaders.ContentType, "image/jpeg")
-                })
-            }))
-        }.body()
+    // ── GCS resumable upload ──────────────────────────────────────────────────
+
+    suspend fun initiateUpload(
+        uuid: String,
+        filename: String,
+        size: Long
+    ): ApiResult<UploadInitiateResponse> = safeCall {
+        post("datasets/$uuid/upload/initiate", UploadInitiateRequest(filename = filename, size = size))
     }
 
-    suspend fun addAssociatedFile(
+    suspend fun completeUpload(
         uuid: String,
-        cloudPath: String,
-        size: Int,
-        sha256Hash: String,
-        ingestionClass: String? = null
+        uploadId: String,
+        sha256Hash: String
     ): ApiResult<JsonObject> = safeCall {
-        client.post("${baseUrl}datasets/$uuid/associated_files") {
-            header("Authorization", "Bearer $apiKey")
-            if (ingestionClass != null) url.parameters.append("ingestion_class", ingestionClass)
-            contentType(ContentType.Application.Json)
-            setBody(AssociatedFileRequest(filename = cloudPath, size = size, sha256Hash = sha256Hash))
-        }.body()
+        post("datasets/$uuid/upload/complete", UploadCompleteRequest(uploadId = uploadId, sha256Hash = sha256Hash))
+    }
+
+    // Uploads bytes to a GCS resumable URI in chunks. Returns success when all chunks
+    // are accepted (GCS 200/201 on the last chunk). The resumable URI is pre-authenticated
+    // — no Authorization header is sent to GCS.
+    @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
+    suspend fun uploadChunksToGCS(
+        resumableUri: String,
+        bytes: ByteArray,
+        chunkSizeHint: Int
+    ): ApiResult<Unit> = safeCall {
+        val total = bytes.size.toLong()
+        // Align chunk size to 256 KiB as required by GCS for all but the last chunk.
+        val alignedChunkSize = maxOf(chunkSizeHint, 256 * 1024)
+            .let { it - (it % (256 * 1024)) }
+            .coerceAtLeast(256 * 1024)
+        val crc32c = crucible.lens.data.util.crc32cBase64(bytes)
+        var offset = 0
+        while (offset < bytes.size) {
+            val end = minOf(offset + alignedChunkSize, bytes.size)
+            val chunk = bytes.copyOfRange(offset, end)
+            val isLast = end == bytes.size
+            val response = gcsClient.put(resumableUri) {
+                header("Content-Range", "bytes $offset-${end - 1}/$total")
+                if (isLast) header("X-Goog-Hash", "crc32c=$crc32c")
+                contentType(io.ktor.http.ContentType.Application.OctetStream)
+                setBody(chunk)
+            }
+            when (response.status.value) {
+                308 -> offset = end  // chunk accepted, continue
+                200, 201 -> return@safeCall Unit  // upload complete
+                else -> error("GCS upload failed: ${response.status}")
+            }
+        }
     }
 
     suspend fun extractMetadata(request: ExtractMetadataRequest): ApiResult<JsonObject> = safeCall {

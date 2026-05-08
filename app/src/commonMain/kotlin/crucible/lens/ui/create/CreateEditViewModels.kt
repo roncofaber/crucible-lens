@@ -82,10 +82,23 @@ class CreateDatasetViewModel : ViewModel() {
                 var thumbnailFailures = 0
                 files.forEachIndexed { index, (bytes, asThumbnail) ->
                     val filename = "file_${newUuid}_$index.jpg"
-                    val uploadResp = ApiClient.service.uploadFileToDataset(newUuid, bytes, filename)
-                    if (uploadResp is ApiResult.Success) {
-                        val cloudPath = uploadResp.data.replace("./mnt/gcs", "crucible-uploads")
-                        ApiClient.service.addAssociatedFile(newUuid, cloudPath, bytes.size, PlatformCrypto.sha256Hex(bytes))
+                    val sha256 = PlatformCrypto.sha256Hex(bytes)
+                    // Step 1: initiate GCS resumable session
+                    val initiateResp = ApiClient.service.initiateUpload(newUuid, filename, bytes.size.toLong())
+                    if (initiateResp is ApiResult.Success) {
+                        val session = initiateResp.data
+                        // Step 2: upload chunks directly to GCS
+                        val chunkResp = ApiClient.service.uploadChunksToGCS(
+                            resumableUri = session.resumableUri,
+                            bytes = bytes,
+                            chunkSizeHint = session.chunkSizeHint
+                        )
+                        if (chunkResp is ApiResult.Success) {
+                            // Step 3: finalize — server registers as AssociatedFile
+                            ApiClient.service.completeUpload(newUuid, session.uploadId, sha256)
+                        } else {
+                            uploadFailures++
+                        }
                     } else {
                         uploadFailures++
                     }

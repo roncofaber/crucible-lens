@@ -55,10 +55,18 @@ fun AddFilesScreen(
                 try {
                     files.forEachIndexed { index, (bytes, asThumbnail) ->
                         val filename = "file_${datasetUuid}_${Clock.System.now().toEpochMilliseconds()}_$index.jpg"
-                        val uploadResp = ApiClient.service.uploadFileToDataset(datasetUuid!!, bytes, filename)
-                        if (uploadResp is ApiResult.Success) {
-                            val cloudPath = uploadResp.data.replace("./mnt/gcs", "crucible-uploads")
-                            ApiClient.service.addAssociatedFile(datasetUuid, cloudPath, bytes.size, PlatformCrypto.sha256Hex(bytes))
+                        val sha256 = PlatformCrypto.sha256Hex(bytes)
+                        val initiateResp = ApiClient.service.initiateUpload(datasetUuid!!, filename, bytes.size.toLong())
+                        if (initiateResp is ApiResult.Success) {
+                            val session = initiateResp.data
+                            val chunkResp = ApiClient.service.uploadChunksToGCS(
+                                resumableUri = session.resumableUri,
+                                bytes = bytes,
+                                chunkSizeHint = session.chunkSizeHint
+                            )
+                            if (chunkResp is ApiResult.Success) {
+                                ApiClient.service.completeUpload(datasetUuid, session.uploadId, sha256)
+                            }
                         }
                         if (asThumbnail) {
                             ApiClient.service.addThumbnail(

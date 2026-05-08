@@ -56,10 +56,20 @@ object ApiClient {
         }
     }
 
+    // Separate client for GCS resumable uploads: no auth headers, longer timeouts,
+    // no content negotiation (raw bytes + status codes only).
+    internal val gcsClient: HttpClient = HttpClient {
+        install(HttpTimeout) {
+            requestTimeoutMillis = 10 * 60_000   // 10 min per chunk
+            connectTimeoutMillis = 30_000
+            socketTimeoutMillis  = 10 * 60_000
+        }
+    }
+
     val service: CrucibleApiService
         get() {
             if (_service == null) {
-                _service = CrucibleApiService(httpClient, baseUrl, apiKey)
+                _service = CrucibleApiService(httpClient, gcsClient, baseUrl, apiKey)
             }
             return requireNotNull(_service)
         }

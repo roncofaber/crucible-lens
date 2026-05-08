@@ -240,10 +240,24 @@ data class MetadataImageData(
     @SerialName("media_type") val mediaType: String
 )
 
+// ── GCS resumable upload models ──────────────────────────────────────────────
+
 @Serializable
-data class AssociatedFileRequest(
+data class UploadInitiateRequest(
     val filename: String,
-    val size: Int,
+    val size: Long
+)
+
+@Serializable
+data class UploadInitiateResponse(
+    @SerialName("upload_id") val uploadId: String,
+    @SerialName("resumable_uri") val resumableUri: String,
+    @SerialName("chunk_size_hint") val chunkSizeHint: Int = 8 * 1024 * 1024
+)
+
+@Serializable
+data class UploadCompleteRequest(
+    @SerialName("upload_id") val uploadId: String,
     @SerialName("sha256_hash") val sha256Hash: String
 )
 
