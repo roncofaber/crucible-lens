@@ -79,6 +79,7 @@ fun ProjectsListScreen(
     var reloadTrigger by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
     // Load persistent cache immediately on startup for instant display
@@ -236,6 +237,7 @@ fun ProjectsListScreen(
     }
 
     AppScaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             Column {
             TopAppBar(
@@ -478,12 +480,21 @@ fun ProjectsListScreen(
                                     val dismissState = rememberSwipeToDismissBoxState(
                                         confirmValueChange = { value ->
                                             if (value == SwipeToDismissBoxValue.EndToStart) {
-                                                showToast(platformContext, "Project hidden")
                                                 onToggleHide(project.projectId)
+                                                scope.launch {
+                                                    val result = snackbarHostState.showSnackbar(
+                                                        message = "\"${project.title ?: project.projectId}\" hidden",
+                                                        actionLabel = "Undo",
+                                                        duration = SnackbarDuration.Short
+                                                    )
+                                                    if (result == SnackbarResult.ActionPerformed) {
+                                                        onToggleHide(project.projectId)
+                                                    }
+                                                }
                                                 true
                                             } else false
                                         },
-                                        positionalThreshold = { totalDistance -> totalDistance * 0.65f }
+                                        positionalThreshold = { totalDistance -> totalDistance * 0.5f }
                                     )
                                     val iconScale by animateFloatAsState(
                                         targetValue = 0.75f + 0.5f * dismissState.progress,

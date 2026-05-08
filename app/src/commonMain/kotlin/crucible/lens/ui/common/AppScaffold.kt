@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 fun AppScaffold(
     modifier: Modifier = Modifier,
     topBar: @Composable () -> Unit = {},
+    snackbarHost: @Composable () -> Unit = {},
     containerColor: Color = MaterialTheme.colorScheme.background,
     contentColor: Color = contentColorFor(containerColor),
     content: @Composable (PaddingValues) -> Unit
@@ -34,6 +35,7 @@ fun AppScaffold(
     Scaffold(
         modifier = modifier,
         topBar = topBar,
+        snackbarHost = snackbarHost,
         containerColor = containerColor,
         contentColor = contentColor
     ) { paddingValues ->
