@@ -1,5 +1,7 @@
 package crucible.lens.ui.settings
 
+import crucible.lens.platform.getPlatformContext
+import crucible.lens.platform.showToast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -55,8 +57,7 @@ fun ApiSettingsScreen(
     var apiBaseUrlInput by remember { mutableStateOf(currentApiBaseUrl) }
     var graphExplorerUrlInput by remember { mutableStateOf(currentGraphExplorerUrl) }
     var isApiKeyVisible by remember { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+    val platformContext = getPlatformContext()
 
     val apiKeyDirty = apiKeyInput != (currentApiKey ?: "")
     val apiBaseUrlDirty = apiBaseUrlInput != currentApiBaseUrl
@@ -119,7 +120,7 @@ fun ApiSettingsScreen(
         if (apiKeyDirty) onApiKeySave(apiKeyInput)
         if (apiBaseUrlDirty) onApiBaseUrlSave(apiBaseUrlInput)
         if (graphExplorerUrlDirty) onGraphExplorerUrlSave(graphExplorerUrlInput)
-        scope.launch { snackbarHostState.showSnackbar("Settings saved", duration = SnackbarDuration.Short) }
+        showToast(platformContext, "Settings saved")
     }
 
     fun discard() {
@@ -129,7 +130,6 @@ fun ApiSettingsScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("API") },

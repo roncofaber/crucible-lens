@@ -65,6 +65,7 @@ fun InstrumentListScreen(
     var sortState by remember { mutableStateOf(SortState(SortField.NAME, true)) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
     val filteredInstruments = remember(instruments, searchQuery) {
@@ -124,6 +125,7 @@ fun InstrumentListScreen(
     LaunchedEffect(Unit) { loadInstruments() }
 
     AppScaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Instruments") },
@@ -275,12 +277,21 @@ fun InstrumentListScreen(
                                 val dismissState = rememberSwipeToDismissBoxState(
                                     confirmValueChange = { value ->
                                         if (value == SwipeToDismissBoxValue.EndToStart) {
-                                            showToast(platformContext, "Instrument hidden")
                                             onToggleHide(instrument.uniqueId)
+                                            scope.launch {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message = "${instrument.instrumentName ?: instrument.uniqueId} hidden",
+                                                    actionLabel = "Undo",
+                                                    duration = SnackbarDuration.Short
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed) {
+                                                    onToggleHide(instrument.uniqueId)
+                                                }
+                                            }
                                             true
                                         } else false
                                     },
-                                    positionalThreshold = { it * 0.65f }
+                                    positionalThreshold = { it * 0.5f }
                                 )
                                 val hideIconScale by animateFloatAsState(
                                     targetValue = 0.75f + 0.5f * dismissState.progress,

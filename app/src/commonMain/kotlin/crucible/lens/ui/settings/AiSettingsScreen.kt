@@ -1,5 +1,7 @@
 package crucible.lens.ui.settings
 
+import crucible.lens.platform.getPlatformContext
+import crucible.lens.platform.showToast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -35,8 +37,7 @@ fun AiSettingsScreen(
     var aiApiKeyInput by remember { mutableStateOf(currentAiApiKey ?: "") }
     var aiApiUrlInput by remember { mutableStateOf(currentAiApiUrl) }
     var isAiApiKeyVisible by remember { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+    val platformContext = getPlatformContext()
 
     val directModeDirty = directMode != currentAiDirectMode
     val aiApiKeyDirty = aiApiKeyInput != (currentAiApiKey ?: "")
@@ -49,7 +50,7 @@ fun AiSettingsScreen(
         if (directModeDirty) onAiDirectModeSave(directMode)
         if (aiApiKeyDirty) onAiApiKeySave(aiApiKeyInput)
         if (aiApiUrlDirty) onAiApiUrlSave(aiApiUrlInput)
-        scope.launch { snackbarHostState.showSnackbar("Settings saved", duration = SnackbarDuration.Short) }
+        showToast(platformContext, "Settings saved")
     }
 
     fun discard() {
@@ -59,7 +60,6 @@ fun AiSettingsScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("AI Extraction") },
