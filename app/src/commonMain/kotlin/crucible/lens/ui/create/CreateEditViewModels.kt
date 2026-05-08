@@ -12,6 +12,7 @@ import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.util.PlatformCrypto
 import crucible.lens.platform.PlatformBase64
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -95,7 +96,14 @@ class CreateDatasetViewModel : ViewModel() {
                         )
                         if (chunkResp is ApiResult.Success) {
                             // Step 3: finalize — server registers as AssociatedFile
-                            ApiClient.service.completeUpload(newUuid, session.uploadId, sha256)
+                            val completeResp = ApiClient.service.completeUpload(newUuid, session.uploadId, sha256)
+                            // Step 4: trigger ingestion worker
+                            if (completeResp is ApiResult.Success) {
+                                val storedFilename = completeResp.data["filename"]?.jsonPrimitive?.content
+                                if (storedFilename != null) {
+                                    ApiClient.service.requestIngestion(newUuid, storedFilename, bytes.size.toLong())
+                                }
+                            }
                         } else {
                             uploadFailures++
                         }

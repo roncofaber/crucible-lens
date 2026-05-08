@@ -301,6 +301,23 @@ class CrucibleApiService(
         post("datasets/$uuid/upload/complete", UploadCompleteRequest(uploadId = uploadId, sha256Hash = sha256Hash))
     }
 
+    // Triggers the ingestion worker for a file registered on a dataset.
+    // `filename` is the full GCS path returned by completeUpload (AssociatedFile.filename).
+    // `ingestionClass` is optional — omit to let the server pick based on file extension.
+    suspend fun requestIngestion(
+        uuid: String,
+        filename: String,
+        fileSize: Long,
+        ingestionClass: String? = null
+    ): ApiResult<JsonObject> = safeCall {
+        client.post("${baseUrl}datasets/$uuid/ingest") {
+            header("Authorization", "Bearer $apiKey")
+            url.parameters.append("filename", filename)
+            url.parameters.append("file_size", fileSize.toString())
+            if (ingestionClass != null) url.parameters.append("ingestion_class", ingestionClass)
+        }.body()
+    }
+
     // Uploads bytes to a GCS resumable URI in chunks. Returns success when all chunks
     // are accepted (GCS 200/201 on the last chunk). The resumable URI is pre-authenticated
     // — no Authorization header is sent to GCS.

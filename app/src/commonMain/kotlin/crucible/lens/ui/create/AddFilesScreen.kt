@@ -16,6 +16,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import crucible.lens.data.api.ApiClient
+import kotlinx.serialization.json.jsonPrimitive
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.ui.create.FilesHolder
@@ -65,7 +66,13 @@ fun AddFilesScreen(
                                 chunkSizeHint = session.chunkSizeHint
                             )
                             if (chunkResp is ApiResult.Success) {
-                                ApiClient.service.completeUpload(datasetUuid, session.uploadId, sha256)
+                                val completeResp = ApiClient.service.completeUpload(datasetUuid!!, session.uploadId, sha256)
+                                if (completeResp is ApiResult.Success) {
+                                    val storedFilename = completeResp.data["filename"]?.jsonPrimitive?.content
+                                    if (storedFilename != null) {
+                                        ApiClient.service.requestIngestion(datasetUuid, storedFilename, bytes.size.toLong())
+                                    }
+                                }
                             }
                         }
                         if (asThumbnail) {
