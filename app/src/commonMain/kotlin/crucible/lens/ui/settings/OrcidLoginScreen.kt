@@ -1,9 +1,7 @@
 package crucible.lens.ui.settings
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,8 +13,6 @@ import com.multiplatform.webview.web.rememberWebViewState
 import crucible.lens.ui.common.AppScaffold
 import kotlinx.coroutines.delay
 
-// Matches any non-empty, non-quote string as the key value so we don't
-// reject keys that contain uppercase hex or other characters.
 private val KEY_REGEX = Regex(""""crucible_apikey"\s*:\s*"([^"]+)"""")
 
 private fun extractKey(rawJsResult: String?): String? {
@@ -38,28 +34,29 @@ fun OrcidLoginScreen(
 ) {
     val state = rememberWebViewState(loginUrl)
     val navigator = rememberWebViewNavigator()
+    var keyFound by remember { mutableStateOf(false) }
 
-    // JavaScript must be enabled to evaluate body text and extract the API key
     state.webSettings.isJavaScriptEnabled = true
-    // ORCID uses DOM storage for session state
     state.webSettings.androidWebSettings.domStorageEnabled = true
 
-    val loadingState = state.loadingState
-    LaunchedEffect(loadingState) {
-        if (loadingState !is LoadingState.Finished) return@LaunchedEffect
-
-        // First attempt immediately when the page reports finished.
-        navigator.evaluateJavaScript("(function(){ return document.body.innerText; })()") { result ->
-            val key = extractKey(result)
-            if (!key.isNullOrBlank()) { onKeyFound(key); return@evaluateJavaScript }
-        }
-
-        // The ORCID redirect chain can leave the WebView in a Finished state
-        // before the body is fully populated. Retry once after a short delay.
-        delay(600)
-        navigator.evaluateJavaScript("(function(){ return document.body.innerText; })()") { result ->
-            val key = extractKey(result)
-            if (!key.isNullOrBlank()) onKeyFound(key)
+    // Re-run whenever the page finishes loading. Polls up to 10 times with
+    // 500 ms gaps so slow DOM population or redirect chains don't cause misses.
+    // The LaunchedEffect is cancelled automatically when loadingState changes
+    // (new navigation starts), so we never act on a stale page.
+    LaunchedEffect(state.loadingState) {
+        if (state.loadingState !is LoadingState.Finished || keyFound) return@LaunchedEffect
+        repeat(10) { attempt ->
+            if (keyFound) return@repeat
+            if (attempt > 0) delay(500)
+            navigator.evaluateJavaScript("(function(){ return document.body.innerText; })()") { result ->
+                if (!keyFound) {
+                    val key = extractKey(result)
+                    if (!key.isNullOrBlank()) {
+                        keyFound = true
+                        onKeyFound(key)
+                    }
+                }
+            }
         }
     }
 
@@ -75,10 +72,10 @@ fun OrcidLoginScreen(
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).background(Color.White)) {
-            if (loadingState is LoadingState.Loading) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (state.loadingState is LoadingState.Loading) {
                 LinearProgressIndicator(
-                    progress = { loadingState.progress },
+                    progress = { (state.loadingState as LoadingState.Loading).progress },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
