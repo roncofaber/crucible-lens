@@ -15,7 +15,7 @@ android {
 
     defaultConfig {
         applicationId = "crucible.lens"
-        minSdk = 26
+        minSdk = 34
         targetSdk = 36
         versionCode = (project.findProperty("app.versionCode") as String).toInt()
         versionName = project.findProperty("app.versionName") as String
