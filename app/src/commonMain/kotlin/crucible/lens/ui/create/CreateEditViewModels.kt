@@ -99,9 +99,9 @@ class CreateDatasetViewModel : ViewModel() {
                             val completeResp = ApiClient.service.completeUpload(newUuid, session.uploadId, sha256)
                             // Step 4: trigger ingestion worker
                             if (completeResp is ApiResult.Success) {
-                                val storedFilename = completeResp.data["filename"]?.jsonPrimitive?.content
-                                if (storedFilename != null) {
-                                    ApiClient.service.requestIngestion(newUuid, storedFilename, bytes.size.toLong())
+                                val afid = completeResp.data["id"]?.jsonPrimitive?.content?.toIntOrNull()
+                                if (afid != null) {
+                                    ApiClient.service.requestIngestion(newUuid, afid)
                                 }
                             }
                         } else {

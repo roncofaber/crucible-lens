@@ -301,19 +301,16 @@ class CrucibleApiService(
         post("datasets/$uuid/upload/complete", UploadCompleteRequest(uploadId = uploadId, sha256Hash = sha256Hash))
     }
 
-    // Triggers the ingestion worker for a file registered on a dataset.
-    // `filename` is the full GCS path returned by completeUpload (AssociatedFile.filename).
-    // `ingestionClass` is optional — omit to let the server pick based on file extension.
+    // Triggers the ingestion worker for a registered AssociatedFile.
+    // `afid` is the integer id returned in the completeUpload response.
+    // `ingestionClass` selects the ingestor (e.g. "nexus", "lammps") — omit to let the server decide.
     suspend fun requestIngestion(
         uuid: String,
-        filename: String,
-        fileSize: Long,
+        afid: Int,
         ingestionClass: String? = null
     ): ApiResult<JsonObject> = safeCall {
-        client.post("${baseUrl}datasets/$uuid/ingest") {
+        client.post("${baseUrl}datasets/$uuid/associated_files/$afid/ingest") {
             header("Authorization", "Bearer $apiKey")
-            url.parameters.append("filename", filename)
-            url.parameters.append("file_size", fileSize.toString())
             if (ingestionClass != null) url.parameters.append("ingestion_class", ingestionClass)
         }.body()
     }

@@ -68,9 +68,9 @@ fun AddFilesScreen(
                             if (chunkResp is ApiResult.Success) {
                                 val completeResp = ApiClient.service.completeUpload(datasetUuid!!, session.uploadId, sha256)
                                 if (completeResp is ApiResult.Success) {
-                                    val storedFilename = completeResp.data["filename"]?.jsonPrimitive?.content
-                                    if (storedFilename != null) {
-                                        ApiClient.service.requestIngestion(datasetUuid, storedFilename, bytes.size.toLong())
+                                    val afid = completeResp.data["id"]?.jsonPrimitive?.content?.toIntOrNull()
+                                    if (afid != null) {
+                                        ApiClient.service.requestIngestion(datasetUuid, afid)
                                     }
                                 }
                             }
