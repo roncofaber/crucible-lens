@@ -421,9 +421,8 @@ class CrucibleApiService(
         resourceId: String,
         reason: String? = null
     ): ApiResult<Unit> = safeCall {
-        client.post("${baseUrl}deletion_requests") {
+        client.post("${baseUrl}resources/$resourceId/delete") {
             header("Authorization", "Bearer $apiKey")
-            url.parameters.append("resource_id", resourceId)
             if (reason != null) url.parameters.append("reason", reason)
         }
     }
