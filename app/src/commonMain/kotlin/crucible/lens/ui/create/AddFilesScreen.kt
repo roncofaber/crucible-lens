@@ -72,14 +72,15 @@ fun AddFilesScreen(
                                     if (afid != null) {
                                         ApiClient.service.requestIngestion(datasetUuid, afid)
                                     }
+                                    // Thumbnail only added if upload fully succeeded
+                                    if (asThumbnail) {
+                                        ApiClient.service.addThumbnail(
+                                            datasetUuid!!,
+                                            ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
+                                        )
+                                    }
                                 }
                             }
-                        }
-                        if (asThumbnail) {
-                            ApiClient.service.addThumbnail(
-                                datasetUuid!!,
-                                ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
-                            )
                         }
                     }
                     snackbarHostState.showSnackbar(if (files.size == 1) "File uploaded" else "${files.size} files uploaded")

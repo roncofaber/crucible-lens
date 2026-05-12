@@ -97,11 +97,19 @@ class CreateDatasetViewModel : ViewModel() {
                         if (chunkResp is ApiResult.Success) {
                             // Step 3: finalize — server registers as AssociatedFile
                             val completeResp = ApiClient.service.completeUpload(newUuid, session.uploadId, sha256)
-                            // Step 4: trigger ingestion worker
                             if (completeResp is ApiResult.Success) {
+                                // Step 4: trigger ingestion worker
                                 val afid = completeResp.data["id"]?.jsonPrimitive?.content?.toIntOrNull()
                                 if (afid != null) {
                                     ApiClient.service.requestIngestion(newUuid, afid)
+                                }
+                                // Step 5: optional thumbnail — only if upload succeeded
+                                if (asThumbnail) {
+                                    val thumbResp = ApiClient.service.addThumbnail(
+                                        newUuid,
+                                        ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
+                                    )
+                                    if (thumbResp is ApiResult.Error) thumbnailFailures++
                                 }
                             }
                         } else {
@@ -109,13 +117,6 @@ class CreateDatasetViewModel : ViewModel() {
                         }
                     } else {
                         uploadFailures++
-                    }
-                    if (asThumbnail) {
-                        val thumbResp = ApiClient.service.addThumbnail(
-                            newUuid,
-                            ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
-                        )
-                        if (thumbResp is ApiResult.Error) thumbnailFailures++
                     }
                 }
 
