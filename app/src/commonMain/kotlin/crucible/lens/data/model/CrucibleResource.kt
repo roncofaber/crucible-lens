@@ -276,3 +276,18 @@ data class ExtractMetadataRequest(
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val apiUrl: String? = null
 )
+
+@Serializable
+data class AssociatedFile(
+    val mfid: String,
+    val filename: String,
+    @SerialName("storage_path") val storagePath: String? = null,
+    val size: Long? = null,
+    @SerialName("sha256_hash") val sha256Hash: String? = null
+)
+
+@Serializable
+data class FileDownloadLinkResponse(
+    val url: String,
+    @SerialName("expires_in") val expiresIn: Int = 3600
+)

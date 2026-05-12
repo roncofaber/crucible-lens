@@ -132,16 +132,16 @@ internal fun ThumbnailsSection(
     }
 }
 
-internal sealed class DownloadLinksState {
-    object Idle    : DownloadLinksState()
-    object Loading : DownloadLinksState()
-    object Empty   : DownloadLinksState()
-    data class Success(val links: Map<String, String>) : DownloadLinksState()
-    data class Err(val message: String) : DownloadLinksState()
+internal sealed class AssociatedFilesState {
+    object Idle    : AssociatedFilesState()
+    object Loading : AssociatedFilesState()
+    object Empty   : AssociatedFilesState()
+    data class Success(val files: List<crucible.lens.data.model.AssociatedFile>) : AssociatedFilesState()
+    data class Err(val message: String) : AssociatedFilesState()
 }
 
-internal fun displayName(path: String): String =
-    path.split("/").drop(1).joinToString("/").ifBlank { path }
+// Extract just the basename from staging paths like crucible-uploads/api-uploads/{user}/{name}
+internal fun displayName(path: String): String = path.substringAfterLast('/').ifBlank { path }
 
 internal fun fileIcon(name: String): androidx.compose.ui.graphics.vector.ImageVector {
     val ext = name.substringAfterLast('.', "").lowercase()
@@ -163,28 +163,29 @@ internal fun DownloadLinksCard(
     onExpandedChange: (Boolean) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(initialExpanded) }
-    var state by remember { mutableStateOf<DownloadLinksState>(DownloadLinksState.Idle) }
+    var state by remember { mutableStateOf<AssociatedFilesState>(AssociatedFilesState.Idle) }
     var isRefreshing by remember { mutableStateOf(false) }
+    // Per-file loading state: mfid -> isLoading
+    val loadingFiles = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
     val scope = rememberCoroutineScope()
     val platformCtx = getPlatformContext()
 
     fun fetch(isRefresh: Boolean = false) {
         scope.launch {
-            if (isRefresh) isRefreshing = true else state = DownloadLinksState.Loading
-            // Check in-memory cache first (55-min TTL matches signed URL expiry)
-            val cached = if (!isRefresh) CacheManager.getDownloadLinks(datasetUuid) else null
+            if (isRefresh) { isRefreshing = true; loadingFiles.clear() } else state = AssociatedFilesState.Loading
+            val cached = if (!isRefresh) CacheManager.getDatasetFiles(datasetUuid) else null
             val newState = if (cached != null) {
-                if (cached.isEmpty()) DownloadLinksState.Empty else DownloadLinksState.Success(cached)
+                if (cached.isEmpty()) AssociatedFilesState.Empty else AssociatedFilesState.Success(cached)
             } else {
-                when (val result = ApiClient.service.getDownloadLinks(datasetUuid)) {
+                when (val result = ApiClient.service.getDatasetFiles(datasetUuid)) {
                     is ApiResult.Success -> {
-                        if (result.data.isEmpty()) DownloadLinksState.Empty
-                        else DownloadLinksState.Success(result.data).also {
-                            CacheManager.cacheDownloadLinks(datasetUuid, result.data)
+                        if (result.data.isEmpty()) AssociatedFilesState.Empty
+                        else AssociatedFilesState.Success(result.data).also {
+                            CacheManager.cacheDatasetFiles(datasetUuid, result.data)
                         }
                     }
-                    is ApiResult.Error -> if (result.code == 404) DownloadLinksState.Empty
-                                         else DownloadLinksState.Err(result.message)
+                    is ApiResult.Error -> if (result.code == 404) AssociatedFilesState.Empty
+                                         else AssociatedFilesState.Err(result.message)
                 }
             }
             isRefreshing = false
@@ -192,61 +193,88 @@ internal fun DownloadLinksCard(
         }
     }
 
-    // Silently fetch on first composition — cache hit is instant, API call is once per hour
+    fun openFile(file: crucible.lens.data.model.AssociatedFile, share: Boolean) {
+        scope.launch {
+            loadingFiles[file.mfid] = true
+            try {
+                val cached = CacheManager.getFileUrl(file.mfid)
+                val url = if (cached != null) cached else {
+                    when (val r = ApiClient.service.getFileDownloadLink(file.mfid)) {
+                        is ApiResult.Success -> r.data.url.also { CacheManager.cacheFileUrl(file.mfid, it) }
+                        is ApiResult.Error -> null
+                    }
+                }
+                if (url != null) {
+                    val name = displayName(file.filename)
+                    if (share) shareText(platformCtx, url, name) else openUrl(platformCtx, url)
+                }
+            } finally {
+                loadingFiles.remove(file.mfid)
+            }
+        }
+    }
+
     LaunchedEffect(datasetUuid) { fetch() }
 
-    // Render nothing until we have confirmed files
-    val linksState = state
-    if (linksState !is DownloadLinksState.Success && !isRefreshing) return
+    val filesState = state
+    if (filesState !is AssociatedFilesState.Success && !isRefreshing) return
 
     Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
         Card {
             Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { val new = !expanded; expanded = new; onExpandedChange(new) },
+                    modifier = Modifier.fillMaxWidth().clickable { val new = !expanded; expanded = new; onExpandedChange(new) },
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    Icon(if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Download Links", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    IconButton(
-                        onClick = { fetch(isRefresh = true) },
-                        modifier = Modifier.size(32.dp),
-                        enabled = !isRefreshing
-                    ) {
-                        if (isRefreshing)
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        else
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                    val fileCount = (filesState as? AssociatedFilesState.Success)?.files?.size
+                    Text(
+                        if (fileCount != null) "Files ($fileCount)" else "Files",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { fetch(isRefresh = true) }, modifier = Modifier.size(32.dp), enabled = !isRefreshing) {
+                        if (isRefreshing) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        else Icon(Icons.Default.Refresh, "Refresh", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                     }
                 }
 
-                if (expanded && linksState is DownloadLinksState.Success) {
+                if (expanded && filesState is AssociatedFilesState.Success) {
                     Spacer(Modifier.height(8.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                        linksState.links.entries.sortedBy { it.key }.forEach { (path, url) ->
-                            val name = displayName(path)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        filesState.files.sortedBy { it.filename }.forEach { file ->
+                            val name = displayName(file.filename)
+                            val ingested = file.storagePath != null
+                            val isLoadingFile = loadingFiles[file.mfid] == true
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(fileIcon(name), contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(name, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                IconButton(onClick = { openUrl(platformCtx, url) }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = "Open", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                Icon(fileIcon(name), null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(name, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    if (file.size != null) {
+                                        Text(crucible.lens.data.util.formatFileSize(file.size), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                 }
-                                IconButton(onClick = { shareText(platformCtx, url, name) }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Default.Share, contentDescription = "Share link", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                if (isLoadingFile) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp).padding(1.dp), strokeWidth = 2.dp)
+                                    Spacer(Modifier.width(32.dp))
+                                } else if (ingested) {
+                                    IconButton(onClick = { openFile(file, false) }, modifier = Modifier.size(32.dp)) {
+                                        Icon(Icons.AutoMirrored.Filled.OpenInNew, "Open", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                    IconButton(onClick = { openFile(file, true) }, modifier = Modifier.size(32.dp)) {
+                                        Icon(Icons.Default.Share, "Share", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                } else {
+                                    Text("Pending", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 4.dp))
+                                    Icon(Icons.Default.HourglassEmpty, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }

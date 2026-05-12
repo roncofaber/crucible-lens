@@ -274,6 +274,14 @@ class CrucibleApiService(
         delete("datasets/$uuid/thumbnails/$thumbnailId")
     }
 
+    suspend fun getDatasetFiles(uuid: String): ApiResult<List<crucible.lens.data.model.AssociatedFile>> = safeCall {
+        get("datasets/$uuid/files")
+    }
+
+    suspend fun getFileDownloadLink(fileId: String): ApiResult<crucible.lens.data.model.FileDownloadLinkResponse> = safeCall {
+        get("files/$fileId/download_link")
+    }
+
     suspend fun getDownloadLinks(uuid: String): ApiResult<Map<String, String>> = safeCall {
         val obj: JsonObject = get("datasets/$uuid/download_links")
         // Filter to only genuine signed URLs — the server may return HTTP 200 with

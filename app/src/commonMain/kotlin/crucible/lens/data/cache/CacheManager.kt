@@ -15,12 +15,13 @@ data class CachedItem<T>(
 
 object CacheManager {
     private const val CACHE_TTL = 10 * 60 * 1000L // 10 minutes
-    private const val DOWNLOAD_LINKS_TTL = 55 * 60 * 1000L // 55 min — just under the 1-hour signed URL expiry
+    private const val FILE_URL_TTL = 50 * 60 * 1000L // 50 min — safely under the 1-hour signed URL expiry
     private const val MAX_RESOURCE_CACHE_SIZE = 50
     private const val MAX_THUMBNAIL_CACHE_SIZE = 20
     private const val MAX_PROJECT_DETAIL_CACHE_SIZE = 30
     private const val MAX_INSTRUMENT_DATASETS_CACHE_SIZE = 15
-    private const val MAX_DOWNLOAD_LINKS_CACHE_SIZE = 50
+    private const val MAX_DATASET_FILES_CACHE_SIZE = 50
+    private const val MAX_FILE_URL_CACHE_SIZE = 200
 
     private fun <V : CachedItem<*>> LinkedHashMap<String, V>.evictOldestIfOver(limit: Int) {
         if (size >= limit) {
@@ -39,7 +40,10 @@ object CacheManager {
     private val instrumentDatasetsCache = LinkedHashMap<String, CachedItem<List<Dataset>>>()
     private val projectSamplesCache = LinkedHashMap<String, CachedItem<List<Sample>>>()
     private val projectDatasetsCache = LinkedHashMap<String, CachedItem<List<Dataset>>>()
-    private val downloadLinksCache = LinkedHashMap<String, CachedItem<Map<String, String>>>()
+    // Associated files list cache (per dataset UUID, standard 10-min TTL)
+    private val datasetFilesCache = LinkedHashMap<String, CachedItem<List<crucible.lens.data.model.AssociatedFile>>>()
+    // Per-file signed URL cache (per MFID, 50-min TTL — just under the 1-hour GCS expiry)
+    private val fileUrlCache = LinkedHashMap<String, CachedItem<String>>()
 
     // Resource caching
     fun cacheResource(uuid: String, resource: CrucibleResource) {
@@ -148,22 +152,35 @@ object CacheManager {
         thumbnailCache.remove(uuid)
     }
 
-    // Download links caching (55-min TTL matching signed URL expiry)
-    fun cacheDownloadLinks(uuid: String, links: Map<String, String>) {
-        downloadLinksCache.evictOldestIfOver(MAX_DOWNLOAD_LINKS_CACHE_SIZE)
-        downloadLinksCache[uuid] = CachedItem(links, Clock.System.now().toEpochMilliseconds())
+    // Associated files list cache (per dataset UUID, standard TTL)
+    fun cacheDatasetFiles(uuid: String, files: List<crucible.lens.data.model.AssociatedFile>) {
+        datasetFilesCache.evictOldestIfOver(MAX_DATASET_FILES_CACHE_SIZE)
+        datasetFilesCache[uuid] = CachedItem(files, Clock.System.now().toEpochMilliseconds())
     }
 
-    fun getDownloadLinks(uuid: String): Map<String, String>? {
-        val cached = downloadLinksCache[uuid] ?: return null
-        if (Clock.System.now().toEpochMilliseconds() - cached.timestamp > DOWNLOAD_LINKS_TTL) {
-            downloadLinksCache.remove(uuid)
-            return null
+    fun getDatasetFiles(uuid: String): List<crucible.lens.data.model.AssociatedFile>? {
+        val cached = datasetFilesCache[uuid] ?: return null
+        if (cached.isExpired()) { datasetFilesCache.remove(uuid); return null }
+        return cached.data
+    }
+
+    fun clearDatasetFiles(uuid: String) { datasetFilesCache.remove(uuid) }
+
+    // Per-file signed URL cache (per MFID, 50-min TTL)
+    fun cacheFileUrl(mfid: String, url: String) {
+        fileUrlCache.evictOldestIfOver(MAX_FILE_URL_CACHE_SIZE)
+        fileUrlCache[mfid] = CachedItem(url, Clock.System.now().toEpochMilliseconds())
+    }
+
+    fun getFileUrl(mfid: String): String? {
+        val cached = fileUrlCache[mfid] ?: return null
+        if (Clock.System.now().toEpochMilliseconds() - cached.timestamp > FILE_URL_TTL) {
+            fileUrlCache.remove(mfid); return null
         }
         return cached.data
     }
 
-    fun clearDownloadLinks(uuid: String) { downloadLinksCache.remove(uuid) }
+    fun clearFileUrl(mfid: String) { fileUrlCache.remove(mfid) }
 
     // Project detail caching (samples and datasets per project)
     fun cacheProjectSamples(projectId: String, samples: List<Sample>) {
