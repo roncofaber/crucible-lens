@@ -164,16 +164,16 @@ internal fun DownloadLinksCard(
 ) {
     var expanded by remember { mutableStateOf(initialExpanded) }
     var state by remember { mutableStateOf<AssociatedFilesState>(AssociatedFilesState.Idle) }
-    var isRefreshing by remember { mutableStateOf(false) }
     // Per-file loading state: mfid -> isLoading
     val loadingFiles = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
     val scope = rememberCoroutineScope()
     val platformCtx = getPlatformContext()
 
-    fun fetch(isRefresh: Boolean = false) {
+    fun fetch() {
         scope.launch {
-            if (isRefresh) { isRefreshing = true; loadingFiles.clear() } else state = AssociatedFilesState.Loading
-            val cached = if (!isRefresh) CacheManager.getDatasetFiles(datasetUuid) else null
+            state = AssociatedFilesState.Loading
+            loadingFiles.clear()
+            val cached = CacheManager.getDatasetFiles(datasetUuid)
             val newState = if (cached != null) {
                 if (cached.isEmpty()) AssociatedFilesState.Empty else AssociatedFilesState.Success(cached)
             } else {
@@ -188,7 +188,6 @@ internal fun DownloadLinksCard(
                                          else AssociatedFilesState.Err(result.message)
                 }
             }
-            isRefreshing = false
             state = newState
         }
     }
@@ -217,7 +216,7 @@ internal fun DownloadLinksCard(
     LaunchedEffect(datasetUuid) { fetch() }
 
     val filesState = state
-    if (filesState !is AssociatedFilesState.Success && !isRefreshing) return
+    if (filesState !is AssociatedFilesState.Success) return
 
     Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
         Card {
@@ -237,10 +236,7 @@ internal fun DownloadLinksCard(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
                     )
-                    IconButton(onClick = { fetch(isRefresh = true) }, modifier = Modifier.size(32.dp), enabled = !isRefreshing) {
-                        if (isRefreshing) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        else Icon(Icons.Default.Refresh, "Refresh", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                    }
+
                 }
 
                 if (expanded && filesState is AssociatedFilesState.Success) {
