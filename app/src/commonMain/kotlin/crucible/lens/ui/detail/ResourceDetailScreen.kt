@@ -989,11 +989,6 @@ fun ResourceDetailScreen(
                                 )
                             }
                         }
-                        DownloadLinksCard(
-                            datasetUuid = pageResource.uniqueId,
-                            initialExpanded = pageGetCardState("download_links"),
-                            onExpandedChange = { pageSetCardState("download_links", it) }
-                        )
                         AnimatedVisibility(
                             visible = !displayResource.scientificMetadata.isNullOrEmpty(),
                             enter = fadeIn(tween(200)) + expandVertically(),
@@ -1009,6 +1004,11 @@ fun ResourceDetailScreen(
                                 )
                             }
                         }
+                        DownloadLinksCard(
+                            datasetUuid = pageResource.uniqueId,
+                            initialExpanded = pageGetCardState("download_links"),
+                            onExpandedChange = { pageSetCardState("download_links", it) }
+                        )
                         AnimatedVisibility(
                             visible = !displayResource.keywords.isNullOrEmpty(),
                             enter = fadeIn(tween(200)) + expandVertically(),

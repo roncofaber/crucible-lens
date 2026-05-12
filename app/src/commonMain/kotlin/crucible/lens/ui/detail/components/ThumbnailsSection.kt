@@ -263,7 +263,7 @@ internal fun DownloadLinksCard(
                                     Spacer(Modifier.width(32.dp))
                                 } else if (ingested) {
                                     IconButton(onClick = { openFile(file, false) }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.AutoMirrored.Filled.OpenInNew, "Open", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                        Icon(Icons.Default.Download, "Download", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                                     }
                                     IconButton(onClick = { openFile(file, true) }, modifier = Modifier.size(32.dp)) {
                                         Icon(Icons.Default.Share, "Share", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
