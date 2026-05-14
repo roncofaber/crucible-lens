@@ -757,8 +757,8 @@ fun ResourceDetailScreen(
                                 }
                                 if (projectId != null && graphExplorerUrl.isNotBlank()) {
                                     val webUrl = when (currentDisplayResource) {
-                                        is Sample  -> "$graphExplorerUrl/$projectId/sample-graph/${currentDisplayResource.uniqueId}"
-                                        is Dataset -> "$graphExplorerUrl/$projectId/dataset/${currentDisplayResource.uniqueId}"
+                                        is Sample  -> "$graphExplorerUrl/$projectId/samples/${currentDisplayResource.uniqueId}"
+                                        is Dataset -> "$graphExplorerUrl/$projectId/datasets/${currentDisplayResource.uniqueId}"
                                     }
                                     OpenInWebMenuItem { overflowMenuExpanded = false; openUrl(platformContext, webUrl) }
                                     ShareMenuItem {

@@ -1005,8 +1005,8 @@ private fun ResourceCard(
     var menuExpanded by remember { mutableStateOf(false) }
 
     val webUrl = if (projectId != null && graphExplorerUrl.isNotBlank()) {
-        if (resourceType == "dataset") "$graphExplorerUrl/$projectId/dataset/$uniqueId"
-        else "$graphExplorerUrl/$projectId/sample-graph/$uniqueId"
+        if (resourceType == "dataset") "$graphExplorerUrl/$projectId/datasets/$uniqueId"
+        else "$graphExplorerUrl/$projectId/samples/$uniqueId"
     } else null
 
     Box {
