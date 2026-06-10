@@ -73,9 +73,10 @@ fun OrcidLoginScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (state.loadingState is LoadingState.Loading) {
+            val loadingState = state.loadingState
+            if (loadingState is LoadingState.Loading) {
                 LinearProgressIndicator(
-                    progress = { (state.loadingState as LoadingState.Loading).progress },
+                    progress = { loadingState.progress },
                     modifier = Modifier.fillMaxWidth()
                 )
             }

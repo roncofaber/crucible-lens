@@ -895,6 +895,37 @@ fun ResourceDetailScreen(
                     )
                 }
 
+                val displayDeletionRequest = when (displayResource) {
+                    is Sample -> displayResource.deletionRequest
+                    is Dataset -> displayResource.deletionRequest
+                }
+                if (displayDeletionRequest != null) {
+                    val delStatus = (displayDeletionRequest["status"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "pending"
+                    val delReason = (displayDeletionRequest["reason"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.ifBlank { null }
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    "Deletion ${delStatus.replaceFirstChar { it.uppercase() }}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                if (delReason != null) {
+                                    Text(delReason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 when (displayResource) {
                     is Sample -> Box(modifier = Modifier.padding(bottom = 16.dp)) {
                         SampleDetailsCard(

@@ -162,9 +162,10 @@ data class Instrument(
 
 @Serializable
 data class PaginatedResponse<T>(
-    @SerialName("total") val total: Int,
+    @SerialName("total") val total: Int? = null,
     @SerialName("limit") val limit: Int,
-    @SerialName("offset") val offset: Int,
+    @SerialName("offset") val offset: Int? = null,
+    @SerialName("next_cursor") val nextCursor: String? = null,
     @SerialName("items") val items: List<T>
 )
 

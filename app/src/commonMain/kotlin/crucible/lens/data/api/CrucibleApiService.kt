@@ -168,12 +168,12 @@ class CrucibleApiService(
 
     suspend fun getDatasetsByInstrument(
         instrumentName: String
-    ): ApiResult<List<Dataset>> = fetchAllPages { limit, offset ->
+    ): ApiResult<List<Dataset>> = fetchAllPagesCursor { limit, cursor ->
         client.get("${baseUrl}datasets") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("instrument_name", instrumentName)
             url.parameters.append("limit", limit.toString())
-            url.parameters.append("offset", offset.toString())
+            if (cursor != null) url.parameters.append("cursor", cursor)
         }.body<PaginatedResponse<Dataset>>()
     }
 
@@ -188,24 +188,24 @@ class CrucibleApiService(
     suspend fun getSamplesByProject(
         projectId: String,
         onTotalKnown: (suspend (Int) -> Unit)? = null
-    ): ApiResult<List<Sample>> = fetchAllPages(onTotalKnown = onTotalKnown) { limit, offset ->
+    ): ApiResult<List<Sample>> = fetchAllPagesCursor(onTotalKnown = onTotalKnown) { limit, cursor ->
         client.get("${baseUrl}samples") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("project_id", projectId)
             url.parameters.append("limit", limit.toString())
-            url.parameters.append("offset", offset.toString())
+            if (cursor != null) url.parameters.append("cursor", cursor)
         }.body<PaginatedResponse<Sample>>()
     }
 
     suspend fun getDatasetsByProject(
         projectId: String,
         onTotalKnown: (suspend (Int) -> Unit)? = null
-    ): ApiResult<List<Dataset>> = fetchAllPages(onTotalKnown = onTotalKnown) { limit, offset ->
+    ): ApiResult<List<Dataset>> = fetchAllPagesCursor(onTotalKnown = onTotalKnown) { limit, cursor ->
         client.get("${baseUrl}datasets") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("project_id", projectId)
             url.parameters.append("limit", limit.toString())
-            url.parameters.append("offset", offset.toString())
+            if (cursor != null) url.parameters.append("cursor", cursor)
         }.body<PaginatedResponse<Dataset>>()
     }
 
@@ -218,7 +218,7 @@ class CrucibleApiService(
         ownerOrcid: String? = null,
         creationTimeGte: String? = null,
         creationTimeLte: String? = null
-    ): ApiResult<List<Dataset>> = fetchAllPages { limit, offset ->
+    ): ApiResult<List<Dataset>> = fetchAllPagesCursor { limit, cursor ->
         client.get("${baseUrl}datasets") {
             header("Authorization", "Bearer $apiKey")
             if (projectId != null) url.parameters.append("project_id", projectId)
@@ -230,7 +230,7 @@ class CrucibleApiService(
             if (creationTimeGte != null) url.parameters.append("creation_time_gte", creationTimeGte)
             if (creationTimeLte != null) url.parameters.append("creation_time_lte", creationTimeLte)
             url.parameters.append("limit", limit.toString())
-            url.parameters.append("offset", offset.toString())
+            if (cursor != null) url.parameters.append("cursor", cursor)
         }.body<PaginatedResponse<Dataset>>()
     }
 
@@ -240,7 +240,7 @@ class CrucibleApiService(
         ownerOrcid: String? = null,
         creationTimeGte: String? = null,
         creationTimeLte: String? = null
-    ): ApiResult<List<Sample>> = fetchAllPages { limit, offset ->
+    ): ApiResult<List<Sample>> = fetchAllPagesCursor { limit, cursor ->
         client.get("${baseUrl}samples") {
             header("Authorization", "Bearer $apiKey")
             if (projectId != null) url.parameters.append("project_id", projectId)
@@ -249,7 +249,7 @@ class CrucibleApiService(
             if (creationTimeGte != null) url.parameters.append("creation_time_gte", creationTimeGte)
             if (creationTimeLte != null) url.parameters.append("creation_time_lte", creationTimeLte)
             url.parameters.append("limit", limit.toString())
-            url.parameters.append("offset", offset.toString())
+            if (cursor != null) url.parameters.append("cursor", cursor)
         }.body<PaginatedResponse<Sample>>()
     }
 
@@ -311,11 +311,11 @@ class CrucibleApiService(
 
     // Triggers the ingestion worker for a registered AssociatedFile.
     // `afid` is the integer id returned in the completeUpload response.
-    // `ingestionClass` selects the ingestor (e.g. "nexus", "lammps") — omit to let the server decide.
+    // `ingestionClass` selects the ingestor — defaults to "ApiUploadIngestor" for standard file uploads.
     suspend fun requestIngestion(
         uuid: String,
         afid: Int,
-        ingestionClass: String? = null
+        ingestionClass: String? = "ApiUploadIngestor"
     ): ApiResult<JsonObject> = safeCall {
         client.post("${baseUrl}datasets/$uuid/associated_files/$afid/ingest") {
             header("Authorization", "Bearer $apiKey")
@@ -530,9 +530,9 @@ class CrucibleApiService(
     }
 
     /**
-     * Fetches all pages of a paginated envelope endpoint in parallel.
+     * Fetches all pages of an offset-paginated endpoint in parallel.
      * Fetches page 0 first to get [total], then fires all remaining pages
-     * concurrently with limit=1000. Results are concatenated in order.
+     * concurrently. Results are concatenated in order.
      */
     private suspend inline fun <reified T> fetchAllPages(
         pageSize: Int = 1000,
@@ -541,7 +541,7 @@ class CrucibleApiService(
     ): ApiResult<List<T>> = safeCall {
         coroutineScope {
             val first = page(pageSize, 0)
-            val total = first.total
+            val total = first.total ?: first.items.size
             onTotalKnown?.invoke(total)
             val remaining = total - first.items.size
             if (remaining <= 0) return@coroutineScope first.items
@@ -553,6 +553,30 @@ class CrucibleApiService(
 
             first.items + rest
         }
+    }
+
+    /**
+     * Fetches all pages of a keyset-paginated endpoint sequentially by following [next_cursor].
+     * [total] is available only on the first page and forwarded to [onTotalKnown] when present.
+     */
+    private suspend inline fun <reified T> fetchAllPagesCursor(
+        pageSize: Int = 1000,
+        noinline onTotalKnown: (suspend (Int) -> Unit)? = null,
+        crossinline page: suspend (limit: Int, cursor: String?) -> PaginatedResponse<T>
+    ): ApiResult<List<T>> = safeCall {
+        val result = mutableListOf<T>()
+        var cursor: String? = null
+        var isFirst = true
+        do {
+            val response = page(pageSize, cursor)
+            if (isFirst) {
+                response.total?.let { onTotalKnown?.invoke(it) }
+                isFirst = false
+            }
+            result.addAll(response.items)
+            cursor = response.nextCursor
+        } while (cursor != null)
+        result
     }
 }
 

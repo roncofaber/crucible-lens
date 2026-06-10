@@ -374,7 +374,7 @@ fun NavGraph(
 
         composable(Screen.OrcidLogin.route) {
             OrcidLoginScreen(
-                loginUrl = "${apiBaseUrl}user_apikey",
+                loginUrl = "${apiBaseUrl}auth/apikey",
                 onBack = navigateBack,
                 onKeyFound = { key ->
                     onApiKeySave(key)
