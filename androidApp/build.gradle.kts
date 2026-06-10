@@ -19,6 +19,9 @@ android {
         targetSdk = 36
         versionCode = (project.findProperty("app.versionCode") as String).toInt()
         versionName = project.findProperty("app.versionName") as String
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
 
     signingConfigs {
