@@ -57,7 +57,7 @@ fun AddFilesScreen(
                     files.forEachIndexed { index, (bytes, asThumbnail) ->
                         val filename = "file_${datasetUuid}_${Clock.System.now().toEpochMilliseconds()}_$index.jpg"
                         val sha256 = PlatformCrypto.sha256Hex(bytes)
-                        val initiateResp = ApiClient.service.initiateUpload(datasetUuid!!, filename, bytes.size.toLong())
+                        val initiateResp = ApiClient.service.initiateUpload(datasetUuid, filename, bytes.size.toLong())
                         if (initiateResp is ApiResult.Success) {
                             val session = initiateResp.data
                             val chunkResp = ApiClient.service.uploadChunksToGCS(
@@ -66,7 +66,7 @@ fun AddFilesScreen(
                                 chunkSizeHint = session.chunkSizeHint
                             )
                             if (chunkResp is ApiResult.Success) {
-                                val completeResp = ApiClient.service.completeUpload(datasetUuid!!, session.uploadId, sha256)
+                                val completeResp = ApiClient.service.completeUpload(datasetUuid, session.uploadId, sha256)
                                 if (completeResp is ApiResult.Success) {
                                     val afid = completeResp.data["id"]?.jsonPrimitive?.content?.toIntOrNull()
                                     if (afid != null) {
@@ -75,7 +75,7 @@ fun AddFilesScreen(
                                     // Thumbnail only added if upload fully succeeded
                                     if (asThumbnail) {
                                         ApiClient.service.addThumbnail(
-                                            datasetUuid!!,
+                                            datasetUuid,
                                             ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
                                         )
                                     }

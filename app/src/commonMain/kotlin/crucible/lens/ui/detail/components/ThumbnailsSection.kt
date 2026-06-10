@@ -229,9 +229,9 @@ internal fun DownloadLinksCard(
                     Spacer(Modifier.width(4.dp))
                     Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    val fileCount = (filesState as? AssociatedFilesState.Success)?.files?.size
+                    val fileCount = filesState.files.size
                     Text(
-                        if (fileCount != null) "Files ($fileCount)" else "Files",
+                        "Files ($fileCount)",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
@@ -239,7 +239,7 @@ internal fun DownloadLinksCard(
 
                 }
 
-                if (expanded && filesState is AssociatedFilesState.Success) {
+                if (expanded) {
                     Spacer(Modifier.height(8.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         filesState.files.sortedBy { it.filename }.forEach { file ->

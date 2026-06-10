@@ -202,7 +202,6 @@ private fun JsonElement.flattenTo(key: String): List<Pair<String, String>> = whe
     is JsonArray     -> listOf(key to joinToString(", ") { elem ->
         runCatching { elem.jsonPrimitive.content }.getOrElse { elem.toString() }
     })
-    else             -> listOf(key to toString())
 }
 
 // ── Shared JSON utilities ─────────────────────────────────────────────────────
