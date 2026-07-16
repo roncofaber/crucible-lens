@@ -138,7 +138,8 @@ actual fun App() {
                     prefs.saveUserOrcid(null)
                     CacheManager.clearAll()
                 }
-            }
+            },
+            prefs = prefs
         )
     }
 }

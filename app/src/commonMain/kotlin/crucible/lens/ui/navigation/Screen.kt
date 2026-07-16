@@ -12,6 +12,7 @@ sealed class Screen(val route: String) {
     object SettingsAppearance : Screen("settings/appearance")
     object SettingsCache : Screen("settings/cache")
     object SettingsAbout : Screen("settings/about")
+    object SettingsAccount : Screen("settings/account")
     object Projects : Screen("projects")
     object ProjectDetail : Screen("project/{projectId}") {
         fun createRoute(projectId: String) = "project/$projectId"

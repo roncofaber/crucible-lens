@@ -22,6 +22,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import kotlinx.coroutines.launch
 import crucible.lens.data.preferences.HistoryItem
+import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.ui.home.HomeScreen
 import crucible.lens.ui.history.HistoryScreen
 import crucible.lens.ui.scanner.QRCodeScannerView
@@ -33,6 +34,8 @@ import crucible.lens.ui.settings.OrcidLoginScreen
 import crucible.lens.ui.settings.AppearanceSettingsScreen
 import crucible.lens.ui.settings.CacheSettingsScreen
 import crucible.lens.ui.settings.AboutSettingsScreen
+import crucible.lens.ui.settings.AccountScreen
+import crucible.lens.ui.settings.AccountViewModel
 import crucible.lens.ui.detail.ResourceDetailViewModel
 import crucible.lens.ui.detail.UiState
 import crucible.lens.ui.detail.ResourceDetailScreen
@@ -120,6 +123,7 @@ fun NavGraph(
     userOrcid: String? = null,
     onUserOrcidSave: (String?) -> Unit = {},
     onSignOut: () -> Unit = {},
+    prefs: AppPreferences,
     viewModel: ResourceDetailViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             override fun <T : androidx.lifecycle.ViewModel> create(modelClass: KClass<T>, extras: CreationExtras): T {
@@ -404,6 +408,15 @@ fun NavGraph(
                 isDarkTheme = darkTheme,
                 onBack = navigateBack,
                 onHome = navigateHome
+            )
+        }
+
+        composable(Screen.SettingsAccount.route) {
+            val accountViewModel = viewModel { AccountViewModel(prefs) }
+            AccountScreen(
+                viewModel = accountViewModel,
+                onBack = navigateBack,
+                onNavigateToOrcidLogin = { navController.navigate(Screen.OrcidLogin.route) }
             )
         }
 

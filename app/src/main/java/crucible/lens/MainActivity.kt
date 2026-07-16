@@ -244,7 +244,8 @@ class MainActivity : ComponentActivity() {
                             preferencesManager.clearApiKey()
                             preferencesManager.saveUserOrcid(null)
                         }
-                    }
+                    },
+                    prefs = preferencesManager
                 )
             }
         }
