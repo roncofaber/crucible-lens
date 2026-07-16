@@ -27,6 +27,8 @@ import crucible.lens.data.model.MetadataImageData
 import crucible.lens.data.model.HealthStatus
 import crucible.lens.data.model.PaginatedResponse
 import crucible.lens.data.model.User
+import crucible.lens.data.model.UserSearchResult
+import crucible.lens.data.model.ProfileUpdateRequest
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.async
@@ -96,6 +98,36 @@ class CrucibleApiService(
 
     suspend fun getAccount(): ApiResult<AccountResponse> = safeCall {
         get("account")
+    }
+
+    suspend fun getProfile(): ApiResult<User> = safeCall {
+        get("account/profile")
+    }
+
+    suspend fun updateProfile(
+        firstName: String? = null,
+        lastName: String? = null,
+        email: String? = null,
+        username: String? = null
+    ): ApiResult<User> = safeCall {
+        patch("account/profile", ProfileUpdateRequest(
+            firstName = firstName,
+            lastName = lastName,
+            email = email?.ifBlank { null },
+            username = username?.ifBlank { null }
+        ))
+    }
+
+    suspend fun checkUsernameAvailability(username: String, currentUniqueId: String): ApiResult<Boolean> = safeCall {
+        val results = client.get("${baseUrl}users/search") {
+            header("Authorization", "Bearer $apiKey")
+            url.parameters.append("q", username.lowercase())
+            url.parameters.append("limit", "5")
+        }.body<List<UserSearchResult>>()
+        val taken = results.any {
+            it.username?.lowercase() == username.lowercase() && it.uniqueId != currentUniqueId
+        }
+        !taken
     }
 
     /**
