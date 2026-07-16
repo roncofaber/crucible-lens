@@ -1,5 +1,6 @@
 package crucible.lens.data.preferences
 
+import crucible.lens.data.model.User
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 
@@ -22,6 +23,7 @@ interface AppPreferences {
     val pinnedInstruments: Flow<Set<String>>
     val hiddenInstruments: Flow<Set<String>>
     val userOrcid: Flow<String?>
+    val userProfile: Flow<User?>
     val resourceHistory: Flow<List<HistoryItem>>
     val sampleGroupBy: Flow<String>
     val datasetGroupBy: Flow<String>
@@ -45,6 +47,8 @@ interface AppPreferences {
     suspend fun togglePinnedInstrument(id: String)
     suspend fun toggleHiddenInstrument(id: String)
     suspend fun saveUserOrcid(orcid: String?)
+    suspend fun saveUserProfile(user: User?)
+    suspend fun clearUserProfile()
     suspend fun addToHistory(uuid: String, name: String)
     suspend fun clearHistory()
     suspend fun saveSampleGroupBy(value: String)

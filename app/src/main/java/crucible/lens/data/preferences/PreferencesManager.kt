@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import crucible.lens.data.model.User
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -30,6 +31,7 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         private val DATASET_GROUP_BY = stringPreferencesKey("dataset_group_by")
         private val DEFAULT_PROJECT_TAB = stringPreferencesKey("default_project_tab")
         private val USER_ORCID = stringPreferencesKey("user_orcid")
+        private val USER_PROFILE = stringPreferencesKey("user_profile")
         private val PINNED_INSTRUMENTS = stringPreferencesKey("pinned_instruments")
         private val USE_DYNAMIC_COLOR = stringPreferencesKey("use_dynamic_color")
         private val AI_API_KEY = stringPreferencesKey("ai_api_key")
@@ -45,6 +47,8 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         const val THEME_MODE_LIGHT = "light"
         const val THEME_MODE_DARK = "dark"
         const val DEFAULT_ACCENT_COLOR = "blue"
+
+        private val profileJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true }
     }
 
     override val apiKey: Flow<String?> = context.dataStore.data.map { preferences ->
@@ -113,6 +117,12 @@ class PreferencesManager(private val context: Context) : AppPreferences {
 
     override val userOrcid: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[USER_ORCID]
+    }
+
+    override val userProfile: Flow<User?> = context.dataStore.data.map { preferences ->
+        preferences[USER_PROFILE]?.let { json ->
+            runCatching { profileJson.decodeFromString<User>(json) }.getOrNull()
+        }
     }
 
     override val aiApiKey: Flow<String?> = context.dataStore.data.map { preferences ->
@@ -239,6 +249,19 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         context.dataStore.edit { preferences ->
             if (orcid != null) preferences[USER_ORCID] = orcid
             else preferences.remove(USER_ORCID)
+        }
+    }
+
+    override suspend fun saveUserProfile(user: User?) {
+        context.dataStore.edit { preferences ->
+            if (user != null) preferences[USER_PROFILE] = profileJson.encodeToString(User.serializer(), user)
+            else preferences.remove(USER_PROFILE)
+        }
+    }
+
+    override suspend fun clearUserProfile() {
+        context.dataStore.edit { preferences ->
+            preferences.remove(USER_PROFILE)
         }
     }
 

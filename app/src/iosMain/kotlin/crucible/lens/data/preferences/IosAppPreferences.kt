@@ -1,6 +1,7 @@
 package crucible.lens.data.preferences
 
 import com.russhwolf.settings.NSUserDefaultsSettings
+import crucible.lens.data.model.User
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.time.Clock
@@ -9,6 +10,7 @@ import kotlinx.serialization.json.Json
 class IosAppPreferences : AppPreferences {
     private val settings = NSUserDefaultsSettings.Factory().create("crucible_lens_prefs")
     private val json = Json
+    private val iosProfileJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true }
 
     override val apiKey: Flow<String?> =
         MutableStateFlow(settings.getStringOrNull("api_key"))
@@ -71,6 +73,13 @@ class IosAppPreferences : AppPreferences {
 
     override val userOrcid: Flow<String?> =
         MutableStateFlow(settings.getStringOrNull("user_orcid"))
+
+    private val _userProfile = MutableStateFlow<User?>(
+        settings.getStringOrNull("user_profile")?.let { json ->
+            runCatching { iosProfileJson.decodeFromString<User>(json) }.getOrNull()
+        }
+    )
+    override val userProfile: Flow<User?> = _userProfile
 
     override val resourceHistory: Flow<List<HistoryItem>> =
         MutableStateFlow(
@@ -203,6 +212,21 @@ class IosAppPreferences : AppPreferences {
             settings.remove("user_orcid")
         }
         (userOrcid as? MutableStateFlow)?.value = orcid
+    }
+
+    override suspend fun saveUserProfile(user: User?) {
+        if (user != null) {
+            val json = iosProfileJson.encodeToString(User.serializer(), user)
+            settings.putString("user_profile", json)
+        } else {
+            settings.remove("user_profile")
+        }
+        _userProfile.value = user
+    }
+
+    override suspend fun clearUserProfile() {
+        settings.remove("user_profile")
+        _userProfile.value = null
     }
 
     override suspend fun addToHistory(uuid: String, name: String) {
