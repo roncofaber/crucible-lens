@@ -175,6 +175,22 @@ class AccountViewModel(private val prefs: AppPreferences) : ViewModel() {
         }
     }
 
+    fun saveApiKey(key: String) {
+        viewModelScope.launch {
+            prefs.saveApiKey(key)
+            ApiClient.setApiKey(key)
+            prefs.clearUserProfile()
+            CacheManager.clearAll()
+            _editState.value = EditUiState.Idle
+            if (key.isBlank()) {
+                _profileState.value = ProfileUiState.NotLoggedIn
+            } else {
+                _profileState.value = ProfileUiState.Loading
+                fetchProfileFromApi()
+            }
+        }
+    }
+
     fun signOut() {
         usernameCheckJob?.cancel()
         viewModelScope.launch {

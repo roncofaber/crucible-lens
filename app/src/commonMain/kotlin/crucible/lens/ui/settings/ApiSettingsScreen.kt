@@ -3,11 +3,8 @@ package crucible.lens.ui.settings
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.showToast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -18,9 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
@@ -38,29 +32,20 @@ private sealed interface HealthState {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ApiSettingsScreen(
-    currentApiKey: String?,
     currentApiBaseUrl: String,
     currentGraphExplorerUrl: String,
-    onApiKeySave: (String) -> Unit,
     onApiBaseUrlSave: (String) -> Unit,
     onGraphExplorerUrlSave: (String) -> Unit,
     onBack: () -> Unit,
     onHome: () -> Unit
 ) {
-    var apiKeyInput by remember { mutableStateOf(currentApiKey ?: "") }
-    LaunchedEffect(currentApiKey) {
-        if (!currentApiKey.isNullOrBlank()) apiKeyInput = currentApiKey
-    }
     var apiBaseUrlInput by remember { mutableStateOf(currentApiBaseUrl) }
     var graphExplorerUrlInput by remember { mutableStateOf(currentGraphExplorerUrl) }
-    var advancedExpanded by remember { mutableStateOf(false) }
-    var apiKeyVisible by remember { mutableStateOf(false) }
     val platformContext = getPlatformContext()
 
-    val apiKeyDirty = apiKeyInput != (currentApiKey ?: "")
     val apiBaseUrlDirty = apiBaseUrlInput != currentApiBaseUrl
     val graphExplorerUrlDirty = graphExplorerUrlInput != currentGraphExplorerUrl
-    val hasChanges = apiKeyDirty || apiBaseUrlDirty || graphExplorerUrlDirty
+    val hasChanges = apiBaseUrlDirty || graphExplorerUrlDirty
 
     var healthState by remember { mutableStateOf<HealthState>(HealthState.Idle) }
     var healthManualTrigger by remember { mutableStateOf(0) }
@@ -86,14 +71,12 @@ fun ApiSettingsScreen(
     }
 
     fun save() {
-        if (apiKeyDirty) onApiKeySave(apiKeyInput)
         if (apiBaseUrlDirty) onApiBaseUrlSave(apiBaseUrlInput)
         if (graphExplorerUrlDirty) onGraphExplorerUrlSave(graphExplorerUrlInput)
         showToast(platformContext, "Settings saved")
     }
 
     fun discard() {
-        apiKeyInput = currentApiKey ?: ""
         apiBaseUrlInput = currentApiBaseUrl
         graphExplorerUrlInput = currentGraphExplorerUrl
     }
@@ -268,57 +251,6 @@ fun ApiSettingsScreen(
                 supportingText = { Text("Web interface for viewing entity graphs", style = MaterialTheme.typography.bodySmall) },
                 colors = if (graphExplorerUrlDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
             )
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp).animateContentSize(tween(200))) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { advancedExpanded = !advancedExpanded }
-                            .padding(vertical = 16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Advanced", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        Icon(
-                            if (advancedExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (advancedExpanded) {
-                        Text(
-                            "For service accounts and developers",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                        OutlinedTextField(
-                            value = apiKeyInput,
-                            onValueChange = { apiKeyInput = it },
-                            label = { Text("API key") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            visualTransformation = if (apiKeyVisible)
-                                VisualTransformation.None
-                            else
-                                PasswordVisualTransformation(),
-                            trailingIcon = {
-                                IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
-                                    Icon(
-                                        if (apiKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = if (apiKeyVisible) "Hide key" else "Show key"
-                                    )
-                                }
-                            },
-                            colors = if (apiKeyDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
-                        )
-                        Spacer(Modifier.height(16.dp))
-                    }
-                }
-            }
 
             // Extra bottom space so content isn't hidden behind the save bar
             Spacer(Modifier.height(16.dp))

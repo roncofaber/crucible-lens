@@ -354,10 +354,8 @@ fun NavGraph(
 
         composable(Screen.SettingsApi.route) {
             ApiSettingsScreen(
-                currentApiKey = apiKey,
                 currentApiBaseUrl = apiBaseUrl,
                 currentGraphExplorerUrl = graphExplorerUrl,
-                onApiKeySave = onApiKeySave,
                 onApiBaseUrlSave = onApiBaseUrlSave,
                 onGraphExplorerUrlSave = onGraphExplorerUrlSave,
                 onBack = navigateBack,

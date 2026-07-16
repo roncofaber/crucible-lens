@@ -1,8 +1,8 @@
 package crucible.lens.ui.settings
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -18,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.User
 import crucible.lens.platform.copyToClipboard
@@ -38,6 +40,9 @@ fun AccountScreen(
     val editState by viewModel.editState.collectAsState()
     var showSignOutDialog by remember { mutableStateOf(false) }
     var lastDraft by remember { mutableStateOf<EditUiState.Editing?>(null) }
+    var advancedExpanded by remember { mutableStateOf(false) }
+    var apiKeyInput by remember { mutableStateOf("") }
+    var apiKeyVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(editState) {
         if (editState is EditUiState.Editing) {
@@ -86,7 +91,14 @@ fun AccountScreen(
         ) {
             when (profileState) {
                 is ProfileUiState.Idle, is ProfileUiState.Loading -> LoadingContent(title = "Loading account")
-                is ProfileUiState.NotLoggedIn -> NotLoggedInCard(onNavigateToOrcidLogin)
+                is ProfileUiState.NotLoggedIn -> NotLoggedInCard(
+                    onNavigateToOrcidLogin = onNavigateToOrcidLogin,
+                    apiKeyInput = apiKeyInput,
+                    apiKeyVisible = apiKeyVisible,
+                    onApiKeyChanged = { apiKeyInput = it },
+                    onApiKeyVisibilityToggle = { apiKeyVisible = !apiKeyVisible },
+                    onApiKeySave = { viewModel.saveApiKey(apiKeyInput.trim()) }
+                )
                 is ProfileUiState.Error -> ErrorCard(
                     title = "Could not load profile",
                     message = (profileState as ProfileUiState.Error).message,
@@ -143,6 +155,39 @@ fun AccountScreen(
                         Spacer(Modifier.width(8.dp))
                         Text("Sign out")
                     }
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp).animateContentSize(tween(200))) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { advancedExpanded = !advancedExpanded }.padding(vertical = 16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Advanced", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                Icon(if (advancedExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (advancedExpanded) {
+                                Text("Manually set API key (for service accounts)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+                                OutlinedTextField(
+                                    value = apiKeyInput,
+                                    onValueChange = { apiKeyInput = it },
+                                    label = { Text("API key") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                    trailingIcon = {
+                                        IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
+                                            Icon(if (apiKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, if (apiKeyVisible) "Hide key" else "Show key")
+                                        }
+                                    }
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Button(onClick = { viewModel.saveApiKey(apiKeyInput.trim()) }, modifier = Modifier.fillMaxWidth(), enabled = apiKeyInput.isNotBlank()) {
+                                    Text("Apply key")
+                                }
+                                Spacer(Modifier.height(16.dp))
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -150,7 +195,14 @@ fun AccountScreen(
 }
 
 @Composable
-private fun NotLoggedInCard(onNavigateToOrcidLogin: () -> Unit) {
+private fun NotLoggedInCard(
+    onNavigateToOrcidLogin: () -> Unit,
+    apiKeyInput: String,
+    apiKeyVisible: Boolean,
+    onApiKeyChanged: (String) -> Unit,
+    onApiKeyVisibilityToggle: () -> Unit,
+    onApiKeySave: () -> Unit
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -162,11 +214,24 @@ private fun NotLoggedInCard(onNavigateToOrcidLogin: () -> Unit) {
             Button(onClick = onNavigateToOrcidLogin, modifier = Modifier.fillMaxWidth()) {
                 Text("Sign in with ORCID")
             }
-            Text(
-                "Or enter your API key manually in API Settings",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            HorizontalDivider()
+            Text("Or enter your API key directly", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedTextField(
+                value = apiKeyInput,
+                onValueChange = onApiKeyChanged,
+                label = { Text("API key") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = onApiKeyVisibilityToggle) {
+                        Icon(if (apiKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, if (apiKeyVisible) "Hide" else "Show")
+                    }
+                }
             )
+            Button(onClick = onApiKeySave, modifier = Modifier.fillMaxWidth(), enabled = apiKeyInput.isNotBlank()) {
+                Text("Sign in with API key")
+            }
         }
     }
 }
