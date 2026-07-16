@@ -312,7 +312,8 @@ fun ApiSettingsScreen(
                                         contentDescription = if (apiKeyVisible) "Hide key" else "Show key"
                                     )
                                 }
-                            }
+                            },
+                            colors = if (apiKeyDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
                         )
                         Spacer(Modifier.height(16.dp))
                     }
