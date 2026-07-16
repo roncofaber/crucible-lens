@@ -111,8 +111,8 @@ class CrucibleApiService(
         username: String? = null
     ): ApiResult<User> = safeCall {
         patch("account/profile", ProfileUpdateRequest(
-            firstName = firstName,
-            lastName = lastName,
+            firstName = firstName?.ifBlank { null },
+            lastName = lastName?.ifBlank { null },
             email = email?.ifBlank { null },
             username = username?.ifBlank { null }
         ))
