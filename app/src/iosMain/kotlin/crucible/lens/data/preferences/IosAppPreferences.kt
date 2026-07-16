@@ -9,7 +9,6 @@ import kotlinx.serialization.json.Json
 
 class IosAppPreferences : AppPreferences {
     private val settings = NSUserDefaultsSettings.Factory().create("crucible_lens_prefs")
-    private val json = Json
     private val iosProfileJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true }
 
     override val apiKey: Flow<String?> =

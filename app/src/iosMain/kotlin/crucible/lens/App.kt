@@ -136,6 +136,7 @@ actual fun App() {
                 scope.launch {
                     prefs.clearApiKey()
                     prefs.saveUserOrcid(null)
+                    prefs.clearUserProfile()
                     CacheManager.clearAll()
                 }
             },

@@ -175,11 +175,6 @@ class AccountViewModel(private val prefs: AppPreferences) : ViewModel() {
         }
     }
 
-    fun dismissSaveError() {
-        val saveError = _editState.value as? EditUiState.SaveError ?: return
-        _editState.value = saveError.draft
-    }
-
     fun signOut() {
         usernameCheckJob?.cancel()
         viewModelScope.launch {

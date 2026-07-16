@@ -243,6 +243,8 @@ class MainActivity : ComponentActivity() {
                         scope.launch {
                             preferencesManager.clearApiKey()
                             preferencesManager.saveUserOrcid(null)
+                            preferencesManager.clearUserProfile()
+                            CacheManager.clearAll()
                         }
                     },
                     prefs = preferencesManager
