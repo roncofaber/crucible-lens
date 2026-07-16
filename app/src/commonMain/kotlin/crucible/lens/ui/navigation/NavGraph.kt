@@ -159,6 +159,8 @@ fun NavGraph(
     }
     val uiState by viewModel.uiState.collectAsState()
     val isSyncing by viewModel.isSyncing.collectAsState()
+    val userProfile by prefs.userProfile.collectAsState(null)
+    val userUsername = userProfile?.username
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -338,6 +340,8 @@ fun NavGraph(
         composable(Screen.Settings.route) {
             SettingsScreen(
                 currentApiKey = apiKey,
+                userUsername = userUsername,
+                onNavigateToAccount = { navController.navigate(Screen.SettingsAccount.route) },
                 onNavigateToApi = { navController.navigate(Screen.SettingsApi.route) },
                 onNavigateToAppearance = { navController.navigate(Screen.SettingsAppearance.route) },
                 onNavigateToCache = { navController.navigate(Screen.SettingsCache.route) },

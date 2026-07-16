@@ -17,6 +17,8 @@ import crucible.lens.platform.appVersionName
 @Composable
 fun SettingsScreen(
     currentApiKey: String?,
+    userUsername: String?,
+    onNavigateToAccount: () -> Unit,
     onNavigateToApi: () -> Unit,
     onNavigateToAppearance: () -> Unit,
     onNavigateToCache: () -> Unit,
@@ -57,6 +59,17 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            SettingsRow(
+                icon = Icons.Default.Person,
+                title = "Account",
+                subtitle = when {
+                    !currentApiKey.isNullOrBlank() && !userUsername.isNullOrBlank() -> "@$userUsername"
+                    !currentApiKey.isNullOrBlank() -> "Signed in"
+                    else -> "Not signed in"
+                },
+                onClick = onNavigateToAccount
+            )
+
             SettingsRow(
                 icon = Icons.Default.Cloud,
                 title = "API",
