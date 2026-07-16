@@ -113,18 +113,33 @@ data class GraphLink(
 )
 
 @Serializable
-data class UserLead(
+data class User(
     @SerialName("first_name") val firstName: String? = null,
     @SerialName("last_name") val lastName: String? = null,
-    @SerialName("email") val email: String? = null,
+    val email: String? = null,
     @SerialName("unique_id") val uniqueId: String? = null,
+    val username: String? = null,
     @SerialName("is_service_account") val isServiceAccount: Boolean = false
 )
 
 @Serializable
 data class AccountResponse(
     @SerialName("user_unique_id") val userUniqueId: String? = null,
-    @SerialName("user_info") val userInfo: UserLead? = null
+    @SerialName("user_info") val userInfo: User? = null
+)
+
+@Serializable
+data class UserSearchResult(
+    val username: String? = null,
+    @SerialName("unique_id") val uniqueId: String? = null
+)
+
+@Serializable
+data class ProfileUpdateRequest(
+    @SerialName("first_name") val firstName: String? = null,
+    @SerialName("last_name") val lastName: String? = null,
+    val email: String? = null,
+    val username: String? = null
 )
 
 @Serializable
@@ -134,7 +149,7 @@ data class Project(
     @SerialName("organization") val organization: String? = null,
     @SerialName("project_lead_orcid") val projectLeadOrcid: String? = null,
     @SerialName("status") val status: String? = null,
-    @SerialName("lead") val lead: UserLead? = null,
+    @SerialName("lead") val lead: User? = null,
     @SerialName("creation_time") val createdAt: String? = null,
     @SerialName("modification_time") val modifiedAt: String? = null
 )

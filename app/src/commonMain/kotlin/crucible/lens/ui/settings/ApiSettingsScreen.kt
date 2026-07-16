@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.HealthStatus
-import crucible.lens.data.model.UserLead
+import crucible.lens.data.model.User
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -87,7 +87,7 @@ fun ApiSettingsScreen(
         if (healthManualTrigger > 0) runHealthCheck(apiBaseUrlInput)
     }
 
-    var account by remember { mutableStateOf<UserLead?>(null) }
+    var account by remember { mutableStateOf<User?>(null) }
     var accountLoading by remember { mutableStateOf(false) }
     var accountErrorMsg by remember { mutableStateOf<String?>(null) }
     var refreshTrigger by remember { mutableStateOf(0) }

@@ -26,7 +26,7 @@ import crucible.lens.data.model.AnthropicMessagesResponse
 import crucible.lens.data.model.MetadataImageData
 import crucible.lens.data.model.HealthStatus
 import crucible.lens.data.model.PaginatedResponse
-import crucible.lens.data.model.UserLead
+import crucible.lens.data.model.User
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.async
@@ -455,12 +455,12 @@ class CrucibleApiService(
         }
     }
 
-    suspend fun getProjectUsers(projectId: String): ApiResult<List<UserLead>> = fetchAllPages { limit, offset ->
+    suspend fun getProjectUsers(projectId: String): ApiResult<List<User>> = fetchAllPages { limit, offset ->
         client.get("${baseUrl}projects/$projectId/users") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("limit", limit.toString())
             url.parameters.append("offset", offset.toString())
-        }.body<PaginatedResponse<UserLead>>()
+        }.body<PaginatedResponse<User>>()
     }
 
     suspend fun searchScientificMetadata(
