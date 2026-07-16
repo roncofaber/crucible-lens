@@ -246,14 +246,16 @@ data class MetadataImageData(
 @Serializable
 data class UploadInitiateRequest(
     val filename: String,
-    val size: Long
+    val size: Long,
+    @SerialName("sha256_hash") val sha256Hash: String
 )
 
 @Serializable
 data class UploadInitiateResponse(
-    @SerialName("upload_id") val uploadId: String,
-    @SerialName("resumable_uri") val resumableUri: String,
-    @SerialName("chunk_size_hint") val chunkSizeHint: Int = 8 * 1024 * 1024
+    @SerialName("upload_id") val uploadId: String? = null,
+    @SerialName("resumable_uri") val resumableUri: String? = null,
+    @SerialName("chunk_size_hint") val chunkSizeHint: Int = 8 * 1024 * 1024,
+    @SerialName("existing_file") val existingFile: AssociatedFile? = null
 )
 
 @Serializable

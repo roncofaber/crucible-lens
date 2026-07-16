@@ -16,7 +16,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import crucible.lens.data.api.ApiClient
-import kotlinx.serialization.json.jsonPrimitive
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.ui.create.FilesHolder
@@ -57,28 +56,33 @@ fun AddFilesScreen(
                     files.forEachIndexed { index, (bytes, asThumbnail) ->
                         val filename = "file_${datasetUuid}_${Clock.System.now().toEpochMilliseconds()}_$index.jpg"
                         val sha256 = PlatformCrypto.sha256Hex(bytes)
-                        val initiateResp = ApiClient.service.initiateUpload(datasetUuid, filename, bytes.size.toLong())
+                        val initiateResp = ApiClient.service.initiateUpload(datasetUuid, filename, bytes.size.toLong(), sha256)
                         if (initiateResp is ApiResult.Success) {
                             val session = initiateResp.data
-                            val chunkResp = ApiClient.service.uploadChunksToGCS(
-                                resumableUri = session.resumableUri,
-                                bytes = bytes,
-                                chunkSizeHint = session.chunkSizeHint
-                            )
-                            if (chunkResp is ApiResult.Success) {
-                                val completeResp = ApiClient.service.completeUpload(datasetUuid, session.uploadId, sha256)
-                                if (completeResp is ApiResult.Success) {
-                                    val afid = completeResp.data["id"]?.jsonPrimitive?.content?.toIntOrNull()
-                                    if (afid != null) {
-                                        ApiClient.service.requestIngestion(datasetUuid, afid)
-                                    }
-                                    // Thumbnail only added if upload fully succeeded
-                                    if (asThumbnail) {
-                                        ApiClient.service.addThumbnail(
-                                            datasetUuid,
-                                            ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
-                                        )
-                                    }
+                            val fileMfid: String?
+                            if (session.existingFile != null) {
+                                // Duplicate detected — skip upload
+                                fileMfid = session.existingFile.mfid
+                            } else {
+                                val chunkResp = ApiClient.service.uploadChunksToGCS(
+                                    resumableUri = session.resumableUri ?: error("Missing resumable URI"),
+                                    bytes = bytes,
+                                    chunkSizeHint = session.chunkSizeHint
+                                )
+                                if (chunkResp is ApiResult.Success) {
+                                    val completeResp = ApiClient.service.completeUpload(datasetUuid, session.uploadId ?: error("Missing upload ID"), sha256)
+                                    fileMfid = if (completeResp is ApiResult.Success) completeResp.data.mfid else null
+                                } else {
+                                    fileMfid = null
+                                }
+                            }
+                            if (fileMfid != null) {
+                                ApiClient.service.requestIngestion(fileMfid)
+                                if (asThumbnail) {
+                                    ApiClient.service.addThumbnail(
+                                        datasetUuid,
+                                        ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
+                                    )
                                 }
                             }
                         }

@@ -12,7 +12,6 @@ import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.util.PlatformCrypto
 import crucible.lens.platform.PlatformBase64
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -84,36 +83,42 @@ class CreateDatasetViewModel : ViewModel() {
                 files.forEachIndexed { index, (bytes, asThumbnail) ->
                     val filename = "file_${newUuid}_$index.jpg"
                     val sha256 = PlatformCrypto.sha256Hex(bytes)
-                    // Step 1: initiate GCS resumable session
-                    val initiateResp = ApiClient.service.initiateUpload(newUuid, filename, bytes.size.toLong())
+                    // Step 1: initiate GCS resumable session (sha256 enables server-side deduplication)
+                    val initiateResp = ApiClient.service.initiateUpload(newUuid, filename, bytes.size.toLong(), sha256)
                     if (initiateResp is ApiResult.Success) {
                         val session = initiateResp.data
-                        // Step 2: upload chunks directly to GCS
-                        val chunkResp = ApiClient.service.uploadChunksToGCS(
-                            resumableUri = session.resumableUri,
-                            bytes = bytes,
-                            chunkSizeHint = session.chunkSizeHint
-                        )
-                        if (chunkResp is ApiResult.Success) {
-                            // Step 3: finalize — server registers as AssociatedFile
-                            val completeResp = ApiClient.service.completeUpload(newUuid, session.uploadId, sha256)
-                            if (completeResp is ApiResult.Success) {
-                                // Step 4: trigger ingestion worker
-                                val afid = completeResp.data["id"]?.jsonPrimitive?.content?.toIntOrNull()
-                                if (afid != null) {
-                                    ApiClient.service.requestIngestion(newUuid, afid)
-                                }
-                                // Step 5: optional thumbnail — only if upload succeeded
-                                if (asThumbnail) {
-                                    val thumbResp = ApiClient.service.addThumbnail(
-                                        newUuid,
-                                        ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
-                                    )
-                                    if (thumbResp is ApiResult.Error) thumbnailFailures++
-                                }
-                            }
+                        val fileMfid: String?
+                        if (session.existingFile != null) {
+                            // Server detected duplicate — skip upload and completion
+                            fileMfid = session.existingFile.mfid
                         } else {
-                            uploadFailures++
+                            // Step 2: upload chunks directly to GCS
+                            val chunkResp = ApiClient.service.uploadChunksToGCS(
+                                resumableUri = session.resumableUri ?: error("Missing resumable URI"),
+                                bytes = bytes,
+                                chunkSizeHint = session.chunkSizeHint
+                            )
+                            if (chunkResp is ApiResult.Success) {
+                                // Step 3: finalize — server registers as AssociatedFile
+                                val completeResp = ApiClient.service.completeUpload(newUuid, session.uploadId ?: error("Missing upload ID"), sha256)
+                                fileMfid = if (completeResp is ApiResult.Success) completeResp.data.mfid else null
+                                if (fileMfid == null) uploadFailures++
+                            } else {
+                                fileMfid = null
+                                uploadFailures++
+                            }
+                        }
+                        if (fileMfid != null) {
+                            // Step 4: trigger ingestion worker
+                            ApiClient.service.requestIngestion(fileMfid)
+                            // Step 5: optional thumbnail — only if file is available
+                            if (asThumbnail) {
+                                val thumbResp = ApiClient.service.addThumbnail(
+                                    newUuid,
+                                    ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
+                                )
+                                if (thumbResp is ApiResult.Error) thumbnailFailures++
+                            }
                         }
                     } else {
                         uploadFailures++

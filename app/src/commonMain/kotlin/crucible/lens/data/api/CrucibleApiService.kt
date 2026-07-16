@@ -13,6 +13,7 @@ import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.UploadInitiateRequest
 import crucible.lens.data.model.UploadInitiateResponse
+import crucible.lens.data.model.AssociatedFile
 import crucible.lens.data.model.UploadCompleteRequest
 import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.model.ThumbnailCreateRequest
@@ -296,36 +297,36 @@ class CrucibleApiService(
     suspend fun initiateUpload(
         uuid: String,
         filename: String,
-        size: Long
+        size: Long,
+        sha256Hash: String
     ): ApiResult<UploadInitiateResponse> = safeCall {
-        post("datasets/$uuid/upload/initiate", UploadInitiateRequest(filename = filename, size = size))
+        post("datasets/$uuid/upload/initiate", UploadInitiateRequest(filename = filename, size = size, sha256Hash = sha256Hash))
     }
 
     suspend fun completeUpload(
         uuid: String,
         uploadId: String,
         sha256Hash: String
-    ): ApiResult<JsonObject> = safeCall {
+    ): ApiResult<AssociatedFile> = safeCall {
         post("datasets/$uuid/upload/complete", UploadCompleteRequest(uploadId = uploadId, sha256Hash = sha256Hash))
     }
 
     // Triggers the ingestion worker for a registered AssociatedFile.
-    // `afid` is the integer id returned in the completeUpload response.
+    // `fileMfid` is the mfid string returned in the completeUpload response.
     // `ingestionClass` selects the ingestor — defaults to "ApiUploadIngestor" for standard file uploads.
     suspend fun requestIngestion(
-        uuid: String,
-        afid: Int,
+        fileMfid: String,
         ingestionClass: String? = "ApiUploadIngestor"
     ): ApiResult<JsonObject> = safeCall {
-        client.post("${baseUrl}datasets/$uuid/associated_files/$afid/ingest") {
+        client.post("${baseUrl}files/$fileMfid/ingest") {
             header("Authorization", "Bearer $apiKey")
             if (ingestionClass != null) url.parameters.append("ingestion_class", ingestionClass)
         }.body()
     }
 
-    // Uploads bytes to a GCS resumable URI in chunks. Returns success when all chunks
-    // are accepted (GCS 200/201 on the last chunk). The resumable URI is pre-authenticated
-    // — no Authorization header is sent to GCS.
+    // Uploads bytes to a GCS resumable URI in chunks. Retries each chunk up to 3 times,
+    // probing the GCS session for the resume offset on failure.
+    // The resumable URI is pre-authenticated — no Authorization header is sent to GCS.
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
     suspend fun uploadChunksToGCS(
         resumableUri: String,
@@ -333,7 +334,6 @@ class CrucibleApiService(
         chunkSizeHint: Int
     ): ApiResult<Unit> = safeCall {
         val total = bytes.size.toLong()
-        // Align chunk size to 256 KiB as required by GCS for all but the last chunk.
         val alignedChunkSize = maxOf(chunkSizeHint, 256 * 1024)
             .let { it - (it % (256 * 1024)) }
             .coerceAtLeast(256 * 1024)
@@ -343,16 +343,36 @@ class CrucibleApiService(
             val end = minOf(offset + alignedChunkSize, bytes.size)
             val chunk = bytes.copyOfRange(offset, end)
             val isLast = end == bytes.size
-            val response = gcsClient.put(resumableUri) {
-                header("Content-Range", "bytes $offset-${end - 1}/$total")
-                if (isLast) header("X-Goog-Hash", "crc32c=$crc32c")
-                contentType(io.ktor.http.ContentType.Application.OctetStream)
-                setBody(chunk)
-            }
-            when (response.status.value) {
-                308 -> offset = end  // chunk accepted, continue
-                200, 201 -> return@safeCall Unit  // upload complete
-                else -> error("GCS upload failed: ${response.status}")
+            var chunkDone = false
+            repeat(3) { attempt ->
+                if (chunkDone) return@repeat
+                val response = gcsClient.put(resumableUri) {
+                    header("Content-Range", "bytes $offset-${end - 1}/$total")
+                    if (isLast) header("X-Goog-Hash", "crc32c=$crc32c")
+                    contentType(io.ktor.http.ContentType.Application.OctetStream)
+                    setBody(chunk)
+                }
+                when (response.status.value) {
+                    308 -> { offset = end; chunkDone = true }
+                    200, 201 -> return@safeCall Unit
+                    else -> {
+                        // Probe session state to find safe resume offset
+                        val probe = gcsClient.put(resumableUri) {
+                            header("Content-Range", "bytes */$total")
+                        }
+                        when (probe.status.value) {
+                            200, 201 -> return@safeCall Unit
+                            308 -> {
+                                val range = probe.headers["Range"]
+                                if (range != null) {
+                                    offset = range.substringAfter('-').toIntOrNull()?.plus(1) ?: offset
+                                }
+                                chunkDone = true
+                            }
+                            else -> if (attempt == 2) error("GCS upload failed after 3 attempts: ${response.status}")
+                        }
+                    }
+                }
             }
         }
     }
