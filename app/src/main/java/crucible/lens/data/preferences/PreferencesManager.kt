@@ -42,7 +42,7 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         const val PROJECT_TAB_DATASETS = "DATASETS"
 
         const val DEFAULT_API_BASE_URL = "https://crucible.lbl.gov/api/v2/"
-        const val DEFAULT_GRAPH_EXPLORER_URL = "https://crucible-graph-explorer-776258882599.us-central1.run.app"
+        const val DEFAULT_GRAPH_EXPLORER_URL = "https://crucible.lbl.gov/explore/"
         const val THEME_MODE_SYSTEM = "system"
         const val THEME_MODE_LIGHT = "light"
         const val THEME_MODE_DARK = "dark"

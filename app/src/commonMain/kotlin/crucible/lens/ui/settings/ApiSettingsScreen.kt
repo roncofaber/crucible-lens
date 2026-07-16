@@ -174,81 +174,72 @@ fun ApiSettingsScreen(
                 colors = if (apiBaseUrlDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
             )
 
-            // Health status row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                when (val hs = healthState) {
-                    is HealthState.Idle -> {
-                        Text(
-                            "REST API endpoint for fetching resources",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f)
-                        )
+            // Connection test card
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Connection", style = MaterialTheme.typography.titleSmall)
+                        OutlinedButton(
+                            onClick = { healthManualTrigger++ },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            enabled = healthState !is HealthState.Checking
+                        ) {
+                            if (healthState is HealthState.Checking) {
+                                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(6.dp))
+                                Text("Checking…", style = MaterialTheme.typography.labelMedium)
+                            } else {
+                                Icon(Icons.Default.Wifi, null, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Test connection", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
                     }
-                    is HealthState.Checking -> {
-                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                        Text(
-                            "Checking server…",
+                    when (val hs = healthState) {
+                        is HealthState.Idle -> Text(
+                            "Tap \"Test connection\" to verify the API endpoint.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        is HealthState.Checking -> {}
+                        is HealthState.Ok -> {
+                            val s = hs.status
+                            val ok = s.status == "ok"
+                            val color = if (ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(if (ok) Icons.Default.CheckCircle else Icons.Default.Warning, null, modifier = Modifier.size(16.dp), tint = color)
+                                Column {
+                                    Text(if (ok) "Connected" else "Server error", style = MaterialTheme.typography.bodySmall, color = color)
+                                    val details = listOfNotNull(
+                                        s.db?.let { "DB: $it" },
+                                        s.dbMs?.let { "${it.toInt()} ms" },
+                                        s.version?.let { "v$it" }
+                                    ).joinToString(" · ")
+                                    if (details.isNotBlank()) Text(details, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                        is HealthState.Failed -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CloudOff, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+                            Text(hs.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        }
                     }
-                    is HealthState.Ok -> {
-                        val s = hs.status
-                        val color = if (s.status == "ok") MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.error
-                        Icon(
-                            if (s.status == "ok") Icons.Default.CheckCircle else Icons.Default.Warning,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = color
-                        )
-                        val latency = s.dbMs?.let { " · DB ${it.toInt()} ms" } ?: ""
-                        val ver = s.version?.let { " · v$it" } ?: ""
-                        Text(
-                            "Server ${s.status}, DB ${s.db ?: "?"}$latency$ver",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = color,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    is HealthState.Failed -> {
-                        Icon(
-                            Icons.Default.CloudOff,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                        Text(
-                            hs.message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-                TextButton(
-                    onClick = { healthManualTrigger++ },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text("Test", style = MaterialTheme.typography.labelMedium)
                 }
             }
 
             OutlinedTextField(
                 value = graphExplorerUrlInput,
                 onValueChange = { graphExplorerUrlInput = it },
-                label = { Text("Graph Explorer URL") },
-                placeholder = { Text("https://crucible-graph-explorer-...") },
+                label = { Text("Crucible Web URL") },
+                placeholder = { Text("https://crucible.lbl.gov/explore/") },
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = { Icon(Icons.Default.Language, contentDescription = null) },
                 singleLine = true,
-                supportingText = { Text("Web interface for viewing entity graphs", style = MaterialTheme.typography.bodySmall) },
+                supportingText = { Text("Web interface for browsing and exploring resources", style = MaterialTheme.typography.bodySmall) },
                 colors = if (graphExplorerUrlDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
             )
 
