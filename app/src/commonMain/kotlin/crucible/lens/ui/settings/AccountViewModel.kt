@@ -126,8 +126,8 @@ class AccountViewModel(private val prefs: AppPreferences) : ViewModel() {
 
     fun onUsernameChanged(value: String) {
         val currentUser = (_profileState.value as? ProfileUiState.Loaded)?.user
-        updateDraft { it.copy(username = value, usernameCheck = UsernameCheckState.Idle) }
         usernameCheckJob?.cancel()
+        updateDraft { it.copy(username = value, usernameCheck = UsernameCheckState.Idle) }
         if (value.isBlank()) return
         // Skip check if it matches the user's own current username
         if (value.lowercase() == currentUser?.username?.lowercase()) {
@@ -181,6 +181,7 @@ class AccountViewModel(private val prefs: AppPreferences) : ViewModel() {
     }
 
     fun signOut() {
+        usernameCheckJob?.cancel()
         viewModelScope.launch {
             prefs.clearApiKey()
             prefs.clearUserProfile()
