@@ -116,9 +116,9 @@ data class GraphLink(
 data class User(
     @SerialName("first_name") val firstName: String? = null,
     @SerialName("last_name") val lastName: String? = null,
-    val email: String? = null,
+    @SerialName("email") val email: String? = null,
     @SerialName("unique_id") val uniqueId: String? = null,
-    val username: String? = null,
+    @SerialName("username") val username: String? = null,
     @SerialName("is_service_account") val isServiceAccount: Boolean = false
 )
 
