@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.Instrument
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun InstrumentPickerField(
@@ -23,24 +25,21 @@ fun InstrumentPickerField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var instruments by remember { mutableStateOf<List<Instrument>?>(null) }
+    var results by remember { mutableStateOf<List<Instrument>>(emptyList()) }
+    var isSearching by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
-        try {
-            instruments = when (val resp = ApiClient.service.getInstruments()) {
-                is ApiResult.Success -> resp.data
-                is ApiResult.Error -> emptyList()
-            }
-        } catch (_: Exception) {
-            instruments = emptyList()
+    LaunchedEffect(value) {
+        if (value.length < 3) { results = emptyList(); return@LaunchedEffect }
+        delay(300)
+        isSearching = true
+        results = when (val resp = ApiClient.service.searchInstruments(value)) {
+            is ApiResult.Success -> resp.data
+            is ApiResult.Error -> emptyList()
         }
-    }
-
-    val filtered = remember(value, instruments) {
-        val list = instruments ?: return@remember emptyList()
-        if (value.isBlank()) emptyList()
-        else list.filter { (it.instrumentName ?: "").contains(value, ignoreCase = true) }
+        isSearching = false
+        expanded = results.isNotEmpty()
     }
 
     Box(modifier = modifier) {
@@ -53,30 +52,27 @@ fun InstrumentPickerField(
             label = { Text("Instrument") },
             modifier = Modifier
                 .fillMaxWidth()
-                .onFocusChanged { if (it.isFocused) expanded = true },
+                .onFocusChanged { if (it.isFocused && value.length >= 3) expanded = true },
             singleLine = true,
-            enabled = instruments != null,
             textStyle = MaterialTheme.typography.bodyMedium,
             leadingIcon = { Icon(Icons.Default.Build, contentDescription = null) },
             trailingIcon = {
                 when {
-                    instruments == null ->
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    value.isNotEmpty() ->
-                        IconButton(onClick = { onValueChange(""); expanded = false }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear")
-                        }
+                    isSearching -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    value.isNotEmpty() -> IconButton(onClick = { onValueChange(""); expanded = false }) {
+                        Icon(Icons.Default.Clear, contentDescription = "Clear")
+                    }
                 }
             }
         )
 
         DropdownMenu(
-            expanded = expanded && filtered.isNotEmpty(),
+            expanded = expanded && results.isNotEmpty(),
             onDismissRequest = { expanded = false },
             properties = PopupProperties(focusable = false),
             modifier = Modifier.heightIn(max = 240.dp)
         ) {
-            filtered.forEach { instrument ->
+            results.forEach { instrument ->
                 DropdownMenuItem(
                     text = { Text(instrument.instrumentName ?: instrument.uniqueId) },
                     onClick = { onValueChange(instrument.instrumentName ?: ""); expanded = false }

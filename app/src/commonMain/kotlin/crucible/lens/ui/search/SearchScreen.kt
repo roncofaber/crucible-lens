@@ -25,11 +25,10 @@ import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import androidx.compose.material.icons.automirrored.filled.ManageSearch
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import crucible.lens.data.util.fetchProjectData
-import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.FilterSheet
 import crucible.lens.ui.common.SearchFilters
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,22 +44,39 @@ fun SearchScreen(
 ) {
     var query by remember { mutableStateOf("") }
     var showMineOnly by remember { mutableStateOf(false) }
-    var allProjects by remember { mutableStateOf<List<Project>>(emptyList()) }
-    var allSamples by remember { mutableStateOf<List<Sample>>(emptyList()) }
-    var allDatasets by remember { mutableStateOf<List<Dataset>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(false) }
-    var loadedCount by remember { mutableIntStateOf(0) }
-    var totalCount by remember { mutableIntStateOf(0) }
     var metadataResults by remember { mutableStateOf<List<MetadataSearchResult>?>(null) }
     var isMetadataSearching by remember { mutableStateOf(false) }
     var activeFilters by remember { mutableStateOf(SearchFilters()) }
     var filterResults by remember { mutableStateOf<Pair<List<Sample>, List<Dataset>>?>(null) }
     var isFilterLoading by remember { mutableStateOf(false) }
     var showFilterSheet by remember { mutableStateOf(false) }
+    // Server-side fuzzy name search results
+    var nameSearchSamples by remember { mutableStateOf<List<Sample>>(emptyList()) }
+    var nameSearchDatasets by remember { mutableStateOf<List<Dataset>>(emptyList()) }
+    var nameSearchProjects by remember { mutableStateOf<List<Project>>(emptyList()) }
+    var isNameSearching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    // Clear server results when query changes
+    // Clear metadata results and name search when query changes
     LaunchedEffect(query) { metadataResults = null }
+
+    // Debounced server-side name search (only when no active filters)
+    LaunchedEffect(query, activeFilters.isActive) {
+        if (activeFilters.isActive || query.length < 3) {
+            nameSearchSamples = emptyList(); nameSearchDatasets = emptyList(); nameSearchProjects = emptyList()
+            isNameSearching = false; return@LaunchedEffect
+        }
+        delay(350)
+        isNameSearching = true
+        val q = query.trim()
+        val samples = (ApiClient.service.searchSamples(q) as? ApiResult.Success)?.data ?: emptyList()
+        val datasets = (ApiClient.service.searchDatasets(q) as? ApiResult.Success)?.data ?: emptyList()
+        val projects = (ApiClient.service.searchProjects(q) as? ApiResult.Success)?.data ?: emptyList()
+        nameSearchSamples = if (showMineOnly && userOrcid != null) samples.filter { it.ownerOrcid == userOrcid } else samples
+        nameSearchDatasets = if (showMineOnly && userOrcid != null) datasets.filter { it.ownerOrcid == userOrcid } else datasets
+        nameSearchProjects = projects
+        isNameSearching = false
+    }
 
     // Apply server-side filters whenever activeFilters changes
     LaunchedEffect(activeFilters) {
@@ -95,81 +111,26 @@ fun SearchScreen(
         isFilterLoading = false
     }
 
-    LaunchedEffect(Unit) {
-        if (apiKey.isNullOrBlank()) return@LaunchedEffect
-        isLoading = true
-
-        // Get or fetch projects list
-        val projects = CacheManager.getProjects()
-            ?: try {
-                when (val r = ApiClient.service.getProjects()) {
-                    is ApiResult.Success -> r.data.also { CacheManager.cacheProjects(it) }
-                    is ApiResult.Error -> null
-                }
-            } catch (e: Exception) {
-                null
-            }
-
-        if (projects == null) { isLoading = false; return@LaunchedEffect }
-
-        allProjects = projects
-
-        // Seed immediately from cache, preferring individually-cached rich versions.
-        val samples = mutableListOf<Sample>()
-        val datasets = mutableListOf<Dataset>()
-        projects.forEach { project ->
-            CacheManager.getProjectSamples(project.projectId)?.forEach { s ->
-                samples.add((CacheManager.getResource(s.uniqueId) as? Sample) ?: s)
-            }
-            CacheManager.getProjectDatasets(project.projectId)?.forEach { d ->
-                datasets.add((CacheManager.getResource(d.uniqueId) as? Dataset) ?: d)
-            }
-        }
-        allSamples = samples.toList()
-        allDatasets = datasets.toList()
-
-        // Fetch uncached projects in the background, updating results as each arrives
-        val uncached = projects.filter {
-            CacheManager.getProjectSamples(it.projectId) == null ||
-            CacheManager.getProjectDatasets(it.projectId) == null
-        }
-        totalCount = uncached.size
-        loadedCount = 0
-
-        uncached.forEach { project ->
-            try {
-                val (s, d) = fetchProjectData(project.projectId)
-                samples.addAll(s.map { (CacheManager.getResource(it.uniqueId) as? Sample) ?: it })
-                datasets.addAll(d.map { (CacheManager.getResource(it.uniqueId) as? Dataset) ?: it })
-                allSamples = samples.toList()
-                allDatasets = datasets.toList()
-            } catch (_: Exception) {
-                // Skip projects that fail to load — continue searching others
-            }
-            loadedCount++
-        }
-
-        isLoading = false
-    }
-
     val mineActive = showMineOnly && userOrcid != null
     val filtersActive = activeFilters.isActive
-    val baseSamples = filterResults?.first ?: allSamples
-    val baseDatasets = filterResults?.second ?: allDatasets
-    val filteredProjects = remember(allProjects, query, filtersActive) {
-        if (query.isBlank() || filtersActive) emptyList()
-        else allProjects.filter { it.matchesSearch(query) }
+    val filteredProjects = if (!filtersActive && query.length >= 3) nameSearchProjects else emptyList()
+    val filteredSamples = when {
+        filtersActive -> {
+            val base = filterResults?.first ?: emptyList()
+            if (mineActive) base.filter { it.ownerOrcid == userOrcid } else base
+        }
+        query.length >= 3 -> nameSearchSamples
+        else -> emptyList()
     }
-    val filteredSamples = remember(baseSamples, query, mineActive, userOrcid, filtersActive) {
-        val base = if (mineActive) baseSamples.filter { it.ownerOrcid == userOrcid } else baseSamples
-        if (query.isBlank()) { if (mineActive || filtersActive) base else emptyList() }
-        else base.filter { it.matchesSearch(query) }
+    val filteredDatasets = when {
+        filtersActive -> {
+            val base = filterResults?.second ?: emptyList()
+            if (mineActive) base.filter { it.ownerOrcid == userOrcid } else base
+        }
+        query.length >= 3 -> nameSearchDatasets
+        else -> emptyList()
     }
-    val filteredDatasets = remember(baseDatasets, query, mineActive, userOrcid, filtersActive) {
-        val base = if (mineActive) baseDatasets.filter { it.ownerOrcid == userOrcid } else baseDatasets
-        if (query.isBlank()) { if (mineActive || filtersActive) base else emptyList() }
-        else base.filter { it.matchesSearch(query) }
-    }
+    val isLoading = isNameSearching || isFilterLoading
     val mfidCandidate = remember(query) {
         val q = query.trim()
         if (q.length >= 10 && q.all { c -> c.isLowerCase() || c.isDigit() }) q else null
@@ -230,14 +191,7 @@ fun SearchScreen(
                     }
                 )
                 if (isLoading) {
-                    if (totalCount > 0) {
-                        LinearProgressIndicator(
-                            progress = { loadedCount.toFloat() / totalCount },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
                 if (userOrcid != null || activeFilters.isActive || isFilterLoading) {
                     Row(
@@ -280,15 +234,10 @@ fun SearchScreen(
                     title = "No API key",
                     subtitle = "Configure your API key in Settings to search"
                 )
-                query.isBlank() && allSamples.isEmpty() && allDatasets.isEmpty() && !isLoading -> EmptyState(
-                    icon = Icons.Default.Storage,
-                    title = "No cached data",
-                    subtitle = "Fetching project data…"
-                )
                 query.isBlank() -> EmptyState(
                     icon = Icons.Default.Search,
                     title = "Start typing",
-                    subtitle = "Search across ${allProjects.size} projects, ${allSamples.size} samples, and ${allDatasets.size} datasets"
+                    subtitle = "Type at least 3 characters to search samples, datasets and projects"
                 )
                 filteredProjects.isEmpty() && filteredSamples.isEmpty() && filteredDatasets.isEmpty() -> {
                     if (mfidCandidate != null) {

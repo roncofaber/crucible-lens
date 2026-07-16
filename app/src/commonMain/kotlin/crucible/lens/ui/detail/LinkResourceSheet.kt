@@ -28,9 +28,8 @@ import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.data.preferences.HistoryItem
-import crucible.lens.data.util.fetchProjectData
-import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.scanner.QRCodeScannerView
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 
@@ -65,34 +64,25 @@ fun LinkResourceSheet(
         is Dataset -> "dataset"
     }
 
-    // Load project resources for name search
     val projectId = when (resource) {
         is Sample -> resource.projectId
         is Dataset -> resource.projectId
     }
-    var projectResources by remember { mutableStateOf<List<CrucibleResource>>(emptyList()) }
-    LaunchedEffect(projectId) {
-        if (projectId == null) return@LaunchedEffect
-        try {
-            val (samples, datasets) = fetchProjectData(projectId)
-            projectResources = (samples + datasets).filter { it.uniqueId != resource.uniqueId }
-        } catch (e: Exception) {
-            println("Failed to load project resources for $projectId: $e")
-        }
-    }
+    var searchResults by remember { mutableStateOf<List<CrucibleResource>>(emptyList()) }
+    var isSearchingNames by remember { mutableStateOf(false) }
 
-    // Name/UUID search results from project pool
-    val searchResults = remember(input, projectResources) {
-        if (input.length < 3) emptyList()
-        else {
-            val q = input.trim()
-            projectResources.filter { r ->
-                when (r) {
-                    is Sample -> r.matchesSearch(q)
-                    is Dataset -> r.matchesSearch(q)
-                }
-            }.take(6)
+    // Server-side fuzzy name search, scoped to the current project
+    LaunchedEffect(input) {
+        val q = input.trim()
+        if (q.length < 3 || q.contains(' ').not() && q.length >= 10) {
+            searchResults = emptyList(); return@LaunchedEffect
         }
+        delay(300)
+        isSearchingNames = true
+        val samples = (ApiClient.service.searchSamples(q, projectId, limit = 6) as? ApiResult.Success)?.data ?: emptyList()
+        val datasets = (ApiClient.service.searchDatasets(q, projectId, limit = 6) as? ApiResult.Success)?.data ?: emptyList()
+        searchResults = (samples + datasets).filter { it.uniqueId != resource.uniqueId }.take(6)
+        isSearchingNames = false
     }
 
     // UUID resolve for direct UUID input (no spaces, long enough)
@@ -225,7 +215,7 @@ fun LinkResourceSheet(
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
                         when {
-                            isResolving -> CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            isResolving || isSearchingNames -> CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                             input.isNotBlank() -> IconButton(onClick = { input = ""; resolvedUuid = null; resolvedType = null }) {
                                 Icon(Icons.Default.Clear, contentDescription = "Clear")
                             }

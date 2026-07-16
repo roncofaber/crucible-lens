@@ -495,6 +495,40 @@ class CrucibleApiService(
         }.body<PaginatedResponse<User>>()
     }
 
+    suspend fun searchSamples(q: String, projectId: String? = null, limit: Int = 20): ApiResult<List<Sample>> = safeCall {
+        client.get("${baseUrl}samples/search") {
+            header("Authorization", "Bearer $apiKey")
+            url.parameters.append("q", q)
+            if (projectId != null) url.parameters.append("project_id", projectId)
+            url.parameters.append("limit", limit.toString())
+        }.body<PaginatedResponse<Sample>>().items
+    }
+
+    suspend fun searchDatasets(q: String, projectId: String? = null, limit: Int = 20): ApiResult<List<Dataset>> = safeCall {
+        client.get("${baseUrl}datasets/search") {
+            header("Authorization", "Bearer $apiKey")
+            url.parameters.append("q", q)
+            if (projectId != null) url.parameters.append("project_id", projectId)
+            url.parameters.append("limit", limit.toString())
+        }.body<PaginatedResponse<Dataset>>().items
+    }
+
+    suspend fun searchProjects(q: String, limit: Int = 20): ApiResult<List<Project>> = safeCall {
+        client.get("${baseUrl}projects/search") {
+            header("Authorization", "Bearer $apiKey")
+            url.parameters.append("q", q)
+            url.parameters.append("limit", limit.toString())
+        }.body<PaginatedResponse<Project>>().items
+    }
+
+    suspend fun searchInstruments(q: String, limit: Int = 20): ApiResult<List<Instrument>> = safeCall {
+        client.get("${baseUrl}instruments/search") {
+            header("Authorization", "Bearer $apiKey")
+            url.parameters.append("q", q)
+            url.parameters.append("limit", limit.toString())
+        }.body<PaginatedResponse<Instrument>>().items
+    }
+
     suspend fun searchScientificMetadata(
         query: String,
         limit: Int = 50
