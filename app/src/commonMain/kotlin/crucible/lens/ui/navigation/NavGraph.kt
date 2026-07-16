@@ -360,9 +360,6 @@ fun NavGraph(
                 onApiKeySave = onApiKeySave,
                 onApiBaseUrlSave = onApiBaseUrlSave,
                 onGraphExplorerUrlSave = onGraphExplorerUrlSave,
-                onUserOrcidSave = onUserOrcidSave,
-                onSignOut = onSignOut,
-                onSignIn = { navController.navigate(Screen.OrcidLogin.route) },
                 onBack = navigateBack,
                 onHome = navigateHome
             )
