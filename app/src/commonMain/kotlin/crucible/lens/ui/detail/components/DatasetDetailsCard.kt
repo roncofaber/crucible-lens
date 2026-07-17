@@ -178,7 +178,7 @@ internal fun DatasetDetailsCard(
                     when {
                         dataset.owner?.username != null -> {
                             val ownerLabel = buildString {
-                                val name = listOfNotNull(dataset.owner.firstName, dataset.owner.lastName).joinToString(" ")
+                                val name = listOfNotNull(dataset.owner.firstName?.firstOrNull()?.let { "$it." }, dataset.owner.lastName).joinToString(" ")
                                 if (name.isNotBlank()) append("$name (@${dataset.owner.username})")
                                 else append("@${dataset.owner.username}")
                             }

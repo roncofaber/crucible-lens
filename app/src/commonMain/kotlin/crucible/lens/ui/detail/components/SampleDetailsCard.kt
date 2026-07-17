@@ -147,7 +147,7 @@ internal fun SampleDetailsCard(
                     when {
                         sample.owner?.username != null -> {
                             val ownerLabel = buildString {
-                                val name = listOfNotNull(sample.owner.firstName, sample.owner.lastName).joinToString(" ")
+                                val name = listOfNotNull(sample.owner.firstName?.firstOrNull()?.let { "$it." }, sample.owner.lastName).joinToString(" ")
                                 if (name.isNotBlank()) append("$name (@${sample.owner.username})")
                                 else append("@${sample.owner.username}")
                             }
