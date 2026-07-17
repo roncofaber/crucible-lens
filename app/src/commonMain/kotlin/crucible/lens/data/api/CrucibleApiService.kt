@@ -207,6 +207,10 @@ class CrucibleApiService(
         get("instruments/$id")
     }
 
+    suspend fun updateInstrument(id: String, request: crucible.lens.data.model.InstrumentUpdateRequest): ApiResult<Instrument> = safeCall {
+        patch("instruments/$id", request)
+    }
+
     suspend fun getDatasetsByInstrument(
         instrumentName: String
     ): ApiResult<List<Dataset>> = fetchAllPagesCursor { limit, cursor ->

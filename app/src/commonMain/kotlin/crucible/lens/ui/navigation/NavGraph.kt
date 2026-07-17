@@ -46,6 +46,8 @@ import crucible.lens.ui.projects.ManageProjectScreen
 import crucible.lens.ui.projects.ManageProjectViewModel
 import crucible.lens.ui.instruments.InstrumentListScreen
 import crucible.lens.ui.instruments.InstrumentDetailScreen
+import crucible.lens.ui.instruments.ManageInstrumentScreen
+import crucible.lens.ui.instruments.ManageInstrumentViewModel
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
@@ -749,8 +751,21 @@ fun NavGraph(
                 onSearch = navigateSearch,
                 onDatasetClick = { mfid ->
                     navController.navigate(Screen.Detail.createRoute(mfid))
+                },
+                onManageInstrument = {
+                    navController.navigate(Screen.ManageInstrument.createRoute(instrumentId))
                 }
             )
+        }
+
+        composable(
+            route = Screen.ManageInstrument.route,
+            arguments = listOf(navArgument("instrumentId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val instrumentId = backStackEntry.arguments?.getString("instrumentId") ?: ""
+            val manageViewModel = viewModel<ManageInstrumentViewModel>()
+            LaunchedEffect(instrumentId) { manageViewModel.init(instrumentId) }
+            ManageInstrumentScreen(viewModel = manageViewModel, onBack = navigateBack)
         }
 
         composable(

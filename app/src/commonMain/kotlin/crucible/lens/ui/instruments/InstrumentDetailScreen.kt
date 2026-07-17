@@ -66,7 +66,8 @@ fun InstrumentDetailScreen(
     modifier: Modifier = Modifier,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
-    onSearch: () -> Unit = {}
+    onSearch: () -> Unit = {},
+    onManageInstrument: () -> Unit = {}
 ) {
     var instrument by remember { mutableStateOf<Instrument?>(null) }
     var datasets by remember { mutableStateOf<List<Dataset>?>(null) }
@@ -171,6 +172,12 @@ fun InstrumentDetailScreen(
                                         val text = "${instr.instrumentName ?: instr.uniqueId}\nID: ${instr.uniqueId}"
                                         shareText(platformCtx, text, instr.instrumentName ?: instr.uniqueId)
                                     }
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text("Manage instrument") },
+                                        leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                        onClick = { overflowMenuExpanded = false; onManageInstrument() }
+                                    )
                                     HorizontalDivider()
                                     RefreshMenuItem { overflowMenuExpanded = false; CacheManager.clearInstrumentsCache(); loadData(forceRefresh = true) }
                                 }

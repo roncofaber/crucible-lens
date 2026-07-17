@@ -155,6 +155,16 @@ data class Project(
 )
 
 @Serializable
+data class InstrumentUpdateRequest(
+    @SerialName("instrument_name") val instrumentName: String? = null,
+    @SerialName("instrument_type") val instrumentType: String? = null,
+    @SerialName("manufacturer") val manufacturer: String? = null,
+    @SerialName("model") val model: String? = null,
+    @SerialName("location") val location: String? = null,
+    @SerialName("owner") val owner: String? = null
+)
+
+@Serializable
 data class ProjectUpdateRequest(
     @SerialName("title") val title: String? = null,
     @SerialName("organization") val organization: String? = null,
