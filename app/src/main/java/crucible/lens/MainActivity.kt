@@ -147,8 +147,8 @@ class MainActivity : ComponentActivity() {
                     onScannerOpened = { openScanner = false },
                     pinnedProjects = pinnedProjects,
                     resourceHistory = resourceHistory,
-                    onHistoryAdd = { uuid, name ->
-                        scope.launch { preferencesManager.addToHistory(uuid, name) }
+                    onHistoryAdd = { uuid, name, resourceType ->
+                        scope.launch { preferencesManager.addToHistory(uuid, name, resourceType) }
                     },
                     onClearHistory = {
                         scope.launch { preferencesManager.clearHistory() }

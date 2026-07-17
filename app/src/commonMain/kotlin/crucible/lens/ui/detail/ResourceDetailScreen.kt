@@ -150,7 +150,7 @@ fun ResourceDetailScreen(
     onRefresh: (uuid: String) -> Unit,
     onDuplicate: (CrucibleResource) -> Unit = {},
     recentHistory: List<crucible.lens.data.preferences.HistoryItem> = emptyList(),
-    onSaveToHistory: (uuid: String, name: String) -> Unit = { _, _ -> },
+    onSaveToHistory: (uuid: String, name: String, resourceType: String?) -> Unit = { _, _, _ -> },
     getCardState: (key: String) -> Boolean = { false },
     onCardStateChange: (key: String, value: Boolean) -> Unit = { _, _ -> },
     // Resource/thumbnail caches owned by the ViewModel so they survive config changes.
@@ -425,7 +425,8 @@ fun ResourceDetailScreen(
         val targetPage = if (pagerState.isScrollInProgress) pagerState.targetPage else pagerState.currentPage
         val targetResource = siblingList.getOrNull(targetPage)
         if (targetResource != null) {
-            onSaveToHistory(targetResource.uniqueId, targetResource.name)
+            val rtype = if (targetResource is Sample) "sample" else "dataset"
+            onSaveToHistory(targetResource.uniqueId, targetResource.name, rtype)
         }
     }
 
@@ -603,7 +604,7 @@ fun ResourceDetailScreen(
     }
 
     LaunchedEffect(resource.uniqueId) {
-        onSaveToHistory(resource.uniqueId, resource.name)
+        onSaveToHistory(resource.uniqueId, resource.name, if (resource is Sample) "sample" else "dataset")
     }
     val scope = rememberCoroutineScope()
     val platformContext = getPlatformContext()

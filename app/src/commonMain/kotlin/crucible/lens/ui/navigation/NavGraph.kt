@@ -102,7 +102,7 @@ fun NavGraph(
     onScannerOpened: () -> Unit = {},
     pinnedProjects: Set<String>,
     resourceHistory: List<HistoryItem>,
-    onHistoryAdd: (String, String) -> Unit,
+    onHistoryAdd: (String, String, String?) -> Unit,
     onClearHistory: () -> Unit = {},
     onApiKeySave: (String) -> Unit,
     onApiBaseUrlSave: (String) -> Unit,
@@ -504,7 +504,8 @@ fun NavGraph(
                     // Save last visited resource and add to history
                     LaunchedEffect(state.resource) {
                         onLastVisitedResourceSave(state.resource.uniqueId, state.resource.name)
-                        onHistoryAdd(state.resource.uniqueId, state.resource.name)
+                        val rtype = if (state.resource is Sample) "sample" else "dataset"
+                        onHistoryAdd(state.resource.uniqueId, state.resource.name, rtype)
                     }
 
                     ResourceDetailScreen(
@@ -513,9 +514,9 @@ fun NavGraph(
                         isRefreshing = state.isRefreshing,
                         graphExplorerUrl = graphExplorerUrl,
                         siblingGroupBy = siblingGroupBy,
-                        onSaveToHistory = { uuid, name ->
+                        onSaveToHistory = { uuid, name, resourceType ->
                             onLastVisitedResourceSave(uuid, name)
-                            onHistoryAdd(uuid, name)
+                            onHistoryAdd(uuid, name, resourceType)
                         },
                         onBack = {
                             navController.popBackStack()

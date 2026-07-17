@@ -140,7 +140,7 @@ class PreferencesManager(private val context: Context) : AppPreferences {
     override val resourceHistory: Flow<List<HistoryItem>> = context.dataStore.data.map { prefs ->
         prefs[RESOURCE_HISTORY]?.split(",")?.mapNotNull { entry ->
             val parts = entry.split("|||")
-            if (parts.size == 3) HistoryItem(parts[0], parts[1], parts[2].toLongOrNull() ?: 0L) else null
+            if (parts.size >= 3) HistoryItem(parts[0], parts[1], parts[2].toLongOrNull() ?: 0L, parts.getOrNull(3)?.ifBlank { null }) else null
         } ?: emptyList()
     }
 
@@ -281,15 +281,15 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         context.dataStore.edit { prefs -> prefs.remove(RESOURCE_HISTORY) }
     }
 
-    override suspend fun addToHistory(uuid: String, name: String) {
+    override suspend fun addToHistory(uuid: String, name: String, resourceType: String?) {
         context.dataStore.edit { prefs ->
             val existing = prefs[RESOURCE_HISTORY]?.split(",")?.mapNotNull { entry ->
                 val parts = entry.split("|||")
-                if (parts.size == 3) HistoryItem(parts[0], parts[1], parts[2].toLongOrNull() ?: 0L) else null
+                if (parts.size >= 3) HistoryItem(parts[0], parts[1], parts[2].toLongOrNull() ?: 0L, parts.getOrNull(3)?.ifBlank { null }) else null
             } ?: emptyList()
-            val updated = listOf(HistoryItem(uuid, name, System.currentTimeMillis())) +
+            val updated = listOf(HistoryItem(uuid, name, System.currentTimeMillis(), resourceType)) +
                 existing.filter { it.uuid != uuid }
-            prefs[RESOURCE_HISTORY] = updated.take(20).joinToString(",") { "${it.uuid}|||${it.name}|||${it.timestamp}" }
+            prefs[RESOURCE_HISTORY] = updated.take(20).joinToString(",") { "${it.uuid}|||${it.name}|||${it.timestamp}|||${it.resourceType ?: ""}" }
         }
     }
 }

@@ -86,8 +86,8 @@ class IosAppPreferences : AppPreferences {
                 .split(",")
                 .mapNotNull { entry ->
                     val parts = entry.split("|||")
-                    if (parts.size == 3) {
-                        HistoryItem(parts[0], parts[1], parts[2].toLongOrNull() ?: 0L)
+                    if (parts.size >= 3) {
+                        HistoryItem(parts[0], parts[1], parts[2].toLongOrNull() ?: 0L, parts.getOrNull(3)?.ifBlank { null })
                     } else {
                         null
                     }
@@ -228,23 +228,23 @@ class IosAppPreferences : AppPreferences {
         _userProfile.value = null
     }
 
-    override suspend fun addToHistory(uuid: String, name: String) {
+    override suspend fun addToHistory(uuid: String, name: String, resourceType: String?) {
         val existing = settings.getString("resource_history", "")
             .split(",")
             .mapNotNull { entry ->
                 val parts = entry.split("|||")
-                if (parts.size == 3) {
-                    HistoryItem(parts[0], parts[1], parts[2].toLongOrNull() ?: 0L)
+                if (parts.size >= 3) {
+                    HistoryItem(parts[0], parts[1], parts[2].toLongOrNull() ?: 0L, parts.getOrNull(3)?.ifBlank { null })
                 } else {
                     null
                 }
             }
 
-        val updated = listOf(HistoryItem(uuid, name, Clock.System.now().toEpochMilliseconds())) +
+        val updated = listOf(HistoryItem(uuid, name, Clock.System.now().toEpochMilliseconds(), resourceType)) +
             existing.filter { it.uuid != uuid }
 
         val encoded = updated.take(20).joinToString(",") {
-            "${it.uuid}|||${it.name}|||${it.timestamp}"
+            "${it.uuid}|||${it.name}|||${it.timestamp}|||${it.resourceType ?: ""}"
         }
         settings.putString("resource_history", encoded)
         (resourceHistory as? MutableStateFlow)?.value = updated.take(20)

@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class HistoryItem(val uuid: String, val name: String, val timestamp: Long)
+data class HistoryItem(val uuid: String, val name: String, val timestamp: Long, val resourceType: String? = null)
 
 interface AppPreferences {
     // Flows
@@ -49,7 +49,7 @@ interface AppPreferences {
     suspend fun saveUserOrcid(orcid: String?)
     suspend fun saveUserProfile(user: User?)
     suspend fun clearUserProfile()
-    suspend fun addToHistory(uuid: String, name: String)
+    suspend fun addToHistory(uuid: String, name: String, resourceType: String? = null)
     suspend fun clearHistory()
     suspend fun saveSampleGroupBy(value: String)
     suspend fun saveDatasetGroupBy(value: String)

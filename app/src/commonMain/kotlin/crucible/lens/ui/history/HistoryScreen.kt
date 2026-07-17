@@ -178,7 +178,7 @@ private fun HistoryCard(
             CacheManager.getProjects()?.find { it.projectId == pid }?.title ?: pid
         }
     }
-    val icon = when (resourceType) {
+    val icon = when (item.resourceType ?: resourceType) {
         "sample" -> Icons.Default.Science
         "dataset" -> Icons.Default.Dataset
         else -> Icons.Default.History
