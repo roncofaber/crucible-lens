@@ -175,13 +175,23 @@ internal fun DatasetDetailsCard(
                         label = "Visibility",
                         value = when (dataset.isPublic) { true -> "Public"; false -> "Private"; null -> "None" }
                     )
-                    if (dataset.ownerOrcid != null) {
-                        ClickableInfoRow(
+                    when {
+                        dataset.owner?.username != null -> {
+                            val ownerLabel = buildString {
+                                append("@${dataset.owner.username}")
+                                val name = listOfNotNull(dataset.owner.firstName, dataset.owner.lastName).joinToString(" ")
+                                if (name.isNotBlank()) append("  ·  $name")
+                            }
+                            ClickableInfoRow(
+                                icon = Icons.Default.Person, label = "Owner", value = ownerLabel,
+                                onClick = { if (dataset.ownerOrcid != null) openUrl(platformCtx, "https://orcid.org/${dataset.ownerOrcid}") }
+                            )
+                        }
+                        dataset.ownerOrcid != null -> ClickableInfoRow(
                             icon = Icons.Default.Person, label = "Owner ORCID", value = dataset.ownerOrcid,
                             onClick = { openUrl(platformCtx, "https://orcid.org/${dataset.ownerOrcid}") }
                         )
-                    } else {
-                        InfoRow(icon = Icons.Default.Person, label = "Owner ORCID", value = "None")
+                        else -> InfoRow(icon = Icons.Default.Person, label = "Owner", value = "None")
                     }
                 }
 

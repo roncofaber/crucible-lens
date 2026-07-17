@@ -163,25 +163,27 @@ class CrucibleApiService(
 
     suspend fun getSample(
         uuid: String,
-        includeLinks: Boolean = true
+        includeLinks: Boolean = true,
+        includeOwner: Boolean = true
     ): ApiResult<Sample> = safeCall {
         client.get("${baseUrl}samples/$uuid") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("include_links", includeLinks.toString())
+            if (includeOwner) url.parameters.append("include_owner", "true")
         }.body()
     }
 
     suspend fun getDataset(
         uuid: String,
         includeLinks: Boolean = true,
-        includeMetadata: Boolean? = null
+        includeMetadata: Boolean? = null,
+        includeOwner: Boolean = true
     ): ApiResult<Dataset> = safeCall {
         client.get("${baseUrl}datasets/$uuid") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("include_links", includeLinks.toString())
-            if (includeMetadata != null) {
-                url.parameters.append("include_metadata", includeMetadata.toString())
-            }
+            if (includeMetadata != null) url.parameters.append("include_metadata", includeMetadata.toString())
+            if (includeOwner) url.parameters.append("include_owner", "true")
         }.body()
     }
 

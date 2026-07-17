@@ -31,7 +31,8 @@ data class Sample(
     @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null,
     @SerialName("datasets") val datasets: List<DatasetReference>? = null,
     @SerialName("deletion_request") val deletionRequest: JsonObject? = null,
-    @SerialName("links") val links: List<ResourceLink>? = null
+    @SerialName("links") val links: List<ResourceLink>? = null,
+    @SerialName("owner") val owner: User? = null
 ) : CrucibleResource() {
     override val name: String get() = sampleName ?: uniqueId
 }
@@ -62,7 +63,8 @@ data class Dataset(
     @SerialName("keywords") override val keywords: List<String>? = null,
     @SerialName("resource_type") override val resourceType: String? = null,
     @SerialName("deletion_request") val deletionRequest: JsonObject? = null,
-    @SerialName("links") val links: List<ResourceLink>? = null
+    @SerialName("links") val links: List<ResourceLink>? = null,
+    @SerialName("owner") val owner: User? = null
 ) : CrucibleResource() {
     override val name: String get() = datasetName ?: uniqueId
 }

@@ -144,13 +144,23 @@ internal fun SampleDetailsCard(
                         label = "Visibility",
                         value = when (sample.isPublic) { true -> "Public"; false -> "Private"; null -> "None" }
                     )
-                    if (sample.ownerOrcid != null) {
-                        ClickableInfoRow(
+                    when {
+                        sample.owner?.username != null -> {
+                            val ownerLabel = buildString {
+                                append("@${sample.owner.username}")
+                                val name = listOfNotNull(sample.owner.firstName, sample.owner.lastName).joinToString(" ")
+                                if (name.isNotBlank()) append("  ·  $name")
+                            }
+                            ClickableInfoRow(
+                                icon = Icons.Default.Person, label = "Owner", value = ownerLabel,
+                                onClick = { if (sample.ownerOrcid != null) openUrl(platformCtx, "https://orcid.org/${sample.ownerOrcid}") }
+                            )
+                        }
+                        sample.ownerOrcid != null -> ClickableInfoRow(
                             icon = Icons.Default.Person, label = "Owner ORCID", value = sample.ownerOrcid,
                             onClick = { openUrl(platformCtx, "https://orcid.org/${sample.ownerOrcid}") }
                         )
-                    } else {
-                        InfoRow(icon = Icons.Default.Person, label = "Owner ORCID", value = "None")
+                        else -> InfoRow(icon = Icons.Default.Person, label = "Owner", value = "None")
                     }
                 }
 
