@@ -9,9 +9,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -131,21 +130,21 @@ fun InstrumentListScreen(
                 title = { Text("Instruments") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        AppIcon(AppIcons.Back)
                     }
                 },
                 actions = {
                     var menuExpanded by remember { mutableStateOf(false) }
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
                         IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
-                            Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
+                            AppIcon(AppIcons.Search, modifier = Modifier.size(24.dp))
                         }
                         IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
-                            Icon(Icons.Default.Home, contentDescription = "Home", modifier = Modifier.size(24.dp))
+                            AppIcon(AppIcons.Home, modifier = Modifier.size(24.dp))
                         }
                         Box {
                             IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options", modifier = Modifier.size(24.dp))
+                                AppIcon(AppIcons.MoreVert, modifier = Modifier.size(24.dp))
                             }
                             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                                 ToggleHiddenMenuItem(hiddenExpanded) { hiddenExpanded = !hiddenExpanded; menuExpanded = false }
@@ -188,7 +187,7 @@ fun InstrumentListScreen(
                                 Box {
                                     IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
                                         Icon(
-                                            Icons.Default.SwapVert,
+                                            AppIcons.Sort,
                                             contentDescription = "Sort",
                                             modifier = Modifier.size(20.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -202,8 +201,7 @@ fun InstrumentListScreen(
                                                 leadingIcon = {
                                                     if (sortState.field == field)
                                                         Icon(
-                                                            if (sortState.ascending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
-                                                            contentDescription = null,
+                                                            if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource,
                                                             modifier = Modifier.size(14.dp),
                                                             tint = MaterialTheme.colorScheme.primary
                                                         )
@@ -252,8 +250,7 @@ fun InstrumentListScreen(
                                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Icon(
-                                                if (searchQuery.isNotBlank()) Icons.Default.SearchOff else Icons.Default.Biotech,
-                                                contentDescription = null,
+                                                if (searchQuery.isNotBlank()) AppIcons.SearchOff else AppIcons.Instrument,
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                             Text(
@@ -319,7 +316,7 @@ fun InstrumentListScreen(
                                                 horizontalAlignment = Alignment.CenterHorizontally,
                                                 modifier = Modifier.scale(hideIconScale)
                                             ) {
-                                                Icon(Icons.Default.VisibilityOff, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
+                                                AppIcon(AppIcons.HideContent, tint = contentColor, modifier = Modifier.size(24.dp))
                                                 Text("Hide", style = MaterialTheme.typography.labelSmall, color = contentColor)
                                             }
                                         }
@@ -349,12 +346,11 @@ fun InstrumentListScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.VisibilityOff, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                                            AppIcon(AppIcons.HideContent, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                                             Text("Hidden (${hiddenInstrumentsList.size})", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                         Icon(
-                                            if (hiddenExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                            contentDescription = null,
+                                            if (hiddenExpanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
@@ -398,7 +394,7 @@ fun InstrumentListScreen(
                                                         horizontalAlignment = Alignment.CenterHorizontally,
                                                         modifier = Modifier.scale(showIconScale)
                                                     ) {
-                                                        Icon(Icons.Default.Visibility, contentDescription = null, tint = contentColor, modifier = Modifier.size(24.dp))
+                                                        AppIcon(AppIcons.ShowContent, tint = contentColor, modifier = Modifier.size(24.dp))
                                                         Text("Show", style = MaterialTheme.typography.labelSmall, color = contentColor)
                                                     }
                                                 }
@@ -452,8 +448,7 @@ private fun InstrumentCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Icon(
-                if (isHidden) Icons.Default.VisibilityOff else Icons.Default.Biotech,
-                contentDescription = null,
+                if (isHidden) AppIcons.HideContent else AppIcons.Instrument,
                 tint = if (isHidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
@@ -477,13 +472,13 @@ private fun InstrumentCard(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
                     IconButton(onClick = onTogglePin, modifier = Modifier.size(36.dp)) {
                         Icon(
-                            if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            if (isPinned) AppIcons.Pinned else AppIcons.PinnedEmpty,
                             contentDescription = if (isPinned) "Unpin" else "Pin",
                             tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                    AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                 }
             }
         }

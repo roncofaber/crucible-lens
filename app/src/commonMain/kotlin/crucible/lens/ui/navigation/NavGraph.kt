@@ -58,9 +58,8 @@ import crucible.lens.ui.create.AddFilesScreen
 import crucible.lens.ui.metadata.MetadataEditorScreen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.ui.Alignment
@@ -488,7 +487,7 @@ fun NavGraph(
                                     title = { Text("Loading...") },
                                     navigationIcon = {
                                         IconButton(onClick = { navController.popBackStack() }) {
-                                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                                            AppIcon(AppIcons.Back)
                                         }
                                     }
                                 )
@@ -598,8 +597,7 @@ fun NavGraph(
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
                                 Icon(
-                                    Icons.Default.ErrorOutline,
-                                    contentDescription = null,
+                                    AppIcons.Error,
                                     modifier = Modifier.size(64.dp),
                                     tint = MaterialTheme.colorScheme.error
                                 )
@@ -644,14 +642,14 @@ fun NavGraph(
                                     OutlinedButton(
                                         onClick = { navController.popBackStack() }
                                     ) {
-                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        AppIcon(AppIcons.Back, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text("Go Back")
                                     }
                                     Button(
                                         onClick = { viewModel.fetchResource(mfid) }
                                     ) {
-                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        AppIcon(AppIcons.Refresh, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text("Retry")
                                     }
@@ -903,7 +901,7 @@ fun NavGraph(
             containerColor = MaterialTheme.colorScheme.primary
         ) {
             Icon(
-                Icons.Default.QrCodeScanner,
+                AppIcons.ScanQr,
                 contentDescription = "Scan QR Code",
                 tint = MaterialTheme.colorScheme.onPrimary
             )

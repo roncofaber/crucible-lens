@@ -4,10 +4,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Notes
-import androidx.compose.material.icons.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -35,13 +35,13 @@ fun ManageInstrumentScreen(
                 title = { Text("Manage Instrument") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        AppIcon(AppIcons.Back)
                     }
                 },
                 actions = {
                     if (state is InstrumentManageState.Loaded && editState is InstrumentEditState.Idle) {
                         IconButton(onClick = { viewModel.startEdit() }) {
-                            Icon(Icons.Default.Edit, "Edit instrument")
+                            AppIcon(AppIcons.Edit)
                         }
                     }
                 }
@@ -98,19 +98,19 @@ fun ManageInstrumentScreen(
 private fun InstrumentInfoCard(instrument: Instrument) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            InfoRow(icon = Icons.Default.Biotech, label = "Name", value = instrument.instrumentName ?: "—")
-            InfoRow(icon = Icons.Default.Category, label = "Type", value = instrument.instrumentType ?: "—")
-            InfoRow(icon = Icons.Default.Factory, label = "Manufacturer", value = instrument.manufacturer ?: "—")
-            InfoRow(icon = Icons.Default.Straighten, label = "Model", value = instrument.model ?: "—")
-            InfoRow(icon = Icons.Default.Place, label = "Location", value = instrument.location ?: "—")
-            InfoRow(icon = Icons.Default.Person, label = "Owner", value = instrument.owner ?: "—")
+            InfoRow(icon = AppIcons.Instrument, label = "Name", value = instrument.instrumentName ?: "—")
+            InfoRow(icon = AppIcons.Category, label = "Type", value = instrument.instrumentType ?: "—")
+            InfoRow(icon = AppIcons.Factory, label = "Manufacturer", value = instrument.manufacturer ?: "—")
+            InfoRow(icon = AppIcons.Straighten, label = "Model", value = instrument.model ?: "—")
+            InfoRow(icon = AppIcons.Place, label = "Location", value = instrument.location ?: "—")
+            InfoRow(icon = AppIcons.Person, label = "Owner", value = instrument.owner ?: "—")
             if (!instrument.description.isNullOrBlank()) {
-                InfoRow(icon = Icons.AutoMirrored.Filled.Notes, label = "Description", value = instrument.description)
+                InfoRow(icon = AppIcons.Notes, label = "Description", value = instrument.description)
             }
             if (!instrument.otherId.isNullOrBlank()) {
-                InfoRow(icon = Icons.Default.Tag, label = "External ID", value = instrument.otherId + (instrument.otherIdSource?.let { " ($it)" } ?: ""))
+                InfoRow(icon = AppIcons.Tag, label = "External ID", value = instrument.otherId + (instrument.otherIdSource?.let { " ($it)" } ?: ""))
             }
-            InfoRow(icon = Icons.Default.Tag, label = "ID", value = instrument.uniqueId)
+            InfoRow(icon = AppIcons.Tag, label = "ID", value = instrument.uniqueId)
         }
     }
 }

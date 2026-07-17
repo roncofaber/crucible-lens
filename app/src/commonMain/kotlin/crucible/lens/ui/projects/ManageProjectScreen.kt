@@ -4,9 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,7 +39,7 @@ fun ManageProjectScreen(
         val displayName = user.username?.let { "@$it" } ?: listOfNotNull(user.firstName, user.lastName).joinToString(" ").ifBlank { "this member" }
         AlertDialog(
             onDismissRequest = { viewModel.cancelRemove() },
-            icon = { Icon(Icons.Default.PersonRemove, null) },
+            icon = { AppIcon(AppIcons.PersonRemove, null) },
             title = { Text("Remove member?") },
             text = { Text("Remove $displayName from the project?") },
             confirmButton = {
@@ -62,14 +61,14 @@ fun ManageProjectScreen(
                 title = { Text("Manage Project") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        AppIcon(AppIcons.Back)
                     }
                 },
                 actions = {
                     val loaded = state as? ManageProjectState.Loaded
                     if (loaded?.isLead == true && editState is ProjectEditState.Idle) {
                         IconButton(onClick = { viewModel.startEdit() }) {
-                            Icon(Icons.Default.Edit, "Edit project")
+                            AppIcon(AppIcons.Edit)
                         }
                     }
                 }
@@ -131,12 +130,12 @@ fun ManageProjectScreen(
 private fun ProjectInfoCard(project: Project) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            InfoRow(icon = Icons.Default.Folder, label = "Title", value = project.title ?: "—")
-            InfoRow(icon = Icons.Default.Business, label = "Organization", value = project.organization ?: "—")
+            InfoRow(icon = AppIcons.Project, label = "Title", value = project.title ?: "—")
+            InfoRow(icon = AppIcons.Business, label = "Organization", value = project.organization ?: "—")
             val leadDisplay = project.lead?.username?.let { "@$it" }
                 ?: listOfNotNull(project.lead?.firstName, project.lead?.lastName).joinToString(" ").ifBlank { "—" }
-            InfoRow(icon = Icons.Default.Person, label = "Project lead", value = leadDisplay)
-            InfoRow(icon = Icons.Default.Tag, label = "Project ID", value = project.projectId)
+            InfoRow(icon = AppIcons.Person, label = "Project lead", value = leadDisplay)
+            InfoRow(icon = AppIcons.Tag, label = "Project ID", value = project.projectId)
         }
     }
 }
@@ -219,7 +218,7 @@ private fun MembersCard(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Members (${members.size})", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 IconButton(onClick = onAddMember, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.PersonAdd, "Add member", modifier = Modifier.size(20.dp))
+                    AppIcon(AppIcons.PersonAdd, modifier = Modifier.size(20.dp))
                 }
             }
             members.forEach { member ->
@@ -242,7 +241,7 @@ private fun MembersCard(
                     }
                     if (isLead && member.uniqueId != null) {
                         IconButton(onClick = { onRemoveMember(member) }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.PersonRemove, "Remove", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                            AppIcon(AppIcons.PersonRemove, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 }

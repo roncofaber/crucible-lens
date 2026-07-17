@@ -15,7 +15,8 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -27,8 +28,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -124,8 +123,7 @@ private fun EmptyListCard(
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(
-                        if (isFiltered) Icons.Default.SearchOff else defaultIcon,
-                        contentDescription = null,
+                        if (isFiltered) AppIcons.SearchOff else defaultIcon,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
@@ -293,37 +291,37 @@ fun ProjectDetailScreen(
                 title = { Text("Project") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        AppIcon(AppIcons.Back)
                     }
                 },
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
                         IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
-                            Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
+                            AppIcon(AppIcons.Search, modifier = Modifier.size(24.dp))
                         }
                         IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
-                            Icon(Icons.Default.Home, contentDescription = "Home", modifier = Modifier.size(24.dp))
+                            AppIcon(AppIcons.Home, modifier = Modifier.size(24.dp))
                         }
                         var topBarMenuExpanded by remember { mutableStateOf(false) }
                         Box {
                             IconButton(onClick = { topBarMenuExpanded = true }, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options", modifier = Modifier.size(24.dp))
+                                AppIcon(AppIcons.MoreVert, modifier = Modifier.size(24.dp))
                             }
                             DropdownMenu(expanded = topBarMenuExpanded, onDismissRequest = { topBarMenuExpanded = false }) {
                                 DropdownMenuItem(
                                     text = { Text("New Sample") },
-                                    leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+                                    leadingIcon = { Icon(Icons.Default.Add) },
                                     onClick = { topBarMenuExpanded = false; onCreateSample() }
                                 )
                                 DropdownMenuItem(
                                     text = { Text("New Dataset") },
-                                    leadingIcon = { Icon(Icons.Default.Dataset, contentDescription = null) },
+                                    leadingIcon = { AppIcon(AppIcons.Dataset) },
                                     onClick = { topBarMenuExpanded = false; onCreateDataset() }
                                 )
                                 HorizontalDivider()
                                 DropdownMenuItem(
                                     text = { Text("Manage project") },
-                                    leadingIcon = { Icon(Icons.Default.ManageAccounts, contentDescription = null) },
+                                    leadingIcon = { Icon(Icons.Default.ManageAccounts) },
                                     onClick = { topBarMenuExpanded = false; onManageProject() }
                                 )
                                 OpenInWebMenuItem { topBarMenuExpanded = false; openUrl(ctx, "$graphExplorerUrl/$projectId") }
@@ -398,7 +396,7 @@ fun ProjectDetailScreen(
                                 label = "samples_tab_label"
                             ) { Text(it) }
                         },
-                        icon = { Icon(Icons.Default.Science, contentDescription = null) }
+                        icon = { AppIcon(AppIcons.Sample) }
                     )
                     Tab(
                         selected = pagerState.currentPage == 1,
@@ -424,7 +422,7 @@ fun ProjectDetailScreen(
                                 label = "datasets_tab_label"
                             ) { Text(it) }
                         },
-                        icon = { Icon(Icons.Default.Dataset, contentDescription = null) }
+                        icon = { AppIcon(AppIcons.Dataset) }
                     )
                 }
 
@@ -516,8 +514,7 @@ private fun ProjectHeader(
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(
-                            Icons.Default.Folder,
-                            contentDescription = null,
+                            AppIcons.Project,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(28.dp)
                         )
@@ -555,7 +552,7 @@ private fun ProjectHeader(
                                             horizontalArrangement = Arrangement.spacedBy(3.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            AppIcon(AppIcons.Person, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                             Text(ownerDisplayName(lead.firstName, lead.lastName), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
@@ -564,7 +561,7 @@ private fun ProjectHeader(
                                             horizontalArrangement = Arrangement.spacedBy(3.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Icon(Icons.Default.Business, contentDescription = null, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            AppIcon(AppIcons.Business, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                             Text(org, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
@@ -585,7 +582,7 @@ private fun ProjectHeader(
                                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Icon(Icons.Default.CalendarToday, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text("Created $created", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
@@ -594,7 +591,7 @@ private fun ProjectHeader(
                                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Icons.Default.Update, contentDescription = null, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Icon(Icons.Default.Update, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text("Updated $modified", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
@@ -602,7 +599,7 @@ private fun ProjectHeader(
                     }
                     IconButton(onClick = onTogglePin, modifier = Modifier.size(32.dp)) {
                         Icon(
-                            if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            if (isPinned) AppIcons.Pinned else AppIcons.PinnedEmpty,
                             contentDescription = if (isPinned) "Unpin" else "Pin",
                             tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                             modifier = Modifier.size(20.dp)
@@ -626,7 +623,7 @@ private fun ProjectHeader(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        AppIcon(AppIcons.Search, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                         Box(modifier = Modifier.weight(1f)) {
                             if (searchQuery.isEmpty()) {
                                 Text(
@@ -664,7 +661,7 @@ private fun ProjectHeader(
                                 DropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            if (opt == sampleGroupBy) Icon(Icons.Default.Circle, contentDescription = null, modifier = Modifier.size(6.dp))
+                                            if (opt == sampleGroupBy) Icon(Icons.Default.Circle, modifier = Modifier.size(6.dp))
                                             else Spacer(modifier = Modifier.size(6.dp))
                                             Text(opt.label)
                                         }
@@ -678,7 +675,7 @@ private fun ProjectHeader(
                                 DropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            if (opt == datasetGroupBy) Icon(Icons.Default.Circle, contentDescription = null, modifier = Modifier.size(6.dp))
+                                            if (opt == datasetGroupBy) Icon(Icons.Default.Circle, modifier = Modifier.size(6.dp))
                                             else Spacer(modifier = Modifier.size(6.dp))
                                             Text(opt.label)
                                         }
@@ -692,7 +689,7 @@ private fun ProjectHeader(
                 }
                 Box {
                     IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.SwapVert, contentDescription = "Sort", modifier = Modifier.size(20.dp))
+                        AppIcon(AppIcons.Sort, modifier = Modifier.size(20.dp))
                     }
                     DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
                         DropdownMenuItem(
@@ -704,7 +701,7 @@ private fun ProjectHeader(
                             DropdownMenuItem(
                                 text = {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (sortState.field == field) Icon(if (sortState.ascending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, contentDescription = null, modifier = Modifier.size(14.dp))
+                                        if (sortState.field == field) Icon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource, modifier = Modifier.size(14.dp))
                                         else Spacer(modifier = Modifier.size(14.dp))
                                         Text(field.label)
                                     }
@@ -741,7 +738,7 @@ private fun SamplesList(
 ) {
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == SampleGroupBy.OWNER, projectId)
     if (samples.isEmpty()) {
-        EmptyListCard(resourceName = "Samples", defaultIcon = Icons.Default.Science, isFiltered = isFiltered)
+        EmptyListCard(resourceName = "Samples", defaultIcon = AppIcons.Sample, isFiltered = isFiltered)
     } else if (!ownerNamesReady) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(32.dp))
@@ -774,7 +771,7 @@ private fun SamplesList(
                     val sortedSamples = samples.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTime ?: "" })
                     items(sortedSamples, key = { it.uniqueId }) { sample ->
                         Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                            ResourceCard(title = sample.name, uniqueId = sample.uniqueId, icon = Icons.Default.Science, graphExplorerUrl = graphExplorerUrl, projectId = projectId, resourceType = "sample", onClick = { onSampleClick(sample.uniqueId) })
+                            ResourceCard(title = sample.name, uniqueId = sample.uniqueId, icon = AppIcons.Sample, graphExplorerUrl = graphExplorerUrl, projectId = projectId, resourceType = "sample", onClick = { onSampleClick(sample.uniqueId) })
                         }
                     }
                 } else groupedSamples.forEach { (groupKey, samplesInGroup) ->
@@ -786,7 +783,7 @@ private fun SamplesList(
                         GroupStickyHeader(
                             title = groupKey,
                             count = samplesInGroup.size,
-                            icon = Icons.Default.Science,
+                            icon = AppIcons.Sample,
                             expanded = expanded,
                             onToggle = { expandedGroups[groupKey] = !expanded }
                         )
@@ -799,7 +796,7 @@ private fun SamplesList(
                                     title = sample.name,
 
                                     uniqueId = sample.uniqueId,
-                                    icon = Icons.Default.Science,
+                                    icon = AppIcons.Sample,
                                     graphExplorerUrl = graphExplorerUrl,
                                     projectId = projectId,
                                     resourceType = "sample",
@@ -850,7 +847,7 @@ private fun DatasetsList(
 ) {
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == DatasetGroupBy.OWNER, projectId)
     if (datasets.isEmpty()) {
-        EmptyListCard(resourceName = "Datasets", defaultIcon = Icons.Default.Dataset, isFiltered = isFiltered)
+        EmptyListCard(resourceName = "Datasets", defaultIcon = AppIcons.Dataset, isFiltered = isFiltered)
     } else if (!ownerNamesReady) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(32.dp))
@@ -886,7 +883,7 @@ private fun DatasetsList(
                     val sortedDatasets = datasets.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTime ?: "" })
                     items(sortedDatasets, key = { it.uniqueId }) { dataset ->
                         Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                            ResourceCard(title = dataset.name, uniqueId = dataset.uniqueId, icon = Icons.Default.Dataset, graphExplorerUrl = graphExplorerUrl, projectId = projectId, resourceType = "dataset", onClick = { onDatasetClick(dataset.uniqueId) })
+                            ResourceCard(title = dataset.name, uniqueId = dataset.uniqueId, icon = AppIcons.Dataset, graphExplorerUrl = graphExplorerUrl, projectId = projectId, resourceType = "dataset", onClick = { onDatasetClick(dataset.uniqueId) })
                         }
                     }
                 } else groupedDatasets.forEach { (groupKey, datasetsInGroup) ->
@@ -898,7 +895,7 @@ private fun DatasetsList(
                         GroupStickyHeader(
                             title = groupKey,
                             count = datasetsInGroup.size,
-                            icon = Icons.Default.Dataset,
+                            icon = AppIcons.Dataset,
                             expanded = expanded,
                             onToggle = { expandedGroups[groupKey] = !expanded }
                         )
@@ -911,7 +908,7 @@ private fun DatasetsList(
                                     title = dataset.name,
 
                                     uniqueId = dataset.uniqueId,
-                                    icon = Icons.Default.Dataset,
+                                    icon = AppIcons.Dataset,
                                     graphExplorerUrl = graphExplorerUrl,
                                     projectId = projectId,
                                     resourceType = "dataset",
@@ -972,7 +969,7 @@ private fun GroupStickyHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                Icon(icon, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                 Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Surface(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
@@ -987,7 +984,7 @@ private fun GroupStickyHeader(
                 }
             }
             Icon(
-                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                if (expanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
                 contentDescription = if (expanded) "Collapse" else "Expand",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
@@ -1035,7 +1032,6 @@ private fun ResourceCard(
         ) {
             Icon(
                 icon,
-                contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
@@ -1057,8 +1053,7 @@ private fun ResourceCard(
                 )
             }
             Icon(
-                Icons.Default.ChevronRight,
-                contentDescription = null,
+                AppIcons.NavigateNext,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )

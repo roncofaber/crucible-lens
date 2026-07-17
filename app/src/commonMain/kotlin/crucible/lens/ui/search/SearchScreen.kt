@@ -4,9 +4,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,8 +22,10 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.MetadataSearchResult
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
-import androidx.compose.material.icons.automirrored.filled.ManageSearch
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.FilterSheet
 import crucible.lens.ui.common.SearchFilters
@@ -154,8 +155,7 @@ fun SearchScreen(
                             singleLine = true,
                             leadingIcon = {
                                 Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = null,
+                                    AppIcons.Search,
                                     modifier = Modifier.size(20.dp)
                                 )
                             },
@@ -171,7 +171,7 @@ fun SearchScreen(
                     },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                            AppIcon(AppIcons.Back)
                         }
                     },
                     actions = {
@@ -182,11 +182,11 @@ fun SearchScreen(
                             }
                         ) {
                             IconButton(onClick = { showFilterSheet = true }) {
-                                Icon(Icons.Default.FilterAlt, contentDescription = "Filters")
+                                AppIcon(AppIcons.Filter)
                             }
                         }
                         IconButton(onClick = onHome) {
-                            Icon(Icons.Default.Home, contentDescription = "Home")
+                            AppIcon(AppIcons.Home)
                         }
                     }
                 )
@@ -204,7 +204,7 @@ fun SearchScreen(
                                 onClick = { showMineOnly = !showMineOnly },
                                 label = { Text("Mine") },
                                 leadingIcon = if (showMineOnly) {
-                                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                    { AppIcon(AppIcons.Check, modifier = Modifier.size(16.dp)) }
                                 } else null
                             )
                         }
@@ -215,7 +215,7 @@ fun SearchScreen(
                                 selected = true,
                                 onClick = { activeFilters = SearchFilters() },
                                 label = { Text("${activeFilters.activeCount} filter${if (activeFilters.activeCount > 1) "s" else ""} · Clear") },
-                                leadingIcon = { Icon(Icons.Default.FilterAlt, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                leadingIcon = { AppIcon(AppIcons.Filter, modifier = Modifier.size(16.dp)) }
                             )
                         }
                     }
@@ -230,12 +230,12 @@ fun SearchScreen(
         ) {
             when {
                 apiKey.isNullOrBlank() -> EmptyState(
-                    icon = Icons.Default.Key,
+                    icon = AppIcons.Key,
                     title = "No API key",
                     subtitle = "Configure your API key in Settings to search"
                 )
                 query.isBlank() -> EmptyState(
-                    icon = Icons.Default.Search,
+                    icon = AppIcons.Search,
                     title = "Start typing",
                     subtitle = "Type at least 3 characters to search samples, datasets and projects"
                 )
@@ -268,7 +268,7 @@ fun SearchScreen(
                                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                                     Spacer(modifier = Modifier.width(8.dp))
                                 } else {
-                                    Icon(Icons.AutoMirrored.Filled.ManageSearch, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    AppIcon(AppIcons.SearchFilters, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
                                 }
                                 Text("Search metadata on server")
@@ -298,7 +298,7 @@ fun SearchScreen(
                         }
                     } else {
                         EmptyState(
-                            icon = Icons.Default.SearchOff,
+                            icon = AppIcons.SearchOff,
                             title = "No results",
                             subtitle = "Try a different search term"
                         )
@@ -389,7 +389,7 @@ fun SearchScreen(
                                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                                 Spacer(modifier = Modifier.width(8.dp))
                             } else {
-                                Icon(Icons.AutoMirrored.Filled.ManageSearch, contentDescription = null, modifier = Modifier.size(18.dp))
+                                AppIcon(AppIcons.SearchFilters, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                             }
                             Text("Search metadata on server")
@@ -450,7 +450,7 @@ private fun EmptyState(icon: androidx.compose.ui.graphics.vector.ImageVector, ti
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(48.dp),
+            Icon(icon, modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -534,8 +534,7 @@ private fun DirectLookupCard(mfid: String, onClick: (String) -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                Icons.AutoMirrored.Filled.OpenInNew,
-                contentDescription = null,
+                AppIcons.OpenInNew,
                 modifier = Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.onPrimaryContainer
             )

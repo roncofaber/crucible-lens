@@ -21,8 +21,8 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -46,12 +46,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.HelpOutline
-import androidx.compose.material.icons.automirrored.filled.ListAlt
-import androidx.compose.material.icons.automirrored.filled.Notes
-import androidx.compose.material.icons.automirrored.filled.Label
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.draw.rotate
@@ -666,7 +660,7 @@ fun ResourceDetailScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        AppIcon(AppIcons.Back)
                     }
                 },
                 actions = {
@@ -675,17 +669,17 @@ fun ResourceDetailScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
-                            Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
+                            AppIcon(AppIcons.Search, modifier = Modifier.size(24.dp))
                         }
                         IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
-                            Icon(Icons.Default.Home, contentDescription = "Home", modifier = Modifier.size(24.dp))
+                            AppIcon(AppIcons.Home, modifier = Modifier.size(24.dp))
                         }
                         Box {
                             IconButton(
                                 onClick = { overflowMenuExpanded = true },
                                 modifier = Modifier.size(40.dp)
                             ) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options", modifier = Modifier.size(24.dp))
+                                AppIcon(AppIcons.MoreVert, modifier = Modifier.size(24.dp))
                             }
                             DropdownMenu(
                                 expanded = overflowMenuExpanded,
@@ -693,18 +687,18 @@ fun ResourceDetailScreen(
                             ) {
                                 DropdownMenuItem(
                                     text = { Text("Edit") },
-                                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                    leadingIcon = { AppIcon(AppIcons.Edit) },
                                     onClick = { overflowMenuExpanded = false; showEditSheet = true }
                                 )
                                 DropdownMenuItem(
                                     text = { Text("Duplicate") },
-                                    leadingIcon = { Icon(Icons.Default.CopyAll, contentDescription = null) },
+                                    leadingIcon = { AppIcon(AppIcons.CopyResource) },
                                     onClick = { overflowMenuExpanded = false; onDuplicate(currentDisplayResource) }
                                 )
                                 if (currentDisplayResource is Dataset) {
                                     DropdownMenuItem(
                                         text = { Text("Add file") },
-                                        leadingIcon = { Icon(Icons.Default.AttachFile, contentDescription = null) },
+                                        leadingIcon = { AppIcon(AppIcons.AttachFile) },
                                         onClick = {
                                             overflowMenuExpanded = false
                                             onNavigateToAddFiles(currentDisplayResource.uniqueId)
@@ -713,7 +707,7 @@ fun ResourceDetailScreen(
                                 }
                                 DropdownMenuItem(
                                     text = { Text("Link") },
-                                    leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
+                                    leadingIcon = { AppIcon(AppIcons.LinkResource) },
                                     onClick = { overflowMenuExpanded = false; showLinkSheet = true }
                                 )
                                 val deletionRequest = when (currentDisplayResource) {
@@ -723,7 +717,7 @@ fun ResourceDetailScreen(
                                 val deletionStatus = (deletionRequest?.get("status") as? kotlinx.serialization.json.JsonPrimitive)?.content
                                 DropdownMenuItem(
                                     text = { Text(if (deletionStatus != null) "Deletion ${deletionStatus.replaceFirstChar { it.uppercase() }}" else "Request deletion") },
-                                    leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
+                                    leadingIcon = { AppIcon(AppIcons.RequestDeletion) },
                                     enabled = deletionStatus == null,
                                     onClick = { overflowMenuExpanded = false; showDeletionDialog = true }
                                 )
@@ -755,7 +749,7 @@ fun ResourceDetailScreen(
                                     val groupLabel = siblingGroupLabel(activeSiblingGroupBy, currentDisplayResource)
                                     DropdownMenuItem(
                                         text = { Text("Siblings: $groupLabel") },
-                                        leadingIcon = { Icon(Icons.Default.SwapHoriz, contentDescription = null) },
+                                        leadingIcon = { AppIcon(AppIcons.SwapResource) },
                                         onClick = {
                                             overflowMenuExpanded = false
                                             showSiblingGroupDialog = true
@@ -887,7 +881,7 @@ fun ResourceDetailScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
+                            AppIcon(AppIcons.RequestDeletion, tint = MaterialTheme.colorScheme.onErrorContainer)
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text(
                                     "Deletion ${delStatus.replaceFirstChar { it.uppercase() }}",
@@ -1137,7 +1131,7 @@ fun ResourceDetailScreen(
         }
         AlertDialog(
             onDismissRequest = { showSiblingGroupDialog = false },
-            icon = { Icon(Icons.Default.SwapHoriz, contentDescription = null) },
+            icon = { AppIcon(AppIcons.SwapResource) },
             title = { Text("Sibling grouping") },
             text = {
                 Column {
@@ -1203,7 +1197,7 @@ fun ResourceDetailScreen(
         var isUnlinking by remember { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = { if (!isUnlinking) pendingUnlink = null },
-            icon = { Icon(Icons.Default.LinkOff, contentDescription = null) },
+            icon = { AppIcon(AppIcons.UnlinkResource) },
             title = { Text("Unlink resource") },
             text = { Text("Remove link to \"${req.name}\"? The resources themselves will not be deleted.") },
             confirmButton = {
