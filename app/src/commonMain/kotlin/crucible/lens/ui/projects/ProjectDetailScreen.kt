@@ -598,7 +598,7 @@ private fun ProjectHeader(
                         }
                     }
                     IconButton(onClick = onTogglePin, modifier = Modifier.size(32.dp)) {
-                        AppIcon(if (isPinned) AppIcons.Pinned else AppIcons.PinnedEmpty,
+                        AppIcon(AppIcons.Pinned, filled = isPinned,
                             tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                             modifier = Modifier.size(20.dp)
                         )

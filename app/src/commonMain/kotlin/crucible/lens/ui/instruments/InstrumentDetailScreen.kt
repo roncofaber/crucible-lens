@@ -3,6 +3,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.*
 import crucible.lens.platform.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 
 
@@ -338,7 +340,7 @@ private fun InstrumentHeader(
                     }
                 }
                 IconButton(onClick = onTogglePin, modifier = Modifier.size(32.dp)) {
-                    Icon(if (isPinned) Icons.Default.Bookmark else Icons.Default.BookmarkBorder, contentDescription = if (isPinned) "Unpin" else "Pin", tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current, modifier = Modifier.size(20.dp))
+                    AppIcon(AppIcons.Pinned, filled = isPinned, tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current, modifier = Modifier.size(20.dp))
                 }
             }
 

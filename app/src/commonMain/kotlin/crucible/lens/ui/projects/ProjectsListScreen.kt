@@ -728,7 +728,7 @@ private fun ProjectCard(
                         onClick = { onTogglePin() },
                         modifier = Modifier.size(40.dp)
                     ) {
-                        AppIcon(if (isPinned) AppIcons.Pinned else AppIcons.PinnedEmpty,
+                        AppIcon(AppIcons.Pinned, filled = isPinned,
                             modifier = Modifier.size(24.dp),
                             tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )

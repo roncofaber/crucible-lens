@@ -466,7 +466,7 @@ private fun InstrumentCard(
             if (!isHidden) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
                     IconButton(onClick = onTogglePin, modifier = Modifier.size(36.dp)) {
-                        AppIcon(if (isPinned) AppIcons.Pinned else AppIcons.PinnedEmpty,
+                        AppIcon(AppIcons.Pinned, filled = isPinned,
                             tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
