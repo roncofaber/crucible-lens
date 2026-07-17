@@ -100,7 +100,6 @@ class MainActivity : ComponentActivity() {
             )
             val pinnedInstruments by preferencesManager.pinnedInstruments.collectAsState(initial = emptySet())
             val hiddenInstruments by preferencesManager.hiddenInstruments.collectAsState(initial = emptySet())
-            val userOrcid by preferencesManager.userOrcid.collectAsState(initial = null)
             val aiApiKey by preferencesManager.aiApiKey.collectAsState(initial = null)
             val aiApiUrl by preferencesManager.aiApiUrl.collectAsState(
                 initial = crucible.lens.data.preferences.AppPreferences.DEFAULT_AI_API_URL
@@ -234,18 +233,6 @@ class MainActivity : ComponentActivity() {
                     hiddenInstruments = hiddenInstruments,
                     onToggleHideInstrument = { id ->
                         scope.launch { preferencesManager.toggleHiddenInstrument(id) }
-                    },
-                    userOrcid = userOrcid,
-                    onUserOrcidSave = { orcid ->
-                        scope.launch { preferencesManager.saveUserOrcid(orcid) }
-                    },
-                    onSignOut = {
-                        scope.launch {
-                            preferencesManager.clearApiKey()
-                            preferencesManager.saveUserOrcid(null)
-                            preferencesManager.clearUserProfile()
-                            CacheManager.clearAll()
-                        }
                     },
                     prefs = preferencesManager
                 )

@@ -125,9 +125,6 @@ fun NavGraph(
     onTogglePinnedInstrument: (String) -> Unit = {},
     hiddenInstruments: Set<String> = emptySet(),
     onToggleHideInstrument: (String) -> Unit = {},
-    userOrcid: String? = null,
-    onUserOrcidSave: (String?) -> Unit = {},
-    onSignOut: () -> Unit = {},
     prefs: AppPreferences,
     viewModel: ResourceDetailViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
@@ -166,6 +163,7 @@ fun NavGraph(
     val isSyncing by viewModel.isSyncing.collectAsState()
     val userProfile by prefs.userProfile.collectAsStateWithLifecycle(null)
     val userUsername = userProfile?.username
+    val userOrcid = userProfile?.uniqueId
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route

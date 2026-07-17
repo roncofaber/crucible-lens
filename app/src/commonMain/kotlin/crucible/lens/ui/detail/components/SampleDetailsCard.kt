@@ -168,7 +168,7 @@ internal fun SampleDetailsCard(
 
                 AdvancedGroupLabel("Dates")
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    InfoRow(icon = Icons.Default.Schedule, label = "Created", value = formatDateTime(sample.creationTime))
+                    InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = formatDateTime(sample.creationTime))
                     InfoRow(icon = Icons.Default.Update, label = "Modified", value = formatDateTime(sample.modificationTime))
                 }
             }
