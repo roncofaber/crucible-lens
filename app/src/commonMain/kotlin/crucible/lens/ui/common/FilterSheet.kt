@@ -205,9 +205,9 @@ private fun OwnerPickerField(
     }
 
     Box(modifier = Modifier.fillMaxWidth()) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = { q ->
+        UserSearchField(
+            query = query,
+            onQueryChange = { q ->
                 query = q
                 expanded = true
                 scope.launch {
@@ -218,19 +218,8 @@ private fun OwnerPickerField(
                     isSearching = false
                 }
             },
-            label = { Text("Owner") },
-            placeholder = { Text("Search by username…") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            leadingIcon = { Text("@", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp)) },
-            trailingIcon = {
-                when {
-                    isSearching -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    query.isNotBlank() -> IconButton(onClick = { query = ""; results = emptyList(); expanded = false }) {
-                        Icon(Icons.Default.Clear, "Clear")
-                    }
-                }
-            }
+            isSearching = isSearching,
+            label = "Owner"
         )
         DropdownMenu(
             expanded = expanded && results.isNotEmpty(),
@@ -241,17 +230,13 @@ private fun OwnerPickerField(
             results.take(6).forEach { user ->
                 DropdownMenuItem(
                     text = {
+                        val name = listOfNotNull(user.firstName, user.lastName).joinToString(" ")
                         Column {
                             Text("@${user.username}", style = MaterialTheme.typography.bodyMedium)
-                            val name = listOfNotNull(user.firstName, user.lastName).joinToString(" ")
                             if (name.isNotBlank()) Text(name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     },
-                    onClick = {
-                        expanded = false
-                        query = ""
-                        onOwnerSelected(user)
-                    }
+                    onClick = { expanded = false; query = ""; onOwnerSelected(user) }
                 )
             }
         }

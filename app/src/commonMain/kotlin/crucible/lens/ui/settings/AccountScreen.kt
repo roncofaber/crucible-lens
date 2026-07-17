@@ -25,6 +25,7 @@ import crucible.lens.data.model.User
 import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.UserAvatar
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.detail.components.InfoRow
@@ -239,10 +240,6 @@ private fun NotLoggedInCard(
 @Composable
 private fun AccountHeaderCard(user: User) {
     val platformCtx = getPlatformContext()
-    val initials = buildString {
-        user.firstName?.firstOrNull()?.let { append(it.uppercaseChar()) }
-        user.lastName?.firstOrNull()?.let { append(it.uppercaseChar()) }
-    }.ifEmpty { "?" }
     val displayName = listOfNotNull(user.firstName, user.lastName).joinToString(" ").ifBlank { "Unknown" }
 
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -251,15 +248,7 @@ private fun AccountHeaderCard(user: User) {
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                shape = androidx.compose.foundation.shape.CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(52.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(initials, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                }
-            }
+            UserAvatar(firstName = user.firstName, lastName = user.lastName, size = 52.dp)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 if (!user.username.isNullOrBlank()) {

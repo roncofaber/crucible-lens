@@ -2,7 +2,6 @@ package crucible.lens.ui.projects
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -20,6 +19,9 @@ import crucible.lens.data.model.User
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
+import crucible.lens.ui.common.UserAvatar
+import crucible.lens.ui.common.UserResultItem
+import crucible.lens.ui.common.UserSearchField
 import crucible.lens.ui.detail.components.InfoRow
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -179,32 +181,17 @@ private fun ProjectEditCard(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
             )
-            OutlinedTextField(
-                value = draft.leadUsername,
-                onValueChange = { onLeadUsernameChanged(it.lowercase()) },
-                label = { Text("Project lead username") },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isSaving,
-                singleLine = true,
-                leadingIcon = { Text("@", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp)) },
-                trailingIcon = { if (draft.isLeadSearching) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+            UserSearchField(
+                query = draft.leadUsername,
+                onQueryChange = onLeadUsernameChanged,
+                isSearching = draft.isLeadSearching,
+                label = "Project lead username",
+                enabled = !isSaving
             )
             if (draft.leadSearch.isNotEmpty()) {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                    Column {
-                        draft.leadSearch.take(5).forEach { user ->
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text("@${user.username}", style = MaterialTheme.typography.bodyMedium)
-                                        val name = listOfNotNull(user.firstName, user.lastName).joinToString(" ")
-                                        if (name.isNotBlank()) Text(name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                },
-                                onClick = { onSelectLead(user) }
-                            )
-                        }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    draft.leadSearch.take(5).forEach { user ->
+                        UserResultItem(user = user, onClick = { onSelectLead(user) })
                     }
                 }
             }
@@ -241,15 +228,13 @@ private fun MembersCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    val initials = buildString {
-                        member.firstName?.firstOrNull()?.let { append(it.uppercaseChar()) }
-                        member.lastName?.firstOrNull()?.let { append(it.uppercaseChar()) }
-                    }.ifEmpty { "?" }
-                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(36.dp)) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(initials, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                        }
-                    }
+                    UserAvatar(
+                        firstName = member.firstName,
+                        lastName = member.lastName,
+                        size = 36.dp,
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
                     Column(modifier = Modifier.weight(1f)) {
                         val displayName = listOfNotNull(member.firstName, member.lastName).joinToString(" ").ifBlank { null }
                         if (displayName != null) Text(displayName, style = MaterialTheme.typography.bodyMedium)
@@ -280,48 +265,22 @@ private fun AddMemberSheet(viewModel: ManageProjectViewModel, onDismiss: () -> U
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Add Member", style = MaterialTheme.typography.titleLarge)
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it.lowercase(); viewModel.searchMembers(it) },
-                label = { Text("Search by username") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                trailingIcon = {
-                    when {
-                        isSearching -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        query.isNotBlank() -> IconButton(onClick = { query = ""; viewModel.searchMembers("") }) {
-                            Icon(Icons.Default.Clear, null)
-                        }
-                    }
-                }
+            UserSearchField(
+                query = query,
+                onQueryChange = { query = it; viewModel.searchMembers(it) },
+                isSearching = isSearching
             )
             searchResults.forEach { user ->
-                if (user.username == null) return@forEach
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = MaterialTheme.shapes.small,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("@${user.username}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                            val name = listOfNotNull(user.firstName, user.lastName).joinToString(" ")
-                            if (name.isNotBlank()) Text(name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                UserResultItem(
+                    user = user,
+                    trailingContent = {
                         Button(
                             onClick = { viewModel.addMember(user) },
                             enabled = !isAdding,
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
-                        ) {
-                            Text("Add")
-                        }
+                        ) { Text("Add") }
                     }
-                }
+                )
             }
             if (query.length >= 3 && !isSearching && searchResults.isEmpty()) {
                 Text("No users found for \"$query\"", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
