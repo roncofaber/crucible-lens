@@ -3,13 +3,13 @@
 ## [0.4.2] – 2026-07-16
 
 ### Added
-- **Account screen** — view and edit profile (name, email, username), sign in via ORCID or API key; API key entry moved from ApiSettings to Account
-- **Manage Project screen** — edit project info (lead only), add/remove members with username search
-- **Manage Instrument screen** — view all instrument fields (manufacturer, model, owner were previously invisible), edit any field
-- **Server-side fuzzy search** — samples, datasets, projects, and instruments now search server-side (`/search` endpoints) instead of loading all data client-side
-- **Owner resolution** — `include_owner=true` on sample/dataset fetches; owner shown as "F. LastName (@username)" in detail cards
-- **Username-aware filtering** — FilterSheet owner field replaced with username autocomplete; project lead local search now matches username
-- **Shared user components** — `UserAvatar`, `UserSearchField`, `UserResultItem` in `ui/common/` for consistent user identity display
+- **Account screen**: view and edit profile (name, email, username), sign in via ORCID or API key; API key entry moved from ApiSettings to Account
+- **Manage Project screen**: edit project info (lead only), add/remove members with username search
+- **Manage Instrument screen**: view all instrument fields (manufacturer, model, owner were previously invisible), edit any field
+- **Server-side fuzzy search**: samples, datasets, projects, and instruments now search server-side (`/search` endpoints) instead of loading all data client-side
+- **Owner resolution**: `include_owner=true` on sample/dataset fetches; owner shown as "F. LastName (@username)" in detail cards
+- **Username-aware filtering**: FilterSheet owner field replaced with username autocomplete; project lead local search now matches username
+- **Shared user components**: `UserAvatar`, `UserSearchField`, `UserResultItem` in `ui/common/` for consistent user identity display
 
 ### Changed
 - ApiSettings simplified to connectivity-only (base URL, Crucible Web URL, health check)
@@ -107,4 +107,4 @@
 
 ## [0.1.0] – 2026-02-27
 
-Initial release — QR scanner app migrated to KMP + Compose Multiplatform targeting Android.
+Initial release: QR scanner app migrated to KMP + Compose Multiplatform targeting Android.
