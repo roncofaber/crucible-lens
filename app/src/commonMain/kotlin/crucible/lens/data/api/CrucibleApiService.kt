@@ -146,12 +146,14 @@ class CrucibleApiService(
     suspend fun getResource(
         uuid: String,
         includeLinks: Boolean = true,
-        includeMetadata: Boolean = true
+        includeMetadata: Boolean = true,
+        includeOwner: Boolean = true
     ): ApiResult<CrucibleResource> = safeCall {
         val obj: JsonObject = client.get("${baseUrl}resources/$uuid") {
             header("Authorization", "Bearer $apiKey")
             if (includeLinks) url.parameters.append("include_links", "true")
             if (includeMetadata) url.parameters.append("include_metadata", "true")
+            if (includeOwner) url.parameters.append("include_owner", "true")
         }.body()
         val type = obj["resource_type"]?.jsonPrimitive?.content?.lowercase()
         when (type) {
