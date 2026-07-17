@@ -178,9 +178,9 @@ internal fun DatasetDetailsCard(
                     when {
                         dataset.owner?.username != null -> {
                             val ownerLabel = buildString {
-                                append("@${dataset.owner.username}")
                                 val name = listOfNotNull(dataset.owner.firstName, dataset.owner.lastName).joinToString(" ")
-                                if (name.isNotBlank()) append("  ·  $name")
+                                if (name.isNotBlank()) append("$name (@${dataset.owner.username})")
+                                else append("@${dataset.owner.username}")
                             }
                             ClickableInfoRow(
                                 icon = Icons.Default.Person, label = "Owner", value = ownerLabel,

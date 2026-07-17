@@ -147,9 +147,9 @@ internal fun SampleDetailsCard(
                     when {
                         sample.owner?.username != null -> {
                             val ownerLabel = buildString {
-                                append("@${sample.owner.username}")
                                 val name = listOfNotNull(sample.owner.firstName, sample.owner.lastName).joinToString(" ")
-                                if (name.isNotBlank()) append("  ·  $name")
+                                if (name.isNotBlank()) append("$name (@${sample.owner.username})")
+                                else append("@${sample.owner.username}")
                             }
                             ClickableInfoRow(
                                 icon = Icons.Default.Person, label = "Owner", value = ownerLabel,
