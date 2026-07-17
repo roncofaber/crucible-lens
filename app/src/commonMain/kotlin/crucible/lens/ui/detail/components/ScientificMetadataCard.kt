@@ -61,7 +61,13 @@ internal fun ScientificMetadataCard(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                if (expanded) {
+            }
+
+            if (expanded) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
                     TextButton(
                         onClick = { val new = !expandAll; expandAll = new; onExpandAllChange(new) },
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
@@ -72,10 +78,6 @@ internal fun ScientificMetadataCard(
                         )
                     }
                 }
-            }
-
-            if (expanded) {
-                Spacer(modifier = Modifier.height(8.dp))
                 MetadataTree(displayMetadata, indentLevel = 0, expandAll = expandAll)
             }
         }
