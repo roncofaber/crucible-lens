@@ -1,4 +1,7 @@
 package crucible.lens.ui.detail.components
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable

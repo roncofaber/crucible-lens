@@ -1,4 +1,7 @@
 package crucible.lens.ui.projects
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import crucible.lens.platform.*
 
 
@@ -16,6 +19,7 @@ import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.horizontalScroll
 import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -112,7 +116,7 @@ private fun rememberOwnerNames(
 @Composable
 private fun EmptyListCard(
     resourceName: String,
-    defaultIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    defaultIcon: AppIconToken,
     isFiltered: Boolean
 ) {
     Box(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -122,7 +126,7 @@ private fun EmptyListCard(
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(
+                    AppIcon(
                         if (isFiltered) AppIcons.SearchOff else defaultIcon,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -182,8 +186,7 @@ fun ProjectDetailScreen(
     isHidden: Boolean = false,
     onCreateSample: () -> Unit = {},
     onCreateDataset: () -> Unit = {},
-    onManageProject: () -> Unit = {},
-) {
+    onManageProject: () -> Unit = {}) {
     val project = remember(projectId) {
         CacheManager.getProjects()?.find { it.projectId == projectId }
     }
@@ -310,7 +313,7 @@ fun ProjectDetailScreen(
                             DropdownMenu(expanded = topBarMenuExpanded, onDismissRequest = { topBarMenuExpanded = false }) {
                                 DropdownMenuItem(
                                     text = { Text("New Sample") },
-                                    leadingIcon = { Icon(Icons.Default.Add) },
+                                    leadingIcon = { AppIcon(AppIcons.Add) },
                                     onClick = { topBarMenuExpanded = false; onCreateSample() }
                                 )
                                 DropdownMenuItem(
@@ -321,7 +324,7 @@ fun ProjectDetailScreen(
                                 HorizontalDivider()
                                 DropdownMenuItem(
                                     text = { Text("Manage project") },
-                                    leadingIcon = { Icon(Icons.Default.ManageAccounts) },
+                                    leadingIcon = { AppIcon(AppIcons.ManageMembers) },
                                     onClick = { topBarMenuExpanded = false; onManageProject() }
                                 )
                                 OpenInWebMenuItem { topBarMenuExpanded = false; openUrl(ctx, "$graphExplorerUrl/$projectId") }
@@ -366,8 +369,7 @@ fun ProjectDetailScreen(
                         onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) }; showToast(ctx, "Grouped by ${it.label}") },
                         onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) }; showToast(ctx, "Grouped by ${it.label}") },
                         sortState = sortState,
-                        onSortStateChange = { sortState = it; showToast(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
-                    )
+                        onSortStateChange = { sortState = it; showToast(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") })
                 }
 
                 // TabRow — fixed below the header, above the pager
@@ -489,8 +491,7 @@ private fun ProjectHeader(
     onSampleGroupByChange: (SampleGroupBy) -> Unit = {},
     onDatasetGroupByChange: (DatasetGroupBy) -> Unit = {},
     sortState: SortState = SortState(),
-    onSortStateChange: (SortState) -> Unit = {},
-) {
+    onSortStateChange: (SortState) -> Unit = {}) {
     var groupMenuExpanded by remember { mutableStateOf(false) }
     var sortMenuExpanded by remember { mutableStateOf(false) }
 
@@ -513,8 +514,7 @@ private fun ProjectHeader(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(
-                            AppIcons.Project,
+                        AppIcon(AppIcons.Project,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(28.dp)
                         )
@@ -582,7 +582,7 @@ private fun ProjectHeader(
                                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Icons.Default.CalendarToday, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    AppIcon(AppIcons.CreationDate, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text("Created $created", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
@@ -591,16 +591,14 @@ private fun ProjectHeader(
                                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Icons.Default.Update, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    AppIcon(AppIcons.ModificationDate, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text("Updated $modified", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
                     }
                     IconButton(onClick = onTogglePin, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            if (isPinned) AppIcons.Pinned else AppIcons.PinnedEmpty,
-                            contentDescription = if (isPinned) "Unpin" else "Pin",
+                        AppIcon(if (isPinned) AppIcons.Pinned else AppIcons.PinnedEmpty,
                             tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                             modifier = Modifier.size(20.dp)
                         )
@@ -642,13 +640,13 @@ private fun ProjectHeader(
                             )
                         }
                         if (searchQuery.isNotEmpty()) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear search", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp).clickable { onSearchChange("") })
+                            AppIcon(AppIcons.ClearInput, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp).clickable { onSearchChange("") })
                         }
                     }
                 }
                 Box {
                     IconButton(onClick = { groupMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.Tune, contentDescription = "Group by", modifier = Modifier.size(20.dp))
+                        AppIcon(AppIcons.GroupBy, modifier = Modifier.size(20.dp))
                     }
                     DropdownMenu(expanded = groupMenuExpanded, onDismissRequest = { groupMenuExpanded = false }) {
                         DropdownMenuItem(
@@ -661,7 +659,7 @@ private fun ProjectHeader(
                                 DropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            if (opt == sampleGroupBy) Icon(Icons.Default.Circle, modifier = Modifier.size(6.dp))
+                                            if (opt == sampleGroupBy) AppIcon(AppIcons.SelectionDot, modifier = Modifier.size(6.dp))
                                             else Spacer(modifier = Modifier.size(6.dp))
                                             Text(opt.label)
                                         }
@@ -675,7 +673,7 @@ private fun ProjectHeader(
                                 DropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            if (opt == datasetGroupBy) Icon(Icons.Default.Circle, modifier = Modifier.size(6.dp))
+                                            if (opt == datasetGroupBy) AppIcon(AppIcons.SelectionDot, modifier = Modifier.size(6.dp))
                                             else Spacer(modifier = Modifier.size(6.dp))
                                             Text(opt.label)
                                         }
@@ -701,7 +699,7 @@ private fun ProjectHeader(
                             DropdownMenuItem(
                                 text = {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (sortState.field == field) Icon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource, modifier = Modifier.size(14.dp))
+                                        if (sortState.field == field) AppIcon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource, modifier = Modifier.size(14.dp))
                                         else Spacer(modifier = Modifier.size(14.dp))
                                         Text(field.label)
                                     }
@@ -734,8 +732,7 @@ private fun SamplesList(
     groupBy: SampleGroupBy = SampleGroupBy.TYPE,
     sortState: SortState = SortState(),
     onSampleClick: (String) -> Unit,
-    leadingContent: (LazyListScope.() -> Unit)? = null,
-) {
+    leadingContent: (LazyListScope.() -> Unit)? = null) {
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == SampleGroupBy.OWNER, projectId)
     if (samples.isEmpty()) {
         EmptyListCard(resourceName = "Samples", defaultIcon = AppIcons.Sample, isFiltered = isFiltered)
@@ -843,8 +840,7 @@ private fun DatasetsList(
     groupBy: DatasetGroupBy = DatasetGroupBy.MEASUREMENT,
     sortState: SortState = SortState(),
     onDatasetClick: (String) -> Unit,
-    leadingContent: (LazyListScope.() -> Unit)? = null,
-) {
+    leadingContent: (LazyListScope.() -> Unit)? = null) {
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == DatasetGroupBy.OWNER, projectId)
     if (datasets.isEmpty()) {
         EmptyListCard(resourceName = "Datasets", defaultIcon = AppIcons.Dataset, isFiltered = isFiltered)
@@ -948,7 +944,7 @@ private fun DatasetsList(
 private fun GroupStickyHeader(
     title: String,
     count: Int,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: AppIconToken,
     expanded: Boolean,
     onToggle: () -> Unit
 ) {
@@ -969,7 +965,7 @@ private fun GroupStickyHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(icon, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                AppIcon(icon, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                 Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Surface(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
@@ -983,9 +979,7 @@ private fun GroupStickyHeader(
                     )
                 }
             }
-            Icon(
-                if (expanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
-                contentDescription = if (expanded) "Collapse" else "Expand",
+            AppIcon(if (expanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
@@ -999,7 +993,7 @@ private fun GroupStickyHeader(
 private fun ResourceCard(
     title: String,
     uniqueId: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: AppIconToken,
     graphExplorerUrl: String = "",
     projectId: String? = null,
     resourceType: String = "sample",
@@ -1030,11 +1024,7 @@ private fun ResourceCard(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                icon,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
-            )
+            AppIcon(icon, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -1052,8 +1042,7 @@ private fun ResourceCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Icon(
-                AppIcons.NavigateNext,
+            AppIcon(AppIcons.NavigateNext,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )

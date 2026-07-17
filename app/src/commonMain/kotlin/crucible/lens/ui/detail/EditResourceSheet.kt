@@ -1,4 +1,7 @@
 package crucible.lens.ui.detail
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import crucible.lens.platform.*
 
 import androidx.compose.foundation.layout.*

@@ -1,4 +1,9 @@
 package crucible.lens.ui.settings
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
@@ -54,7 +59,7 @@ fun AccountScreen(
     if (showSignOutDialog) {
         AlertDialog(
             onDismissRequest = { showSignOutDialog = false },
-            icon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null) },
+            icon = { AppIcon(AppIcons.SignOut) },
             title = { Text("Sign out?") },
             text = { Text("You will need to sign in again to access Crucible.") },
             confirmButton = {
@@ -74,7 +79,7 @@ fun AccountScreen(
                 title = { Text("Account") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        AppIcon(AppIcons.Back)
                     }
                 }
             )
@@ -150,7 +155,7 @@ fun AccountScreen(
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, null, modifier = Modifier.size(18.dp))
+                        AppIcon(AppIcons.SignOut, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text("Sign out")
                     }
@@ -175,7 +180,7 @@ fun AccountScreen(
                                     visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
                                     trailingIcon = {
                                         IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
-                                            Icon(if (apiKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, if (apiKeyVisible) "Hide key" else "Show key")
+                                            AppIcon(if (apiKeyVisible) AppIcons.HideContent else AppIcons.ShowContent)
                                         }
                                     }
                                 )
@@ -208,7 +213,7 @@ private fun NotLoggedInCard(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(Icons.Default.Person, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            AppIcon(AppIcons.User, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("Sign in to view and edit your profile", style = MaterialTheme.typography.bodyMedium)
             Button(onClick = onNavigateToOrcidLogin, modifier = Modifier.fillMaxWidth()) {
                 Text("Sign in with ORCID")
@@ -224,7 +229,7 @@ private fun NotLoggedInCard(
                 visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     IconButton(onClick = onApiKeyVisibilityToggle) {
-                        Icon(if (apiKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, if (apiKeyVisible) "Hide" else "Show")
+                        AppIcon(if (apiKeyVisible) AppIcons.HideContent else AppIcons.ShowContent)
                     }
                 }
             )
@@ -261,7 +266,7 @@ private fun AccountHeaderCard(user: User) {
                             onClick = { copyToClipboard(platformCtx, user.uniqueId) },
                             modifier = Modifier.size(20.dp)
                         ) {
-                            Icon(Icons.Default.ContentCopy, "Copy ORCID", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            AppIcon(AppIcons.CopyToClipboard, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -274,14 +279,14 @@ private fun AccountHeaderCard(user: User) {
 private fun ProfileViewCard(user: User, onEdit: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            InfoRow(icon = Icons.Default.Person, label = "First name", value = user.firstName ?: "—")
-            InfoRow(icon = Icons.Default.Person, label = "Last name", value = user.lastName ?: "—")
-            InfoRow(icon = Icons.Default.Email, label = "Email", value = user.email ?: "—")
-            InfoRow(icon = Icons.Default.Badge, label = "Username", value = if (!user.username.isNullOrBlank()) "@${user.username}" else "—")
-            InfoRow(icon = Icons.Default.Badge, label = "ORCID", value = user.uniqueId ?: "—")
+            InfoRow(icon = AppIcons.User, label = "First name", value = user.firstName ?: "—")
+            InfoRow(icon = AppIcons.User, label = "Last name", value = user.lastName ?: "—")
+            InfoRow(icon = AppIcons.Email, label = "Email", value = user.email ?: "—")
+            InfoRow(icon = AppIcons.Username, label = "Username", value = if (!user.username.isNullOrBlank()) "@${user.username}" else "—")
+            InfoRow(icon = AppIcons.Username, label = "ORCID", value = user.uniqueId ?: "—")
             Spacer(Modifier.height(4.dp))
             TextButton(onClick = onEdit, modifier = Modifier.align(Alignment.End)) {
-                Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp))
+                AppIcon(AppIcons.Edit, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("Edit profile")
             }
@@ -363,8 +368,8 @@ private fun ProfileEditForm(
                 trailingIcon = {
                     when (draft.usernameCheck) {
                         is UsernameCheckState.Checking -> CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        is UsernameCheckState.Available -> Icon(Icons.Default.CheckCircle, "Available", tint = MaterialTheme.colorScheme.primary)
-                        is UsernameCheckState.Taken -> Icon(Icons.Default.Cancel, "Taken", tint = MaterialTheme.colorScheme.error)
+                        is UsernameCheckState.Available -> AppIcon(AppIcons.Success, tint = MaterialTheme.colorScheme.primary)
+                        is UsernameCheckState.Taken -> AppIcon(AppIcons.UsernameTaken, tint = MaterialTheme.colorScheme.error)
                         else -> {}
                     }
                 },

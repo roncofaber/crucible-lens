@@ -39,7 +39,7 @@ fun ManageProjectScreen(
         val displayName = user.username?.let { "@$it" } ?: listOfNotNull(user.firstName, user.lastName).joinToString(" ").ifBlank { "this member" }
         AlertDialog(
             onDismissRequest = { viewModel.cancelRemove() },
-            icon = { AppIcon(AppIcons.PersonRemove, null) },
+            icon = { AppIcon(AppIcons.PersonRemove) },
             title = { Text("Remove member?") },
             text = { Text("Remove $displayName from the project?") },
             confirmButton = {

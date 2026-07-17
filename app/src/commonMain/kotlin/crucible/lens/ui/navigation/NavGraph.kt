@@ -596,8 +596,7 @@ fun NavGraph(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
-                                Icon(
-                                    AppIcons.Error,
+                                AppIcon(AppIcons.Error,
                                     modifier = Modifier.size(64.dp),
                                     tint = MaterialTheme.colorScheme.error
                                 )
@@ -900,9 +899,7 @@ fun NavGraph(
                 },
             containerColor = MaterialTheme.colorScheme.primary
         ) {
-            Icon(
-                AppIcons.ScanQr,
-                contentDescription = "Scan QR Code",
+            AppIcon(AppIcons.ScanQr,
                 tint = MaterialTheme.colorScheme.onPrimary
             )
         }

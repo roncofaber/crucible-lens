@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,10 +23,6 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.MetadataSearchResult
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
-import crucible.lens.ui.common.AppIcon
-import crucible.lens.ui.common.AppIcons
-import crucible.lens.ui.common.AppIcon
-import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.FilterSheet
 import crucible.lens.ui.common.SearchFilters
@@ -154,8 +151,7 @@ fun SearchScreen(
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             leadingIcon = {
-                                Icon(
-                                    AppIcons.Search,
+                                AppIcon(AppIcons.Search,
                                     modifier = Modifier.size(20.dp)
                                 )
                             },
@@ -435,7 +431,7 @@ fun SearchScreen(
 }
 
 @Composable
-private fun EmptyState(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String) {
+private fun EmptyState(icon: AppIconToken, title: String, subtitle: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
     Card(
         modifier = Modifier
@@ -450,8 +446,7 @@ private fun EmptyState(icon: androidx.compose.ui.graphics.vector.ImageVector, ti
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(icon, modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            AppIcon(icon, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(subtitle, style = MaterialTheme.typography.bodySmall,
@@ -533,8 +528,7 @@ private fun DirectLookupCard(mfid: String, onClick: (String) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                AppIcons.OpenInNew,
+            AppIcon(AppIcons.OpenInNew,
                 modifier = Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.onPrimaryContainer
             )

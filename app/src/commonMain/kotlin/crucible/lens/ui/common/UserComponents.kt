@@ -62,13 +62,13 @@ fun UserSearchField(
         singleLine = true,
         enabled = enabled,
         leadingIcon = {
-            Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp))
+            AppIcon(AppIcons.Search, modifier = Modifier.size(20.dp))
         },
         trailingIcon = {
             when {
                 isSearching -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 query.isNotBlank() -> IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Default.Clear, contentDescription = "Clear")
+                    AppIcon(AppIcons.ClearInput)
                 }
             }
         }

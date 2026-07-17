@@ -6,13 +6,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIconToken
+import crucible.lens.ui.common.AppIcons
 
 @Composable
 internal fun InfoRow(
-    icon: ImageVector,
+    icon: AppIconToken,
     label: String,
     value: String,
     verticalAlignment: Alignment.Vertical = Alignment.CenterVertically
@@ -23,12 +25,7 @@ internal fun InfoRow(
             .padding(vertical = 4.dp),
         verticalAlignment = verticalAlignment
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
+        AppIcon(icon, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = "$label:",
@@ -47,7 +44,7 @@ internal fun InfoRow(
 
 @Composable
 internal fun ClickableInfoRow(
-    icon: ImageVector,
+    icon: AppIconToken,
     label: String,
     value: String,
     onClick: () -> Unit
@@ -59,12 +56,7 @@ internal fun ClickableInfoRow(
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
+        AppIcon(icon, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = "$label:",
@@ -83,12 +75,7 @@ internal fun ClickableInfoRow(
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Medium
             )
-            Icon(
-                Icons.AutoMirrored.Filled.OpenInNew,
-                contentDescription = "Open link",
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+            AppIcon(AppIcons.OpenExternal, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
         }
     }
 }

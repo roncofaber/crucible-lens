@@ -186,9 +186,7 @@ fun InstrumentListScreen(
                                 )
                                 Box {
                                     IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
-                                        Icon(
-                                            AppIcons.Sort,
-                                            contentDescription = "Sort",
+                                        AppIcon(AppIcons.Sort,
                                             modifier = Modifier.size(20.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -200,8 +198,7 @@ fun InstrumentListScreen(
                                                 text = { Text(label) },
                                                 leadingIcon = {
                                                     if (sortState.field == field)
-                                                        Icon(
-                                                            if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource,
+                                                        AppIcon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource,
                                                             modifier = Modifier.size(14.dp),
                                                             tint = MaterialTheme.colorScheme.primary
                                                         )
@@ -249,7 +246,7 @@ fun InstrumentListScreen(
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Icon(
+                                            AppIcon(
                                                 if (searchQuery.isNotBlank()) AppIcons.SearchOff else AppIcons.Instrument,
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -349,8 +346,7 @@ fun InstrumentListScreen(
                                             AppIcon(AppIcons.HideContent, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                                             Text("Hidden (${hiddenInstrumentsList.size})", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
-                                        Icon(
-                                            if (hiddenExpanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
+                                        AppIcon(if (hiddenExpanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
@@ -447,8 +443,7 @@ private fun InstrumentCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(
-                if (isHidden) AppIcons.HideContent else AppIcons.Instrument,
+            AppIcon(if (isHidden) AppIcons.HideContent else AppIcons.Instrument,
                 tint = if (isHidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
@@ -471,9 +466,7 @@ private fun InstrumentCard(
             if (!isHidden) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
                     IconButton(onClick = onTogglePin, modifier = Modifier.size(36.dp)) {
-                        Icon(
-                            if (isPinned) AppIcons.Pinned else AppIcons.PinnedEmpty,
-                            contentDescription = if (isPinned) "Unpin" else "Pin",
+                        AppIcon(if (isPinned) AppIcons.Pinned else AppIcons.PinnedEmpty,
                             tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )

@@ -1,4 +1,9 @@
 package crucible.lens.ui.detail.components
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
@@ -59,17 +64,13 @@ internal fun SampleDetailsCard(
                         },
                         modifier = Modifier.size(38.dp)
                     ) {
-                        Icon(
-                            Icons.Default.ContentCopy,
-                            contentDescription = "Copy MFID",
+                        AppIcon(AppIcons.CopyToClipboard,
                             modifier = Modifier.size(22.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
                     IconButton(onClick = onShowQr, modifier = Modifier.size(38.dp)) {
-                        Icon(
-                            Icons.Default.QrCode,
-                            contentDescription = "Show QR Code",
+                        AppIcon(AppIcons.ShowQrCode,
                             modifier = Modifier.size(22.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -103,7 +104,7 @@ internal fun SampleDetailsCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(16.dp))
+                        AppIcon(AppIcons.Warning, modifier = Modifier.size(16.dp))
                         Text(
                             "Deletion ${sampleDeletionStatus.replaceFirstChar { it.uppercase() }}",
                             style = MaterialTheme.typography.labelMedium
@@ -116,14 +117,14 @@ internal fun SampleDetailsCard(
 
             // Basic fields
             Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                InfoRow(icon = Icons.Default.Category, label = "Type", value = sample.sampleType ?: "None")
+                InfoRow(icon = AppIcons.Category, label = "Type", value = sample.sampleType ?: "None")
                 if (projectId != null) {
-                    ClickableInfoRow(icon = Icons.Default.Folder, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })
+                    ClickableInfoRow(icon = AppIcons.Project, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })
                 } else {
-                    InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
+                    InfoRow(icon = AppIcons.Project, label = "Project", value = "None")
                 }
-                InfoRow(icon = Icons.Default.Schedule, label = "Timestamp", value = formatDateTime(sample.timestamp))
-                InfoRow(icon = Icons.AutoMirrored.Filled.Notes, label = "Description", value = sample.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
+                InfoRow(icon = AppIcons.Timestamp, label = "Timestamp", value = formatDateTime(sample.timestamp))
+                InfoRow(icon = AppIcons.Notes, label = "Description", value = sample.description?.takeIf { it.isNotBlank() } ?: "None", verticalAlignment = Alignment.Top)
             }
 
             // Advanced fields
@@ -134,9 +135,9 @@ internal fun SampleDetailsCard(
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     InfoRow(
                         icon = when (sample.isPublic) {
-                            true -> Icons.Default.Public
-                            false -> Icons.Default.Lock
-                            null -> Icons.AutoMirrored.Filled.HelpOutline
+                            true -> AppIcons.Public
+                            false -> AppIcons.Private
+                            null -> AppIcons.UnknownVisibility
                         },
                         label = "Visibility",
                         value = when (sample.isPublic) { true -> "Public"; false -> "Private"; null -> "None" }
@@ -149,15 +150,15 @@ internal fun SampleDetailsCard(
                                 else append("@${sample.owner.username}")
                             }
                             ClickableInfoRow(
-                                icon = Icons.Default.Person, label = "Owner", value = ownerLabel,
+                                icon = AppIcons.User, label = "Owner", value = ownerLabel,
                                 onClick = { if (sample.ownerOrcid != null) openUrl(platformCtx, "https://orcid.org/${sample.ownerOrcid}") }
                             )
                         }
                         sample.ownerOrcid != null -> ClickableInfoRow(
-                            icon = Icons.Default.Person, label = "Owner ORCID", value = sample.ownerOrcid,
+                            icon = AppIcons.User, label = "Owner ORCID", value = sample.ownerOrcid,
                             onClick = { openUrl(platformCtx, "https://orcid.org/${sample.ownerOrcid}") }
                         )
-                        else -> InfoRow(icon = Icons.Default.Person, label = "Owner", value = "None")
+                        else -> InfoRow(icon = AppIcons.User, label = "Owner", value = "None")
                     }
                 }
 
@@ -165,8 +166,8 @@ internal fun SampleDetailsCard(
 
                 AdvancedGroupLabel("Dates")
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = formatDateTime(sample.creationTime))
-                    InfoRow(icon = Icons.Default.Update, label = "Modified", value = formatDateTime(sample.modificationTime))
+                    InfoRow(icon = AppIcons.CreationDate, label = "Created", value = formatDateTime(sample.creationTime))
+                    InfoRow(icon = AppIcons.ModificationDate, label = "Modified", value = formatDateTime(sample.modificationTime))
                 }
             }
 

@@ -1,4 +1,7 @@
 package crucible.lens.ui.settings
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.showToast

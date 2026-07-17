@@ -1,4 +1,7 @@
 package crucible.lens.ui.detail.components
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -12,19 +15,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.ResourceLink
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIconToken
+import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.StandardSizeAnim
 
 @Composable
 private fun LinkedResourceCard(
     title: String,
-    headerIcon: ImageVector,
-    rowIcon: ImageVector,
+    headerIcon: AppIconToken,
+    rowIcon: AppIconToken,
     links: List<ResourceLink>,
     onNavigateToResource: (String) -> Unit,
     onUnlink: ((uuid: String, name: String) -> Unit)?,
@@ -43,7 +48,7 @@ private fun LinkedResourceCard(
             ) {
                 ExpandChevron(expanded = expanded, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Icon(headerIcon, contentDescription = null, modifier = Modifier.size(20.dp))
+                AppIcon(headerIcon, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "$title (${links.size})",
@@ -78,7 +83,7 @@ internal fun LinkedSamplesCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) = LinkedResourceCard("Linked Samples", Icons.Default.Science, Icons.Default.Science, samples, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
+) = LinkedResourceCard("Linked Samples", AppIcons.Sample, AppIcons.Sample, samples, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun ParentSamplesCard(
@@ -87,7 +92,7 @@ internal fun ParentSamplesCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) = LinkedResourceCard("Parent Samples", Icons.Default.ArrowUpward, Icons.Default.Science, parents, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
+) = LinkedResourceCard("Parent Samples", AppIcons.ParentResource, AppIcons.Sample, parents, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun ChildSamplesCard(
@@ -96,7 +101,7 @@ internal fun ChildSamplesCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) = LinkedResourceCard("Child Samples", Icons.Default.ArrowDownward, Icons.Default.Science, children, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
+) = LinkedResourceCard("Child Samples", AppIcons.ChildResource, AppIcons.Sample, children, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun LinkedDatasetsCard(
@@ -105,7 +110,7 @@ internal fun LinkedDatasetsCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) = LinkedResourceCard("Linked Datasets", Icons.Default.Dataset, Icons.Default.DataObject, datasets, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
+) = LinkedResourceCard("Linked Datasets", AppIcons.Dataset, AppIcons.Dataset, datasets, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun ParentDatasetsCard(
@@ -114,7 +119,7 @@ internal fun ParentDatasetsCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) = LinkedResourceCard("Parent Datasets", Icons.Default.ArrowUpward, Icons.Default.DataObject, parents, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
+) = LinkedResourceCard("Parent Datasets", AppIcons.ParentResource, AppIcons.Dataset, parents, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun ChildDatasetsCard(
@@ -123,12 +128,12 @@ internal fun ChildDatasetsCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) = LinkedResourceCard("Child Datasets", Icons.Default.ArrowDownward, Icons.Default.DataObject, children, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
+) = LinkedResourceCard("Child Datasets", AppIcons.ChildResource, AppIcons.Dataset, children, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 internal fun ResourceRow(
-    icon: ImageVector,
+    icon: AppIconToken,
     name: String,
     subtitle: String? = null,
     onClick: () -> Unit,
@@ -143,12 +148,7 @@ internal fun ResourceRow(
             .padding(vertical = 10.dp, horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        AppIcon(icon, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.width(12.dp))
         if (subtitle != null) {
             Column(modifier = Modifier.weight(1f)) {
@@ -177,11 +177,6 @@ internal fun ResourceRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Icon(
-            Icons.Default.ChevronRight,
-            contentDescription = "Navigate",
-            modifier = Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-        )
+        AppIcon(AppIcons.NavigateNext, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
     }
 }

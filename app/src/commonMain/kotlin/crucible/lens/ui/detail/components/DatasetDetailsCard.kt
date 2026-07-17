@@ -1,4 +1,9 @@
 package crucible.lens.ui.detail.components
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
@@ -66,17 +71,13 @@ internal fun DatasetDetailsCard(
                         },
                         modifier = Modifier.size(38.dp)
                     ) {
-                        Icon(
-                            Icons.Default.ContentCopy,
-                            contentDescription = "Copy MFID",
+                        AppIcon(AppIcons.CopyToClipboard,
                             modifier = Modifier.size(22.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
                     IconButton(onClick = onShowQr, modifier = Modifier.size(38.dp)) {
-                        Icon(
-                            Icons.Default.QrCode,
-                            contentDescription = "Show QR Code",
+                        AppIcon(AppIcons.ShowQrCode,
                             modifier = Modifier.size(22.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -110,7 +111,7 @@ internal fun DatasetDetailsCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(16.dp))
+                        AppIcon(AppIcons.Warning, modifier = Modifier.size(16.dp))
                         Text(
                             "Deletion ${datasetDeletionStatus.replaceFirstChar { it.uppercase() }}",
                             style = MaterialTheme.typography.labelMedium
@@ -123,12 +124,12 @@ internal fun DatasetDetailsCard(
 
             // Basic fields
             Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                InfoRow(icon = Icons.Default.Science, label = "Measurement", value = dataset.measurement ?: "None")
-                InfoRow(icon = Icons.Default.Tag, label = "Session", value = dataset.sessionName ?: "None")
+                InfoRow(icon = AppIcons.Sample, label = "Measurement", value = dataset.measurement ?: "None")
+                InfoRow(icon = AppIcons.Tag, label = "Session", value = dataset.sessionName ?: "None")
                 if (dataset.instrumentName != null) {
                     val instrumentScope = rememberCoroutineScope()
                     ClickableInfoRow(
-                        icon = Icons.Default.Biotech,
+                        icon = AppIcons.Instrument,
                         label = "Instrument",
                         value = dataset.instrumentName,
                         onClick = {
@@ -146,14 +147,14 @@ internal fun DatasetDetailsCard(
                         }
                     )
                 } else {
-                    InfoRow(icon = Icons.Default.Biotech, label = "Instrument", value = "None")
+                    InfoRow(icon = AppIcons.Instrument, label = "Instrument", value = "None")
                 }
                 if (projectId != null) {
-                    ClickableInfoRow(icon = Icons.Default.Folder, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })
+                    ClickableInfoRow(icon = AppIcons.Project, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })
                 } else {
-                    InfoRow(icon = Icons.Default.Folder, label = "Project", value = "None")
+                    InfoRow(icon = AppIcons.Project, label = "Project", value = "None")
                 }
-                InfoRow(icon = Icons.Default.Schedule, label = "Timestamp", value = formatDateTime(dataset.timestamp))
+                InfoRow(icon = AppIcons.Timestamp, label = "Timestamp", value = formatDateTime(dataset.timestamp))
             }
 
             // Advanced fields
@@ -164,9 +165,9 @@ internal fun DatasetDetailsCard(
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     InfoRow(
                         icon = when (dataset.isPublic) {
-                            true  -> Icons.Default.Public
-                            false -> Icons.Default.Lock
-                            null  -> Icons.AutoMirrored.Filled.HelpOutline
+                            true  -> AppIcons.Public
+                            false -> AppIcons.Private
+                            null  -> AppIcons.UnknownVisibility
                         },
                         label = "Visibility",
                         value = when (dataset.isPublic) { true -> "Public"; false -> "Private"; null -> "None" }
@@ -179,15 +180,15 @@ internal fun DatasetDetailsCard(
                                 else append("@${dataset.owner.username}")
                             }
                             ClickableInfoRow(
-                                icon = Icons.Default.Person, label = "Owner", value = ownerLabel,
+                                icon = AppIcons.User, label = "Owner", value = ownerLabel,
                                 onClick = { if (dataset.ownerOrcid != null) openUrl(platformCtx, "https://orcid.org/${dataset.ownerOrcid}") }
                             )
                         }
                         dataset.ownerOrcid != null -> ClickableInfoRow(
-                            icon = Icons.Default.Person, label = "Owner ORCID", value = dataset.ownerOrcid,
+                            icon = AppIcons.User, label = "Owner ORCID", value = dataset.ownerOrcid,
                             onClick = { openUrl(platformCtx, "https://orcid.org/${dataset.ownerOrcid}") }
                         )
-                        else -> InfoRow(icon = Icons.Default.Person, label = "Owner", value = "None")
+                        else -> InfoRow(icon = AppIcons.User, label = "Owner", value = "None")
                     }
                 }
 
@@ -195,18 +196,18 @@ internal fun DatasetDetailsCard(
 
                 AdvancedGroupLabel("Files")
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    InfoRow(icon = Icons.Default.Description, label = "Format", value = dataset.dataFormat ?: "None")
-                    InfoRow(icon = Icons.AutoMirrored.Filled.Label, label = "Data Type", value = dataset.dataType ?: "None")
-                    InfoRow(icon = Icons.Default.Storage, label = "Size", value = dataset.size?.let { formatFileSize(it) } ?: "None")
-                    InfoRow(icon = Icons.Default.FolderOpen, label = "Source Folder", value = dataset.sourceFolder?.takeIf { it.isNotBlank() } ?: "None")
+                    InfoRow(icon = AppIcons.FilePdf, label = "Format", value = dataset.dataFormat ?: "None")
+                    InfoRow(icon = AppIcons.DataType, label = "Data Type", value = dataset.dataType ?: "None")
+                    InfoRow(icon = AppIcons.FileStorage, label = "Size", value = dataset.size?.let { formatFileSize(it) } ?: "None")
+                    InfoRow(icon = AppIcons.SourceFolder, label = "Source Folder", value = dataset.sourceFolder?.takeIf { it.isNotBlank() } ?: "None")
                 }
 
                 HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
 
                 AdvancedGroupLabel("Dates")
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    InfoRow(icon = Icons.Default.CalendarToday, label = "Created", value = formatDateTime(dataset.creationTime))
-                    InfoRow(icon = Icons.Default.Update, label = "Modified", value = formatDateTime(dataset.modificationTime))
+                    InfoRow(icon = AppIcons.CreationDate, label = "Created", value = formatDateTime(dataset.creationTime))
+                    InfoRow(icon = AppIcons.ModificationDate, label = "Modified", value = formatDateTime(dataset.modificationTime))
                 }
             }
 

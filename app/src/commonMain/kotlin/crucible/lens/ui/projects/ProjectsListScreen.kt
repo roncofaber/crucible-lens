@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -252,9 +253,7 @@ fun ProjectsListScreen(
                             onClick = onSearch,
                             modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(
-                                AppIcons.Search,
-                                contentDescription = "Search",
+                            AppIcon(AppIcons.Search,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -262,9 +261,7 @@ fun ProjectsListScreen(
                             onClick = onHome,
                             modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(
-                                AppIcons.Home,
-                                contentDescription = "Home",
+                            AppIcon(AppIcons.Home,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -314,9 +311,7 @@ fun ProjectsListScreen(
                                 )
                                 Box {
                                     IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
-                                        Icon(
-                                            AppIcons.Sort,
-                                            contentDescription = "Sort",
+                                        AppIcon(AppIcons.Sort,
                                             modifier = Modifier.size(20.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -327,8 +322,7 @@ fun ProjectsListScreen(
                                                 text = { Text(label) },
                                                 leadingIcon = {
                                                     if (sortState.field == field)
-                                                        Icon(
-                                                            if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource,
+                                                        AppIcon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource,
                                                             modifier = Modifier.size(14.dp),
                                                             tint = MaterialTheme.colorScheme.primary
                                                         )
@@ -378,8 +372,7 @@ fun ProjectsListScreen(
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Icon(
-                                                AppIcons.FolderOpen,
+                                            AppIcon(AppIcons.FolderOpen,
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                             Text(
@@ -452,8 +445,7 @@ fun ProjectsListScreen(
                                         ) {
                                             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    Icon(
-                                                        AppIcons.SearchOff,
+                                                    AppIcon(AppIcons.SearchOff,
                                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
                                                     Text(
@@ -556,8 +548,7 @@ fun ProjectsListScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(
-                                                    AppIcons.HideContent,
+                                                AppIcon(AppIcons.HideContent,
                                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     modifier = Modifier.size(18.dp)
                                                 )
@@ -567,8 +558,7 @@ fun ProjectsListScreen(
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
-                                            Icon(
-                                                if (hiddenExpanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
+                                            AppIcon(if (hiddenExpanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
@@ -687,8 +677,7 @@ private fun ProjectCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(
-                    if (isHidden) AppIcons.HideContent else AppIcons.Project,
+                AppIcon(if (isHidden) AppIcons.HideContent else AppIcons.Project,
                     tint = if (isHidden) MaterialTheme.colorScheme.onSurfaceVariant
                            else MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
@@ -739,16 +728,13 @@ private fun ProjectCard(
                         onClick = { onTogglePin() },
                         modifier = Modifier.size(40.dp)
                     ) {
-                        Icon(
-                            if (isPinned) AppIcons.Pinned else AppIcons.PinnedEmpty,
-                            contentDescription = if (isPinned) "Unpin" else "Pin",
+                        AppIcon(if (isPinned) AppIcons.Pinned else AppIcons.PinnedEmpty,
                             modifier = Modifier.size(24.dp),
                             tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                Icon(
-                    AppIcons.NavigateNext,
+                AppIcon(AppIcons.NavigateNext,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -758,7 +744,7 @@ private fun ProjectCard(
 
 @Composable
 private fun CountChip(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: AppIconToken,
     count: Int?,
     loading: Boolean,
     contentDescription: String
@@ -775,7 +761,7 @@ private fun CountChip(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Icon(
-                icon,
+                painter = org.jetbrains.compose.resources.painterResource(if (icon.filledResource != null) icon.resource else icon.resource),
                 contentDescription = contentDescription,
                 modifier = Modifier.size(12.dp),
                 tint = MaterialTheme.colorScheme.primary

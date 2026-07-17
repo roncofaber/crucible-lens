@@ -1,4 +1,7 @@
 package crucible.lens.ui.common
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween

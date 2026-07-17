@@ -1,4 +1,7 @@
 package crucible.lens.ui.scanner
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
