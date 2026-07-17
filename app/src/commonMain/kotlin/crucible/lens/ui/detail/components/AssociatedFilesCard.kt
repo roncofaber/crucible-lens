@@ -1,7 +1,6 @@
 package crucible.lens.ui.detail.components
 
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -19,6 +18,7 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.ui.common.ExpandChevron
+import crucible.lens.ui.common.StandardSizeAnim
 import crucible.lens.data.util.formatFileSize
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
@@ -115,7 +115,7 @@ internal fun AssociatedFilesCard(
 
     Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
         Card {
-            Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
+            Column(modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim)) {
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable { val new = !expanded; expanded = new; onExpandedChange(new) },
                     verticalAlignment = Alignment.CenterVertically

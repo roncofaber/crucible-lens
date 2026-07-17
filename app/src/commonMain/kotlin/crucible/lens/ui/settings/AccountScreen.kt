@@ -26,6 +26,7 @@ import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ExpandChevron
+import crucible.lens.ui.common.StandardSizeAnim
 import crucible.lens.ui.common.UserAvatar
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
@@ -158,7 +159,7 @@ fun AccountScreen(
                         Text("Sign out")
                     }
                     Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(horizontal = 16.dp).animateContentSize(tween(200))) {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp).animateContentSize(StandardSizeAnim)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth().clickable { advancedExpanded = !advancedExpanded }.padding(vertical = 16.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -315,7 +316,7 @@ private fun ProfileEditForm(
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.padding(16.dp).animateContentSize(tween(200)),
+            modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (saveError != null) {

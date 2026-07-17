@@ -1,7 +1,6 @@
 package crucible.lens.ui.detail.components
 
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -20,6 +19,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.util.formatDecimal
 import crucible.lens.ui.common.ExpandChevron
+import crucible.lens.ui.common.FastSizeAnim
+import crucible.lens.ui.common.StandardSizeAnim
 
 @Composable
 internal fun ScientificMetadataCard(
@@ -39,7 +40,7 @@ internal fun ScientificMetadataCard(
     var expandAll by remember { mutableStateOf(initialExpandAll) }
 
     Card {
-        Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
+        Column(modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -90,7 +91,7 @@ internal fun MetadataTree(data: Map<String, Any?>, indentLevel: Int, expandAll: 
             when (entryValue) {
                 is Map<*, *> -> {
                     var expanded by remember(expandAll) { mutableStateOf(expandAll) }
-                    Column(modifier = Modifier.fillMaxWidth().animateContentSize(tween(150))) {
+                    Column(modifier = Modifier.fillMaxWidth().animateContentSize(FastSizeAnim)) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

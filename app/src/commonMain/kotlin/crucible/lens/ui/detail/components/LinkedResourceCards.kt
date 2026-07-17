@@ -1,7 +1,6 @@
 package crucible.lens.ui.detail.components
 
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,6 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.ResourceLink
 import crucible.lens.ui.common.ExpandChevron
+import crucible.lens.ui.common.StandardSizeAnim
 
 @Composable
 private fun LinkedResourceCard(
@@ -36,7 +36,7 @@ private fun LinkedResourceCard(
     var expanded by remember { mutableStateOf(initialExpanded) }
 
     Card {
-        Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
+        Column(modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

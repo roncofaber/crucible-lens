@@ -1,7 +1,6 @@
 package crucible.lens.ui.detail.components
 
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -31,6 +30,7 @@ import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
 import crucible.lens.platform.showToast
 import crucible.lens.ui.common.ExpandChevron
+import crucible.lens.ui.common.StandardSizeAnim
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -48,7 +48,7 @@ internal fun DatasetDetailsCard(
     val platformCtx = getPlatformContext()
     var advanced by remember { mutableStateOf(initialAdvanced) }
     Card {
-        Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
+        Column(modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim)) {
             val projectId = dataset.projectId
 
             // Header: title + action icons (copy, open, share, QR)
