@@ -1,6 +1,7 @@
 package crucible.lens.ui.detail.components
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,6 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -46,6 +48,7 @@ internal fun DatasetDetailsCard(
 ) {
     val platformCtx = getPlatformContext()
     var advanced by remember { mutableStateOf(initialAdvanced) }
+    val chevronRotation by animateFloatAsState(targetValue = if (advanced) 0f else -90f, animationSpec = tween(200), label = "chevron")
 
     Card {
         Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
@@ -226,16 +229,16 @@ internal fun DatasetDetailsCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(
-                        if (advanced) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
                     Text(
-                        if (advanced) "Basic" else "Advanced",
+                        if (advanced) "Less" else "More",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary
+                    )
+                    Icon(
+                        Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp).rotate(chevronRotation),
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
