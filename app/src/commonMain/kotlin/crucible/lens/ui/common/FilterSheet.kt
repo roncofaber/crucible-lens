@@ -10,10 +10,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
+import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
+import crucible.lens.data.model.User
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 data class SearchFilters(
     val projectId: String = "",
     val ownerOrcid: String = "",
+    val ownerUsername: String = "",  // display only — ownerOrcid is sent to API
     val createdAfter: String = "",
     val createdBefore: String = "",
     // Dataset-specific
@@ -73,11 +80,16 @@ fun FilterSheet(
                 label = "Project ID",
                 icon = Icons.Default.Folder
             )
-            FilterTextField(
-                value = local.ownerOrcid,
-                onValueChange = { local = local.copy(ownerOrcid = it) },
-                label = "Owner ORCID",
-                icon = Icons.Default.Person
+            OwnerPickerField(
+                ownerOrcid = local.ownerOrcid,
+                ownerUsername = local.ownerUsername,
+                onOwnerSelected = { user ->
+                    local = local.copy(
+                        ownerOrcid = user.uniqueId ?: "",
+                        ownerUsername = user.username ?: user.uniqueId ?: ""
+                    )
+                },
+                onOwnerCleared = { local = local.copy(ownerOrcid = "", ownerUsername = "") }
             )
             DateTimePickerField(
                 value = local.createdAfter,
@@ -157,6 +169,90 @@ fun FilterSheet(
                 Icon(Icons.Default.FilterAlt, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(if (local.isActive) "Apply ${local.activeCount} filter${if (local.activeCount > 1) "s" else ""}" else "Apply")
+            }
+        }
+    }
+}
+
+@Composable
+private fun OwnerPickerField(
+    ownerOrcid: String,
+    ownerUsername: String,
+    onOwnerSelected: (User) -> Unit,
+    onOwnerCleared: () -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<User>>(emptyList()) }
+    var isSearching by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    if (ownerOrcid.isNotBlank()) {
+        OutlinedTextField(
+            value = if (ownerUsername.isNotBlank()) "@$ownerUsername" else ownerOrcid,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Owner") },
+            modifier = Modifier.fillMaxWidth(),
+            leadingIcon = { Icon(Icons.Default.Person, null) },
+            trailingIcon = {
+                IconButton(onClick = { query = ""; results = emptyList(); onOwnerCleared() }) {
+                    Icon(Icons.Default.Clear, "Clear owner")
+                }
+            }
+        )
+        return
+    }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = { q ->
+                query = q
+                expanded = true
+                scope.launch {
+                    if (q.length < 3) { results = emptyList(); isSearching = false; return@launch }
+                    delay(350)
+                    isSearching = true
+                    results = (ApiClient.service.searchUsers(q) as? ApiResult.Success)?.data ?: emptyList()
+                    isSearching = false
+                }
+            },
+            label = { Text("Owner") },
+            placeholder = { Text("Search by username…") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            leadingIcon = { Text("@", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp)) },
+            trailingIcon = {
+                when {
+                    isSearching -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    query.isNotBlank() -> IconButton(onClick = { query = ""; results = emptyList(); expanded = false }) {
+                        Icon(Icons.Default.Clear, "Clear")
+                    }
+                }
+            }
+        )
+        DropdownMenu(
+            expanded = expanded && results.isNotEmpty(),
+            onDismissRequest = { expanded = false },
+            properties = PopupProperties(focusable = false),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            results.take(6).forEach { user ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text("@${user.username}", style = MaterialTheme.typography.bodyMedium)
+                            val name = listOfNotNull(user.firstName, user.lastName).joinToString(" ")
+                            if (name.isNotBlank()) Text(name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    },
+                    onClick = {
+                        expanded = false
+                        query = ""
+                        onOwnerSelected(user)
+                    }
+                )
             }
         }
     }

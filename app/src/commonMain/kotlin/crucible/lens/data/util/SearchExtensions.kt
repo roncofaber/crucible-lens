@@ -12,6 +12,7 @@ fun Project.matchesSearch(query: String): Boolean {
     return (title?.lowercase()?.contains(q) == true) ||
         projectId.lowercase().contains(q) ||
         (organization?.lowercase()?.contains(q) == true) ||
+        (lead?.username?.lowercase()?.contains(q) == true) ||
         (lead?.email?.lowercase()?.contains(q) == true) ||
         (status?.lowercase()?.contains(q) == true)
 }
