@@ -6,6 +6,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -82,6 +83,7 @@ fun ManageInstrumentScreen(
                             onModelChanged = viewModel::onModelChanged,
                             onLocationChanged = viewModel::onLocationChanged,
                             onOwnerChanged = viewModel::onOwnerChanged,
+                            onDescriptionChanged = viewModel::onDescriptionChanged,
                             onSave = { viewModel.save() },
                             onCancel = { viewModel.cancelEdit() }
                         )
@@ -102,6 +104,12 @@ private fun InstrumentInfoCard(instrument: Instrument) {
             InfoRow(icon = Icons.Default.Straighten, label = "Model", value = instrument.model ?: "—")
             InfoRow(icon = Icons.Default.Place, label = "Location", value = instrument.location ?: "—")
             InfoRow(icon = Icons.Default.Person, label = "Owner", value = instrument.owner ?: "—")
+            if (!instrument.description.isNullOrBlank()) {
+                InfoRow(icon = Icons.AutoMirrored.Filled.Notes, label = "Description", value = instrument.description)
+            }
+            if (!instrument.otherId.isNullOrBlank()) {
+                InfoRow(icon = Icons.Default.Tag, label = "External ID", value = instrument.otherId + (instrument.otherIdSource?.let { " ($it)" } ?: ""))
+            }
             InfoRow(icon = Icons.Default.Tag, label = "ID", value = instrument.uniqueId)
         }
     }
@@ -118,6 +126,7 @@ private fun InstrumentEditCard(
     onModelChanged: (String) -> Unit,
     onLocationChanged: (String) -> Unit,
     onOwnerChanged: (String) -> Unit,
+    onDescriptionChanged: (String) -> Unit,
     onSave: () -> Unit,
     onCancel: () -> Unit
 ) {
@@ -136,7 +145,8 @@ private fun InstrumentEditCard(
             OutlinedTextField(draft.manufacturer, onManufacturerChanged, label = { Text("Manufacturer") }, modifier = Modifier.fillMaxWidth(), enabled = !isSaving, singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next))
             OutlinedTextField(draft.model, onModelChanged, label = { Text("Model") }, modifier = Modifier.fillMaxWidth(), enabled = !isSaving, singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next))
             OutlinedTextField(draft.location, onLocationChanged, label = { Text("Location") }, modifier = Modifier.fillMaxWidth(), enabled = !isSaving, singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next))
-            OutlinedTextField(draft.owner, onOwnerChanged, label = { Text("Owner") }, modifier = Modifier.fillMaxWidth(), enabled = !isSaving, singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done))
+            OutlinedTextField(draft.owner, onOwnerChanged, label = { Text("Owner") }, modifier = Modifier.fillMaxWidth(), enabled = !isSaving, singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next))
+            OutlinedTextField(draft.description, onDescriptionChanged, label = { Text("Description") }, modifier = Modifier.fillMaxWidth(), enabled = !isSaving, minLines = 2, maxLines = 4, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f), enabled = !isSaving) { Text("Cancel") }

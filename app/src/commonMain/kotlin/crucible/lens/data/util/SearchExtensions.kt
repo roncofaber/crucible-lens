@@ -23,8 +23,7 @@ fun Sample.matchesSearch(query: String): Boolean {
         (sampleType?.lowercase()?.contains(q) == true) ||
         (projectId?.lowercase()?.contains(q) == true) ||
         uniqueId.lowercase().contains(q) ||
-        (ownerOrcid?.lowercase()?.contains(q) == true) ||
-        (keywords?.any { it.lowercase().contains(q) } == true)
+        (ownerOrcid?.lowercase()?.contains(q) == true)
 }
 
 fun Dataset.matchesSearch(query: String): Boolean {
@@ -39,9 +38,6 @@ fun Dataset.matchesSearch(query: String): Boolean {
         (dataFormat?.lowercase()?.contains(q) == true) ||
         (ownerOrcid?.lowercase()?.contains(q) == true) ||
         (sourceFolder?.lowercase()?.contains(q) == true) ||
-        (fileToUpload?.lowercase()?.contains(q) == true) ||
-        (sha256Hash?.lowercase()?.contains(q) == true) ||
-        (keywords?.any { it.lowercase().contains(q) } == true) ||
         (scientificMetadata?.matchesSearch(q) == true)
 }
 

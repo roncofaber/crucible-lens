@@ -11,8 +11,6 @@ sealed class CrucibleResource {
     abstract val name: String
     abstract val description: String?
     open val resourceType: String? get() = null
-    // keywords are served by a separate endpoint; inline here for future API support
-    open val keywords: List<String>? get() = null
 }
 
 @Serializable
@@ -55,12 +53,7 @@ data class Dataset(
     @SerialName("source_folder") val sourceFolder: String? = null,
     @SerialName("session_name") val sessionName: String? = null,
     @SerialName("data_type") val dataType: String? = null,
-    @SerialName("file_to_upload") val fileToUpload: String? = null,
     @SerialName("size") val size: Long? = null,
-    @SerialName("sha256_hash_file_to_upload") val sha256Hash: String? = null,
-    @SerialName("ingestion_githash") val ingestionGithash: String? = null,
-    @SerialName("ingestion_class") val ingestionClass: String? = null,
-    @SerialName("keywords") override val keywords: List<String>? = null,
     @SerialName("resource_type") override val resourceType: String? = null,
     @SerialName("deletion_request") val deletionRequest: JsonObject? = null,
     @SerialName("links") val links: List<ResourceLink>? = null,
@@ -163,7 +156,8 @@ data class InstrumentUpdateRequest(
     @SerialName("manufacturer") val manufacturer: String? = null,
     @SerialName("model") val model: String? = null,
     @SerialName("location") val location: String? = null,
-    @SerialName("owner") val owner: String? = null
+    @SerialName("owner") val owner: String? = null,
+    @SerialName("description") val description: String? = null
 )
 
 @Serializable
@@ -189,6 +183,9 @@ data class Instrument(
     @SerialName("model") val model: String? = null,
     @SerialName("owner") val owner: String? = null,
     @SerialName("location") val location: String? = null,
+    @SerialName("description") val description: String? = null,
+    @SerialName("other_id") val otherId: String? = null,
+    @SerialName("other_id_source") val otherIdSource: String? = null,
     @SerialName("creation_time") val createdAt: String? = null,
     @SerialName("modification_time") val modifiedAt: String? = null,
     @SerialName("resource_type") val resourceType: String? = null

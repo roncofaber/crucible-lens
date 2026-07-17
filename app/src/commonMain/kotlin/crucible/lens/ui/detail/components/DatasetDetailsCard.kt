@@ -203,7 +203,6 @@ internal fun DatasetDetailsCard(
                     InfoRow(icon = Icons.AutoMirrored.Filled.Label, label = "Data Type", value = dataset.dataType ?: "None")
                     InfoRow(icon = Icons.Default.Storage, label = "Size", value = dataset.size?.let { formatFileSize(it) } ?: "None")
                     InfoRow(icon = Icons.Default.FolderOpen, label = "Source Folder", value = dataset.sourceFolder?.takeIf { it.isNotBlank() } ?: "None")
-                    InfoRow(icon = Icons.Default.Security, label = "SHA-256", value = dataset.sha256Hash ?: "None")
                 }
 
                 HorizontalDivider(modifier = Modifier.padding(top = 8.dp))

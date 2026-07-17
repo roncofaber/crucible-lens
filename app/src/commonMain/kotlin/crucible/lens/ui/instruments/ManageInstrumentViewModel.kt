@@ -26,7 +26,8 @@ sealed class InstrumentEditState {
         val manufacturer: String,
         val model: String,
         val location: String,
-        val owner: String
+        val owner: String,
+        val description: String
     ) : InstrumentEditState()
     object Saving : InstrumentEditState()
     data class SaveError(val draft: Editing, val message: String) : InstrumentEditState()
@@ -65,7 +66,8 @@ class ManageInstrumentViewModel : ViewModel() {
             manufacturer = instrument.manufacturer ?: "",
             model = instrument.model ?: "",
             location = instrument.location ?: "",
-            owner = instrument.owner ?: ""
+            owner = instrument.owner ?: "",
+            description = instrument.description ?: ""
         )
     }
 
@@ -77,6 +79,7 @@ class ManageInstrumentViewModel : ViewModel() {
     fun onModelChanged(v: String) = updateDraft { it.copy(model = v) }
     fun onLocationChanged(v: String) = updateDraft { it.copy(location = v) }
     fun onOwnerChanged(v: String) = updateDraft { it.copy(owner = v) }
+    fun onDescriptionChanged(v: String) = updateDraft { it.copy(description = v) }
 
     fun save() {
         val draft = currentDraft() ?: return
@@ -91,7 +94,8 @@ class ManageInstrumentViewModel : ViewModel() {
                     manufacturer = draft.manufacturer.trim().ifBlank { null },
                     model = draft.model.trim().ifBlank { null },
                     location = draft.location.trim().ifBlank { null },
-                    owner = draft.owner.trim().ifBlank { null }
+                    owner = draft.owner.trim().ifBlank { null },
+                    description = draft.description.trim().ifBlank { null }
                 )
             )
             when (result) {

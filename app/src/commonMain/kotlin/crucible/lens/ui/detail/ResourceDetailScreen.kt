@@ -1016,15 +1016,6 @@ fun ResourceDetailScreen(
                             initialExpanded = pageGetCardState("download_links"),
                             onExpandedChange = { pageSetCardState("download_links", it) }
                         )
-                        AnimatedVisibility(
-                            visible = !displayResource.keywords.isNullOrEmpty(),
-                            enter = fadeIn(tween(200)) + expandVertically(),
-                            exit = fadeOut(tween(150)) + shrinkVertically()
-                        ) {
-                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                                KeywordsCard(displayResource.keywords.orEmpty())
-                            }
-                        }
                     }
                     is Sample -> {
                         AnimatedVisibility(
@@ -1085,15 +1076,6 @@ fun ResourceDetailScreen(
                                     onExpandedChange = { pageSetCardState("sci_meta_expanded", it) },
                                     onExpandAllChange = { pageSetCardState("sci_meta_expand_all", it) }
                                 )
-                            }
-                        }
-                        AnimatedVisibility(
-                            visible = !displayResource.keywords.isNullOrEmpty(),
-                            enter = fadeIn(tween(200)) + expandVertically(),
-                            exit = fadeOut(tween(150)) + shrinkVertically()
-                        ) {
-                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                                KeywordsCard(displayResource.keywords.orEmpty())
                             }
                         }
                     }
