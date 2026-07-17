@@ -1,7 +1,6 @@
 package crucible.lens.ui.detail.components
 
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,7 +17,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -32,6 +30,7 @@ import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
 import crucible.lens.platform.showToast
+import crucible.lens.ui.common.ExpandChevron
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -48,8 +47,6 @@ internal fun DatasetDetailsCard(
 ) {
     val platformCtx = getPlatformContext()
     var advanced by remember { mutableStateOf(initialAdvanced) }
-    val chevronRotation by animateFloatAsState(targetValue = if (advanced) 0f else -90f, animationSpec = tween(200), label = "chevron")
-
     Card {
         Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
             val projectId = dataset.projectId
@@ -230,16 +227,11 @@ internal fun DatasetDetailsCard(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        if (advanced) "Less" else "More",
+                        if (advanced) "Basic" else "Advanced",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    Icon(
-                        Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp).rotate(chevronRotation),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    ExpandChevron(expanded = advanced, modifier = Modifier.size(16.dp))
                 }
             }
         }

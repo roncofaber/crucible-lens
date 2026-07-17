@@ -1,7 +1,6 @@
 package crucible.lens.ui.detail.components
 
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -16,12 +15,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.ResourceLink
+import crucible.lens.ui.common.ExpandChevron
 
 @Composable
 private fun LinkedResourceCard(
@@ -35,11 +34,6 @@ private fun LinkedResourceCard(
     onExpandChange: (Boolean) -> Unit
 ) {
     var expanded by remember { mutableStateOf(initialExpanded) }
-    val iconRotation by animateFloatAsState(
-        targetValue = if (expanded) 0f else -90f,
-        animationSpec = tween(200),
-        label = "expand_icon"
-    )
 
     Card {
         Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
@@ -49,12 +43,7 @@ private fun LinkedResourceCard(
                     .clickable { val new = !expanded; expanded = new; onExpandChange(new) },
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp).rotate(iconRotation),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                ExpandChevron(expanded = expanded, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Icon(headerIcon, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
@@ -100,7 +89,7 @@ internal fun ParentSamplesCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) = LinkedResourceCard("Parent Samples", Icons.Default.ArrowUpward, Icons.Default.BubbleChart, parents, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
+) = LinkedResourceCard("Parent Samples", Icons.Default.ArrowUpward, Icons.Default.Science, parents, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun ChildSamplesCard(
@@ -109,7 +98,7 @@ internal fun ChildSamplesCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) = LinkedResourceCard("Child Samples", Icons.Default.ArrowDownward, Icons.Default.BubbleChart, children, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
+) = LinkedResourceCard("Child Samples", Icons.Default.ArrowDownward, Icons.Default.Science, children, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun LinkedDatasetsCard(

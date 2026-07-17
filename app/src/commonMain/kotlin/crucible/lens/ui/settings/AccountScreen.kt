@@ -25,6 +25,7 @@ import crucible.lens.data.model.User
 import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.UserAvatar
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
@@ -164,7 +165,7 @@ fun AccountScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text("Advanced", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                Icon(if (advancedExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                ExpandChevron(expanded = advancedExpanded)
                             }
                             if (advancedExpanded) {
                                 Text("Manually set API key (for service accounts)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))

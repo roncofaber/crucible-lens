@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
+import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.data.util.formatFileSize
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
@@ -119,7 +120,7 @@ internal fun AssociatedFilesCard(
                     modifier = Modifier.fillMaxWidth().clickable { val new = !expanded; expanded = new; onExpandedChange(new) },
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                    ExpandChevron(expanded = expanded, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(4.dp))
                     Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))

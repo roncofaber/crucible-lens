@@ -1,7 +1,6 @@
 package crucible.lens.ui.detail.components
 
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,10 +16,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.util.formatDecimal
+import crucible.lens.ui.common.ExpandChevron
 
 @Composable
 internal fun ScientificMetadataCard(
@@ -51,12 +50,7 @@ internal fun ScientificMetadataCard(
                         .clickable { val new = !expanded; expanded = new; onExpandedChange(new) },
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = if (expanded) "Collapse" else "Expand",
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    ExpandChevron(expanded = expanded, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(Icons.AutoMirrored.Filled.ListAlt, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
@@ -96,12 +90,6 @@ internal fun MetadataTree(data: Map<String, Any?>, indentLevel: Int, expandAll: 
             when (entryValue) {
                 is Map<*, *> -> {
                     var expanded by remember(expandAll) { mutableStateOf(expandAll) }
-                    val nodeRotation by animateFloatAsState(
-                        targetValue = if (expanded) 0f else -90f,
-                        animationSpec = tween(150),
-                        label = "node_expand_icon"
-                    )
-
                     Column(modifier = Modifier.fillMaxWidth().animateContentSize(tween(150))) {
                         Row(
                             modifier = Modifier
@@ -111,12 +99,7 @@ internal fun MetadataTree(data: Map<String, Any?>, indentLevel: Int, expandAll: 
                                 .padding(start = (indentLevel * 16).dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.ExpandMore,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp).rotate(nodeRotation),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
+                            ExpandChevron(expanded = expanded, modifier = Modifier.size(16.dp), fast = true)
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = formatKey(entryKey),
