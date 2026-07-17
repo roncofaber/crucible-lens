@@ -128,11 +128,11 @@ internal fun DatasetDetailsCard(
             // Basic fields
             Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 InfoRow(icon = Icons.Default.Science, label = "Measurement", value = dataset.measurement ?: "None")
-                InfoRow(icon = Icons.Default.PlayCircle, label = "Session", value = dataset.sessionName ?: "None")
+                InfoRow(icon = Icons.Default.Tag, label = "Session", value = dataset.sessionName ?: "None")
                 if (dataset.instrumentName != null) {
                     val instrumentScope = rememberCoroutineScope()
                     ClickableInfoRow(
-                        icon = Icons.Default.Build,
+                        icon = Icons.Default.Biotech,
                         label = "Instrument",
                         value = dataset.instrumentName,
                         onClick = {
@@ -150,7 +150,7 @@ internal fun DatasetDetailsCard(
                         }
                     )
                 } else {
-                    InfoRow(icon = Icons.Default.Build, label = "Instrument", value = "None")
+                    InfoRow(icon = Icons.Default.Biotech, label = "Instrument", value = "None")
                 }
                 if (projectId != null) {
                     ClickableInfoRow(icon = Icons.Default.Folder, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })

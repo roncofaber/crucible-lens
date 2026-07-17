@@ -85,6 +85,7 @@ import crucible.lens.data.model.Sample
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.util.MONTH_NAMES
 import crucible.lens.data.util.dateGroupKey
+import crucible.lens.data.util.monthBounds
 import crucible.lens.data.util.formatFileSize
 import crucible.lens.data.util.formatDecimal
 import crucible.lens.ui.metadata.MetadataHolder
@@ -102,22 +103,22 @@ import crucible.lens.ui.detail.components.*
 
 private data class UnlinkRequest(val name: String, val otherUuid: String, val action: suspend () -> Unit)
 
-private val DAYS_IN_MONTH = intArrayOf(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-private fun isLeapYear(y: Int) = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+private fun List<Sample>.filterSiblings(groupBy: String?, resource: Sample) =
+    filter { s -> when (groupBy) {
+        "DATE"  -> dateGroupKey(s.timestamp) == dateGroupKey(resource.timestamp)
+        "OWNER" -> s.ownerOrcid == resource.ownerOrcid
+        else    -> s.sampleType == resource.sampleType
+    } }.sortedBy { it.uniqueId }
 
-private fun monthBounds(raw: String?): Pair<String, String>? {
-    if (raw == null) return null
-    return try {
-        // Parse YYYY-MM from ISO 8601 string (handles offset and local forms)
-        val s = raw.trim().replace("T", " ")
-        val year = s.substring(0, 4).toInt()
-        val month = s.substring(5, 7).toInt()
-        val daysInMonth = if (month == 2 && isLeapYear(year)) 29 else DAYS_IN_MONTH[month - 1]
-        val mm = month.toString().padStart(2, '0')
-        val dd = daysInMonth.toString().padStart(2, '0')
-        "${year}-${mm}-01T00:00:00" to "${year}-${mm}-${dd}T23:59:59"
-    } catch (_: Exception) { null }
-}
+private fun List<Dataset>.filterSiblings(groupBy: String?, resource: Dataset) =
+    filter { d -> when (groupBy) {
+        "INSTRUMENT" -> d.instrumentName == resource.instrumentName
+        "DATE"       -> dateGroupKey(d.timestamp) == dateGroupKey(resource.timestamp)
+        "FORMAT"     -> d.dataFormat == resource.dataFormat
+        "SESSION"    -> d.sessionName == resource.sessionName
+        "OWNER"      -> d.ownerOrcid == resource.ownerOrcid
+        else         -> d.measurement == resource.measurement
+    } }.sortedBy { it.uniqueId }
 
 private fun siblingGroupLabel(groupBy: String?, resource: CrucibleResource): String = when (groupBy) {
     "MEASUREMENT" -> "Measurement"
@@ -201,15 +202,10 @@ fun ResourceDetailScreen(
             is Sample -> {
                 val projectId = resource.projectId
                 if (projectId == null) { siblingsResolved = true; return@LaunchedEffect }
-                fun List<Sample>.filterAndSort() = filter { s -> when (siblingGroupBy) {
-                    "DATE"  -> dateGroupKey(s.timestamp) == dateGroupKey(resource.timestamp)
-                    "OWNER" -> s.ownerOrcid == resource.ownerOrcid
-                    else    -> s.sampleType == resource.sampleType
-                } }.sortedBy { it.uniqueId }
                 // Fast path: use existing project cache
                 val cached = CacheManager.getProjectSamples(projectId)
                 if (cached != null) {
-                    val filtered = cached.filterAndSort()
+                    val filtered = cached.filterSiblings(siblingGroupBy, resource)
                     val sorted = if (filtered.any { it.uniqueId == resource.uniqueId }) filtered else (filtered + resource).sortedBy { it.uniqueId }
                     cached.forEach { s -> val rich = CacheManager.getResource(s.uniqueId) as? Sample; if (rich != null) { enrichedUuids.add(s.uniqueId); loadedResources[s.uniqueId] = rich } }
                     sameTypeSamples = sorted
@@ -253,18 +249,10 @@ fun ResourceDetailScreen(
             is Dataset -> {
                 val projectId = resource.projectId
                 if (projectId == null) { siblingsResolved = true; return@LaunchedEffect }
-                fun List<Dataset>.filterAndSort() = filter { d -> when (siblingGroupBy) {
-                    "INSTRUMENT" -> d.instrumentName == resource.instrumentName
-                    "DATE"       -> dateGroupKey(d.timestamp) == dateGroupKey(resource.timestamp)
-                    "FORMAT"     -> d.dataFormat == resource.dataFormat
-                    "SESSION"    -> d.sessionName == resource.sessionName
-                    "OWNER"      -> d.ownerOrcid == resource.ownerOrcid
-                    else         -> d.measurement == resource.measurement
-                } }.sortedBy { it.uniqueId }
                 // Fast path: use existing project cache
                 val cached = CacheManager.getProjectDatasets(projectId)
                 if (cached != null) {
-                    val filtered = cached.filterAndSort()
+                    val filtered = cached.filterSiblings(siblingGroupBy, resource)
                     val sorted = if (filtered.any { it.uniqueId == resource.uniqueId }) filtered else (filtered + resource).sortedBy { it.uniqueId }
                     cached.forEach { d -> val rich = CacheManager.getResource(d.uniqueId) as? Dataset; if (rich != null) { enrichedUuids.add(d.uniqueId); loadedResources[d.uniqueId] = rich } }
                     sameTypeDatasets = sorted
@@ -319,14 +307,9 @@ fun ResourceDetailScreen(
             when (resource) {
                 is Sample -> {
                     val projectId = resource.projectId ?: run { siblingsResolved = true; return }
-                    fun List<Sample>.filterAndSort() = filter { s -> when (groupBy) {
-                        "DATE"  -> dateGroupKey(s.timestamp) == dateGroupKey(resource.timestamp)
-                        "OWNER" -> s.ownerOrcid == resource.ownerOrcid
-                        else    -> s.sampleType == resource.sampleType
-                    } }.sortedBy { it.uniqueId }
                     val cached = CacheManager.getProjectSamples(projectId)
                     if (cached != null) {
-                        val sorted = cached.filterAndSort().let { f ->
+                        val sorted = cached.filterSiblings(groupBy, resource).let { f ->
                             if (f.any { it.uniqueId == resource.uniqueId }) f else (f + resource).sortedBy { it.uniqueId }
                         }
                         sameTypeSamples = sorted
@@ -355,17 +338,9 @@ fun ResourceDetailScreen(
                 }
                 is Dataset -> {
                     val projectId = resource.projectId ?: run { siblingsResolved = true; return }
-                    fun List<Dataset>.filterAndSort() = filter { d -> when (groupBy) {
-                        "INSTRUMENT" -> d.instrumentName == resource.instrumentName
-                        "DATE"       -> dateGroupKey(d.timestamp) == dateGroupKey(resource.timestamp)
-                        "FORMAT"     -> d.dataFormat == resource.dataFormat
-                        "SESSION"    -> d.sessionName == resource.sessionName
-                        "OWNER"      -> d.ownerOrcid == resource.ownerOrcid
-                        else         -> d.measurement == resource.measurement
-                    } }.sortedBy { it.uniqueId }
                     val cached = CacheManager.getProjectDatasets(projectId)
                     if (cached != null) {
-                        val sorted = cached.filterAndSort().let { f ->
+                        val sorted = cached.filterSiblings(groupBy, resource).let { f ->
                             if (f.any { it.uniqueId == resource.uniqueId }) f else (f + resource).sortedBy { it.uniqueId }
                         }
                         sameTypeDatasets = sorted
@@ -1035,7 +1010,7 @@ fun ResourceDetailScreen(
                                 )
                             }
                         }
-                        DownloadLinksCard(
+                        AssociatedFilesCard(
                             datasetUuid = pageResource.uniqueId,
                             initialExpanded = pageGetCardState("download_links"),
                             onExpandedChange = { pageSetCardState("download_links", it) }
@@ -1299,72 +1274,3 @@ fun ResourceDetailScreen(
 }
 
 
-@Composable
-private fun DeletionRequestDialog(
-    resource: CrucibleResource,
-    onDismiss: () -> Unit,
-    onSubmitted: () -> Unit
-) {
-    var reason by remember { mutableStateOf("") }
-    var isSubmitting by remember { mutableStateOf(false) }
-    var errorMsg by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
-        title = { Text("Request deletion") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "Submit a deletion request for \"${resource.name}\". An admin will review it.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                OutlinedTextField(
-                    value = reason,
-                    onValueChange = { reason = it },
-                    label = { Text("Reason (optional)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    maxLines = 4,
-                    textStyle = MaterialTheme.typography.bodyMedium,
-                )
-                if (errorMsg != null) {
-                    Text(errorMsg!!, color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.labelSmall)
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    scope.launch {
-                        isSubmitting = true
-                        errorMsg = null
-                        try {
-                            val resp = ApiClient.service.requestDeletion(
-                                resourceId = resource.uniqueId,
-                                reason = reason.trim().ifBlank { null }
-                            )
-                            when (resp) {
-                                is ApiResult.Success -> onSubmitted()
-                                is ApiResult.Error -> errorMsg = "Failed (${resp.code}) — a request may already exist"
-                            }
-                        } catch (e: Exception) {
-                            errorMsg = "Network error: ${e.message}"
-                        } finally {
-                            isSubmitting = false
-                        }
-                    }
-                },
-                enabled = !isSubmitting
-            ) {
-                if (isSubmitting) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                else Text("Submit")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
-}

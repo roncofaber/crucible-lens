@@ -358,7 +358,7 @@ private fun DatasetEditFields(
         label = { Text("Session") },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
-        leadingIcon = { Icon(Icons.Default.PlayCircle, contentDescription = null) }
+        leadingIcon = { Icon(Icons.Default.Tag, contentDescription = null) }
     )
     InstrumentPickerField(
         value = instrumentName,

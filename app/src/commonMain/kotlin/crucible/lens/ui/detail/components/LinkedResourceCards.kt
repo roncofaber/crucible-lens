@@ -12,19 +12,77 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.ResourceLink
+
+@Composable
+private fun LinkedResourceCard(
+    title: String,
+    headerIcon: ImageVector,
+    rowIcon: ImageVector,
+    links: List<ResourceLink>,
+    onNavigateToResource: (String) -> Unit,
+    onUnlink: ((uuid: String, name: String) -> Unit)?,
+    initialExpanded: Boolean,
+    onExpandChange: (Boolean) -> Unit
+) {
+    var expanded by remember { mutableStateOf(initialExpanded) }
+    val iconRotation by animateFloatAsState(
+        targetValue = if (expanded) 0f else -90f,
+        animationSpec = tween(200),
+        label = "expand_icon"
+    )
+
+    Card {
+        Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { val new = !expanded; expanded = new; onExpandChange(new) },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    modifier = Modifier.size(20.dp).rotate(iconRotation),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(headerIcon, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "$title (${links.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            if (expanded) {
+                Column(
+                    modifier = Modifier.padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    for (link in links) {
+                        ResourceRow(
+                            icon = rowIcon,
+                            name = link.name ?: "",
+                            onClick = { onNavigateToResource(link.uniqueId) },
+                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name ?: "") } }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 internal fun LinkedSamplesCard(
@@ -33,56 +91,7 @@ internal fun LinkedSamplesCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) {
-    var expanded by remember { mutableStateOf(initialExpanded) }
-    val iconRotation by animateFloatAsState(
-        targetValue = if (expanded) 0f else -90f,
-        animationSpec = tween(200),
-        label = "expand_icon"
-    )
-
-    Card {
-        Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { val new = !expanded; expanded = new; onExpandChange(new) },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp).rotate(iconRotation),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(Icons.Default.Science, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Linked Samples (${samples.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (expanded) {
-                Column(
-                    modifier = Modifier.padding(top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    for (link in samples) {
-                        ResourceRow(
-                            icon = Icons.Default.BubbleChart,
-                            name = link.name ?: "",
-                            onClick = { onNavigateToResource(link.uniqueId) },
-                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name ?: "") } }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
+) = LinkedResourceCard("Linked Samples", Icons.Default.Science, Icons.Default.Science, samples, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun ParentSamplesCard(
@@ -91,56 +100,7 @@ internal fun ParentSamplesCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) {
-    var expanded by remember { mutableStateOf(initialExpanded) }
-    val iconRotation by animateFloatAsState(
-        targetValue = if (expanded) 0f else -90f,
-        animationSpec = tween(200),
-        label = "expand_icon"
-    )
-
-    Card {
-        Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { val new = !expanded; expanded = new; onExpandChange(new) },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp).rotate(iconRotation),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(Icons.Default.ArrowUpward, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Parent Samples (${parents.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (expanded) {
-                Column(
-                    modifier = Modifier.padding(top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    for (link in parents) {
-                        ResourceRow(
-                            icon = Icons.Default.BubbleChart,
-                            name = link.name ?: "",
-                            onClick = { onNavigateToResource(link.uniqueId) },
-                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name ?: "") } }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
+) = LinkedResourceCard("Parent Samples", Icons.Default.ArrowUpward, Icons.Default.BubbleChart, parents, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun ChildSamplesCard(
@@ -149,56 +109,7 @@ internal fun ChildSamplesCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) {
-    var expanded by remember { mutableStateOf(initialExpanded) }
-    val iconRotation by animateFloatAsState(
-        targetValue = if (expanded) 0f else -90f,
-        animationSpec = tween(200),
-        label = "expand_icon"
-    )
-
-    Card {
-        Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { val new = !expanded; expanded = new; onExpandChange(new) },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp).rotate(iconRotation),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(Icons.Default.ArrowDownward, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Child Samples (${children.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (expanded) {
-                Column(
-                    modifier = Modifier.padding(top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    for (link in children) {
-                        ResourceRow(
-                            icon = Icons.Default.BubbleChart,
-                            name = link.name ?: "",
-                            onClick = { onNavigateToResource(link.uniqueId) },
-                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name ?: "") } }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
+) = LinkedResourceCard("Child Samples", Icons.Default.ArrowDownward, Icons.Default.BubbleChart, children, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun LinkedDatasetsCard(
@@ -207,56 +118,7 @@ internal fun LinkedDatasetsCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) {
-    var expanded by remember { mutableStateOf(initialExpanded) }
-    val iconRotation by animateFloatAsState(
-        targetValue = if (expanded) 0f else -90f,
-        animationSpec = tween(200),
-        label = "expand_icon"
-    )
-
-    Card {
-        Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { val new = !expanded; expanded = new; onExpandChange(new) },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp).rotate(iconRotation),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(Icons.Default.Dataset, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Linked Datasets (${datasets.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (expanded) {
-                Column(
-                    modifier = Modifier.padding(top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    for (link in datasets) {
-                        ResourceRow(
-                            icon = Icons.Default.DataObject,
-                            name = link.name ?: "",
-                            onClick = { onNavigateToResource(link.uniqueId) },
-                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name ?: "") } }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
+) = LinkedResourceCard("Linked Datasets", Icons.Default.Dataset, Icons.Default.DataObject, datasets, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun ParentDatasetsCard(
@@ -265,56 +127,7 @@ internal fun ParentDatasetsCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) {
-    var expanded by remember { mutableStateOf(initialExpanded) }
-    val iconRotation by animateFloatAsState(
-        targetValue = if (expanded) 0f else -90f,
-        animationSpec = tween(200),
-        label = "expand_icon"
-    )
-
-    Card {
-        Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { val new = !expanded; expanded = new; onExpandChange(new) },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp).rotate(iconRotation),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(Icons.Default.ArrowUpward, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Parent Datasets (${parents.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (expanded) {
-                Column(
-                    modifier = Modifier.padding(top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    for (link in parents) {
-                        ResourceRow(
-                            icon = Icons.Default.DataObject,
-                            name = link.name ?: "",
-                            onClick = { onNavigateToResource(link.uniqueId) },
-                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name ?: "") } }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
+) = LinkedResourceCard("Parent Datasets", Icons.Default.ArrowUpward, Icons.Default.DataObject, parents, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun ChildDatasetsCard(
@@ -323,90 +136,12 @@ internal fun ChildDatasetsCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) {
-    var expanded by remember { mutableStateOf(initialExpanded) }
-    val iconRotation by animateFloatAsState(
-        targetValue = if (expanded) 0f else -90f,
-        animationSpec = tween(200),
-        label = "expand_icon"
-    )
-
-    Card {
-        Column(modifier = Modifier.padding(16.dp).animateContentSize(tween(200))) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { val new = !expanded; expanded = new; onExpandChange(new) },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp).rotate(iconRotation),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(Icons.Default.ArrowDownward, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Child Datasets (${children.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (expanded) {
-                Column(
-                    modifier = Modifier.padding(top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    for (link in children) {
-                        ResourceRow(
-                            icon = Icons.Default.DataObject,
-                            name = link.name ?: "",
-                            onClick = { onNavigateToResource(link.uniqueId) },
-                            onLongClick = onUnlink?.let { { it(link.uniqueId, link.name ?: "") } }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-internal fun KeywordsCard(keywords: List<String>) {
-    Card {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Tag, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Keywords",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                keywords.forEach { keyword ->
-                    AssistChip(
-                        onClick = { },
-                        label = { Text(keyword) }
-                    )
-                }
-            }
-        }
-    }
-}
+) = LinkedResourceCard("Child Datasets", Icons.Default.ArrowDownward, Icons.Default.DataObject, children, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 internal fun ResourceRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     name: String,
     subtitle: String? = null,
     onClick: () -> Unit,

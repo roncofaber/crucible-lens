@@ -279,7 +279,7 @@ private fun ProfileViewCard(user: User, onEdit: () -> Unit) {
             InfoRow(icon = Icons.Default.Person, label = "First name", value = user.firstName ?: "—")
             InfoRow(icon = Icons.Default.Person, label = "Last name", value = user.lastName ?: "—")
             InfoRow(icon = Icons.Default.Email, label = "Email", value = user.email ?: "—")
-            InfoRow(icon = Icons.Default.AlternateEmail, label = "Username", value = if (!user.username.isNullOrBlank()) "@${user.username}" else "—")
+            InfoRow(icon = Icons.Default.Badge, label = "Username", value = if (!user.username.isNullOrBlank()) "@${user.username}" else "—")
             InfoRow(icon = Icons.Default.Badge, label = "ORCID", value = user.uniqueId ?: "—")
             Spacer(Modifier.height(4.dp))
             TextButton(onClick = onEdit, modifier = Modifier.align(Alignment.End)) {

@@ -207,7 +207,7 @@ fun CreateDatasetScreen(
                 label = { Text("Session") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                leadingIcon = { Icon(Icons.Default.PlayCircle, contentDescription = null) }
+                leadingIcon = { Icon(Icons.Default.Tag, contentDescription = null) }
             )
             InstrumentPickerField(value = instrumentName, onValueChange = { instrumentName = it }, modifier = Modifier.fillMaxWidth())
             DateTimePickerField(value = timestamp, onValueChange = { timestamp = it }, modifier = Modifier.fillMaxWidth())

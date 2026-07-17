@@ -96,7 +96,7 @@ fun ManageInstrumentScreen(
 private fun InstrumentInfoCard(instrument: Instrument) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            InfoRow(icon = Icons.Default.Build, label = "Name", value = instrument.instrumentName ?: "—")
+            InfoRow(icon = Icons.Default.Biotech, label = "Name", value = instrument.instrumentName ?: "—")
             InfoRow(icon = Icons.Default.Category, label = "Type", value = instrument.instrumentType ?: "—")
             InfoRow(icon = Icons.Default.Factory, label = "Manufacturer", value = instrument.manufacturer ?: "—")
             InfoRow(icon = Icons.Default.Straighten, label = "Model", value = instrument.model ?: "—")

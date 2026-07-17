@@ -52,7 +52,7 @@ internal fun ScientificMetadataCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = if (expanded) "Collapse" else "Expand",
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.primary
