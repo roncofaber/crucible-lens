@@ -42,6 +42,8 @@ import crucible.lens.ui.detail.UiState
 import crucible.lens.ui.detail.ResourceDetailScreen
 import crucible.lens.ui.projects.ProjectsListScreen
 import crucible.lens.ui.projects.ProjectDetailScreen
+import crucible.lens.ui.projects.ManageProjectScreen
+import crucible.lens.ui.projects.ManageProjectViewModel
 import crucible.lens.ui.instruments.InstrumentListScreen
 import crucible.lens.ui.instruments.InstrumentDetailScreen
 import crucible.lens.ui.common.LoadingContent
@@ -700,8 +702,22 @@ fun NavGraph(
                 },
                 onCreateDataset = {
                     navController.navigate(Screen.CreateDataset.createRoute(projectId))
+                },
+                onManageProject = {
+                    navController.navigate(Screen.ManageProject.createRoute(projectId))
                 }
             )
+        }
+
+        composable(
+            route = Screen.ManageProject.route,
+            arguments = listOf(navArgument("projectId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val projectId = backStackEntry.arguments?.getString("projectId") ?: ""
+            val manageViewModel = viewModel<ManageProjectViewModel>()
+            val currentUsername by prefs.userProfile.collectAsStateWithLifecycle(null)
+            LaunchedEffect(projectId) { manageViewModel.init(projectId, currentUsername?.username) }
+            ManageProjectScreen(viewModel = manageViewModel, onBack = navigateBack)
         }
 
         composable(Screen.Instruments.route) {

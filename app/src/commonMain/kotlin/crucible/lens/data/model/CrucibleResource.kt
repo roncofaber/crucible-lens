@@ -155,6 +155,13 @@ data class Project(
 )
 
 @Serializable
+data class ProjectUpdateRequest(
+    @SerialName("title") val title: String? = null,
+    @SerialName("organization") val organization: String? = null,
+    @SerialName("project_lead_username") val projectLeadUsername: String? = null
+)
+
+@Serializable
 data class MetadataSearchResult(
     val id: Int? = null,
     @SerialName("unique_id") val uniqueId: String,

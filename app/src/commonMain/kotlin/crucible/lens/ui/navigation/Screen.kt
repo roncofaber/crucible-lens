@@ -17,6 +17,9 @@ sealed class Screen(val route: String) {
     object ProjectDetail : Screen("project/{projectId}") {
         fun createRoute(projectId: String) = "project/$projectId"
     }
+    object ManageProject : Screen("project/{projectId}/manage") {
+        fun createRoute(projectId: String) = "project/${encodeRouteSegment(projectId)}/manage"
+    }
     object Detail : Screen("detail/{mfid}?groupBy={groupBy}") {
         fun createRoute(mfid: String, groupBy: String? = null) =
             "detail/${encodeRouteSegment(mfid)}?groupBy=${groupBy ?: ""}"

@@ -118,6 +118,14 @@ class CrucibleApiService(
         ))
     }
 
+    suspend fun searchUsers(q: String, limit: Int = 20): ApiResult<List<User>> = safeCall {
+        client.get("${baseUrl}users/search") {
+            header("Authorization", "Bearer $apiKey")
+            url.parameters.append("q", q)
+            url.parameters.append("limit", limit.toString())
+        }.body<List<User>>()
+    }
+
     suspend fun checkUsernameAvailability(username: String, currentUniqueId: String): ApiResult<Boolean> = safeCall {
         val results = client.get("${baseUrl}users/search") {
             header("Authorization", "Bearer $apiKey")
@@ -493,6 +501,32 @@ class CrucibleApiService(
             url.parameters.append("limit", limit.toString())
             url.parameters.append("offset", offset.toString())
         }.body<PaginatedResponse<User>>()
+    }
+
+    suspend fun updateProject(
+        projectId: String,
+        title: String? = null,
+        organization: String? = null,
+        projectLeadUsername: String? = null
+    ): ApiResult<Project> = safeCall {
+        patch("projects/$projectId", crucible.lens.data.model.ProjectUpdateRequest(
+            title = title,
+            organization = organization,
+            projectLeadUsername = projectLeadUsername
+        ))
+    }
+
+    suspend fun addProjectMember(projectId: String, username: String): ApiResult<Boolean> = safeCall {
+        client.post("${baseUrl}projects/$projectId/users/0") {
+            header("Authorization", "Bearer $apiKey")
+            url.parameters.append("username", username)
+        }.status.value in 200..299
+    }
+
+    suspend fun removeProjectMember(projectId: String, userOrcid: String): ApiResult<Boolean> = safeCall {
+        client.delete("${baseUrl}projects/$projectId/users/$userOrcid") {
+            header("Authorization", "Bearer $apiKey")
+        }.status.value in 200..299
     }
 
     suspend fun searchSamples(q: String, projectId: String? = null, limit: Int = 20): ApiResult<List<Sample>> = safeCall {

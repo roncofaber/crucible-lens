@@ -184,6 +184,7 @@ fun ProjectDetailScreen(
     isHidden: Boolean = false,
     onCreateSample: () -> Unit = {},
     onCreateDataset: () -> Unit = {},
+    onManageProject: () -> Unit = {},
 ) {
     val project = remember(projectId) {
         CacheManager.getProjects()?.find { it.projectId == projectId }
@@ -318,6 +319,12 @@ fun ProjectDetailScreen(
                                     text = { Text("New Dataset") },
                                     leadingIcon = { Icon(Icons.Default.Dataset, contentDescription = null) },
                                     onClick = { topBarMenuExpanded = false; onCreateDataset() }
+                                )
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Manage project") },
+                                    leadingIcon = { Icon(Icons.Default.ManageAccounts, contentDescription = null) },
+                                    onClick = { topBarMenuExpanded = false; onManageProject() }
                                 )
                                 OpenInWebMenuItem { topBarMenuExpanded = false; openUrl(ctx, "$graphExplorerUrl/$projectId") }
                                 ShareMenuItem { topBarMenuExpanded = false; shareText(ctx, "$graphExplorerUrl/$projectId", project?.title ?: projectId) }
