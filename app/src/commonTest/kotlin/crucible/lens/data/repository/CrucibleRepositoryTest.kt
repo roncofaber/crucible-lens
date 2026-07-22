@@ -80,4 +80,16 @@ class CrucibleRepositoryTest {
         val repository = CrucibleRepository(ApiClient(), CacheManager())
         repository.invalidateProjectData("project-1")
     }
+
+    @Test
+    fun observeInstrumentDatasetsEmitsNullWhenNotCached() = runTest {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        assertNull(repository.observeInstrumentDatasets("Microscope A").first())
+    }
+
+    @Test
+    fun invalidateInstrumentDatasetsIsSafeNoOpWhenNotCached() {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        repository.invalidateInstrumentDatasets("Microscope A")
+    }
 }

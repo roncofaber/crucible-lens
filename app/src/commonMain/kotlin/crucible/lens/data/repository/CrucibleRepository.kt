@@ -242,4 +242,28 @@ class CrucibleRepository(
         projectSamplesObservableCache.invalidate(projectId)
         projectDatasetsObservableCache.invalidate(projectId)
     }
+
+    private val instrumentDatasetsObservableCache = ObservableCache<String, List<Dataset>>(
+        ttlMillis = 10 * 60 * 1000L,
+        maxSize = 15
+    )
+
+    /** Cache-first dataset-by-instrument fetch. Caches on success. */
+    suspend fun fetchInstrumentDatasets(
+        instrumentName: String,
+        forceRefresh: Boolean = false
+    ): ApiResult<List<Dataset>> {
+        if (!forceRefresh) {
+            instrumentDatasetsObservableCache.get(instrumentName)?.let { return ApiResult.Success(it) }
+        }
+        return api.getDatasetsByInstrument(instrumentName).also { result ->
+            if (result is ApiResult.Success) instrumentDatasetsObservableCache.put(instrumentName, result.data)
+        }
+    }
+
+    fun observeInstrumentDatasets(instrumentName: String): Flow<List<Dataset>?> =
+        instrumentDatasetsObservableCache.observe(instrumentName)
+
+    fun invalidateInstrumentDatasets(instrumentName: String) =
+        instrumentDatasetsObservableCache.invalidate(instrumentName)
 }
