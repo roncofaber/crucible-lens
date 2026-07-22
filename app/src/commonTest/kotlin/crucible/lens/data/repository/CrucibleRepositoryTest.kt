@@ -2,9 +2,11 @@ package crucible.lens.data.repository
 
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.model.Sample
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class CrucibleRepositoryTest {
@@ -91,5 +93,36 @@ class CrucibleRepositoryTest {
     fun invalidateInstrumentDatasetsIsSafeNoOpWhenNotCached() {
         val repository = CrucibleRepository(ApiClient(), CacheManager())
         repository.invalidateInstrumentDatasets("Microscope A")
+    }
+
+    @Test
+    fun observeThumbnailsEmitsNullWhenNotCached() = runTest {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        assertNull(repository.observeThumbnails("dataset-uuid").first())
+    }
+
+    @Test
+    fun invalidateThumbnailsIsSafeNoOpWhenNotCached() {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        repository.invalidateThumbnails("dataset-uuid")
+    }
+
+    @Test
+    fun fetchSiblingsReturnsSingleItemListWhenResourceHasNoProjectId() = runTest {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        val sample = Sample(uniqueId = "s1", sampleName = "Sample 1", projectId = null)
+        val result = repository.fetchSiblings(sample, groupBy = null)
+        assertEquals(listOf(sample), result)
+    }
+
+    @Test
+    fun fetchSiblingsFallsBackToSingleItemWhenNetworkUnavailable() = runTest {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        val sample = Sample(uniqueId = "s1", sampleName = "A", projectId = "p1", sampleType = "TypeX")
+        // No project cache populated and no real network in this JVM unit test — getFilteredSamples
+        // will throw or return an error; fetchSiblings must not propagate that as a crash, and must
+        // still return a list containing at least the resource itself.
+        val result = repository.fetchSiblings(sample, groupBy = null)
+        assertEquals(true, result.any { it.uniqueId == "s1" })
     }
 }

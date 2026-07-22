@@ -10,6 +10,7 @@ import crucible.lens.data.model.Instrument
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.Thumbnail
+import crucible.lens.data.util.monthBounds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -97,10 +98,18 @@ class CrucibleRepository(
         is Dataset -> resource.links != null
     }
 
-    suspend fun fetchThumbnails(datasetUuid: String): List<Thumbnail> = withContext(Dispatchers.Default) {
+    private val thumbnailObservableCache = ObservableCache<String, List<Thumbnail>>(
+        ttlMillis = 10 * 60 * 1000L,
+        maxSize = 20
+    )
+
+    suspend fun fetchThumbnails(datasetUuid: String, forceRefresh: Boolean = false): List<Thumbnail> = withContext(Dispatchers.Default) {
+        if (!forceRefresh) {
+            thumbnailObservableCache.get(datasetUuid)?.let { return@withContext it }
+        }
         try {
             when (val result = api.getThumbnails(datasetUuid)) {
-                is ApiResult.Success -> result.data
+                is ApiResult.Success -> result.data.also { thumbnailObservableCache.put(datasetUuid, it) }
                 is ApiResult.Error -> emptyList()
             }
         } catch (e: CancellationException) {
@@ -109,6 +118,10 @@ class CrucibleRepository(
             emptyList()
         }
     }
+
+    fun observeThumbnails(uuid: String): Flow<List<Thumbnail>?> = thumbnailObservableCache.observe(uuid)
+
+    fun invalidateThumbnails(uuid: String) = thumbnailObservableCache.invalidate(uuid)
 
     private val projectsObservableCache = ObservableCache<Unit, List<Project>>(
         ttlMillis = 10 * 60 * 1000L,
@@ -266,4 +279,79 @@ class CrucibleRepository(
 
     fun invalidateInstrumentDatasets(instrumentName: String) =
         instrumentDatasetsObservableCache.invalidate(instrumentName)
+
+    /**
+     * Resolves the sibling list for [resource] within its project, applying [groupBy]
+     * filtering. Cache-first via the project sample/dataset list cache; falls back to a
+     * filtered API call scoped to the group when no cached project list is available.
+     * Always returns a list containing at least [resource] itself.
+     */
+    suspend fun fetchSiblings(resource: CrucibleResource, groupBy: String?): List<CrucibleResource> {
+        return when (resource) {
+            is Sample -> {
+                val projectId = resource.projectId ?: return listOf(resource)
+                val cached = projectSamplesObservableCache.get(projectId)
+                if (cached != null) {
+                    cached.filterSiblings(groupBy, resource).ensureContains(resource)
+                } else {
+                    val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
+                    when (val resp = withContext(Dispatchers.Default) {
+                        api.getFilteredSamples(
+                            projectId = projectId,
+                            sampleType = if (groupBy == null || groupBy == "TYPE") resource.sampleType else null,
+                            ownerOrcid = if (groupBy == "OWNER") resource.ownerOrcid else null,
+                            creationTimeGte = bounds?.first, creationTimeLte = bounds?.second
+                        )
+                    }) {
+                        is ApiResult.Success -> resp.data.ensureContains(resource)
+                        is ApiResult.Error -> listOf(resource)
+                    }
+                }
+            }
+            is Dataset -> {
+                val projectId = resource.projectId ?: return listOf(resource)
+                val cached = projectDatasetsObservableCache.get(projectId)
+                if (cached != null) {
+                    cached.filterSiblings(groupBy, resource).ensureContains(resource)
+                } else {
+                    val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
+                    when (val resp = withContext(Dispatchers.Default) {
+                        api.getFilteredDatasets(
+                            projectId = projectId,
+                            measurement = if (groupBy == null || groupBy == "MEASUREMENT") resource.measurement else null,
+                            instrumentName = if (groupBy == "INSTRUMENT") resource.instrumentName else null,
+                            dataFormat = if (groupBy == "FORMAT") resource.dataFormat else null,
+                            sessionName = if (groupBy == "SESSION") resource.sessionName else null,
+                            ownerOrcid = if (groupBy == "OWNER") resource.ownerOrcid else null,
+                            creationTimeGte = bounds?.first, creationTimeLte = bounds?.second
+                        )
+                    }) {
+                        is ApiResult.Success -> resp.data.ensureContains(resource)
+                        is ApiResult.Error -> listOf(resource)
+                    }
+                }
+            }
+        }
+    }
 }
+
+private fun <T : CrucibleResource> List<T>.ensureContains(resource: T): List<T> =
+    if (any { it.uniqueId == resource.uniqueId }) sortedBy { it.uniqueId }
+    else (this + resource).sortedBy { it.uniqueId }
+
+private fun List<Sample>.filterSiblings(groupBy: String?, resource: Sample) =
+    filter { s -> when (groupBy) {
+        "DATE"  -> crucible.lens.data.util.dateGroupKey(s.timestamp) == crucible.lens.data.util.dateGroupKey(resource.timestamp)
+        "OWNER" -> s.ownerOrcid == resource.ownerOrcid
+        else    -> s.sampleType == resource.sampleType
+    } }.sortedBy { it.uniqueId }
+
+private fun List<Dataset>.filterSiblings(groupBy: String?, resource: Dataset) =
+    filter { d -> when (groupBy) {
+        "INSTRUMENT" -> d.instrumentName == resource.instrumentName
+        "DATE"       -> crucible.lens.data.util.dateGroupKey(d.timestamp) == crucible.lens.data.util.dateGroupKey(resource.timestamp)
+        "FORMAT"     -> d.dataFormat == resource.dataFormat
+        "SESSION"    -> d.sessionName == resource.sessionName
+        "OWNER"      -> d.ownerOrcid == resource.ownerOrcid
+        else         -> d.measurement == resource.measurement
+    } }.sortedBy { it.uniqueId }
