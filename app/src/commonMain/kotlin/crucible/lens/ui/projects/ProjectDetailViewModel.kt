@@ -18,7 +18,10 @@ import kotlinx.coroutines.launch
 
 data class ProjectContent(val samples: List<Sample>, val datasets: List<Dataset>)
 
-class ProjectDetailViewModel : ViewModel() {
+class ProjectDetailViewModel(
+    private val apiClient: ApiClient,
+    private val cacheManager: CacheManager
+) : ViewModel() {
 
     private val _loadState = MutableStateFlow<LoadState<ProjectContent>>(LoadState.Loading)
     val loadState: StateFlow<LoadState<ProjectContent>> = _loadState.asStateFlow()
@@ -36,8 +39,8 @@ class ProjectDetailViewModel : ViewModel() {
                     LoadState.Success(current, isRefreshing = true)
                 else LoadState.Loading
 
-                val cachedSamples = CacheManager.getProjectSamples(projectId)
-                val cachedDatasets = CacheManager.getProjectDatasets(projectId)
+                val cachedSamples = cacheManager.getProjectSamples(projectId)
+                val cachedDatasets = cacheManager.getProjectDatasets(projectId)
 
                 if (cachedSamples != null && cachedDatasets != null && !forceRefresh) {
                     _loadState.value = LoadState.Success(
@@ -56,16 +59,16 @@ class ProjectDetailViewModel : ViewModel() {
                 }
 
                 val (samplesResp, datasetsResp) = coroutineScope {
-                    val s = async { ApiClient.service.getSamplesByProject(projectId) }
-                    val d = async { ApiClient.service.getDatasetsByProject(projectId) }
+                    val s = async { apiClient.service.getSamplesByProject(projectId) }
+                    val d = async { apiClient.service.getDatasetsByProject(projectId) }
                     s.await() to d.await()
                 }
                 val samples = (samplesResp as? ApiResult.Success)?.data
                 val datasets = (datasetsResp as? ApiResult.Success)?.data
 
                 if (samples != null && datasets != null) {
-                    CacheManager.cacheProjectSamples(projectId, samples)
-                    CacheManager.cacheProjectDatasets(projectId, datasets)
+                    cacheManager.cacheProjectSamples(projectId, samples)
+                    cacheManager.cacheProjectDatasets(projectId, datasets)
                     _loadState.value = LoadState.Success(ProjectContent(samples, datasets))
                 } else {
                     _loadState.value = LoadState.Error("Failed to load project data")

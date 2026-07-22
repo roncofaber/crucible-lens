@@ -33,7 +33,10 @@ sealed class ProjectEditState {
     data class SaveError(val draft: Editing, val message: String) : ProjectEditState()
 }
 
-class ManageProjectViewModel : ViewModel() {
+class ManageProjectViewModel(
+    private val apiClient: ApiClient,
+    private val cacheManager: CacheManager
+) : ViewModel() {
 
     private val _state = MutableStateFlow<ManageProjectState>(ManageProjectState.Loading)
     val state: StateFlow<ManageProjectState> = _state.asStateFlow()
@@ -70,13 +73,13 @@ class ManageProjectViewModel : ViewModel() {
     fun load() {
         viewModelScope.launch {
             _state.value = ManageProjectState.Loading
-            val projectResult = ApiClient.service.getProjects()
+            val projectResult = apiClient.service.getProjects()
             val project = (projectResult as? ApiResult.Success)?.data?.find { it.projectId == projectId }
             if (project == null) {
                 _state.value = ManageProjectState.Error("Project not found")
                 return@launch
             }
-            val members = (ApiClient.service.getProjectUsers(projectId) as? ApiResult.Success)?.data ?: emptyList()
+            val members = (apiClient.service.getProjectUsers(projectId) as? ApiResult.Success)?.data ?: emptyList()
             val uname = currentUserUsername
             val isLead = uname != null &&
                 project.lead?.username?.lowercase() == uname.lowercase()
@@ -110,7 +113,7 @@ class ManageProjectViewModel : ViewModel() {
         updateEditDraft { it.copy(isLeadSearching = true) }
         leadSearchJob = viewModelScope.launch {
             delay(400)
-            val results = (ApiClient.service.searchUsers(value) as? ApiResult.Success)?.data ?: emptyList()
+            val results = (apiClient.service.searchUsers(value) as? ApiResult.Success)?.data ?: emptyList()
             updateEditDraft { it.copy(leadSearch = results, isLeadSearching = false) }
         }
     }
@@ -126,7 +129,7 @@ class ManageProjectViewModel : ViewModel() {
         _editState.value = ProjectEditState.Saving
         viewModelScope.launch {
             val loaded = _state.value as? ManageProjectState.Loaded
-            val result = ApiClient.service.updateProject(
+            val result = apiClient.service.updateProject(
                 projectId = projectId,
                 title = draft.title.trim().ifBlank { null },
                 organization = draft.organization.trim().ifBlank { null },
@@ -134,7 +137,7 @@ class ManageProjectViewModel : ViewModel() {
             )
             when (result) {
                 is ApiResult.Success -> {
-                    CacheManager.clearProjectsCache()
+                    cacheManager.clearProjectsCache()
                     val members = loaded?.members ?: emptyList()
                     val uname2 = currentUserUsername
                     val isLead = uname2 != null &&
@@ -158,7 +161,7 @@ class ManageProjectViewModel : ViewModel() {
         memberSearchJob = viewModelScope.launch {
             delay(350)
             _isMemberSearching.value = true
-            _memberSearchResults.value = (ApiClient.service.searchUsers(query) as? ApiResult.Success)?.data ?: emptyList()
+            _memberSearchResults.value = (apiClient.service.searchUsers(query) as? ApiResult.Success)?.data ?: emptyList()
             _isMemberSearching.value = false
         }
     }
@@ -167,7 +170,7 @@ class ManageProjectViewModel : ViewModel() {
         val username = user.username ?: return
         viewModelScope.launch {
             _isAddingMember.value = true
-            val result = ApiClient.service.addProjectMember(projectId, username)
+            val result = apiClient.service.addProjectMember(projectId, username)
             if (result is ApiResult.Success && result.data) {
                 val loaded = _state.value as? ManageProjectState.Loaded
                 if (loaded != null && loaded.members.none { it.uniqueId == user.uniqueId }) {
@@ -187,7 +190,7 @@ class ManageProjectViewModel : ViewModel() {
         val orcid = user.uniqueId ?: return
         _pendingRemove.value = null
         viewModelScope.launch {
-            val result = ApiClient.service.removeProjectMember(projectId, orcid)
+            val result = apiClient.service.removeProjectMember(projectId, orcid)
             if (result is ApiResult.Success && result.data) {
                 val loaded = _state.value as? ManageProjectState.Loaded
                 if (loaded != null) {

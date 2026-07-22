@@ -14,7 +14,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.Project
@@ -27,6 +26,8 @@ import crucible.lens.ui.common.InstrumentPickerField
 import crucible.lens.ui.create.CreateDatasetViewModel
 import crucible.lens.ui.create.SaveState
 import kotlinx.serialization.json.JsonObject
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun CreateDatasetScreen(
@@ -51,10 +52,11 @@ fun CreateDatasetScreen(
     // (remember is wiped when the screen leaves composition; FilesHolder bridges the gap).
     var pendingFiles by remember { mutableStateOf(FilesHolder.files) }
 
-    val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
+    val cacheManager = koinInject<CacheManager>()
+    val projects: List<Project> = remember { cacheManager.getProjects() ?: emptyList() }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
 
-    val createViewModel: CreateDatasetViewModel = viewModel()
+    val createViewModel: CreateDatasetViewModel = koinViewModel()
     val saveState by createViewModel.saveState.collectAsState()
     val isSaving = saveState is SaveState.Saving
     val snackbarHostState = remember { SnackbarHostState() }

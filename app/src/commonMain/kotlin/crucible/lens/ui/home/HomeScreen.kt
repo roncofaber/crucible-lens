@@ -39,13 +39,14 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.data.model.Project
-import crucible.lens.data.util.fetchProjectData
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.allLoadingMessages
 import crucible.lens.ui.common.fadeEndEdge
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
+import org.koin.compose.koinInject
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -78,6 +79,9 @@ fun HomeScreen(
     var showEasterEggDialog by remember { mutableStateOf(false) }
     var clickCount by remember { mutableIntStateOf(0) }
     val platformContext = getPlatformContext()
+    val apiClient = koinInject<ApiClient>()
+    val cacheManager = koinInject<CacheManager>()
+    val repository = koinInject<CrucibleRepository>()
     var backPressedOnce by remember { mutableStateOf(false) }
 
     BackPressHandler(enabled = !backPressedOnce) {
@@ -91,7 +95,7 @@ fun HomeScreen(
         }
     }
 
-    var allProjects by remember { mutableStateOf(CacheManager.getProjects() ?: emptyList()) }
+    var allProjects by remember { mutableStateOf(cacheManager.getProjects() ?: emptyList()) }
     var fetchError by remember { mutableStateOf<String?>(null) }
     var retryTrigger by remember { mutableIntStateOf(0) }
     var isPreloading by remember { mutableStateOf(false) }
@@ -105,16 +109,16 @@ fun HomeScreen(
 
     LaunchedEffect(apiKey, retryTrigger) {
         if (apiKey.isNullOrBlank()) return@LaunchedEffect
-        val cached = CacheManager.getProjects()
+        val cached = cacheManager.getProjects()
         if (cached != null) {
             allProjects = cached
             fetchError = null
         } else {
             try {
-                when (val response = ApiClient.service.getProjects()) {
+                when (val response = apiClient.service.getProjects()) {
                     is crucible.lens.data.api.ApiResult.Success -> {
                         val projects = response.data
-                        CacheManager.cacheProjects(projects)
+                        cacheManager.cacheProjects(projects)
                         allProjects = projects
                         fetchError = null
                     }
@@ -132,10 +136,10 @@ fun HomeScreen(
 
     LaunchedEffect(apiKey) {
         if (apiKey.isNullOrBlank()) return@LaunchedEffect
-        if (CacheManager.getInstruments() != null) return@LaunchedEffect
+        if (cacheManager.getInstruments() != null) return@LaunchedEffect
         try {
-            (ApiClient.service.getInstruments() as? crucible.lens.data.api.ApiResult.Success)?.data
-                ?.also { CacheManager.cacheInstruments(it) }
+            (apiClient.service.getInstruments() as? crucible.lens.data.api.ApiResult.Success)?.data
+                ?.also { cacheManager.cacheInstruments(it) }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (_: Exception) { }
@@ -156,7 +160,7 @@ fun HomeScreen(
             batch.forEach { project ->
                 launch(kotlinx.coroutines.Dispatchers.Default) {
                     try {
-                        fetchProjectData(project.projectId)
+                        repository.fetchProjectData(project.projectId)
                         consecutiveFailures = 0
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
@@ -182,7 +186,7 @@ fun HomeScreen(
         allProjects.filter { it.projectId in pinnedProjects }
     }
     val pinnedInstrumentList = remember(pinnedInstruments) {
-        CacheManager.getInstruments()?.filter { it.uniqueId in pinnedInstruments } ?: emptyList()
+        cacheManager.getInstruments()?.filter { it.uniqueId in pinnedInstruments } ?: emptyList()
     }
 
     val isBackgroundLoading = isSyncing || isPreloading

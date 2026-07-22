@@ -34,6 +34,7 @@ import crucible.lens.ui.scanner.QRCodeScannerView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 
 private enum class Direction { THEY_ARE_PARENT, THEY_ARE_CHILD }
@@ -47,6 +48,8 @@ fun LinkResourceSheet(
 ) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val apiClient = koinInject<ApiClient>()
+    val cacheManager = koinInject<CacheManager>()
 
     var input by remember { mutableStateOf("") }
     var resolvedType by remember { mutableStateOf<String?>(null) }
@@ -81,8 +84,8 @@ fun LinkResourceSheet(
         }
         delay(300)
         isSearchingNames = true
-        val samples = (ApiClient.service.searchSamples(q, projectId, limit = 6) as? ApiResult.Success)?.data ?: emptyList()
-        val datasets = (ApiClient.service.searchDatasets(q, projectId, limit = 6) as? ApiResult.Success)?.data ?: emptyList()
+        val samples = (apiClient.service.searchSamples(q, projectId, limit = 6) as? ApiResult.Success)?.data ?: emptyList()
+        val datasets = (apiClient.service.searchDatasets(q, projectId, limit = 6) as? ApiResult.Success)?.data ?: emptyList()
         searchResults = (samples + datasets).filter { it.uniqueId != resource.uniqueId }.take(6)
         isSearchingNames = false
     }
@@ -96,7 +99,7 @@ fun LinkResourceSheet(
         }
         isResolving = true
         resolvedType = try {
-            when (val resp = ApiClient.service.getResource(trimmed)) {
+            when (val resp = apiClient.service.getResource(trimmed)) {
                 is ApiResult.Success -> {
                     resolvedUuid = trimmed
                     val resource = resp.data
@@ -114,7 +117,7 @@ fun LinkResourceSheet(
 
     val isSameType = resolvedType == currentType
     val projectNames = remember {
-        CacheManager.getProjects()?.associate { it.projectId to (it.title ?: it.projectId) } ?: emptyMap<String, String>()
+        cacheManager.getProjects()?.associate { it.projectId to (it.title ?: it.projectId) } ?: emptyMap<String, String>()
     }
 
     ModalBottomSheet(
@@ -388,7 +391,7 @@ fun LinkResourceSheet(
                                     snackbarHostState.showSnackbar("Couldn't identify resource type")
                                     return@launch
                                 }
-                                val ok = performLink(resource, currentType, targetUuid, targetType, direction)
+                                val ok = performLink(apiClient, resource, currentType, targetUuid, targetType, direction)
                                 if (ok) {
                                     onLinked()
                                 } else {
@@ -435,13 +438,14 @@ private fun buildLinkDescription(currentType: String, targetType: String): Strin
 }
 
 private suspend fun performLink(
+    apiClient: ApiClient,
     current: CrucibleResource,
     currentType: String,
     targetUuid: String,
     targetType: String,
     direction: Direction
 ): Boolean {
-    val api = ApiClient.service
+    val api = apiClient.service
     val resp = when {
         currentType == "sample" && targetType == "sample" -> {
             if (direction == Direction.THEY_ARE_PARENT)

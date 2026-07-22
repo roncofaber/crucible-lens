@@ -27,8 +27,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import crucible.lens.ui.common.SearchBar
 
-import crucible.lens.data.api.ApiClient
-import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
@@ -43,12 +41,13 @@ import crucible.lens.ui.common.ToggleHiddenMenuItem
 import crucible.lens.platform.showToast
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
-import androidx.lifecycle.viewmodel.compose.viewModel
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.LoadState
 import crucible.lens.ui.common.ScrollToTopButton
-import crucible.lens.data.util.fetchProjectData
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -64,7 +63,9 @@ fun ProjectsListScreen(
     onToggleHide: (String) -> Unit = {},
 ) {
     val platformContext = getPlatformContext()
-    val viewModel: ProjectsListViewModel = viewModel()
+    val viewModel: ProjectsListViewModel = koinViewModel()
+    val repository = koinInject<CrucibleRepository>()
+    val cacheManager = koinInject<CacheManager>()
     val loadState by viewModel.loadState.collectAsState()
     val projectCounts by viewModel.projectCounts.collectAsState()
     // Persistent cache summaries - loaded immediately for instant display
@@ -109,7 +110,7 @@ fun ProjectsListScreen(
             batch.forEach { project ->
                 launch(kotlinx.coroutines.Dispatchers.Default) {
                     try {
-                        fetchProjectData(
+                        repository.fetchProjectData(
                             projectId = project.projectId,
                             onCountsAvailable = { sampleCount, datasetCount ->
                                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -289,11 +290,11 @@ fun ProjectsListScreen(
                                         project.lead?.email?.contains(searchQuery, ignoreCase = true) == true
 
                                     // Search in cached samples
-                                    val matchesSamples = CacheManager.getProjectSamples(project.projectId)
+                                    val matchesSamples = cacheManager.getProjectSamples(project.projectId)
                                         ?.any { it.matchesSearch(searchQuery) } == true
 
                                     // Search in cached datasets (including metadata)
-                                    val matchesDatasets = CacheManager.getProjectDatasets(project.projectId)
+                                    val matchesDatasets = cacheManager.getProjectDatasets(project.projectId)
                                         ?.any { it.matchesSearch(searchQuery) } == true
 
                                     matchesProject || matchesSamples || matchesDatasets

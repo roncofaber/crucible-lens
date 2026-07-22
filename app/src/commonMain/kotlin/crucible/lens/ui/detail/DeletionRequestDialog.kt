@@ -12,6 +12,7 @@ import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.CrucibleResource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 @Composable
 internal fun DeletionRequestDialog(
@@ -23,6 +24,7 @@ internal fun DeletionRequestDialog(
     var isSubmitting by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val apiClient = koinInject<ApiClient>()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -59,7 +61,7 @@ internal fun DeletionRequestDialog(
                         isSubmitting = true
                         errorMsg = null
                         try {
-                            val resp = ApiClient.service.requestDeletion(
+                            val resp = apiClient.service.requestDeletion(
                                 resourceId = resource.uniqueId,
                                 reason = reason.trim().ifBlank { null }
                             )

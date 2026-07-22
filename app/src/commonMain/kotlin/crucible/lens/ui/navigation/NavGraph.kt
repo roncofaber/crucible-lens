@@ -16,10 +16,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.CreationExtras
-import androidx.lifecycle.ViewModelProvider
-import kotlin.reflect.KClass
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -96,21 +94,16 @@ import kotlin.math.roundToInt
 @Composable
 fun NavGraph(
     navController: NavHostController,
-    prefs: AppPreferences,
     deepLinkUuid: String?,
     openScanner: Boolean = false,
     onScannerOpened: () -> Unit = {},
-    viewModel: ResourceDetailViewModel = viewModel(
-        factory = object : ViewModelProvider.Factory {
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: KClass<T>, extras: CreationExtras): T {
-                @Suppress("UNCHECKED_CAST")
-                return ResourceDetailViewModel() as T
-            }
-        }
-    )
+    viewModel: ResourceDetailViewModel = koinViewModel()
 ) {
     val platformCtx = getPlatformContext()
     val scope = rememberCoroutineScope()
+    val prefs = koinInject<AppPreferences>()
+    val apiClient = koinInject<ApiClient>()
+    val cacheManager = koinInject<CacheManager>()
 
     // ── Preference state ──────────────────────────────────────────────────────
     val apiKey by prefs.apiKey.collectAsStateWithLifecycle()
@@ -132,8 +125,8 @@ fun NavGraph(
     val defaultProjectTab by prefs.defaultProjectTab.collectAsStateWithLifecycle()
 
     // ── ApiClient sync ────────────────────────────────────────────────────────
-    LaunchedEffect(apiKey) { apiKey?.let { ApiClient.setApiKey(it) } }
-    LaunchedEffect(apiBaseUrl) { ApiClient.setBaseUrl(apiBaseUrl) }
+    LaunchedEffect(apiKey) { apiKey?.let { apiClient.setApiKey(it) } }
+    LaunchedEffect(apiBaseUrl) { apiClient.setBaseUrl(apiBaseUrl) }
 
     LaunchedEffect(deepLinkUuid) {
         if (!deepLinkUuid.isNullOrBlank()) {
@@ -354,7 +347,7 @@ fun NavGraph(
             ApiSettingsScreen(
                 currentApiBaseUrl = apiBaseUrl,
                 currentGraphExplorerUrl = graphExplorerUrl,
-                onApiBaseUrlSave = { url -> scope.launch { prefs.saveApiBaseUrl(url); ApiClient.setBaseUrl(url); CacheManager.clearAll(); PersistentProjectCache.clear(platformCtx) } },
+                onApiBaseUrlSave = { url -> scope.launch { prefs.saveApiBaseUrl(url); apiClient.setBaseUrl(url); cacheManager.clearAll(); PersistentProjectCache.clear(platformCtx) } },
                 onGraphExplorerUrlSave = { url -> scope.launch { prefs.saveGraphExplorerUrl(url) } },
                 onBack = navigateBack,
                 onHome = navigateHome
@@ -366,7 +359,7 @@ fun NavGraph(
                 loginUrl = "${apiBaseUrl}auth/apikey",
                 onBack = navigateBack,
                 onKeyFound = { key ->
-                    scope.launch { prefs.saveApiKey(key); ApiClient.setApiKey(key); CacheManager.clearAll() }
+                    scope.launch { prefs.saveApiKey(key); apiClient.setApiKey(key); cacheManager.clearAll() }
                     showToast(platformCtx, "API key saved")
                     navController.popBackStack()
                 }
@@ -399,7 +392,7 @@ fun NavGraph(
         }
 
         composable(Screen.SettingsAccount.route) {
-            val accountViewModel = viewModel { AccountViewModel(prefs) }
+            val accountViewModel: AccountViewModel = koinViewModel()
             AccountScreen(
                 viewModel = accountViewModel,
                 onBack = navigateBack,
@@ -705,7 +698,7 @@ fun NavGraph(
             arguments = listOf(navArgument("projectId") { type = NavType.StringType })
         ) { backStackEntry ->
             val projectId = backStackEntry.savedStateHandle.get<String>("projectId") ?: ""
-            val manageViewModel = viewModel<ManageProjectViewModel>()
+            val manageViewModel: ManageProjectViewModel = koinViewModel()
             val currentUsername by prefs.userProfile.collectAsStateWithLifecycle()
             LaunchedEffect(projectId) { manageViewModel.init(projectId, currentUsername?.username) }
             ManageProjectScreen(viewModel = manageViewModel, onBack = navigateBack)
@@ -752,7 +745,7 @@ fun NavGraph(
             arguments = listOf(navArgument("instrumentId") { type = NavType.StringType })
         ) { backStackEntry ->
             val instrumentId = backStackEntry.savedStateHandle.get<String>("instrumentId") ?: ""
-            val manageViewModel = viewModel<ManageInstrumentViewModel>()
+            val manageViewModel: ManageInstrumentViewModel = koinViewModel()
             LaunchedEffect(instrumentId) { manageViewModel.init(instrumentId) }
             ManageInstrumentScreen(viewModel = manageViewModel, onBack = navigateBack)
         }

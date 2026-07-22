@@ -17,6 +17,7 @@ import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.Instrument
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 @Composable
 fun InstrumentPickerField(
@@ -28,12 +29,13 @@ fun InstrumentPickerField(
     var isSearching by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val apiClient = koinInject<ApiClient>()
 
     LaunchedEffect(value) {
         if (value.length < 3) { results = emptyList(); return@LaunchedEffect }
         delay(300)
         isSearching = true
-        results = when (val resp = ApiClient.service.searchInstruments(value)) {
+        results = when (val resp = apiClient.service.searchInstruments(value)) {
             is ApiResult.Success -> resp.data
             is ApiResult.Error -> emptyList()
         }

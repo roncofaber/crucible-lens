@@ -24,7 +24,7 @@ Last updated: 2026-05-01
 | Kotlin | 2.1.0 |
 | AGP | 9.2.0 |
 | Gradle | 9.4.1 |
-| No DI framework | dependencies passed explicitly |
+| Dependency injection | Koin — see "Dependency injection (Koin)" below |
 
 ---
 
@@ -212,35 +212,45 @@ See `dev/IOS_SETUP.md` for Xcode project setup instructions.
 
 ---
 
-## Known architectural debt
+## Dependency injection (Koin)
 
-**Repository pattern is inconsistently applied.** `CrucibleRepository` (`data/repository/CrucibleRepository.kt`)
-wraps `ApiClient` + `CacheManager` with proper error mapping (`ResourceResult` sealed class), but only
-`ResourceDetailViewModel` uses it. Every other ViewModel, and several leaf composables
-(`InstrumentPickerField`, `FilterSheet`, `AssociatedFilesCard`, `DatasetDetailsCard`), call
-`ApiClient.service.*` directly. This means there are currently two competing conventions for data
-access in the codebase, and new code has no clear signal which one to follow.
+The app uses [Koin](https://insert-koin.io/) for dependency injection. `ApiClient` and `CacheManager`
+were converted from Kotlin `object` singletons to plain classes and are registered as Koin `single`s
+in `di/AppModule.kt`, giving them the same effective app-lifetime-singleton behavior they had before,
+but as constructor-injectable dependencies rather than globally-reachable statics.
 
-Two ways to resolve this — not yet decided:
-1. Extend `CrucibleRepository` to cover all data access and migrate every ViewModel/composable to go
-   through it (better testability, single error-mapping point, matches the "MVVM + Repository"
-   architecture this project claims to use).
-2. Delete `CrucibleRepository` and standardize on direct `ApiClient` calls from ViewModels only —
-   simpler, matches current majority practice, but still requires moving the API calls currently
-   inside leaf composables (`InstrumentPickerField`, `FilterSheet`, `AssociatedFilesCard`,
-   `DatasetDetailsCard`) into their owning ViewModels, since calling the network from a composable
-   breaks the MVVM boundary regardless of which option is chosen.
+- **`di/AppModule.kt`** — the shared module: `ApiClient`, `CacheManager`, `CrucibleRepository`,
+  `DataSyncManager`, and every ViewModel are registered here via `single { ... }` / `viewModelOf(::X)`.
+- **`di/KoinInit.kt`** — `initKoin(platformModule)` starts Koin with `appModule` plus a
+  platform-supplied module. `AppPreferences` is *not* in `appModule` because Android's implementation
+  needs a `PlatformContext` to construct — each platform's entry point provides it via its own module
+  and calls `initKoin(...)` once, guarded by `KoinPlatformTools.defaultContext().getOrNull() == null`.
+- **Entry points**: `MainActivity.onCreate()` (Android) and `App()` (iOS, `iosMain/App.kt`) both call
+  `initKoin(...)` before rendering `NavGraph`.
+- **In Compose**: ViewModels are obtained via `koinViewModel<T>()` (replaces the old
+  `viewModel()`/`viewModel<T>()`/manual-factory calls). Non-ViewModel singletons are obtained via
+  `koinInject<T>()`.
+- **`CrucibleRepository`** (`data/repository/CrucibleRepository.kt`) is constructor-injected with
+  `ApiClient` + `CacheManager` and is the single point of contact for resource/project/instrument
+  fetch-with-cache logic. Every ViewModel that fetches Crucible data is expected to go through it or,
+  for one-shot mutations (create/update/delete) that don't share caching logic with anything else, to
+  take `ApiClient`/`CacheManager` directly via constructor injection — both are acceptable; reaching
+  for the global object instead of the constructor parameter is not.
 
-**Unused KSP plugin.** `com.google.devtools.ksp` is applied in `app/build.gradle.kts` but no
-`ksp(...)` dependency exists anywhere — likely a leftover from an abandoned codegen experiment
-(Room, Moshi, etc.). Should be removed to shave a small amount of build time, once confirmed nothing
-depends on it being present.
+**Leaf-composable exception (accepted, not a gap):** `InstrumentPickerField`, `FilterSheet`, and
+`AssociatedFilesCard` call `koinInject<ApiClient>()` (and `CacheManager` where needed) directly from
+within the composable rather than through an owning ViewModel. This is intentional: each of these
+components is reused from multiple, unrelated parent screens with no single owning ViewModel
+(e.g. `InstrumentPickerField` appears in both `CreateDatasetScreen` and `EditResourceSheet`).
+Introducing a per-use-site ViewModel, or threading callback props through every parent, would add
+real wiring complexity for no benefit — `koinInject` still gives these components a real, swappable
+dependency rather than a global static, which was the actual problem being solved. Do not "fix" this
+by half-threading callbacks through call sites; if a genuine need for shared state across these
+components arises, revisit then.
 
-**No DI framework is a deliberate, documented choice** (see Stack table above) appropriate for this
-project's size. The tradeoff: `ApiClient` and `CacheManager` are globally mutable singletons accessed
-directly from ~20 files. This is consistent today, but will make future test-writing harder than it
-would be with constructor-injected dependencies (e.g. via Koin, the common choice in KMP). Not worth
-introducing now, but worth remembering if/when the project adds a test suite.
+**Unused KSP plugin — removed.** `com.google.devtools.ksp` was applied in `app/build.gradle.kts` with
+no `ksp(...)` dependency anywhere (leftover from an abandoned codegen experiment). It has been removed
+from both `build.gradle.kts` and `gradle/libs.versions.toml`.
 
 ---
 

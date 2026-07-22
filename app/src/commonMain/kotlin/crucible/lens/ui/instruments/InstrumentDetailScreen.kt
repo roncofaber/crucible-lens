@@ -40,7 +40,8 @@ import crucible.lens.data.util.SortField
 import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
-import androidx.lifecycle.viewmodel.compose.viewModel
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.LoadState
 import crucible.lens.ui.common.CopyIdMenuItem
@@ -73,7 +74,8 @@ fun InstrumentDetailScreen(
     onSearch: () -> Unit = {},
     onManageInstrument: () -> Unit = {}
 ) {
-    val viewModel: InstrumentDetailViewModel = viewModel()
+    val viewModel: InstrumentDetailViewModel = koinViewModel()
+    val cacheManager = koinInject<CacheManager>()
     val instrument by viewModel.instrument.collectAsState()
     val datasetsState by viewModel.datasetsState.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
@@ -101,7 +103,7 @@ fun InstrumentDetailScreen(
                 InstrumentDatasetGroupBy.NONE        -> ""
                 InstrumentDatasetGroupBy.MEASUREMENT -> d.measurement ?: "No measurement"
                 InstrumentDatasetGroupBy.PROJECT     -> d.projectId?.let { pid ->
-                    CacheManager.getProjects()?.find { it.projectId == pid }?.title ?: pid
+                    cacheManager.getProjects()?.find { it.projectId == pid }?.title ?: pid
                 } ?: "No project"
                 InstrumentDatasetGroupBy.DATE        -> dateGroupKey(d.timestamp)
                 InstrumentDatasetGroupBy.SESSION     -> d.sessionName ?: "No session"
@@ -143,7 +145,7 @@ fun InstrumentDetailScreen(
                                     onClick = { overflowMenuExpanded = false; onManageInstrument() }
                                 )
                                 HorizontalDivider()
-                                RefreshMenuItem { overflowMenuExpanded = false; CacheManager.clearInstrumentsCache(); viewModel.load(instrumentId, forceRefresh = true) }
+                                RefreshMenuItem { overflowMenuExpanded = false; cacheManager.clearInstrumentsCache(); viewModel.load(instrumentId, forceRefresh = true) }
                             }
                         }
                     }

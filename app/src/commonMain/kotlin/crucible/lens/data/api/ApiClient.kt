@@ -9,7 +9,7 @@ import io.ktor.client.plugins.logging.Logging
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
-object ApiClient {
+class ApiClient {
     private var apiKey: String = ""
     private var baseUrl: String = "https://crucible.lbl.gov/api/v2/"
     private var _service: CrucibleApiService? = null

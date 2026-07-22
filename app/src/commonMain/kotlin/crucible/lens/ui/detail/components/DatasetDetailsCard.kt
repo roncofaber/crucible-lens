@@ -32,6 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
+import org.koin.compose.koinInject
 
 @Composable
 internal fun DatasetDetailsCard(
@@ -44,6 +45,8 @@ internal fun DatasetDetailsCard(
     onAdvancedChange: (Boolean) -> Unit = {}
 ) {
     val platformCtx = getPlatformContext()
+    val apiClient = koinInject<ApiClient>()
+    val cacheManager = koinInject<CacheManager>()
     var advanced by remember { mutableStateOf(initialAdvanced) }
     Card {
         Column(modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim)) {
@@ -131,10 +134,10 @@ internal fun DatasetDetailsCard(
                         value = dataset.instrumentName,
                         onClick = {
                             instrumentScope.launch {
-                                val instruments = CacheManager.getInstruments()
+                                val instruments = cacheManager.getInstruments()
                                     ?: withContext(Dispatchers.Default) {
-                                        when (val resp = ApiClient.service.getInstruments()) {
-                                            is ApiResult.Success -> resp.data.also { CacheManager.cacheInstruments(it) }
+                                        when (val resp = apiClient.service.getInstruments()) {
+                                            is ApiResult.Success -> resp.data.also { cacheManager.cacheInstruments(it) }
                                             is ApiResult.Error -> null
                                         }
                                     }

@@ -11,10 +11,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.navigation.compose.rememberNavController
 import crucible.lens.data.network.ConnectivityObserver
+import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.data.preferences.PreferencesManager
+import crucible.lens.di.initKoin
 import crucible.lens.ui.navigation.NavGraph
 import crucible.lens.ui.theme.CrucibleScannerTheme
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import org.koin.dsl.module
+import org.koin.mp.KoinPlatformTools
 
 class MainActivity : ComponentActivity() {
     private lateinit var preferencesManager: PreferencesManager
@@ -31,6 +35,10 @@ class MainActivity : ComponentActivity() {
 
         preferencesManager = PreferencesManager(this)
         ConnectivityObserver.init(this)
+
+        if (KoinPlatformTools.defaultContext().getOrNull() == null) {
+            initKoin(platformModule = module { single<AppPreferences> { preferencesManager } })
+        }
 
         // Keep splash visible until DataStore has emitted its first snapshot —
         // all StateFlows will have their real values by then, no flash possible.
@@ -55,7 +63,6 @@ class MainActivity : ComponentActivity() {
             ) {
                 NavGraph(
                     navController = navController,
-                    prefs = preferencesManager,
                     deepLinkUuid = deepLinkUuid,
                     openScanner = openScanner,
                     onScannerOpened = { openScanner = false }

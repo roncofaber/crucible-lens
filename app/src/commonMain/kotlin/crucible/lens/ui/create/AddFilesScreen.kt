@@ -28,6 +28,7 @@ import crucible.lens.platform.rememberGalleryPicker
 import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 @Composable
 fun AddFilesScreen(
@@ -41,6 +42,7 @@ fun AddFilesScreen(
     var isUploading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val apiClient = koinInject<ApiClient>()
 
     val cameraPicker = rememberCameraPicker { bytes ->
         if (bytes != null) files = files + Pair(bytes, true)
@@ -58,7 +60,7 @@ fun AddFilesScreen(
                     files.forEachIndexed { index, (bytes, asThumbnail) ->
                         val filename = "file_${datasetUuid}_${Clock.System.now().toEpochMilliseconds()}_$index.jpg"
                         val sha256 = PlatformCrypto.sha256Hex(bytes)
-                        val initiateResp = ApiClient.service.initiateUpload(datasetUuid, filename, bytes.size.toLong(), sha256)
+                        val initiateResp = apiClient.service.initiateUpload(datasetUuid, filename, bytes.size.toLong(), sha256)
                         if (initiateResp is ApiResult.Success) {
                             val session = initiateResp.data
                             val fileMfid: String?
@@ -66,22 +68,22 @@ fun AddFilesScreen(
                                 // Duplicate detected — skip upload
                                 fileMfid = session.existingFile.mfid
                             } else {
-                                val chunkResp = ApiClient.service.uploadChunksToGCS(
+                                val chunkResp = apiClient.service.uploadChunksToGCS(
                                     resumableUri = session.resumableUri ?: error("Missing resumable URI"),
                                     bytes = bytes,
                                     chunkSizeHint = session.chunkSizeHint
                                 )
                                 if (chunkResp is ApiResult.Success) {
-                                    val completeResp = ApiClient.service.completeUpload(datasetUuid, session.uploadId ?: error("Missing upload ID"), sha256)
+                                    val completeResp = apiClient.service.completeUpload(datasetUuid, session.uploadId ?: error("Missing upload ID"), sha256)
                                     fileMfid = if (completeResp is ApiResult.Success) completeResp.data.mfid else null
                                 } else {
                                     fileMfid = null
                                 }
                             }
                             if (fileMfid != null) {
-                                ApiClient.service.requestIngestion(fileMfid)
+                                apiClient.service.requestIngestion(fileMfid)
                                 if (asThumbnail) {
-                                    ApiClient.service.addThumbnail(
+                                    apiClient.service.addThumbnail(
                                         datasetUuid,
                                         ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
                                     )

@@ -33,7 +33,10 @@ sealed class InstrumentEditState {
     data class SaveError(val draft: Editing, val message: String) : InstrumentEditState()
 }
 
-class ManageInstrumentViewModel : ViewModel() {
+class ManageInstrumentViewModel(
+    private val apiClient: ApiClient,
+    private val cacheManager: CacheManager
+) : ViewModel() {
 
     private val _state = MutableStateFlow<InstrumentManageState>(InstrumentManageState.Loading)
     val state: StateFlow<InstrumentManageState> = _state.asStateFlow()
@@ -51,7 +54,7 @@ class ManageInstrumentViewModel : ViewModel() {
     fun load() {
         viewModelScope.launch {
             _state.value = InstrumentManageState.Loading
-            when (val result = ApiClient.service.getInstrument(instrumentId)) {
+            when (val result = apiClient.service.getInstrument(instrumentId)) {
                 is ApiResult.Success -> _state.value = InstrumentManageState.Loaded(result.data)
                 is ApiResult.Error -> _state.value = InstrumentManageState.Error("Could not load instrument (${result.code})")
             }
@@ -86,7 +89,7 @@ class ManageInstrumentViewModel : ViewModel() {
         if (_editState.value is InstrumentEditState.Saving) return
         _editState.value = InstrumentEditState.Saving
         viewModelScope.launch {
-            val result = ApiClient.service.updateInstrument(
+            val result = apiClient.service.updateInstrument(
                 instrumentId,
                 InstrumentUpdateRequest(
                     instrumentName = draft.name.trim().ifBlank { null },
@@ -100,7 +103,7 @@ class ManageInstrumentViewModel : ViewModel() {
             )
             when (result) {
                 is ApiResult.Success -> {
-                    CacheManager.clearInstrumentsCache()
+                    cacheManager.clearInstrumentsCache()
                     _state.value = InstrumentManageState.Loaded(result.data)
                     _editState.value = InstrumentEditState.Idle
                 }

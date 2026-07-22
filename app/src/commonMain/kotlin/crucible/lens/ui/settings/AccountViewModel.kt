@@ -53,7 +53,11 @@ sealed class EditUiState {
 
 // ── ViewModel ─────────────────────────────────────────────────────────────────
 
-class AccountViewModel(private val prefs: AppPreferences) : ViewModel() {
+class AccountViewModel(
+    private val prefs: AppPreferences,
+    private val apiClient: ApiClient,
+    private val cacheManager: CacheManager
+) : ViewModel() {
 
     private val _profileState = MutableStateFlow<ProfileUiState>(ProfileUiState.Idle)
     val profileState: StateFlow<ProfileUiState> = _profileState.asStateFlow()
@@ -91,7 +95,7 @@ class AccountViewModel(private val prefs: AppPreferences) : ViewModel() {
             _profileState.value = ProfileUiState.NotLoggedIn
             return
         }
-        when (val result = ApiClient.service.getProfile()) {
+        when (val result = apiClient.service.getProfile()) {
             is ApiResult.Success -> {
                 val user = result.data
                 prefs.saveUserProfile(user)
@@ -146,7 +150,7 @@ class AccountViewModel(private val prefs: AppPreferences) : ViewModel() {
         usernameCheckJob = viewModelScope.launch {
             delay(500)
             val currentUniqueId = currentUser?.uniqueId ?: ""
-            when (val result = ApiClient.service.checkUsernameAvailability(value, currentUniqueId)) {
+            when (val result = apiClient.service.checkUsernameAvailability(value, currentUniqueId)) {
                 is ApiResult.Success -> updateDraft {
                     it.copy(usernameCheck = if (result.data) UsernameCheckState.Available else UsernameCheckState.Taken)
                 }
@@ -160,7 +164,7 @@ class AccountViewModel(private val prefs: AppPreferences) : ViewModel() {
         if (_editState.value is EditUiState.Saving) return
         _editState.value = EditUiState.Saving
         viewModelScope.launch {
-            when (val result = ApiClient.service.updateProfile(
+            when (val result = apiClient.service.updateProfile(
                 firstName = draft.firstName.trim().ifBlank { null },
                 lastName = draft.lastName.trim().ifBlank { null },
                 email = draft.email.trim().ifBlank { null },
@@ -183,9 +187,9 @@ class AccountViewModel(private val prefs: AppPreferences) : ViewModel() {
     fun saveApiKey(key: String) {
         viewModelScope.launch {
             prefs.saveApiKey(key)
-            ApiClient.setApiKey(key)
+            apiClient.setApiKey(key)
             prefs.clearUserProfile()
-            CacheManager.clearAll()
+            cacheManager.clearAll()
             _editState.value = EditUiState.Idle
             if (key.isBlank()) {
                 _profileState.value = ProfileUiState.NotLoggedIn
@@ -201,8 +205,8 @@ class AccountViewModel(private val prefs: AppPreferences) : ViewModel() {
         viewModelScope.launch {
             prefs.clearApiKey()
             prefs.clearUserProfile()
-            ApiClient.setApiKey("")
-            CacheManager.clearAll()
+            apiClient.setApiKey("")
+            cacheManager.clearAll()
             _profileState.value = ProfileUiState.NotLoggedIn
             _editState.value = EditUiState.Idle
         }

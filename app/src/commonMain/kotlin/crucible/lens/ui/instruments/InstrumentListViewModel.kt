@@ -13,7 +13,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class InstrumentListViewModel : ViewModel() {
+class InstrumentListViewModel(
+    private val apiClient: ApiClient,
+    private val cacheManager: CacheManager
+) : ViewModel() {
 
     private val _loadState = MutableStateFlow<LoadState<List<Instrument>>>(LoadState.Loading)
     val loadState: StateFlow<LoadState<List<Instrument>>> = _loadState.asStateFlow()
@@ -30,12 +33,12 @@ class InstrumentListViewModel : ViewModel() {
             }
             try {
                 if (!forceRefresh) {
-                    val cached = CacheManager.getInstruments()
+                    val cached = cacheManager.getInstruments()
                     if (cached != null) { _loadState.value = LoadState.Success(cached); return@launch }
                 }
-                when (val resp = ApiClient.service.getInstruments()) {
+                when (val resp = apiClient.service.getInstruments()) {
                     is ApiResult.Success -> {
-                        CacheManager.cacheInstruments(resp.data)
+                        cacheManager.cacheInstruments(resp.data)
                         _loadState.value = LoadState.Success(resp.data)
                     }
                     is ApiResult.Error -> _loadState.value = LoadState.Error("Failed to load instruments")

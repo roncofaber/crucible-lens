@@ -30,7 +30,10 @@ sealed class SaveState {
 
 // ── CreateSampleViewModel ─────────────────────────────────────────────────────
 
-class CreateSampleViewModel : ViewModel() {
+class CreateSampleViewModel(
+    private val apiClient: ApiClient,
+    private val cacheManager: CacheManager
+) : ViewModel() {
 
     private val _saveState = MutableStateFlow<SaveState>(SaveState.Idle)
     val saveState: StateFlow<SaveState> = _saveState.asStateFlow()
@@ -40,13 +43,13 @@ class CreateSampleViewModel : ViewModel() {
         _saveState.value = SaveState.Saving
         viewModelScope.launch {
             _saveState.value = try {
-                when (val resp = ApiClient.service.createSample(request)) {
+                when (val resp = apiClient.service.createSample(request)) {
                     is ApiResult.Success -> {
                         val sample = resp.data
-                        CacheManager.cacheResource(sample.uniqueId, sample)
-                        projectId?.let { CacheManager.clearProjectDetail(it) }
+                        cacheManager.cacheResource(sample.uniqueId, sample)
+                        projectId?.let { cacheManager.clearProjectDetail(it) }
                         if (!metadata.isNullOrEmpty()) {
-                            ApiClient.service.postResourceMetadata(sample.uniqueId, metadata)
+                            apiClient.service.postResourceMetadata(sample.uniqueId, metadata)
                         }
                         SaveState.Success(sample.uniqueId)
                     }
@@ -65,7 +68,10 @@ class CreateSampleViewModel : ViewModel() {
 
 // ── CreateDatasetViewModel ────────────────────────────────────────────────────
 
-class CreateDatasetViewModel : ViewModel() {
+class CreateDatasetViewModel(
+    private val apiClient: ApiClient,
+    private val cacheManager: CacheManager
+) : ViewModel() {
 
     private val _saveState = MutableStateFlow<SaveState>(SaveState.Idle)
     val saveState: StateFlow<SaveState> = _saveState.asStateFlow()
@@ -75,15 +81,15 @@ class CreateDatasetViewModel : ViewModel() {
         _saveState.value = SaveState.Saving
         viewModelScope.launch {
             _saveState.value = try {
-                val createResp = ApiClient.service.createDataset(request)
+                val createResp = apiClient.service.createDataset(request)
                 if (createResp !is ApiResult.Success) {
                     val code = (createResp as? ApiResult.Error)?.code ?: -1
                     return@launch run { _saveState.value = SaveState.Error("Could not create dataset ($code)") }
                 }
                 val newDataset = createResp.data
                 val newUuid = newDataset.uniqueId
-                CacheManager.cacheResource(newUuid, newDataset)
-                request.projectId?.let { CacheManager.clearProjectDetail(it) }
+                cacheManager.cacheResource(newUuid, newDataset)
+                request.projectId?.let { cacheManager.clearProjectDetail(it) }
 
                 var uploadFailures = 0
                 var thumbnailFailures = 0
@@ -91,7 +97,7 @@ class CreateDatasetViewModel : ViewModel() {
                     val filename = "file_${newUuid}_$index.jpg"
                     val sha256 = PlatformCrypto.sha256Hex(bytes)
                     // Step 1: initiate GCS resumable session (sha256 enables server-side deduplication)
-                    val initiateResp = ApiClient.service.initiateUpload(newUuid, filename, bytes.size.toLong(), sha256)
+                    val initiateResp = apiClient.service.initiateUpload(newUuid, filename, bytes.size.toLong(), sha256)
                     if (initiateResp is ApiResult.Success) {
                         val session = initiateResp.data
                         val fileMfid: String?
@@ -100,14 +106,14 @@ class CreateDatasetViewModel : ViewModel() {
                             fileMfid = session.existingFile.mfid
                         } else {
                             // Step 2: upload chunks directly to GCS
-                            val chunkResp = ApiClient.service.uploadChunksToGCS(
+                            val chunkResp = apiClient.service.uploadChunksToGCS(
                                 resumableUri = session.resumableUri ?: error("Missing resumable URI"),
                                 bytes = bytes,
                                 chunkSizeHint = session.chunkSizeHint
                             )
                             if (chunkResp is ApiResult.Success) {
                                 // Step 3: finalize — server registers as AssociatedFile
-                                val completeResp = ApiClient.service.completeUpload(newUuid, session.uploadId ?: error("Missing upload ID"), sha256)
+                                val completeResp = apiClient.service.completeUpload(newUuid, session.uploadId ?: error("Missing upload ID"), sha256)
                                 fileMfid = if (completeResp is ApiResult.Success) completeResp.data.mfid else null
                                 if (fileMfid == null) uploadFailures++
                             } else {
@@ -117,10 +123,10 @@ class CreateDatasetViewModel : ViewModel() {
                         }
                         if (fileMfid != null) {
                             // Step 4: trigger ingestion worker
-                            ApiClient.service.requestIngestion(fileMfid)
+                            apiClient.service.requestIngestion(fileMfid)
                             // Step 5: optional thumbnail — only if file is available
                             if (asThumbnail) {
-                                val thumbResp = ApiClient.service.addThumbnail(
+                                val thumbResp = apiClient.service.addThumbnail(
                                     newUuid,
                                     ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
                                 )
@@ -140,7 +146,7 @@ class CreateDatasetViewModel : ViewModel() {
                     else -> null
                 }
                 if (!metadata.isNullOrEmpty()) {
-                    ApiClient.service.postResourceMetadata(newUuid, metadata)
+                    apiClient.service.postResourceMetadata(newUuid, metadata)
                 }
                 SaveState.Success(newUuid, uploadWarning = warning)
             } catch (e: CancellationException) {
@@ -156,7 +162,10 @@ class CreateDatasetViewModel : ViewModel() {
 
 // ── EditResourceViewModel ─────────────────────────────────────────────────────
 
-class EditResourceViewModel : ViewModel() {
+class EditResourceViewModel(
+    private val apiClient: ApiClient,
+    private val cacheManager: CacheManager
+) : ViewModel() {
 
     private val _saveState = MutableStateFlow<SaveState>(SaveState.Idle)
     val saveState: StateFlow<SaveState> = _saveState.asStateFlow()
@@ -167,11 +176,11 @@ class EditResourceViewModel : ViewModel() {
         _saveState.value = SaveState.Saving
         viewModelScope.launch {
             _saveState.value = try {
-                when (val resp = ApiClient.service.updateSample(uuid, request)) {
+                when (val resp = apiClient.service.updateSample(uuid, request)) {
                     is ApiResult.Success -> {
-                        CacheManager.cacheResource(uuid, resp.data)
+                        cacheManager.cacheResource(uuid, resp.data)
                         if (metadata != null) {
-                            ApiClient.service.postResourceMetadata(uuid, metadata, overwrite = true)
+                            apiClient.service.postResourceMetadata(uuid, metadata, overwrite = true)
                         }
                         SaveState.Success(uuid)
                     }
@@ -190,11 +199,11 @@ class EditResourceViewModel : ViewModel() {
         _saveState.value = SaveState.Saving
         viewModelScope.launch {
             _saveState.value = try {
-                when (val resp = ApiClient.service.updateDataset(uuid, request)) {
+                when (val resp = apiClient.service.updateDataset(uuid, request)) {
                     is ApiResult.Success -> {
-                        CacheManager.cacheResource(uuid, resp.data)
+                        cacheManager.cacheResource(uuid, resp.data)
                         if (metadata != null) {
-                            ApiClient.service.postResourceMetadata(uuid, metadata, overwrite = true)
+                            apiClient.service.postResourceMetadata(uuid, metadata, overwrite = true)
                         }
                         SaveState.Success(uuid)
                     }

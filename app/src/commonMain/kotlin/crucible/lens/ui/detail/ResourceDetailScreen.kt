@@ -168,6 +168,8 @@ fun ResourceDetailScreen(
     onNavigateToMetadataEditor: () -> Unit = {},
     onNavigateToUser: (String) -> Unit = {},
 ) {
+    val apiClient = org.koin.compose.koinInject<ApiClient>()
+    val cacheManager = org.koin.compose.koinInject<CacheManager>()
     var showQrDialog by remember { mutableStateOf(false) }
     var showSiblingGroupDialog by remember { mutableStateOf(false) }
     // Local groupBy that can be changed while browsing; starts from the nav argument.
@@ -202,14 +204,14 @@ fun ResourceDetailScreen(
         when (resource) {
             is Sample -> {
                 val projectId = resource.projectId ?: run { siblingsResolved = true; return }
-                val cached = CacheManager.getProjectSamples(projectId)
+                val cached = cacheManager.getProjectSamples(projectId)
                 if (cached != null) {
                     sameTypeSamples = cached.filterSiblings(groupBy, resource).ensureContains(resource)
                     siblingsResolved = true
                 } else {
                     val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
                     when (val resp = withContext(Dispatchers.Default) {
-                        ApiClient.service.getFilteredSamples(
+                        apiClient.service.getFilteredSamples(
                             projectId = projectId,
                             sampleType = if (groupBy == null || groupBy == "TYPE") resource.sampleType else null,
                             ownerOrcid = if (groupBy == "OWNER") resource.ownerOrcid else null,
@@ -228,14 +230,14 @@ fun ResourceDetailScreen(
             }
             is Dataset -> {
                 val projectId = resource.projectId ?: run { siblingsResolved = true; return }
-                val cached = CacheManager.getProjectDatasets(projectId)
+                val cached = cacheManager.getProjectDatasets(projectId)
                 if (cached != null) {
                     sameTypeDatasets = cached.filterSiblings(groupBy, resource).ensureContains(resource)
                     siblingsResolved = true
                 } else {
                     val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
                     when (val resp = withContext(Dispatchers.Default) {
-                        ApiClient.service.getFilteredDatasets(
+                        apiClient.service.getFilteredDatasets(
                             projectId = projectId,
                             measurement = if (groupBy == null || groupBy == "MEASUREMENT") resource.measurement else null,
                             instrumentName = if (groupBy == "INSTRUMENT") resource.instrumentName else null,
@@ -267,14 +269,14 @@ fun ResourceDetailScreen(
         // Warm loadedResources from the project cache so sibling pages render instantly
         when (resource) {
             is Sample -> resource.projectId?.let { pid ->
-                CacheManager.getProjectSamples(pid)?.forEach { s ->
-                    val rich = CacheManager.getResource(s.uniqueId) as? Sample
+                cacheManager.getProjectSamples(pid)?.forEach { s ->
+                    val rich = cacheManager.getResource(s.uniqueId) as? Sample
                     if (rich != null) { cache.enrichedUuids.add(s.uniqueId); cache.loadedResources[s.uniqueId] = rich }
                 }
             }
             is Dataset -> resource.projectId?.let { pid ->
-                CacheManager.getProjectDatasets(pid)?.forEach { d ->
-                    val rich = CacheManager.getResource(d.uniqueId) as? Dataset
+                cacheManager.getProjectDatasets(pid)?.forEach { d ->
+                    val rich = cacheManager.getResource(d.uniqueId) as? Dataset
                     if (rich != null) { cache.enrichedUuids.add(d.uniqueId); cache.loadedResources[d.uniqueId] = rich }
                 }
             }
@@ -402,7 +404,7 @@ fun ResourceDetailScreen(
                 }
 
                 // Use individual resource cache if already enriched from a prior navigation
-                val cached = CacheManager.getResource(uuid)
+                val cached = cacheManager.getResource(uuid)
                 if (cached != null && when (cached) {
                         is Sample  -> cached.links != null
                         is Dataset -> cached.links != null
@@ -417,15 +419,15 @@ fun ResourceDetailScreen(
 
                 try {
                     val enriched: CrucibleResource? = when (pageResource) {
-                        is Sample -> (ApiClient.service.getSample(uuid) as? ApiResult.Success)?.data
+                        is Sample -> (apiClient.service.getSample(uuid) as? ApiResult.Success)?.data
                         is Dataset ->
-                            (ApiClient.service.getDataset(uuid, includeMetadata = true) as? ApiResult.Success)?.data
+                            (apiClient.service.getDataset(uuid, includeMetadata = true) as? ApiResult.Success)?.data
                     }
                     withContext(Dispatchers.Main) {
                         cache.enrichedUuids.add(uuid)
                         if (enriched != null) {
                             cache.loadedResources[uuid] = enriched
-                            CacheManager.cacheResource(uuid, enriched)
+                            cacheManager.cacheResource(uuid, enriched)
                             cache.failedEnrichmentUuids.remove(uuid)
                         } else {
                             cache.failedEnrichmentUuids.add(uuid)
@@ -475,21 +477,21 @@ fun ResourceDetailScreen(
                 if (cache.loadedThumbnails.containsKey(uuid) || pageResource !is Dataset) return@forEach
 
                 // Prefer the ViewModel-cached thumbnails over a fresh API call
-                val cached = CacheManager.getThumbnails(uuid)
+                val cached = cacheManager.getThumbnails(uuid)
                 if (cached != null) {
                     withContext(Dispatchers.Main) { cache.loadedThumbnails[uuid] = cached }
                     return@forEach
                 }
 
                 try {
-                    val thumbResp = ApiClient.service.getThumbnails(uuid)
+                    val thumbResp = apiClient.service.getThumbnails(uuid)
                     val thumbs = when (thumbResp) {
                         is ApiResult.Success -> thumbResp.data
                         is ApiResult.Error -> emptyList()
                     }
                     withContext(Dispatchers.Main) {
                         cache.loadedThumbnails[uuid] = thumbs
-                        if (thumbs.isNotEmpty()) CacheManager.cacheThumbnails(uuid, thumbs)
+                        if (thumbs.isNotEmpty()) cacheManager.cacheThumbnails(uuid, thumbs)
                     }
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
@@ -540,13 +542,13 @@ fun ResourceDetailScreen(
                     if (pageResource != null) {
                         val fresh: CrucibleResource? = withContext(Dispatchers.Default) {
                             when (pageResource) {
-                                is Sample  -> (ApiClient.service.getSample(currentUuid) as? ApiResult.Success)?.data
-                                is Dataset -> (ApiClient.service.getDataset(currentUuid, includeMetadata = true) as? ApiResult.Success)?.data
+                                is Sample  -> (apiClient.service.getSample(currentUuid) as? ApiResult.Success)?.data
+                                is Dataset -> (apiClient.service.getDataset(currentUuid, includeMetadata = true) as? ApiResult.Success)?.data
                             }
                         }
                         if (fresh != null) {
                             cache.loadedResources[currentUuid] = fresh
-                            CacheManager.cacheResource(currentUuid, fresh)
+                            cacheManager.cacheResource(currentUuid, fresh)
                         }
                         cache.loadedThumbnails.remove(currentUuid)
                         siblingReloadTrigger++ // re-fetch thumbnails
@@ -833,12 +835,12 @@ fun ResourceDetailScreen(
                                         thumbnails = displayThumbnails,
                                         onDelete = { thumbnailId ->
                                             scope.launch {
-                                                val resp = ApiClient.service.deleteThumbnail(pageResource.uniqueId, thumbnailId)
+                                                val resp = apiClient.service.deleteThumbnail(pageResource.uniqueId, thumbnailId)
                                                 if (resp is ApiResult.Success) {
                                                     cache.loadedThumbnails[pageResource.uniqueId] =
                                                         cache.loadedThumbnails[pageResource.uniqueId].orEmpty()
                                                             .filter { it.id != thumbnailId }
-                                                    CacheManager.clearThumbnail(pageResource.uniqueId)
+                                                    cacheManager.clearThumbnail(pageResource.uniqueId)
                                                 }
                                             }
                                         }
@@ -855,7 +857,7 @@ fun ResourceDetailScreen(
                                 LinkedSamplesCard(
                                     samples = displayResource.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "associated" }.sortedBy { it.uniqueId },
                                     onNavigateToResource = onNavigateToResource,
-                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { ApiClient.service.unlinkDatasetSample(displayResource.uniqueId, uuid) } },
+                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { apiClient.service.unlinkDatasetSample(displayResource.uniqueId, uuid) } },
                                     initialExpanded = pageGetCardState("linked_samples"),
                                     onExpandChange = { pageSetCardState("linked_samples", it) }
                                 )
@@ -870,7 +872,7 @@ fun ResourceDetailScreen(
                                 ParentDatasetsCard(
                                     parents = displayResource.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "parent" }.sortedBy { it.uniqueId },
                                     onNavigateToResource = onNavigateToResource,
-                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { ApiClient.service.unlinkDatasets(uuid, displayResource.uniqueId) } },
+                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { apiClient.service.unlinkDatasets(uuid, displayResource.uniqueId) } },
                                     initialExpanded = pageGetCardState("parent_datasets"),
                                     onExpandChange = { pageSetCardState("parent_datasets", it) }
                                 )
@@ -885,7 +887,7 @@ fun ResourceDetailScreen(
                                 ChildDatasetsCard(
                                     children = displayResource.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "child" }.sortedBy { it.uniqueId },
                                     onNavigateToResource = onNavigateToResource,
-                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { ApiClient.service.unlinkDatasets(displayResource.uniqueId, uuid) } },
+                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { apiClient.service.unlinkDatasets(displayResource.uniqueId, uuid) } },
                                     initialExpanded = pageGetCardState("child_datasets"),
                                     onExpandChange = { pageSetCardState("child_datasets", it) }
                                 )
@@ -922,7 +924,7 @@ fun ResourceDetailScreen(
                                 ParentSamplesCard(
                                     parents = displayResource.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "parent" }.sortedBy { it.uniqueId },
                                     onNavigateToResource = onNavigateToResource,
-                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { ApiClient.service.unlinkSamples(uuid, displayResource.uniqueId) } },
+                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { apiClient.service.unlinkSamples(uuid, displayResource.uniqueId) } },
                                     initialExpanded = pageGetCardState("parent_samples"),
                                     onExpandChange = { pageSetCardState("parent_samples", it) }
                                 )
@@ -937,7 +939,7 @@ fun ResourceDetailScreen(
                                 ChildSamplesCard(
                                     children = displayResource.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "child" }.sortedBy { it.uniqueId },
                                     onNavigateToResource = onNavigateToResource,
-                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { ApiClient.service.unlinkSamples(displayResource.uniqueId, uuid) } },
+                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { apiClient.service.unlinkSamples(displayResource.uniqueId, uuid) } },
                                     initialExpanded = pageGetCardState("child_samples"),
                                     onExpandChange = { pageSetCardState("child_samples", it) }
                                 )
@@ -952,7 +954,7 @@ fun ResourceDetailScreen(
                                 LinkedDatasetsCard(
                                     datasets = displayResource.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "associated" }.sortedBy { it.uniqueId },
                                     onNavigateToResource = onNavigateToResource,
-                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { ApiClient.service.unlinkDatasetSample(uuid, displayResource.uniqueId) } },
+                                    onUnlink = { uuid, name -> pendingUnlink = UnlinkRequest(name, uuid) { apiClient.service.unlinkDatasetSample(uuid, displayResource.uniqueId) } },
                                     initialExpanded = pageGetCardState("linked_datasets"),
                                     onExpandChange = { pageSetCardState("linked_datasets", it) }
                                 )
@@ -976,7 +978,7 @@ fun ResourceDetailScreen(
                     }
                 }
 
-                val ageMin = CacheManager.getResourceAgeMinutes(resource.uniqueId)
+                val ageMin = cacheManager.getResourceAgeMinutes(resource.uniqueId)
                 if (ageMin != null) {
                     Text(
                         text = "Cached ${ageMin}m ago",
@@ -1109,7 +1111,7 @@ fun ResourceDetailScreen(
                             try {
                                 req.action()
                                 // Evict both sides so neither shows stale links
-                                CacheManager.clearResource(req.otherUuid)
+                                cacheManager.clearResource(req.otherUuid)
                                 pendingUnlink = null
                                 onRefresh(currentDisplayResource.uniqueId)
                             } catch (e: kotlinx.coroutines.CancellationException) {

@@ -23,6 +23,7 @@ import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
 import crucible.lens.platform.shareText
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 internal sealed class AssociatedFilesState {
     object Idle    : AssociatedFilesState()
@@ -59,20 +60,22 @@ internal fun AssociatedFilesCard(
     val errorFiles = remember { mutableStateMapOf<String, Boolean>() }
     val scope = rememberCoroutineScope()
     val platformCtx = getPlatformContext()
+    val apiClient = koinInject<ApiClient>()
+    val cacheManager = koinInject<CacheManager>()
 
     fun fetch() {
         scope.launch {
             state = AssociatedFilesState.Loading
             loadingFiles.clear()
-            val cached = CacheManager.getDatasetFiles(datasetUuid)
+            val cached = cacheManager.getDatasetFiles(datasetUuid)
             val newState = if (cached != null) {
                 if (cached.isEmpty()) AssociatedFilesState.Empty else AssociatedFilesState.Success(cached)
             } else {
-                when (val result = ApiClient.service.getDatasetFiles(datasetUuid)) {
+                when (val result = apiClient.service.getDatasetFiles(datasetUuid)) {
                     is ApiResult.Success -> {
                         if (result.data.isEmpty()) AssociatedFilesState.Empty
                         else AssociatedFilesState.Success(result.data).also {
-                            CacheManager.cacheDatasetFiles(datasetUuid, result.data)
+                            cacheManager.cacheDatasetFiles(datasetUuid, result.data)
                         }
                     }
                     is ApiResult.Error -> if (result.code == 404) AssociatedFilesState.Empty
@@ -88,10 +91,10 @@ internal fun AssociatedFilesCard(
             loadingFiles[file.mfid] = true
             errorFiles.remove(file.mfid)
             try {
-                val cached = CacheManager.getFileUrl(file.mfid)
+                val cached = cacheManager.getFileUrl(file.mfid)
                 val url = if (cached != null) cached else {
-                    when (val r = ApiClient.service.getFileDownloadLink(file.mfid)) {
-                        is ApiResult.Success -> r.data.url.also { CacheManager.cacheFileUrl(file.mfid, it) }
+                    when (val r = apiClient.service.getFileDownloadLink(file.mfid)) {
+                        is ApiResult.Success -> r.data.url.also { cacheManager.cacheFileUrl(file.mfid, it) }
                         is ApiResult.Error -> null
                     }
                 }

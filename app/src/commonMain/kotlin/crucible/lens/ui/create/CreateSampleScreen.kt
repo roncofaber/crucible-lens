@@ -14,7 +14,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.SampleCreateRequest
@@ -25,6 +24,8 @@ import crucible.lens.ui.common.DateTimePickerField
 import crucible.lens.ui.create.CreateSampleViewModel
 import crucible.lens.ui.create.SaveState
 import kotlinx.serialization.json.JsonObject
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun CreateSampleScreen(
@@ -43,10 +44,11 @@ fun CreateSampleScreen(
     var metadata by remember { mutableStateOf<JsonObject?>(null) }
     var isPublic by rememberSaveable { mutableStateOf(false) }
 
-    val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
+    val cacheManager = koinInject<CacheManager>()
+    val projects: List<Project> = remember { cacheManager.getProjects() ?: emptyList() }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
 
-    val createViewModel: CreateSampleViewModel = viewModel()
+    val createViewModel: CreateSampleViewModel = koinViewModel()
     val saveState by createViewModel.saveState.collectAsState()
     val isSaving = saveState is SaveState.Saving
     val snackbarHostState = remember { SnackbarHostState() }

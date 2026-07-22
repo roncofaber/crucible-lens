@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.lifecycle.viewmodel.compose.viewModel
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppTopBar
@@ -25,8 +24,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.api.ApiClient
-import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Instrument
 import crucible.lens.data.util.SortField
 import crucible.lens.data.util.SortState
@@ -44,6 +41,7 @@ import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.SearchBar
 import crucible.lens.platform.showToast
 import kotlinx.coroutines.launch
+import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun InstrumentListScreen(
@@ -58,7 +56,7 @@ fun InstrumentListScreen(
     onToggleHide: (String) -> Unit = {}
 ) {
     val platformContext = getPlatformContext()
-    val viewModel: InstrumentListViewModel = viewModel()
+    val viewModel: InstrumentListViewModel = koinViewModel()
     val loadState by viewModel.loadState.collectAsState()
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var hiddenExpanded by remember { mutableStateOf(false) }

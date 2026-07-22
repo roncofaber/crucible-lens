@@ -36,6 +36,7 @@ import crucible.lens.ui.common.FilterSheet
 import crucible.lens.ui.common.SearchFilters
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import org.koin.compose.koinInject
 
 // Maps resource type string to the correct icon.
 private fun iconForType(resourceType: String?) = when (resourceType) {
@@ -54,6 +55,7 @@ fun SearchScreen(
     modifier: Modifier = Modifier,
     userOrcid: String? = null
 ) {
+    val apiClient = koinInject<ApiClient>()
     var query by rememberSaveable { mutableStateOf("") }
     var showMineOnly by rememberSaveable { mutableStateOf(false) }
     // Search mode: false = name search, true = metadata search
@@ -89,13 +91,13 @@ fun SearchScreen(
         isFirstComposition = false
         isNameSearching = true
         val q = query.trim()
-        val samples = (ApiClient.service.searchSamples(q) as? ApiResult.Success)?.data
+        val samples = (apiClient.service.searchSamples(q) as? ApiResult.Success)?.data
             ?.map { ResourceSearchResult(it.uniqueId, "sample", it.name, it.ownerOrcid) }
             ?: emptyList()
-        val datasets = (ApiClient.service.searchDatasets(q) as? ApiResult.Success)?.data
+        val datasets = (apiClient.service.searchDatasets(q) as? ApiResult.Success)?.data
             ?.map { ResourceSearchResult(it.uniqueId, "dataset", it.name, it.ownerOrcid) }
             ?: emptyList()
-        val projects = (ApiClient.service.searchProjects(q) as? ApiResult.Success)?.data
+        val projects = (apiClient.service.searchProjects(q) as? ApiResult.Success)?.data
             ?.map { ResourceSearchResult(it.projectId, "project", it.title ?: it.projectId) }
             ?: emptyList()
         val combined = projects + samples + datasets
@@ -114,7 +116,7 @@ fun SearchScreen(
             val before = activeFilters.createdBefore.ifBlank { null }
             val projectId = activeFilters.projectId.ifBlank { null }
             val ownerOrcid = activeFilters.ownerOrcid.ifBlank { null }
-            val samples = (ApiClient.service.getFilteredSamples(
+            val samples = (apiClient.service.getFilteredSamples(
                 projectId = projectId,
                 sampleType = activeFilters.sampleType.ifBlank { null },
                 ownerOrcid = ownerOrcid,
@@ -123,7 +125,7 @@ fun SearchScreen(
             ) as? ApiResult.Success)?.data
                 ?.map { ResourceSearchResult(it.uniqueId, "sample", it.name, it.ownerOrcid) }
                 ?: emptyList()
-            val datasets = (ApiClient.service.getFilteredDatasets(
+            val datasets = (apiClient.service.getFilteredDatasets(
                 projectId = projectId,
                 measurement = activeFilters.measurement.ifBlank { null },
                 instrumentName = activeFilters.instrumentName.ifBlank { null },
@@ -152,7 +154,7 @@ fun SearchScreen(
         isFirstComposition = false
         isMetadataSearching = true
         metadataResults = try {
-            (ApiClient.service.searchScientificMetadata(query.trim()) as? ApiResult.Success)?.data
+            (apiClient.service.searchScientificMetadata(query.trim()) as? ApiResult.Success)?.data
                 ?: emptyList()
         } catch (e: CancellationException) {
             throw e

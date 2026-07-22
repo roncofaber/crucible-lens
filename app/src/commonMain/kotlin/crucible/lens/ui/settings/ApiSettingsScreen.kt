@@ -22,6 +22,7 @@ import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.ui.common.AppScaffold
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 private sealed interface HealthState {
     object Idle : HealthState
@@ -42,6 +43,7 @@ fun ApiSettingsScreen(
     var apiBaseUrlInput by remember { mutableStateOf(currentApiBaseUrl) }
     var graphExplorerUrlInput by remember { mutableStateOf(currentGraphExplorerUrl) }
     val platformContext = getPlatformContext()
+    val apiClient = koinInject<ApiClient>()
 
     val apiBaseUrlDirty = apiBaseUrlInput != currentApiBaseUrl
     val graphExplorerUrlDirty = graphExplorerUrlInput != currentGraphExplorerUrl
@@ -53,7 +55,7 @@ fun ApiSettingsScreen(
     suspend fun runHealthCheck(url: String) {
         if (url.isBlank()) { healthState = HealthState.Idle; return }
         healthState = HealthState.Checking
-        healthState = when (val result = ApiClient.service.checkHealth(url)) {
+        healthState = when (val result = apiClient.service.checkHealth(url)) {
             is ApiResult.Success -> HealthState.Ok(result.data)
             is ApiResult.Error   -> HealthState.Failed("HTTP ${result.code}: ${result.message}")
         }

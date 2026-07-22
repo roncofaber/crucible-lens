@@ -15,7 +15,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class ProjectsListViewModel : ViewModel() {
+class ProjectsListViewModel(
+    private val apiClient: ApiClient,
+    private val cacheManager: CacheManager
+) : ViewModel() {
 
     private val _loadState = MutableStateFlow<LoadState<List<Project>>>(LoadState.Loading)
     val loadState: StateFlow<LoadState<List<Project>>> = _loadState.asStateFlow()
@@ -30,7 +33,7 @@ class ProjectsListViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.Default) {
             try {
                 if (!forceRefresh) {
-                    val cached = CacheManager.getProjects()
+                    val cached = cacheManager.getProjects()
                     if (cached != null) {
                         withContext(Dispatchers.Main) {
                             _loadState.value = LoadState.Success(cached)
@@ -42,7 +45,7 @@ class ProjectsListViewModel : ViewModel() {
                         return@launch
                     }
                 } else {
-                    CacheManager.clearAll()
+                    cacheManager.clearAll()
                     withContext(Dispatchers.Main) {
                         _projectCounts.value = emptyMap()
                     }
@@ -54,9 +57,9 @@ class ProjectsListViewModel : ViewModel() {
                                        else LoadState.Loading
                 }
 
-                when (val resp = ApiClient.service.getProjects()) {
+                when (val resp = apiClient.service.getProjects()) {
                     is ApiResult.Success -> {
-                        CacheManager.cacheProjects(resp.data)
+                        cacheManager.cacheProjects(resp.data)
                         withContext(Dispatchers.Main) {
                             _loadState.value = LoadState.Success(resp.data)
                             _projectCounts.update { counts ->

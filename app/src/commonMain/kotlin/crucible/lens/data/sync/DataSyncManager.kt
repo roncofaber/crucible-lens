@@ -1,9 +1,7 @@
 package crucible.lens.data.sync
 
-import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
-import crucible.lens.data.cache.CacheManager
-import crucible.lens.data.util.fetchProjectData
+import crucible.lens.data.repository.CrucibleRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -16,23 +14,18 @@ import kotlinx.coroutines.coroutineScope
  *
  * fetchProjectData() is idempotent — it skips projects already cached.
  */
-object DataSyncManager {
+class DataSyncManager(private val repository: CrucibleRepository) {
 
     suspend fun syncAll() {
         coroutineScope {
-            // Load projects and instruments in parallel
-            val projectsDeferred = async {
-                (ApiClient.service.getProjects() as? ApiResult.Success)?.data
-                    ?.also { CacheManager.cacheProjects(it) }
-                    ?: CacheManager.getProjects()
-                    ?: emptyList()
-            }
-            val instrumentsDeferred = async {
-                (ApiClient.service.getInstruments() as? ApiResult.Success)?.data
-                    ?.also { CacheManager.cacheInstruments(it) }
-            }
+            // Always attempt a fresh network fetch; fall back to whatever is
+            // already cached if the network call fails.
+            val projectsDeferred = async { repository.fetchProjects(forceRefresh = true) }
+            val instrumentsDeferred = async { repository.fetchInstruments(forceRefresh = true) }
 
-            val projects = projectsDeferred.await()
+            val projects = (projectsDeferred.await() as? ApiResult.Success)?.data
+                ?: (repository.fetchProjects(forceRefresh = false) as? ApiResult.Success)?.data
+                ?: emptyList()
             instrumentsDeferred.await()
 
             // Load samples + datasets for every project in batches
@@ -40,7 +33,7 @@ object DataSyncManager {
                 coroutineScope {
                     batch.map { project ->
                         async {
-                            try { fetchProjectData(project.projectId) }
+                            try { repository.fetchProjectData(project.projectId) }
                             catch (e: CancellationException) { throw e }
                             catch (_: Exception) { }
                         }

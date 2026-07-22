@@ -19,6 +19,7 @@ import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.User
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 data class SearchFilters(
     val projectId: String = "",
@@ -188,6 +189,7 @@ private fun OwnerPickerField(
     var isSearching by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val apiClient = koinInject<ApiClient>()
 
     if (ownerOrcid.isNotBlank()) {
         OutlinedTextField(
@@ -216,7 +218,7 @@ private fun OwnerPickerField(
                     if (q.length < 3) { results = emptyList(); isSearching = false; return@launch }
                     delay(350)
                     isSearching = true
-                    results = (ApiClient.service.searchUsers(q) as? ApiResult.Success)?.data ?: emptyList()
+                    results = (apiClient.service.searchUsers(q) as? ApiResult.Success)?.data ?: emptyList()
                     isSearching = false
                 }
             },

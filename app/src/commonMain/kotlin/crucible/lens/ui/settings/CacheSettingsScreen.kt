@@ -18,6 +18,7 @@ import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.util.formatDecimal
 import crucible.lens.ui.common.AppScaffold
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 @Composable
 fun CacheSettingsScreen(
@@ -26,12 +27,13 @@ fun CacheSettingsScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val cacheManager = koinInject<CacheManager>()
     var cacheAge by remember { mutableStateOf<Long?>(null) }
     var cacheStats by remember { mutableStateOf<CacheManager.CacheStats?>(null) }
 
     LaunchedEffect(Unit) {
-        cacheAge = CacheManager.getProjectsAgeMinutes()
-        cacheStats = CacheManager.getDetailedStats()
+        cacheAge = cacheManager.getProjectsAgeMinutes()
+        cacheStats = cacheManager.getDetailedStats()
     }
 
     AppScaffold(
@@ -111,9 +113,9 @@ fun CacheSettingsScreen(
 
             OutlinedButton(
                 onClick = {
-                    CacheManager.clearAll()
+                    cacheManager.clearAll()
                     cacheAge = null
-                    cacheStats = CacheManager.getDetailedStats()
+                    cacheStats = cacheManager.getDetailedStats()
                     scope.launch {
                         snackbarHostState.showSnackbar(
                             message = "Cache cleared",

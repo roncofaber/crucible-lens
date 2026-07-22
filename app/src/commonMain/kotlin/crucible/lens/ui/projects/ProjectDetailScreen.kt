@@ -56,7 +56,8 @@ import crucible.lens.data.util.SortField
 import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
-import androidx.lifecycle.viewmodel.compose.viewModel
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.LoadState
 import crucible.lens.ui.common.CopyIdMenuItem
@@ -102,10 +103,11 @@ private fun rememberOwnerNames(
     var ownerNamesReady by remember(isOwnerGroupBy) {
         mutableStateOf(!isOwnerGroupBy || ownerNames.isNotEmpty())
     }
+    val apiClient = koinInject<ApiClient>()
     LaunchedEffect(isOwnerGroupBy, projectId) {
         if (!isOwnerGroupBy || ownerNames.isNotEmpty()) { ownerNamesReady = true; return@LaunchedEffect }
         try {
-            when (val resp = ApiClient.service.getProjectUsers(projectId)) {
+            when (val resp = apiClient.service.getProjectUsers(projectId)) {
                 is ApiResult.Success -> {
                     resp.data.forEach { u -> u.uniqueId?.let { id -> ownerNames[id] = ownerDisplayName(u.firstName, u.lastName) } }
                 }
@@ -196,14 +198,15 @@ fun ProjectDetailScreen(
     onCreateDataset: () -> Unit = {},
     onManageProject: () -> Unit = {},
     onUserClick: (String) -> Unit = {}) {
+    val cacheManager = koinInject<CacheManager>()
     val project = remember(projectId) {
-        CacheManager.getProjects()?.find { it.projectId == projectId }
+        cacheManager.getProjects()?.find { it.projectId == projectId }
     }
 
     val ctx = getPlatformContext()
     val prefs = remember(ctx) { createAppPreferences(ctx) }
 
-    val viewModel: ProjectDetailViewModel = viewModel()
+    val viewModel: ProjectDetailViewModel = koinViewModel()
     val loadState by viewModel.loadState.collectAsState()
     val pagerState = rememberPagerState(pageCount = { 2 })
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -675,6 +678,7 @@ private fun SamplesList(
     sortState: SortState = SortState(),
     onSampleClick: (String) -> Unit,
     leadingContent: (LazyListScope.() -> Unit)? = null) {
+    val cacheManager = koinInject<CacheManager>()
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == SampleGroupBy.OWNER, projectId)
     if (samples.isEmpty()) {
         EmptyListCard(resourceName = "Samples", defaultIcon = AppIcons.Sample, isFiltered = isFiltered)
@@ -738,7 +742,7 @@ private fun SamplesList(
                     }
                 }
                 if (fromCache) {
-                    val ageMin = CacheManager.getProjectDataAgeMinutes(projectId) ?: 0
+                    val ageMin = cacheManager.getProjectDataAgeMinutes(projectId) ?: 0
                     item(key = "cache_age") {
                         Text(
                             text = "Cached ${ageMin}m ago",
@@ -772,6 +776,7 @@ private fun DatasetsList(
     sortState: SortState = SortState(),
     onDatasetClick: (String) -> Unit,
     leadingContent: (LazyListScope.() -> Unit)? = null) {
+    val cacheManager = koinInject<CacheManager>()
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == DatasetGroupBy.OWNER, projectId)
     if (datasets.isEmpty()) {
         EmptyListCard(resourceName = "Datasets", defaultIcon = AppIcons.Dataset, isFiltered = isFiltered)
@@ -838,7 +843,7 @@ private fun DatasetsList(
                     }
                 }
                 if (fromCache) {
-                    val ageMin = CacheManager.getProjectDataAgeMinutes(projectId) ?: 0
+                    val ageMin = cacheManager.getProjectDataAgeMinutes(projectId) ?: 0
                     item(key = "cache_age") {
                         Text(
                             text = "Cached ${ageMin}m ago",

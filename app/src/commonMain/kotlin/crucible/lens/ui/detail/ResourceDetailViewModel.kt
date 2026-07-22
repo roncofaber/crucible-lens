@@ -30,8 +30,11 @@ sealed class UiState {
 
 private const val MAX_CARD_STATE_ENTRIES = 50
 
-class ResourceDetailViewModel : ViewModel() {
-    private val repository = CrucibleRepository()
+class ResourceDetailViewModel(
+    private val repository: CrucibleRepository,
+    private val cacheManager: CacheManager,
+    private val dataSyncManager: DataSyncManager
+) : ViewModel() {
 
     // Tracks the active fetch/refresh so navigating to a new resource
     // cancels any in-flight request for the previous one.
@@ -81,17 +84,17 @@ class ResourceDetailViewModel : ViewModel() {
     // ── Thumbnail helpers (L1 memory → L2 disk → network) ────────────────────
 
     private fun getThumbnails(uuid: String): List<Thumbnail>? =
-        CacheManager.getThumbnails(uuid)
+        cacheManager.getThumbnails(uuid)
 
     private suspend fun fetchAndCacheThumbnails(uuid: String): List<Thumbnail> {
         val fetched = repository.fetchThumbnails(uuid)
-        CacheManager.cacheThumbnails(uuid, fetched)
+        cacheManager.cacheThumbnails(uuid, fetched)
         // L2 disk cache stubbed: PersistentThumbnailCache not available in commonMain
         return fetched
     }
 
     private fun evictThumbnails(uuid: String) {
-        CacheManager.clearThumbnail(uuid)
+        cacheManager.clearThumbnail(uuid)
         // L2 disk cache stubbed: PersistentThumbnailCache not available in commonMain
     }
 
@@ -111,7 +114,7 @@ class ResourceDetailViewModel : ViewModel() {
         activeFetchJob = viewModelScope.launch {
             val trimmedUuid = uuid.trim()
 
-            val cachedResource = CacheManager.getResource(trimmedUuid)
+            val cachedResource = cacheManager.getResource(trimmedUuid)
             val cachedThumbnails = getThumbnails(trimmedUuid)
 
             // Show cached version immediately for snappy navigation, but always
@@ -127,7 +130,7 @@ class ResourceDetailViewModel : ViewModel() {
             when (val result = repository.fetchResourceByUuid(trimmedUuid)) {
                 is ResourceResult.Success -> {
                     val resource = result.resource
-                    CacheManager.cacheResource(trimmedUuid, resource)
+                    cacheManager.cacheResource(trimmedUuid, resource)
 
                     val thumbnails = if (resource is Dataset) {
                         getThumbnails(resource.uniqueId) ?: fetchAndCacheThumbnails(resource.uniqueId)
@@ -150,12 +153,12 @@ class ResourceDetailViewModel : ViewModel() {
             }
 
             uuidsToPreload.filter { it != resource.uniqueId }.distinct().forEach { uuid ->
-                if (CacheManager.getResource(uuid) == null) {
+                if (cacheManager.getResource(uuid) == null) {
                     launch {
                         try {
                             when (val result = repository.fetchResourceByUuid(uuid)) {
                                 is ResourceResult.Success -> {
-                                    CacheManager.cacheResource(uuid, result.resource)
+                                    cacheManager.cacheResource(uuid, result.resource)
                                     if (result.resource is Dataset && getThumbnails(uuid) == null) {
                                         fetchAndCacheThumbnails(uuid)
                                     }
@@ -181,7 +184,7 @@ class ResourceDetailViewModel : ViewModel() {
     fun startBackgroundSync() {
         _isSyncing.value = true
         syncJob = viewModelScope.launch {
-            try { DataSyncManager.syncAll() }
+            try { dataSyncManager.syncAll() }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) { }
             finally { _isSyncing.value = false }
@@ -206,7 +209,7 @@ class ResourceDetailViewModel : ViewModel() {
 
         activeFetchJob = viewModelScope.launch {
             val trimmedUuid = uuid.trim()
-            CacheManager.clearResource(trimmedUuid)
+            cacheManager.clearResource(trimmedUuid)
             evictThumbnails(trimmedUuid)
 
             val current = _uiState.value
@@ -217,7 +220,7 @@ class ResourceDetailViewModel : ViewModel() {
                         is ResourceResult.Success -> {
                             val thumbnails = if (result.resource is Dataset)
                                 fetchAndCacheThumbnails(trimmedUuid) else emptyList()
-                            CacheManager.cacheResource(trimmedUuid, result.resource)
+                            cacheManager.cacheResource(trimmedUuid, result.resource)
                             _uiState.value = UiState.Success(result.resource, thumbnails)
                         }
                         is ResourceResult.Error -> _uiState.value = UiState.Error(result.message)
@@ -239,7 +242,7 @@ class ResourceDetailViewModel : ViewModel() {
                 _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = true) else it }
                 try {
                     when (val result = repository.fetchResourceByUuid(trimmedUuid)) {
-                        is ResourceResult.Success -> CacheManager.cacheResource(trimmedUuid, result.resource)
+                        is ResourceResult.Success -> cacheManager.cacheResource(trimmedUuid, result.resource)
                         else -> {}
                     }
                 } catch (e: CancellationException) {

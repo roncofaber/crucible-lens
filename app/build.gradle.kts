@@ -8,7 +8,6 @@ plugins {
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.ksp)
 }
 
 val versionNameProp = project.findProperty("app.versionName") as? String ?: "0.0.0"
@@ -155,6 +154,11 @@ kotlin {
 
                 // QR code display/generation (qr-kit painter only)
                 implementation(libs.qr.kit)
+
+                // Dependency injection
+                implementation(libs.koin.core)
+                implementation(libs.koin.compose)
+                implementation(libs.koin.compose.viewmodel)
             }
         }
 

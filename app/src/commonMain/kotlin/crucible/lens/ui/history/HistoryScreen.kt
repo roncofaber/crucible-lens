@@ -28,6 +28,7 @@ import crucible.lens.ui.common.OpenInWebMenuItem
 import crucible.lens.ui.common.ShareMenuItem
 import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.openUrl
+import org.koin.compose.koinInject
 import crucible.lens.platform.shareText
 import crucible.lens.platform.showToast
 import crucible.lens.ui.common.AppScaffold
@@ -157,11 +158,12 @@ private fun HistoryCard(
     onClick: () -> Unit
 ) {
     val platformContext = getPlatformContext()
+    val cacheManager = koinInject<CacheManager>()
     var menuExpanded by remember { mutableStateOf(false) }
 
     // Best-effort cache lookups for display enrichment
-    val cached = remember(item.uuid) { CacheManager.getResource(item.uuid) }
-    val resourceType = remember(item.uuid) { CacheManager.getResourceType(item.uuid) }
+    val cached = remember(item.uuid) { cacheManager.getResource(item.uuid) }
+    val resourceType = remember(item.uuid) { cacheManager.getResourceType(item.uuid) }
     val projectId = remember(cached) {
         when (cached) {
             is Sample -> cached.projectId
@@ -171,7 +173,7 @@ private fun HistoryCard(
     }
     val projectName = remember(projectId) {
         projectId?.let { pid ->
-            CacheManager.getProjects()?.find { it.projectId == pid }?.title ?: pid
+            cacheManager.getProjects()?.find { it.projectId == pid }?.title ?: pid
         }
     }
     val icon = when (item.resourceType ?: resourceType) {

@@ -22,6 +22,7 @@ import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.UserAvatar
+import org.koin.compose.koinInject
 
 @Composable
 fun UserProfileScreen(
@@ -30,6 +31,7 @@ fun UserProfileScreen(
     onHome: () -> Unit = {}
 ) {
     val platformCtx = getPlatformContext()
+    val apiClient = koinInject<ApiClient>()
     var user by remember { mutableStateOf<User?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -39,13 +41,13 @@ fun UserProfileScreen(
         error = null
         val isOrcid = identifier.contains("-") && identifier.length > 10
         val result: ApiResult<User> = if (isOrcid) {
-            when (val r = ApiClient.service.resolveUsers(orcids = listOf(identifier))) {
+            when (val r = apiClient.service.resolveUsers(orcids = listOf(identifier))) {
                 is ApiResult.Success -> r.data[identifier]?.let { ApiResult.Success(it) }
                     ?: ApiResult.Error(404, "User not found")
                 is ApiResult.Error -> r
             }
         } else {
-            ApiClient.service.getUserByUsername(identifier)
+            apiClient.service.getUserByUsername(identifier)
         }
         when (result) {
             is ApiResult.Success -> user = result.data

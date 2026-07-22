@@ -13,15 +13,17 @@ data class CachedItem<T>(
     val timestamp: Long
 )
 
-object CacheManager {
-    private const val CACHE_TTL = 10 * 60 * 1000L // 10 minutes
-    private const val FILE_URL_TTL = 50 * 60 * 1000L // 50 min — safely under the 1-hour signed URL expiry
-    private const val MAX_RESOURCE_CACHE_SIZE = 50
-    private const val MAX_THUMBNAIL_CACHE_SIZE = 20
-    private const val MAX_PROJECT_DETAIL_CACHE_SIZE = 30
-    private const val MAX_INSTRUMENT_DATASETS_CACHE_SIZE = 15
-    private const val MAX_DATASET_FILES_CACHE_SIZE = 50
-    private const val MAX_FILE_URL_CACHE_SIZE = 200
+class CacheManager {
+    private companion object {
+        const val CACHE_TTL = 10 * 60 * 1000L // 10 minutes
+        const val FILE_URL_TTL = 50 * 60 * 1000L // 50 min — safely under the 1-hour signed URL expiry
+        const val MAX_RESOURCE_CACHE_SIZE = 50
+        const val MAX_THUMBNAIL_CACHE_SIZE = 20
+        const val MAX_PROJECT_DETAIL_CACHE_SIZE = 30
+        const val MAX_INSTRUMENT_DATASETS_CACHE_SIZE = 15
+        const val MAX_DATASET_FILES_CACHE_SIZE = 50
+        const val MAX_FILE_URL_CACHE_SIZE = 200
+    }
 
     private fun <V : CachedItem<*>> LinkedHashMap<String, V>.evictOldestIfOver(limit: Int) {
         if (size >= limit) {

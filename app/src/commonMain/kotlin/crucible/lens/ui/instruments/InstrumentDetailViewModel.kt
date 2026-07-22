@@ -14,7 +14,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class InstrumentDetailViewModel : ViewModel() {
+class InstrumentDetailViewModel(
+    private val apiClient: ApiClient,
+    private val cacheManager: CacheManager
+) : ViewModel() {
 
     private val _instrument = MutableStateFlow<Instrument?>(null)
     val instrument: StateFlow<Instrument?> = _instrument.asStateFlow()
@@ -37,10 +40,10 @@ class InstrumentDetailViewModel : ViewModel() {
             }
             try {
                 val resolvedInstrument = if (!forceRefresh) {
-                    CacheManager.getInstruments()?.find { it.uniqueId == instrumentId }
-                        ?: (ApiClient.service.getInstrument(instrumentId) as? ApiResult.Success)?.data
+                    cacheManager.getInstruments()?.find { it.uniqueId == instrumentId }
+                        ?: (apiClient.service.getInstrument(instrumentId) as? ApiResult.Success)?.data
                 } else {
-                    (ApiClient.service.getInstrument(instrumentId) as? ApiResult.Success)?.data
+                    (apiClient.service.getInstrument(instrumentId) as? ApiResult.Success)?.data
                 }
                 if (resolvedInstrument == null) {
                     _datasetsState.value = LoadState.Error("Instrument not found")
@@ -49,15 +52,15 @@ class InstrumentDetailViewModel : ViewModel() {
                 _instrument.value = resolvedInstrument
                 val instrName = resolvedInstrument.instrumentName ?: resolvedInstrument.uniqueId
                 if (!forceRefresh) {
-                    val cached = CacheManager.getInstrumentDatasets(instrName)
+                    val cached = cacheManager.getInstrumentDatasets(instrName)
                     if (cached != null) {
                         _datasetsState.value = LoadState.Success(cached, fromCache = true)
                         return@launch
                     }
                 }
-                when (val resp = ApiClient.service.getDatasetsByInstrument(instrName)) {
+                when (val resp = apiClient.service.getDatasetsByInstrument(instrName)) {
                     is ApiResult.Success -> {
-                        CacheManager.cacheInstrumentDatasets(instrName, resp.data)
+                        cacheManager.cacheInstrumentDatasets(instrName, resp.data)
                         _datasetsState.value = LoadState.Success(resp.data)
                     }
                     is ApiResult.Error -> _datasetsState.value = LoadState.Error("Failed to load datasets")

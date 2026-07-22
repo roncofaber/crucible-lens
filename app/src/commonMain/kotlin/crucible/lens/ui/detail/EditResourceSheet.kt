@@ -13,7 +13,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import crucible.lens.data.cache.CacheManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -31,6 +30,8 @@ import crucible.lens.data.model.CrucibleResource
 import crucible.lens.ui.create.EditResourceViewModel
 import crucible.lens.ui.create.SaveState
 import kotlinx.serialization.json.JsonObject
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -170,7 +171,7 @@ fun EditResourceSheet(
     onOpenMetadataEditor: ((currentJson: String) -> Unit)? = null,
     overrideMetadata: JsonObject? = null
 ) {
-    val editViewModel: EditResourceViewModel = viewModel()
+    val editViewModel: EditResourceViewModel = koinViewModel()
     val saveState by editViewModel.saveState.collectAsState()
     val isSaving = saveState is SaveState.Saving
     val snackbarHostState = remember { SnackbarHostState() }
@@ -224,7 +225,8 @@ private fun SampleEditFields(
     onOpenMetadataEditor: ((String) -> Unit)? = null,
     overrideMetadata: JsonObject? = null
 ) {
-    val projects = remember { CacheManager.getProjects() ?: emptyList() }
+    val cacheManager = koinInject<CacheManager>()
+    val projects = remember { cacheManager.getProjects() ?: emptyList() }
     var name by remember { mutableStateOf(resource.name) }
     var type by remember { mutableStateOf(resource.sampleType ?: "") }
     var description by remember { mutableStateOf(resource.description ?: "") }
@@ -281,7 +283,8 @@ private fun DatasetEditFields(
     onOpenMetadataEditor: ((String) -> Unit)? = null,
     overrideMetadata: JsonObject? = null
 ) {
-    val projects = remember { CacheManager.getProjects() ?: emptyList() }
+    val cacheManager = koinInject<CacheManager>()
+    val projects = remember { cacheManager.getProjects() ?: emptyList() }
     var name by remember { mutableStateOf(resource.name) }
     var measurement by remember { mutableStateOf(resource.measurement ?: "") }
     var instrumentName by remember { mutableStateOf(resource.instrumentName ?: "") }
