@@ -5,10 +5,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import crucible.lens.BuildConfig
+import crucible.lens.AppBuildConfig
 import crucible.lens.R
 
-actual fun appVersionName(): String = BuildConfig.VERSION_NAME
+actual fun appVersionName(): String = AppBuildConfig.VERSION_NAME
 
 @Composable
 actual fun AppLogo(isDarkTheme: Boolean, modifier: Modifier) {

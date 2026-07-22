@@ -1,7 +1,9 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.create
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -24,7 +26,6 @@ import crucible.lens.ui.create.CreateSampleViewModel
 import crucible.lens.ui.create.SaveState
 import kotlinx.serialization.json.JsonObject
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateSampleScreen(
     initialProjectId: String?,
@@ -68,13 +69,9 @@ fun CreateSampleScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("New Sample") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
+            AppTopBar(
+                title = "New Sample",
+                onBack = onBack
             )
         }
     ) { padding ->
@@ -96,7 +93,7 @@ fun CreateSampleScreen(
                 label = { Text("Name *") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                leadingIcon = { Icon(Icons.Default.Science, contentDescription = null) }
+                leadingIcon = { AppIcon(AppIcons.Sample) }
             )
             OutlinedTextField(
                 value = type,
@@ -104,7 +101,7 @@ fun CreateSampleScreen(
                 label = { Text("Type") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                leadingIcon = { Icon(Icons.Default.Category, contentDescription = null) }
+                leadingIcon = { AppIcon(AppIcons.Category) }
             )
 
             if (initialProjectId == null) {
@@ -118,8 +115,8 @@ fun CreateSampleScreen(
                         readOnly = true,
                         label = { Text("Project *") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = projectDropdownExpanded) },
-                        leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                        leadingIcon = { AppIcon(AppIcons.Project) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
                     )
                     ExposedDropdownMenu(
                         expanded = projectDropdownExpanded,
@@ -142,7 +139,7 @@ fun CreateSampleScreen(
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Project *") },
-                    leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
+                    leadingIcon = { AppIcon(AppIcons.Project) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -177,7 +174,7 @@ fun CreateSampleScreen(
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2,
                 maxLines = 4,
-                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = null) }
+                leadingIcon = { AppIcon(AppIcons.Notes) }
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -187,13 +184,7 @@ fun CreateSampleScreen(
 
             OutlinedCard(
                 onClick = {
-                    val ctx = listOfNotNull(
-                        name.trim().ifBlank { null }?.let { "Sample: $it" },
-                        type.trim().ifBlank { null }?.let { "Type: $it" },
-                        description.trim().ifBlank { null }?.let { "Description: $it" },
-                        selectedProject?.title?.let { "Project: $it" }
-                    ).joinToString(", ")
-                    MetadataHolder.put(metadata, ctx)
+                    MetadataHolder.put(metadata)
                     onOpenMetadataEditor()
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -204,7 +195,7 @@ fun CreateSampleScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.DataObject, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        AppIcon(AppIcons.FileJson, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                         Column {
                             Text("Scientific metadata", style = MaterialTheme.typography.bodyMedium)
                             Text(
@@ -215,7 +206,7 @@ fun CreateSampleScreen(
                             )
                         }
                     }
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -228,10 +219,10 @@ fun CreateSampleScreen(
                             description = description.trim().ifBlank { null },
                             projectId = selectedProjectId,
                             timestamp = timestamp.trim().ifBlank { null },
-                            public = isPublic,
-                            scientificMetadata = metadata
+                            public = isPublic
                         ),
-                        projectId = selectedProjectId
+                        projectId = selectedProjectId,
+                        metadata = metadata
                     )
                 },
                 enabled = name.isNotBlank() && !selectedProjectId.isNullOrBlank() && !isSaving,
@@ -244,7 +235,7 @@ fun CreateSampleScreen(
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    AppIcon(AppIcons.Add, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Create Sample")
                 }

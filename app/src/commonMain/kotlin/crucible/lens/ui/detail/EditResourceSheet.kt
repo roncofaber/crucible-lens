@@ -1,7 +1,8 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.detail
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 import crucible.lens.platform.*
 
 import androidx.compose.foundation.layout.*
@@ -29,18 +30,145 @@ import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.ui.create.EditResourceViewModel
 import crucible.lens.ui.create.SaveState
+import kotlinx.serialization.json.JsonObject
 
-@OptIn(ExperimentalMaterial3Api::class)
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Parses the metadata JSON for saving. Returns:
+ *  - null if the text is blank (no metadata → skip the API call)
+ *  - null if the text is unchanged from the original (no-op → skip the API call)
+ *  - a parsed JsonObject if changed and valid
+ * Calls [onError] with a user-facing message if the JSON is malformed (caller should abort save).
+ */
+private fun resolveMetadata(
+    text: String,
+    originalJson: String,
+    onError: (String) -> Unit
+): JsonObject? {
+    val trimmed = text.trim()
+    return when {
+        trimmed.isBlank() -> null
+        trimmed == originalJson.trim() -> null
+        else -> try {
+            trimmed.parseAsJsonObject()
+        } catch (e: Exception) {
+            onError(e.message?.substringAfter(":")?.trim() ?: "Invalid JSON")
+            null
+        }
+    }
+}
+
+// ── Shared composables ────────────────────────────────────────────────────────
+
+@Composable
+private fun EditProjectDropdown(
+    projects: List<Project>,
+    selectedProjectId: String?,
+    onProjectSelected: (String) -> Unit
+) {
+    if (projects.isEmpty()) return
+    val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            value = selectedProject?.title ?: selectedProjectId ?: "",
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Project") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            leadingIcon = { AppIcon(AppIcons.Project) },
+            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            projects.forEach { project ->
+                DropdownMenuItem(
+                    text = { Text(project.title ?: project.projectId) },
+                    onClick = { onProjectSelected(project.projectId); expanded = false }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditVisibilityToggle(isPublic: Boolean, onToggle: (Boolean) -> Unit, resourceName: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text("Public", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                if (isPublic) "$resourceName is visible to all users" else "$resourceName is private",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(checked = isPublic, onCheckedChange = onToggle)
+    }
+}
+
+@Composable
+private fun EditMetadataSection(
+    metadataJson: String,
+    onMetadataChange: (String) -> Unit,
+    metadataJsonError: String?,
+    onOpenMetadataEditor: ((String) -> Unit)?
+) {
+    Text("Metadata", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+    if (onOpenMetadataEditor != null) {
+        val fieldCount = runCatching {
+            metadataJson.trim().ifBlank { null }?.parseAsJsonObject()?.size
+        }.getOrNull() ?: 0
+        OutlinedCard(onClick = { onOpenMetadataEditor(metadataJson) }, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AppIcon(AppIcons.FileJson, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Column {
+                        Text("Scientific metadata", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (fieldCount == 0) "No fields" else "$fieldCount field${if (fieldCount != 1) "s" else ""}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    } else {
+        OutlinedTextField(
+            value = metadataJson,
+            onValueChange = onMetadataChange,
+            label = { Text("Scientific Metadata (JSON)") },
+            placeholder = { Text("{\n  \"key\": \"value\"\n}") },
+            modifier = Modifier.fillMaxWidth(),
+            isError = metadataJsonError != null,
+            minLines = 4,
+            maxLines = 12,
+            textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+        )
+        if (metadataJsonError != null) {
+            Text(metadataJsonError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+    }
+}
+
+// ── Sheet ─────────────────────────────────────────────────────────────────────
+
 @Composable
 fun EditResourceSheet(
     resource: CrucibleResource,
     onDismiss: () -> Unit,
     onSaved: () -> Unit,
-    // When provided, the metadata section shows a card that navigates to MetadataEditorScreen.
-    // The callback receives the current JSON string so it can seed MetadataHolder before navigating.
     onOpenMetadataEditor: ((currentJson: String) -> Unit)? = null,
-    // Overrides the resource's scientificMetadata (used when returning from MetadataEditorScreen).
-    overrideMetadata: kotlinx.serialization.json.JsonObject? = null
+    overrideMetadata: JsonObject? = null
 ) {
     val editViewModel: EditResourceViewModel = viewModel()
     val saveState by editViewModel.saveState.collectAsState()
@@ -73,27 +201,11 @@ fun EditResourceSheet(
                     text = "Edit ${if (resource is Sample) "Sample" else "Dataset"}",
                     style = MaterialTheme.typography.titleLarge
                 )
-
                 when (resource) {
-                    is Sample -> SampleEditFields(
-                        resource = resource,
-                        isSaving = isSaving,
-                        snackbarHostState = snackbarHostState,
-                        viewModel = editViewModel,
-                        onOpenMetadataEditor = onOpenMetadataEditor,
-                        overrideMetadata = overrideMetadata
-                    )
-                    is Dataset -> DatasetEditFields(
-                        resource = resource,
-                        isSaving = isSaving,
-                        snackbarHostState = snackbarHostState,
-                        viewModel = editViewModel,
-                        onOpenMetadataEditor = onOpenMetadataEditor,
-                        overrideMetadata = overrideMetadata
-                    )
+                    is Sample -> SampleEditFields(resource, isSaving, editViewModel, onOpenMetadataEditor, overrideMetadata)
+                    is Dataset -> DatasetEditFields(resource, isSaving, editViewModel, onOpenMetadataEditor, overrideMetadata)
                 }
             }
-
             SnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp)
@@ -102,162 +214,50 @@ fun EditResourceSheet(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+// ── Field groups ──────────────────────────────────────────────────────────────
+
 @Composable
 private fun SampleEditFields(
     resource: Sample,
     isSaving: Boolean,
-    snackbarHostState: SnackbarHostState,
     viewModel: EditResourceViewModel,
-    onOpenMetadataEditor: ((currentJson: String) -> Unit)? = null,
-    overrideMetadata: kotlinx.serialization.json.JsonObject? = null
+    onOpenMetadataEditor: ((String) -> Unit)? = null,
+    overrideMetadata: JsonObject? = null
 ) {
-    val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
+    val projects = remember { CacheManager.getProjects() ?: emptyList() }
     var name by remember { mutableStateOf(resource.name) }
     var type by remember { mutableStateOf(resource.sampleType ?: "") }
     var description by remember { mutableStateOf(resource.description ?: "") }
     var timestamp by remember { mutableStateOf(resource.timestamp ?: "") }
     var isPublic by remember { mutableStateOf(resource.isPublic ?: false) }
     var selectedProjectId by remember { mutableStateOf(resource.projectId) }
-    var projectDropdownExpanded by remember { mutableStateOf(false) }
-    var metadataJson by remember {
-        mutableStateOf(overrideMetadata?.toPrettyString() ?: resource.scientificMetadata?.toPrettyString() ?: "")
-    }
+    val originalMetadataJson = remember { resource.scientificMetadata?.toPrettyString() ?: "" }
+    var metadataJson by remember { mutableStateOf(overrideMetadata?.toPrettyString() ?: originalMetadataJson) }
     var metadataJsonError by remember { mutableStateOf<String?>(null) }
-    val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
 
-    // Section: Basic Info
     Text("Basic Info", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-
-    OutlinedTextField(
-        value = name,
-        onValueChange = { name = it },
-        label = { Text("Name *") },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        leadingIcon = { Icon(Icons.Default.Science, contentDescription = null) }
-    )
-    OutlinedTextField(
-        value = type,
-        onValueChange = { type = it },
-        label = { Text("Type") },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        leadingIcon = { Icon(Icons.Default.Category, contentDescription = null) }
-    )
-    if (projects.isNotEmpty()) {
-        ExposedDropdownMenuBox(
-            expanded = projectDropdownExpanded,
-            onExpandedChange = { projectDropdownExpanded = it }
-        ) {
-            OutlinedTextField(
-                value = selectedProject?.title ?: selectedProjectId ?: "",
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Project") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = projectDropdownExpanded) },
-                leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
-            )
-            ExposedDropdownMenu(
-                expanded = projectDropdownExpanded,
-                onDismissRequest = { projectDropdownExpanded = false }
-            ) {
-                projects.forEach { project ->
-                    DropdownMenuItem(
-                        text = { Text(project.title ?: project.projectId) },
-                        onClick = { selectedProjectId = project.projectId; projectDropdownExpanded = false }
-                    )
-                }
-            }
-        }
-    }
-    DateTimePickerField(
-        value = timestamp,
-        onValueChange = { timestamp = it },
-        modifier = Modifier.fillMaxWidth()
-    )
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Text("Public", style = MaterialTheme.typography.bodyLarge)
-            Text("Visible to all users", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(checked = isPublic, onCheckedChange = { isPublic = it })
-    }
+    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name *") },
+        modifier = Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { AppIcon(AppIcons.Sample) })
+    OutlinedTextField(value = type, onValueChange = { type = it }, label = { Text("Type") },
+        modifier = Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { AppIcon(AppIcons.Category) })
+    EditProjectDropdown(projects, selectedProjectId) { selectedProjectId = it }
+    DateTimePickerField(value = timestamp, onValueChange = { timestamp = it }, modifier = Modifier.fillMaxWidth())
+    EditVisibilityToggle(isPublic, { isPublic = it }, "Sample")
 
     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-    // Section: Description
     Text("Description", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-
-    OutlinedTextField(
-        value = description,
-        onValueChange = { description = it },
-        label = { Text("Description") },
-        modifier = Modifier.fillMaxWidth(),
-        minLines = 2,
-        maxLines = 4,
-        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = null) }
-    )
+    OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") },
+        modifier = Modifier.fillMaxWidth(), minLines = 2, maxLines = 4, leadingIcon = { AppIcon(AppIcons.Notes) })
 
     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-    // Section: Metadata
-    Text("Metadata", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-
-    if (onOpenMetadataEditor != null) {
-        val fieldCount = runCatching { metadataJson.trim().ifBlank { null }?.parseAsJsonObject()?.size }.getOrNull() ?: 0
-        OutlinedCard(onClick = { onOpenMetadataEditor(metadataJson) }, modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.DataObject, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Column {
-                        Text("Scientific metadata", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            if (fieldCount == 0) "No fields" else "$fieldCount field${if (fieldCount != 1) "s" else ""}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    } else {
-        OutlinedTextField(
-            value = metadataJson,
-            onValueChange = { metadataJson = it; metadataJsonError = null },
-            label = { Text("Scientific Metadata (JSON)") },
-            placeholder = { Text("{\n  \"key\": \"value\"\n}") },
-            modifier = Modifier.fillMaxWidth(),
-            isError = metadataJsonError != null,
-            minLines = 4,
-            maxLines = 12,
-            textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
-        )
-        if (metadataJsonError != null) {
-            Text(metadataJsonError!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-        }
-    }
+    EditMetadataSection(metadataJson, { metadataJson = it; metadataJsonError = null }, metadataJsonError, onOpenMetadataEditor)
 
     SaveButton(enabled = name.isNotBlank() && !isSaving, isSaving = isSaving) {
-        val text = metadataJson.trim()
-        val parsedMetadata = if (text.isBlank()) {
-            kotlinx.serialization.json.JsonObject(emptyMap())
-        } else {
-            try { text.parseAsJsonObject() } catch (e: Exception) {
-                metadataJsonError = e.message?.substringAfter(":")?.trim() ?: "Invalid JSON"
-                return@SaveButton
-            }
+        var parseError = false
+        val parsedMetadata = resolveMetadata(metadataJson, originalMetadataJson) {
+            metadataJsonError = it; parseError = true
         }
+        if (parseError) return@SaveButton
         viewModel.updateSample(
             resource.uniqueId,
             SampleUpdateRequest(
@@ -266,183 +266,63 @@ private fun SampleEditFields(
                 description = description.trim().ifBlank { null },
                 timestamp = timestamp.trim().ifBlank { null },
                 projectId = selectedProjectId,
-                public = isPublic,
-                scientificMetadata = parsedMetadata
-            )
+                public = isPublic
+            ),
+            metadata = parsedMetadata
         )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DatasetEditFields(
     resource: Dataset,
     isSaving: Boolean,
-    snackbarHostState: SnackbarHostState,
     viewModel: EditResourceViewModel,
-    onOpenMetadataEditor: ((currentJson: String) -> Unit)? = null,
-    overrideMetadata: kotlinx.serialization.json.JsonObject? = null
+    onOpenMetadataEditor: ((String) -> Unit)? = null,
+    overrideMetadata: JsonObject? = null
 ) {
-    val projects: List<Project> = remember { CacheManager.getProjects() ?: emptyList() }
+    val projects = remember { CacheManager.getProjects() ?: emptyList() }
     var name by remember { mutableStateOf(resource.name) }
     var measurement by remember { mutableStateOf(resource.measurement ?: "") }
     var instrumentName by remember { mutableStateOf(resource.instrumentName ?: "") }
     var sessionName by remember { mutableStateOf(resource.sessionName ?: "") }
     var dataType by remember { mutableStateOf(resource.dataType ?: "") }
+    var dataFormat by remember { mutableStateOf(resource.dataFormat ?: "") }
     var isPublic by remember { mutableStateOf(resource.isPublic ?: false) }
-    var metadataJson by remember {
-        mutableStateOf(overrideMetadata?.toPrettyString() ?: resource.scientificMetadata?.toPrettyString() ?: "")
-    }
-    var metadataJsonError by remember { mutableStateOf<String?>(null) }
     var timestamp by remember { mutableStateOf(resource.timestamp ?: "") }
     var selectedProjectId by remember { mutableStateOf(resource.projectId) }
-    var projectDropdownExpanded by remember { mutableStateOf(false) }
-    val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
+    val originalMetadataJson = remember { resource.scientificMetadata?.toPrettyString() ?: "" }
+    var metadataJson by remember { mutableStateOf(overrideMetadata?.toPrettyString() ?: originalMetadataJson) }
+    var metadataJsonError by remember { mutableStateOf<String?>(null) }
 
-    // Section: Basic Info
     Text("Basic Info", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-
-    OutlinedTextField(
-        value = name,
-        onValueChange = { name = it },
-        label = { Text("Name *") },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        leadingIcon = { Icon(Icons.Default.Dataset, contentDescription = null) }
-    )
-    OutlinedTextField(
-        value = measurement,
-        onValueChange = { measurement = it },
-        label = { Text("Measurement") },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        leadingIcon = { Icon(Icons.Default.Science, contentDescription = null) }
-    )
-    if (projects.isNotEmpty()) {
-        ExposedDropdownMenuBox(
-            expanded = projectDropdownExpanded,
-            onExpandedChange = { projectDropdownExpanded = it }
-        ) {
-            OutlinedTextField(
-                value = selectedProject?.title ?: selectedProjectId ?: "",
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Project") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = projectDropdownExpanded) },
-                leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
-            )
-            ExposedDropdownMenu(
-                expanded = projectDropdownExpanded,
-                onDismissRequest = { projectDropdownExpanded = false }
-            ) {
-                projects.forEach { project ->
-                    DropdownMenuItem(
-                        text = { Text(project.title ?: project.projectId) },
-                        onClick = { selectedProjectId = project.projectId; projectDropdownExpanded = false }
-                    )
-                }
-            }
-        }
-    }
+    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name *") },
+        modifier = Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { AppIcon(AppIcons.Dataset) })
+    OutlinedTextField(value = measurement, onValueChange = { measurement = it }, label = { Text("Measurement") },
+        modifier = Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { AppIcon(AppIcons.Sample) })
+    EditProjectDropdown(projects, selectedProjectId) { selectedProjectId = it }
 
     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-    // Section: Scientific Details
     Text("Scientific Details", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-
-    OutlinedTextField(
-        value = sessionName,
-        onValueChange = { sessionName = it },
-        label = { Text("Session") },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        leadingIcon = { Icon(Icons.Default.Tag, contentDescription = null) }
-    )
-    InstrumentPickerField(
-        value = instrumentName,
-        onValueChange = { instrumentName = it },
-        modifier = Modifier.fillMaxWidth()
-    )
-    DateTimePickerField(
-        value = timestamp,
-        onValueChange = { timestamp = it },
-        modifier = Modifier.fillMaxWidth()
-    )
-    OutlinedTextField(
-        value = dataType,
-        onValueChange = { dataType = it },
-        label = { Text("Data Type") },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) }
-    )
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Text("Public", style = MaterialTheme.typography.bodyLarge)
-            Text("Visible to all users", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(checked = isPublic, onCheckedChange = { isPublic = it })
-    }
+    OutlinedTextField(value = sessionName, onValueChange = { sessionName = it }, label = { Text("Session") },
+        modifier = Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { AppIcon(AppIcons.Tag) })
+    InstrumentPickerField(value = instrumentName, onValueChange = { instrumentName = it }, modifier = Modifier.fillMaxWidth())
+    DateTimePickerField(value = timestamp, onValueChange = { timestamp = it }, modifier = Modifier.fillMaxWidth())
+    OutlinedTextField(value = dataType, onValueChange = { dataType = it }, label = { Text("Data Type") },
+        modifier = Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { AppIcon(AppIcons.DataType) })
+    OutlinedTextField(value = dataFormat, onValueChange = { dataFormat = it }, label = { Text("Data Format") },
+        modifier = Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { AppIcon(AppIcons.FileGeneric) })
+    EditVisibilityToggle(isPublic, { isPublic = it }, "Dataset")
 
     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-    // Section: Metadata
-    Text("Metadata", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-
-    if (onOpenMetadataEditor != null) {
-        val fieldCount = runCatching { metadataJson.trim().ifBlank { null }?.parseAsJsonObject()?.size }.getOrNull() ?: 0
-        OutlinedCard(onClick = { onOpenMetadataEditor(metadataJson) }, modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.DataObject, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Column {
-                        Text("Scientific metadata", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            if (fieldCount == 0) "No fields" else "$fieldCount field${if (fieldCount != 1) "s" else ""}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    } else {
-        OutlinedTextField(
-            value = metadataJson,
-            onValueChange = { metadataJson = it; metadataJsonError = null },
-            label = { Text("Scientific Metadata (JSON)") },
-            placeholder = { Text("{\n  \"key\": \"value\"\n}") },
-            modifier = Modifier.fillMaxWidth(),
-            isError = metadataJsonError != null,
-            minLines = 4,
-            maxLines = 12,
-            textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
-        )
-        if (metadataJsonError != null) {
-            Text(metadataJsonError!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-        }
-    }
+    EditMetadataSection(metadataJson, { metadataJson = it; metadataJsonError = null }, metadataJsonError, onOpenMetadataEditor)
 
     SaveButton(enabled = name.isNotBlank() && !isSaving, isSaving = isSaving) {
-        val text = metadataJson.trim()
-        val parsedMetadata = if (text.isBlank()) {
-            kotlinx.serialization.json.JsonObject(emptyMap())
-        } else {
-            try { text.parseAsJsonObject() } catch (e: Exception) {
-                metadataJsonError = e.message?.substringAfter(":")?.trim() ?: "Invalid JSON"
-                return@SaveButton
-            }
+        var parseError = false
+        val parsedMetadata = resolveMetadata(metadataJson, originalMetadataJson) {
+            metadataJsonError = it; parseError = true
         }
+        if (parseError) return@SaveButton
         viewModel.updateDataset(
             resource.uniqueId,
             DatasetUpdateRequest(
@@ -453,33 +333,23 @@ private fun DatasetEditFields(
                 timestamp = timestamp.trim().ifBlank { null },
                 projectId = selectedProjectId,
                 dataType = dataType.trim().ifBlank { null },
-                public = isPublic,
-                scientificMetadata = parsedMetadata
-            )
+                dataFormat = dataFormat.trim().ifBlank { null },
+                public = isPublic
+            ),
+            metadata = parsedMetadata
         )
     }
 }
 
+// ── Save button ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun SaveButton(
-    enabled: Boolean,
-    isSaving: Boolean,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.fillMaxWidth().height(52.dp)
-    ) {
+private fun SaveButton(enabled: Boolean, isSaving: Boolean, onClick: () -> Unit) {
+    Button(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth().height(52.dp)) {
         if (isSaving) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
-                color = MaterialTheme.colorScheme.onPrimary,
-                strokeWidth = 2.dp
-            )
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
         } else {
-            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+            AppIcon(AppIcons.Save, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text("Save")
         }

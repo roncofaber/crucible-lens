@@ -1,7 +1,7 @@
 package crucible.lens.ui.detail.components
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIconToken
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
@@ -34,16 +34,16 @@ internal sealed class AssociatedFilesState {
 
 internal fun displayName(path: String): String = path.substringAfterLast('/').ifBlank { path }
 
-internal fun fileIcon(name: String): androidx.compose.ui.graphics.vector.ImageVector {
+internal fun fileIcon(name: String): AppIconToken {
     val ext = name.substringAfterLast('.', "").lowercase()
     return when (ext) {
-        "h5", "hdf5", "nc", "netcdf", "nxs" -> Icons.Default.Storage
-        "tiff", "tif", "png", "jpg", "jpeg", "bmp", "gif" -> Icons.Default.Image
-        "pdf" -> Icons.Default.Description
-        "csv", "tsv", "txt", "dat", "log" -> Icons.AutoMirrored.Filled.Notes
-        "json", "yaml", "yml", "xml", "toml" -> Icons.Default.DataObject
-        "zip", "tar", "gz", "bz2", "xz" -> Icons.Default.FolderZip
-        else -> Icons.AutoMirrored.Filled.InsertDriveFile
+        "h5", "hdf5", "nc", "netcdf", "nxs" -> AppIcons.FileStorage
+        "tiff", "tif", "png", "jpg", "jpeg", "bmp", "gif" -> AppIcons.FileImage
+        "pdf" -> AppIcons.FilePdf
+        "csv", "tsv", "txt", "dat", "log" -> AppIcons.Notes
+        "json", "yaml", "yml", "xml", "toml" -> AppIcons.FileJson
+        "zip", "tar", "gz", "bz2", "xz" -> AppIcons.FileArchive
+        else -> AppIcons.FileGeneric
     }
 }
 
@@ -121,7 +121,7 @@ internal fun AssociatedFilesCard(
                 ) {
                     ExpandChevron(expanded = expanded, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(20.dp))
+                    AppIcon(AppIcons.AttachFile, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
                         "Files (${filesState.files.size})",
@@ -144,7 +144,7 @@ internal fun AssociatedFilesCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(fileIcon(name), null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                AppIcon(fileIcon(name), modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(name, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     if (file.size != null) {
@@ -155,18 +155,18 @@ internal fun AssociatedFilesCard(
                                     CircularProgressIndicator(modifier = Modifier.size(18.dp).padding(1.dp), strokeWidth = 2.dp)
                                     Spacer(Modifier.width(32.dp))
                                 } else if (hasError) {
-                                    Icon(Icons.Default.CloudOff, "Unavailable", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.error)
+                                    AppIcon(AppIcons.Unreachable, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.error)
                                     Text("Unavailable", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(end = 4.dp))
                                 } else if (ingested) {
                                     IconButton(onClick = { openFile(file, false) }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.Download, "Download", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                        AppIcon(AppIcons.Download, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                                     }
                                     IconButton(onClick = { openFile(file, true) }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.Share, "Share", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                        AppIcon(AppIcons.Share, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                                     }
                                 } else {
                                     Text("Pending", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 4.dp))
-                                    Icon(Icons.Default.HourglassEmpty, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    AppIcon(AppIcons.Pending, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }

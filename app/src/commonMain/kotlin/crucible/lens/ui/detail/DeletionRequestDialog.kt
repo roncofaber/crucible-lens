@@ -1,7 +1,6 @@
 package crucible.lens.ui.detail
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -11,6 +10,7 @@ import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.CrucibleResource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
@@ -26,7 +26,7 @@ internal fun DeletionRequestDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
+        icon = { AppIcon(AppIcons.RequestDeletion) },
         title = { Text("Request deletion") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -67,6 +67,8 @@ internal fun DeletionRequestDialog(
                                 is ApiResult.Success -> onSubmitted()
                                 is ApiResult.Error -> errorMsg = "Failed (${resp.code}) — a request may already exist"
                             }
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             errorMsg = "Network error: ${e.message}"
                         } finally {

@@ -6,7 +6,7 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.DatasetUpdateRequest
 import crucible.lens.data.model.Instrument
-import crucible.lens.data.model.MetadataSearchResult
+import crucible.lens.data.model.ResourceSearchResult
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.SampleCreateRequest
@@ -17,13 +17,6 @@ import crucible.lens.data.model.AssociatedFile
 import crucible.lens.data.model.UploadCompleteRequest
 import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.model.ThumbnailCreateRequest
-import crucible.lens.data.model.ExtractMetadataRequest
-import crucible.lens.data.model.AnthropicContentBlock
-import crucible.lens.data.model.AnthropicImageSource
-import crucible.lens.data.model.AnthropicMessage
-import crucible.lens.data.model.AnthropicMessagesRequest
-import crucible.lens.data.model.AnthropicMessagesResponse
-import crucible.lens.data.model.MetadataImageData
 import crucible.lens.data.model.HealthStatus
 import crucible.lens.data.model.PaginatedResponse
 import crucible.lens.data.model.User
@@ -31,6 +24,7 @@ import crucible.lens.data.model.UserSearchResult
 import crucible.lens.data.model.ProfileUpdateRequest
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.ResponseException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlin.math.ceil
@@ -48,10 +42,14 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.add
 
 class CrucibleApiService(
     private val client: HttpClient,
@@ -116,6 +114,26 @@ class CrucibleApiService(
             email = email?.ifBlank { null },
             username = username?.ifBlank { null }
         ))
+    }
+
+    suspend fun getUserByUsername(username: String): ApiResult<User> = safeCall {
+        client.get("${baseUrl}users/by-username/$username") {
+            header("Authorization", "Bearer $apiKey")
+        }.body()
+    }
+
+    suspend fun resolveUsers(
+        orcids: List<String>? = null,
+        usernames: List<String>? = null
+    ): ApiResult<Map<String, User?>> = safeCall {
+        client.post("${baseUrl}users/resolve") {
+            header("Authorization", "Bearer $apiKey")
+            contentType(io.ktor.http.ContentType.Application.Json)
+            setBody(buildJsonObject {
+                if (orcids != null) put("orcids", buildJsonArray { orcids.forEach { add(it) } })
+                if (usernames != null) put("usernames", buildJsonArray { usernames.forEach { add(it) } })
+            })
+        }.body()
     }
 
     suspend fun searchUsers(q: String, limit: Int = 20): ApiResult<List<User>> = safeCall {
@@ -193,6 +211,24 @@ class CrucibleApiService(
         // Returns { unique_id, scientific_metadata: {...} } — extract the inner field
         val wrapper: JsonObject = get("resources/$uuid/metadata")
         wrapper["scientific_metadata"] as? JsonObject ?: kotlinx.serialization.json.JsonObject(emptyMap())
+    }
+
+    // POST /resources/{uuid}/metadata — creates or replaces all metadata (use overwrite=true to replace existing)
+    suspend fun postResourceMetadata(uuid: String, metadata: JsonObject, overwrite: Boolean = false): ApiResult<Unit> = safeCall {
+        client.post("${baseUrl}resources/$uuid/metadata${if (overwrite) "?overwrite=true" else ""}") {
+            header("Authorization", "Bearer $apiKey")
+            contentType(io.ktor.http.ContentType.Application.Json)
+            setBody(metadata)
+        }.body()
+    }
+
+    // PATCH /resources/{uuid}/metadata — merges into existing metadata (safe even if none exists yet)
+    suspend fun patchResourceMetadata(uuid: String, metadata: JsonObject): ApiResult<Unit> = safeCall {
+        client.patch("${baseUrl}resources/$uuid/metadata") {
+            header("Authorization", "Bearer $apiKey")
+            contentType(io.ktor.http.ContentType.Application.Json)
+            setBody(metadata)
+        }.body()
     }
 
     suspend fun getThumbnails(uuid: String): ApiResult<List<Thumbnail>> = safeCall {
@@ -425,74 +461,6 @@ class CrucibleApiService(
         }
     }
 
-    suspend fun extractMetadata(request: ExtractMetadataRequest): ApiResult<JsonObject> = safeCall {
-        post("extract_metadata", request.copy(
-            apiKey = ApiClient.aiApiKey?.ifBlank { null } ?: apiKey,
-            apiUrl = ApiClient.aiApiUrl
-        ))
-    }
-
-    suspend fun extractMetadataDirect(
-        images: List<MetadataImageData>,
-        context: String?,
-        aiApiKey: String,
-        aiApiUrl: String
-    ): ApiResult<JsonObject> = safeCall {
-        val contentBlocks = images.map { img ->
-            AnthropicContentBlock(
-                type = "image",
-                source = AnthropicImageSource(type = "base64", mediaType = img.mediaType, data = img.data)
-            )
-        } + AnthropicContentBlock(
-            type = "text",
-            text = "Extract metadata from these lab notebook page(s) as a JSON object." +
-                if (!context.isNullOrBlank()) " Additional context: $context" else ""
-        )
-
-        val request = AnthropicMessagesRequest(
-            model = "claude-haiku-4-5",
-            maxTokens = 2048,
-            system = ANTHROPIC_SYSTEM_PROMPT,
-            messages = listOf(AnthropicMessage(role = "user", content = contentBlocks))
-        )
-
-        val responseObj = client.post("$aiApiUrl/v1/messages") {
-            header("Authorization", "Bearer $aiApiKey")
-            contentType(ContentType.Application.Json)
-            setBody(request)
-        }.body<JsonObject>()
-
-        // Handle Anthropic-style error bodies returned as 2xx (e.g. auth errors from some proxies)
-        if (responseObj["type"]?.jsonPrimitive?.content == "error") {
-            val msg = responseObj["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content
-                ?: "Unknown AI error"
-            throw Exception(msg)
-        }
-
-        var raw = responseObj["content"]
-            ?.jsonArray?.firstOrNull()
-            ?.jsonObject?.get("text")
-            ?.jsonPrimitive?.content?.trim()
-            ?: throw Exception("No content in AI response: $responseObj")
-
-        // Strip markdown code fences if present (mirrors server-side logic)
-        if (raw.startsWith("```")) {
-            raw = raw.split("\n", limit = 2).getOrElse(1) { "" }
-            raw = raw.substringBeforeLast("```").trim()
-        }
-
-        json.parseToJsonElement(raw).jsonObject
-    }
-
-    companion object {
-        const val ANTHROPIC_SYSTEM_PROMPT =
-            "You are a scientific metadata extractor specializing in laboratory notebooks. " +
-            "Analyze the provided image(s) and extract all relevant scientific metadata as a single JSON object. " +
-            "Include fields such as sample identifiers, dates, measurements, conditions, instrument settings, " +
-            "observations, and any other structured information visible in the notebook. " +
-            "Return only valid JSON with no additional text or markdown."
-    }
-
     suspend fun requestDeletion(
         resourceId: String,
         reason: String? = null
@@ -573,13 +541,13 @@ class CrucibleApiService(
 
     suspend fun searchScientificMetadata(
         query: String,
-        limit: Int = 50
-    ): ApiResult<List<MetadataSearchResult>> = safeCall {
+        limit: Int = 20
+    ): ApiResult<List<ResourceSearchResult>> = safeCall {
         client.get("${baseUrl}resources/metadata/search") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("q", query)
-            url.parameters.append("limit", limit.toString())
-        }.body()
+            if (limit != 20) url.parameters.append("limit", limit.toString())
+        }.body<PaginatedResponse<ResourceSearchResult>>().items
     }
 
     // ── Linking ──────────────────────────────────────────────────────────────
@@ -717,6 +685,8 @@ suspend fun <T> safeCall(block: suspend () -> T): ApiResult<T> = try {
     ApiResult.Success(block())
 } catch (e: ResponseException) {
     ApiResult.Error(e.response.status.value, "HTTP ${e.response.status.value}: ${e.response.status.description}")
+} catch (e: CancellationException) {
+    throw e
 } catch (e: Exception) {
     ApiResult.Error(-1, e.message ?: "Unknown error")
 }

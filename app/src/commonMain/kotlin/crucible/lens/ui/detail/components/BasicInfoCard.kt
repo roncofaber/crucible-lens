@@ -1,13 +1,12 @@
 package crucible.lens.ui.detail.components
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.tween
+import crucible.lens.ui.common.EffectsFastSpring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -46,8 +45,8 @@ internal fun BasicInfoCard(
             AnimatedContent(
                 targetState = resource.name,
                 transitionSpec = {
-                    fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith
-                        fadeOut(animationSpec = tween(durationMillis = 200))
+                    fadeIn(animationSpec = EffectsFastSpring) togetherWith
+                        fadeOut(animationSpec = EffectsFastSpring)
                 },
                 label = "resource_name"
             ) { name ->
@@ -85,9 +84,7 @@ internal fun BasicInfoCard(
                     enabled = onPrev != null,
                     modifier = Modifier.size(28.dp)
                 ) {
-                    Icon(
-                        Icons.Default.ChevronLeft,
-                        contentDescription = "Previous sample",
+                    AppIcon(AppIcons.CarouselPrev,
                         tint = if (onPrev != null) MaterialTheme.colorScheme.primary
                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
                     )
@@ -100,8 +97,8 @@ internal fun BasicInfoCard(
                 AnimatedContent(
                     targetState = counterText,
                     transitionSpec = {
-                        fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith
-                            fadeOut(animationSpec = tween(durationMillis = 200))
+                        fadeIn(animationSpec = EffectsFastSpring) togetherWith
+                            fadeOut(animationSpec = EffectsFastSpring)
                     },
                     label = "sibling_counter"
                 ) { text ->
@@ -116,9 +113,7 @@ internal fun BasicInfoCard(
                     enabled = onNext != null,
                     modifier = Modifier.size(28.dp)
                 ) {
-                    Icon(
-                        Icons.Default.ChevronRight,
-                        contentDescription = "Next sample",
+                    AppIcon(AppIcons.NavigateNext,
                         tint = if (onNext != null) MaterialTheme.colorScheme.primary
                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
                     )

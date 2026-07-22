@@ -1,7 +1,9 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.create
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -24,9 +26,9 @@ import crucible.lens.platform.PlatformBase64
 import crucible.lens.platform.rememberCameraPicker
 import crucible.lens.platform.rememberGalleryPicker
 import kotlin.time.Clock
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddFilesScreen(
     onBack: () -> Unit,
@@ -88,6 +90,8 @@ fun AddFilesScreen(
                         }
                     }
                     snackbarHostState.showSnackbar(if (files.size == 1) "File uploaded" else "${files.size} files uploaded")
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                     snackbarHostState.showSnackbar("Upload failed — check your connection")
                 } finally {
@@ -105,13 +109,9 @@ fun AddFilesScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text(if (isUploadMode) "Add files" else "Attach files") },
-                navigationIcon = {
-                    IconButton(onClick = onBack, enabled = !isUploading) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+            AppTopBar(
+                title = if (isUploadMode) "Add files" else "Attach files",
+                onBack = onBack,
                 actions = {
                     TextButton(onClick = ::onDoneClicked, enabled = !isUploading) {
                         if (isUploading) {
@@ -141,7 +141,7 @@ fun AddFilesScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        AppIcon(AppIcons.AttachFile, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("No files added yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -185,7 +185,7 @@ fun AddFilesScreen(
                                 modifier = Modifier.size(36.dp),
                                 enabled = !isUploading
                             ) {
-                                Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                                AppIcon(AppIcons.ClearInput, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -194,12 +194,12 @@ fun AddFilesScreen(
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { cameraPicker() }, modifier = Modifier.weight(1f), enabled = !isUploading) {
-                    Icon(Icons.Default.AddAPhoto, null, modifier = Modifier.size(16.dp))
+                    AppIcon(AppIcons.TakePhoto, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("Camera")
                 }
                 OutlinedButton(onClick = { galleryPicker() }, modifier = Modifier.weight(1f), enabled = !isUploading) {
-                    Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(16.dp))
+                    AppIcon(AppIcons.AttachFile, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("Attach file")
                 }

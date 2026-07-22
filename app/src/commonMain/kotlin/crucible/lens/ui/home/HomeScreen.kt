@@ -1,7 +1,9 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.home
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIconToken
+import crucible.lens.ui.common.AppIcons
 import crucible.lens.platform.*
 
 
@@ -46,7 +48,7 @@ import kotlinx.coroutines.launch
 import kotlin.time.Clock
 
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     graphExplorerUrl: String,
@@ -95,11 +97,9 @@ fun HomeScreen(
     var isPreloading by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        val persistentData = PersistentProjectCache.loadProjectData(platformContext)
+        val persistentData = PersistentProjectCache.load(platformContext)
         if (persistentData != null && allProjects.isEmpty()) {
-            allProjects = persistentData.map {
-                Project(projectId = it.projectId, title = it.projectName)
-            }
+            allProjects = persistentData
         }
     }
 
@@ -136,6 +136,8 @@ fun HomeScreen(
         try {
             (ApiClient.service.getInstruments() as? crucible.lens.data.api.ApiResult.Success)?.data
                 ?.also { CacheManager.cacheInstruments(it) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (_: Exception) { }
     }
 
@@ -156,6 +158,8 @@ fun HomeScreen(
                     try {
                         fetchProjectData(project.projectId)
                         consecutiveFailures = 0
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         consecutiveFailures++
                     }
@@ -165,17 +169,9 @@ fun HomeScreen(
         }
 
         launch(kotlinx.coroutines.Dispatchers.Default) {
-            try {
-                val samplesMap = mutableMapOf<String, List<crucible.lens.data.model.Sample>>()
-                val datasetsMap = mutableMapOf<String, List<crucible.lens.data.model.Dataset>>()
-                allProjects.forEach { project ->
-                    CacheManager.getProjectSamples(project.projectId)?.let { samplesMap[project.projectId] = it }
-                    CacheManager.getProjectDatasets(project.projectId)?.let { datasetsMap[project.projectId] = it }
-                }
-                PersistentProjectCache.saveProjectData(platformContext, allProjects, samplesMap, datasetsMap)
-            } catch (e: Exception) {
-
-            }
+            try { PersistentProjectCache.save(platformContext, allProjects) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) {}
         }
         } finally {
             isPreloading = false
@@ -213,11 +209,11 @@ fun HomeScreen(
                             }
                         } else {
                             IconButton(onClick = { fetchError = null; retryTrigger++ }) {
-                                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                                AppIcon(AppIcons.Refresh)
                             }
                         }
-                        IconButton(onClick = { showHelpDialog = true }) { Icon(Icons.AutoMirrored.Filled.Help, contentDescription = "Help") }
-                        IconButton(onClick = onSettingsClick) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
+                        IconButton(onClick = { showHelpDialog = true }) { AppIcon(AppIcons.Help) }
+                        IconButton(onClick = onSettingsClick) { AppIcon(AppIcons.Settings) }
                     }
                 )
         }
@@ -285,9 +281,7 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            Icons.Default.Error,
-                            contentDescription = null,
+                        AppIcon(AppIcons.Error,
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onErrorContainer
                         )
@@ -309,9 +303,7 @@ fun HomeScreen(
                             onClick = { fetchError = null },
                             modifier = Modifier.size(32.dp)
                         ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Dismiss",
+                            AppIcon(AppIcons.ClearInput,
                                 modifier = Modifier.size(16.dp),
                                 tint = MaterialTheme.colorScheme.onErrorContainer
                             )
@@ -410,10 +402,10 @@ private fun HomeSearchPill(onClick: () -> Unit, onScan: () -> Unit) {
             modifier = Modifier.fillMaxSize().padding(start = 16.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            AppIcon(AppIcons.Search, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
             Text("Search samples, datasets...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f).padding(start = 12.dp))
             IconButton(onClick = onScan) {
-                Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan QR", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                AppIcon(AppIcons.ScanQr, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -435,7 +427,7 @@ private fun HomeBrowseSection(
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(28.dp))
+                    AppIcon(AppIcons.Project, modifier = Modifier.size(28.dp))
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("Projects", style = MaterialTheme.typography.labelMedium)
                 }
@@ -448,7 +440,7 @@ private fun HomeBrowseSection(
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Biotech, contentDescription = null, modifier = Modifier.size(28.dp))
+                    AppIcon(AppIcons.Instrument, modifier = Modifier.size(28.dp))
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("Instruments", style = MaterialTheme.typography.labelMedium)
                 }
@@ -467,7 +459,7 @@ private fun HomeCreateSection(onCreateSample: () -> Unit, onCreateDataset: () ->
                 modifier = Modifier.weight(1f).height(52.dp),
                 shape = MaterialTheme.shapes.medium
             ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                AppIcon(AppIcons.Add, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("New Sample", style = MaterialTheme.typography.labelMedium)
             }
@@ -476,7 +468,7 @@ private fun HomeCreateSection(onCreateSample: () -> Unit, onCreateDataset: () ->
                 modifier = Modifier.weight(1f).height(52.dp),
                 shape = MaterialTheme.shapes.medium
             ) {
-                Icon(Icons.Default.Dataset, contentDescription = null, modifier = Modifier.size(18.dp))
+                AppIcon(AppIcons.Dataset, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("New Dataset", style = MaterialTheme.typography.labelMedium)
             }
@@ -494,7 +486,7 @@ private fun HomeLastVisited(name: String, onClick: () -> Unit, onHistory: () -> 
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                AppIcon(AppIcons.History, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
                 Text("Last Visited", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
             Row(
@@ -503,7 +495,7 @@ private fun HomeLastVisited(name: String, onClick: () -> Unit, onHistory: () -> 
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text("See all", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                Icon(Icons.Default.ChevronRight, contentDescription = "History", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                AppIcon(AppIcons.NavigateNext, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
             }
         }
         Card(
@@ -516,7 +508,7 @@ private fun HomeLastVisited(name: String, onClick: () -> Unit, onHistory: () -> 
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                AppIcon(AppIcons.RecentItems, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -531,7 +523,7 @@ private fun HomeLastVisited(name: String, onClick: () -> Unit, onHistory: () -> 
                         modifier = Modifier.basicMarquee()
                     )
                 }
-                Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                AppIcon(AppIcons.NavigateNext, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -560,7 +552,7 @@ private fun HomePinnedProjects(
     if (pendingProjectName != null) {
         AlertDialog(
             onDismissRequest = { pendingUnpinProjectId = null },
-            icon = { Icon(Icons.Default.BookmarkRemove, contentDescription = null) },
+            icon = { AppIcon(AppIcons.RemovePin) },
             title = { Text("Unpin project?") },
             text = { Text("Remove \"$pendingProjectName\" from pinned items?") },
             confirmButton = {
@@ -577,7 +569,7 @@ private fun HomePinnedProjects(
     if (pendingInstrumentName != null) {
         AlertDialog(
             onDismissRequest = { pendingUnpinInstrumentId = null },
-            icon = { Icon(Icons.Default.BookmarkRemove, contentDescription = null) },
+            icon = { AppIcon(AppIcons.RemovePin) },
             title = { Text("Unpin instrument?") },
             text = { Text("Remove \"$pendingInstrumentName\" from pinned items?") },
             confirmButton = {
@@ -600,7 +592,7 @@ private fun HomePinnedProjects(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.padding(bottom = 6.dp)
         ) {
-            Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+            AppIcon(AppIcons.Pinned, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
             Text("Pinned", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         }
         // Scrollable cards area — fade at bottom signals more content
@@ -624,7 +616,7 @@ private fun HomePinnedProjects(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        AppIcon(AppIcons.Project, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                         Text(
                             text = project.title ?: project.projectId,
                             style = MaterialTheme.typography.bodyMedium,
@@ -633,7 +625,7 @@ private fun HomePinnedProjects(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
-                        Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        AppIcon(AppIcons.NavigateNext, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -650,7 +642,7 @@ private fun HomePinnedProjects(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(Icons.Default.Biotech, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        AppIcon(AppIcons.Instrument, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                         Text(
                             text = instrument.instrumentName ?: instrument.uniqueId,
                             style = MaterialTheme.typography.bodyMedium,
@@ -659,7 +651,7 @@ private fun HomePinnedProjects(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
-                        Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        AppIcon(AppIcons.NavigateNext, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -673,7 +665,7 @@ private fun HomePinnedProjects(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(Icons.Default.Bookmark, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f), modifier = Modifier.size(26.dp))
+                    AppIcon(AppIcons.Pinned, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f), modifier = Modifier.size(26.dp))
                     Text("No pinned items", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                     Text("Bookmark a project or instrument to pin it here", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                 }
@@ -709,7 +701,7 @@ private fun HomeFooter(graphExplorerUrl: String) {
         OutlinedButton(onClick = {
             openUrl(ctx, graphExplorerUrl)
         }) {
-            Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(18.dp))
+            AppIcon(AppIcons.WebUrl, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
             Text("Open Web Explorer", style = MaterialTheme.typography.labelLarge)
         }
@@ -735,41 +727,25 @@ private fun HelpDialog(onDismiss: () -> Unit, onSettings: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
-            Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+            AppIcon(AppIcons.Info, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
         },
         title = { Text("How to Use Crucible Lens", style = MaterialTheme.typography.titleLarge) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                HelpSection(Icons.Default.QrCodeScanner, "Scan QR Codes",
-                    "Point your camera at any Crucible QR code to instantly load sample or dataset details. The app vibrates when a code is detected.")
-                HelpSection(Icons.Default.Search, "Global Search",
-                    "Search across all cached samples and datasets by name, type, keywords, metadata, and more. Available from the home screen and from any browse or detail screen.")
-                HelpSection(Icons.Default.Folder, "Browse Projects",
-                    "Explore all projects and their contents. Tap the bookmark icon to pin favorites — they appear on the home screen for quick access. Swipe a project left to archive it.")
-                HelpSection(Icons.Default.Biotech, "Browse Instruments",
-                    "View all registered instruments at the Molecular Foundry. Tap an instrument to see its details and the datasets collected with it.")
-                HelpSection(Icons.Default.History, "History",
-                    "The clock icon (top right) shows recently viewed resources so you can jump back to them instantly.")
-                HelpSection(Icons.Default.Info, "Resource Details",
-                    "From any sample or dataset card: copy the unique ID, display its QR code, share a link, or open it directly in the Graph Explorer.")
-                HelpSection(Icons.Default.Language, "Web Explorer",
-                    "Access the full Crucible web interface for advanced features and data exploration.")
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary)) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Default.Lightbulb, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
-                            Text("About Crucible", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onPrimary)
-                        }
-                        Text(
-                            "Crucible is the Molecular Foundry's data management system for tracking samples, datasets, and experimental workflows.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                }
+                HelpSection(AppIcons.ScanQr, "Scan QR Codes",
+                    "Point the camera at a Crucible QR code to open a sample or dataset.")
+                HelpSection(AppIcons.Search, "Search",
+                    "Search samples, datasets, projects, and instruments by name, type, metadata, or keywords.")
+                HelpSection(AppIcons.Project, "Projects",
+                    "Browse all projects and their contents. Tap the pin icon to keep a project on the home screen. Swipe left to hide it.")
+                HelpSection(AppIcons.Instrument, "Instruments",
+                    "Browse instruments at the Molecular Foundry and the datasets collected with each one.")
+                HelpSection(AppIcons.History, "History",
+                    "The home screen shows your last visited resource. Tap \"See all\" to view your full browsing history.")
+                HelpSection(AppIcons.Info, "Resource Details",
+                    "From any sample or dataset: view metadata and thumbnails, copy the ID, generate a QR code, or open in the web interface.")
+                HelpSection(AppIcons.WebUrl, "Web Explorer",
+                    "Opens the resource in the Crucible Graph Explorer for full data management.")
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Need to configure your API key? ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -777,14 +753,14 @@ private fun HelpDialog(onDismiss: () -> Unit, onSettings: () -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Got it!") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
     )
 }
 
 @Composable
-private fun HelpSection(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, description: String) {
+private fun HelpSection(icon: AppIconToken, title: String, description: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+        AppIcon(icon, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -796,7 +772,7 @@ private fun HelpSection(icon: androidx.compose.ui.graphics.vector.ImageVector, t
 private fun EasterEggDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp)) },
+        icon = { AppIcon(AppIcons.AiFeature, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp)) },
         title = { Text("Loading Messages", style = MaterialTheme.typography.titleLarge) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {

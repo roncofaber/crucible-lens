@@ -1,9 +1,6 @@
 package crucible.lens.ui.detail.components
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
@@ -30,7 +27,6 @@ import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
 import crucible.lens.platform.showToast
-import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.StandardSizeAnim
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,6 +37,7 @@ import kotlinx.serialization.json.JsonPrimitive
 internal fun DatasetDetailsCard(
     dataset: Dataset,
     onProjectClick: (String) -> Unit,
+    onUserClick: (String) -> Unit = {},
     onInstrumentClick: (String) -> Unit = {},
     onShowQr: () -> Unit = {},
     initialAdvanced: Boolean = false,
@@ -181,12 +178,12 @@ internal fun DatasetDetailsCard(
                             }
                             ClickableInfoRow(
                                 icon = AppIcons.User, label = "Owner", value = ownerLabel,
-                                onClick = { if (dataset.ownerOrcid != null) openUrl(platformCtx, "https://orcid.org/${dataset.ownerOrcid}") }
+                                onClick = { onUserClick(dataset.owner.username) }
                             )
                         }
                         dataset.ownerOrcid != null -> ClickableInfoRow(
-                            icon = AppIcons.User, label = "Owner ORCID", value = dataset.ownerOrcid,
-                            onClick = { openUrl(platformCtx, "https://orcid.org/${dataset.ownerOrcid}") }
+                            icon = AppIcons.User, label = "Owner", value = dataset.ownerOrcid,
+                            onClick = { onUserClick(dataset.ownerOrcid) }
                         )
                         else -> InfoRow(icon = AppIcons.User, label = "Owner", value = "None")
                     }
@@ -227,7 +224,11 @@ internal fun DatasetDetailsCard(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    ExpandChevron(expanded = advanced, modifier = Modifier.size(16.dp))
+                    AppIcon(
+                        if (advanced) AppIcons.HideContent else AppIcons.ShowContent,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }

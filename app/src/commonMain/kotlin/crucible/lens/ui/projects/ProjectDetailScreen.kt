@@ -1,10 +1,10 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.projects
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
 import crucible.lens.platform.*
 
 
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -21,6 +21,7 @@ import androidx.compose.foundation.horizontalScroll
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -55,7 +56,9 @@ import crucible.lens.data.util.SortField
 import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
+import androidx.lifecycle.viewmodel.compose.viewModel
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.LoadState
 import crucible.lens.ui.common.CopyIdMenuItem
 import crucible.lens.ui.common.OpenInWebMenuItem
 import crucible.lens.ui.common.RefreshMenuItem
@@ -70,10 +73,13 @@ import crucible.lens.platform.openUrl
 import androidx.compose.ui.graphics.SolidColor
 import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.data.preferences.createAppPreferences
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+
+// ProjectContent is defined in ProjectDetailViewModel.kt
 
 private enum class SampleGroupBy(val label: String) {
     NONE("None"), TYPE("Type"), DATE("Date"), OWNER("Owner")
@@ -107,6 +113,8 @@ private fun rememberOwnerNames(
                     // Fail silently
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) { }
         ownerNamesReady = true
     }
@@ -171,7 +179,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.loadMoreItem(
 }
 
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalAnimationApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun ProjectDetailScreen(
     projectId: String,
@@ -186,7 +194,8 @@ fun ProjectDetailScreen(
     isHidden: Boolean = false,
     onCreateSample: () -> Unit = {},
     onCreateDataset: () -> Unit = {},
-    onManageProject: () -> Unit = {}) {
+    onManageProject: () -> Unit = {},
+    onUserClick: (String) -> Unit = {}) {
     val project = remember(projectId) {
         CacheManager.getProjects()?.find { it.projectId == projectId }
     }
@@ -194,16 +203,13 @@ fun ProjectDetailScreen(
     val ctx = getPlatformContext()
     val prefs = remember(ctx) { createAppPreferences(ctx) }
 
-    var samples by remember { mutableStateOf<List<Sample>?>(null) }
-    var datasets by remember { mutableStateOf<List<Dataset>?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val viewModel: ProjectDetailViewModel = viewModel()
+    val loadState by viewModel.loadState.collectAsState()
     val pagerState = rememberPagerState(pageCount = { 2 })
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var sampleGroupBy by remember { mutableStateOf(SampleGroupBy.TYPE) }
     var datasetGroupBy by remember { mutableStateOf(DatasetGroupBy.MEASUREMENT) }
     var sortState by remember { mutableStateOf(SortState()) }
-    var fromCache by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     // Load persisted group-by choices and default tab on first composition
@@ -215,123 +221,59 @@ fun ProjectDetailScreen(
             pagerState.scrollToPage(1)
         }
     }
-    var isRefreshingNow by remember { mutableStateOf(false) }
 
-    val filteredSamples = remember(samples, searchQuery) {
-        if (searchQuery.isBlank()) samples ?: emptyList()
-        else (samples ?: emptyList()).filter { it.matchesSearch(searchQuery) }
+    val projectContent = (loadState as? LoadState.Success)?.data
+    val samples = projectContent?.samples ?: emptyList()
+    val datasets = projectContent?.datasets ?: emptyList()
+    val filteredSamples = remember(loadState, searchQuery) {
+        if (searchQuery.isBlank()) samples
+        else samples.filter { it.matchesSearch(searchQuery) }
     }
-    val filteredDatasets = remember(datasets, searchQuery) {
-        if (searchQuery.isBlank()) datasets ?: emptyList()
-        else (datasets ?: emptyList()).filter { it.matchesSearch(searchQuery) }
-    }
-
-    fun loadProjectData(forceRefresh: Boolean = false) {
-        if (forceRefresh) isRefreshingNow = true
-        scope.launch {
-            try {
-                isLoading = true
-                error = null
-
-                // Always try cache first
-                val cachedSamples = CacheManager.getProjectSamples(projectId)
-                val cachedDatasets = CacheManager.getProjectDatasets(projectId)
-
-                if (cachedSamples != null && cachedDatasets != null && !forceRefresh) {
-                    samples = cachedSamples
-                    datasets = cachedDatasets
-                    fromCache = true
-                    isLoading = false
-                    return@launch
-                }
-
-                // Skip API calls for archived projects (use cache only)
-                if (isHidden) {
-                    // Use cache if available, otherwise show empty
-                    samples = cachedSamples ?: emptyList()
-                    datasets = cachedDatasets ?: emptyList()
-                    fromCache = cachedSamples != null && cachedDatasets != null
-                    isLoading = false
-                    return@launch
-                }
-
-                // Only make API calls for non-archived projects
-                fromCache = false
-
-                val (samplesResponse, datasetsResponse) = coroutineScope {
-                    val s = async { ApiClient.service.getSamplesByProject(projectId) }
-                    val d = async { ApiClient.service.getDatasetsByProject(projectId) }
-                    s.await() to d.await()
-                }
-
-                val loadedSamples = (samplesResponse as? ApiResult.Success)?.data
-                val loadedDatasets = (datasetsResponse as? ApiResult.Success)?.data
-
-                if (loadedSamples != null && loadedDatasets != null) {
-                    CacheManager.cacheProjectSamples(projectId, loadedSamples)
-                    CacheManager.cacheProjectDatasets(projectId, loadedDatasets)
-                    samples = loadedSamples
-                    datasets = loadedDatasets
-                } else {
-                    error = "Failed to load project data"
-                }
-            } catch (e: Exception) {
-                error = "Error: ${e.message}"
-            } finally {
-                isLoading = false
-                isRefreshingNow = false
-            }
-        }
+    val filteredDatasets = remember(loadState, searchQuery) {
+        if (searchQuery.isBlank()) datasets
+        else datasets.filter { it.matchesSearch(searchQuery) }
     }
 
-    LaunchedEffect(projectId) {
-        loadProjectData()
-    }
+    LaunchedEffect(projectId) { viewModel.load(projectId, isHidden = isHidden) }
 
     AppScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Project") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        AppIcon(AppIcons.Back)
-                    }
-                },
+            AppTopBar(
+                title = "Project",
+                onBack = onBack,
                 actions = {
-                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
-                            AppIcon(AppIcons.Search, modifier = Modifier.size(24.dp))
+                    IconButton(onClick = onSearch) {
+                        AppIcon(AppIcons.Search)
+                    }
+                    IconButton(onClick = onHome) {
+                        AppIcon(AppIcons.Home)
+                    }
+                    var topBarMenuExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { topBarMenuExpanded = true }) {
+                            AppIcon(AppIcons.MoreVert)
                         }
-                        IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
-                            AppIcon(AppIcons.Home, modifier = Modifier.size(24.dp))
-                        }
-                        var topBarMenuExpanded by remember { mutableStateOf(false) }
-                        Box {
-                            IconButton(onClick = { topBarMenuExpanded = true }, modifier = Modifier.size(40.dp)) {
-                                AppIcon(AppIcons.MoreVert, modifier = Modifier.size(24.dp))
-                            }
-                            DropdownMenu(expanded = topBarMenuExpanded, onDismissRequest = { topBarMenuExpanded = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("New Sample") },
-                                    leadingIcon = { AppIcon(AppIcons.Add) },
-                                    onClick = { topBarMenuExpanded = false; onCreateSample() }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("New Dataset") },
-                                    leadingIcon = { AppIcon(AppIcons.Dataset) },
-                                    onClick = { topBarMenuExpanded = false; onCreateDataset() }
-                                )
-                                HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text("Manage project") },
-                                    leadingIcon = { AppIcon(AppIcons.ManageMembers) },
-                                    onClick = { topBarMenuExpanded = false; onManageProject() }
-                                )
-                                OpenInWebMenuItem { topBarMenuExpanded = false; openUrl(ctx, "$graphExplorerUrl/$projectId") }
-                                ShareMenuItem { topBarMenuExpanded = false; shareText(ctx, "$graphExplorerUrl/$projectId", project?.title ?: projectId) }
-                                HorizontalDivider()
-                                RefreshMenuItem { topBarMenuExpanded = false; loadProjectData(forceRefresh = true) }
-                            }
+                        DropdownMenu(expanded = topBarMenuExpanded, onDismissRequest = { topBarMenuExpanded = false }) {
+                            DropdownMenuItem(
+                                text = { Text("New Sample") },
+                                leadingIcon = { AppIcon(AppIcons.Add) },
+                                onClick = { topBarMenuExpanded = false; onCreateSample() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("New Dataset") },
+                                leadingIcon = { AppIcon(AppIcons.Dataset) },
+                                onClick = { topBarMenuExpanded = false; onCreateDataset() }
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("Manage project") },
+                                leadingIcon = { AppIcon(AppIcons.ManageMembers) },
+                                onClick = { topBarMenuExpanded = false; onManageProject() }
+                            )
+                            OpenInWebMenuItem { topBarMenuExpanded = false; openUrl(ctx, "$graphExplorerUrl/$projectId") }
+                            ShareMenuItem { topBarMenuExpanded = false; shareText(ctx, "$graphExplorerUrl/$projectId", project?.title ?: projectId) }
+                            HorizontalDivider()
+                            RefreshMenuItem { topBarMenuExpanded = false; viewModel.load(projectId, isHidden = isHidden, forceRefresh = true) }
                         }
                     }
                 }
@@ -339,8 +281,8 @@ fun ProjectDetailScreen(
         }
     ) { padding ->
         PullToRefreshBox(
-            isRefreshing = isRefreshingNow,
-            onRefresh = { loadProjectData(forceRefresh = true) },
+            isRefreshing = loadState.isRefreshingNow,
+            onRefresh = { viewModel.load(projectId, isHidden = isHidden, forceRefresh = true) },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -369,11 +311,12 @@ fun ProjectDetailScreen(
                         onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) }; showToast(ctx, "Grouped by ${it.label}") },
                         onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) }; showToast(ctx, "Grouped by ${it.label}") },
                         sortState = sortState,
-                        onSortStateChange = { sortState = it; showToast(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") })
+                        onSortStateChange = { sortState = it; showToast(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
+                        onUserClick = onUserClick)
                 }
 
                 // TabRow — fixed below the header, above the pager
-                TabRow(selectedTabIndex = pagerState.currentPage) {
+                PrimaryTabRow(selectedTabIndex = pagerState.currentPage) {
                     Tab(
                         selected = pagerState.currentPage == 0,
                         onClick = {
@@ -386,12 +329,9 @@ fun ProjectDetailScreen(
                         },
                         text = {
                             val count = filteredSamples.size
-                            val total = samples?.size
-                            val label = when {
-                                total == null -> "Samples (--)"
-                                searchQuery.isBlank() -> "Samples ($total)"
-                                else -> "Samples ($count/$total)"
-                            }
+                            val total = samples.size
+                            val label = if (searchQuery.isBlank()) "Samples ($total)"
+                                else "Samples ($count/$total)"
                             AnimatedContent(
                                 targetState = label,
                                 transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
@@ -412,9 +352,8 @@ fun ProjectDetailScreen(
                         },
                         text = {
                             val count = filteredDatasets.size
-                            val total = datasets?.size
+                            val total = datasets.size
                             val label = when {
-                                total == null -> "Datasets (--)"
                                 searchQuery.isBlank() -> "Datasets ($total)"
                                 else -> "Datasets ($count/$total)"
                             }
@@ -430,16 +369,16 @@ fun ProjectDetailScreen(
 
                 // Pager — only list content swipes, header+tabs stay fixed above
                 when {
-                    isLoading -> LoadingContent(
+                    loadState is LoadState.Loading -> LoadingContent(
                         title = "Loading Project Data",
                         modifier = Modifier.fillMaxWidth().weight(1f)
                     )
-                    error != null -> Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    loadState is LoadState.Error -> Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                         ErrorCard(
                             title = "Error Loading Data",
-                            message = error ?: "Unknown error",
+                            message = (loadState as LoadState.Error).message,
                             modifier = Modifier.padding(16.dp),
-                            onRetry = { loadProjectData(forceRefresh = true) }
+                            onRetry = { viewModel.load(projectId, isHidden = isHidden, forceRefresh = true) }
                         )
                     }
                     else -> HorizontalPager(
@@ -450,7 +389,7 @@ fun ProjectDetailScreen(
                             0 -> SamplesList(
                                 samples = filteredSamples,
                                 isFiltered = searchQuery.isNotBlank(),
-                                fromCache = fromCache,
+                                fromCache = (loadState as? LoadState.Success)?.fromCache ?: false,
                                 projectId = projectId,
                                 graphExplorerUrl = graphExplorerUrl,
                                 groupBy = sampleGroupBy,
@@ -460,7 +399,7 @@ fun ProjectDetailScreen(
                             1 -> DatasetsList(
                                 datasets = filteredDatasets,
                                 isFiltered = searchQuery.isNotBlank(),
-                                fromCache = fromCache,
+                                fromCache = (loadState as? LoadState.Success)?.fromCache ?: false,
                                 projectId = projectId,
                                 graphExplorerUrl = graphExplorerUrl,
                                 groupBy = datasetGroupBy,
@@ -491,7 +430,8 @@ private fun ProjectHeader(
     onSampleGroupByChange: (SampleGroupBy) -> Unit = {},
     onDatasetGroupByChange: (DatasetGroupBy) -> Unit = {},
     sortState: SortState = SortState(),
-    onSortStateChange: (SortState) -> Unit = {}) {
+    onSortStateChange: (SortState) -> Unit = {},
+    onUserClick: (String) -> Unit = {}) {
     var groupMenuExpanded by remember { mutableStateOf(false) }
     var sortMenuExpanded by remember { mutableStateOf(false) }
 
@@ -548,12 +488,14 @@ private fun ProjectHeader(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     if (lead != null) {
+                                        val leadIdentifier = lead.username ?: lead.uniqueId
                                         Row(
                                             horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                            verticalAlignment = Alignment.CenterVertically
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = if (leadIdentifier != null) Modifier.clickable { onUserClick(leadIdentifier) } else Modifier
                                         ) {
-                                            AppIcon(AppIcons.Person, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            Text(ownerDisplayName(lead.firstName, lead.lastName), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            AppIcon(AppIcons.Person, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.primary)
+                                            Text(ownerDisplayName(lead.firstName, lead.lastName), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                                         }
                                     }
                                     if (org != null) {
@@ -767,9 +709,8 @@ private fun SamplesList(
                 if (groupBy == SampleGroupBy.NONE) {
                     val sortedSamples = samples.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTime ?: "" })
                     items(sortedSamples, key = { it.uniqueId }) { sample ->
-                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                             ResourceCard(title = sample.name, uniqueId = sample.uniqueId, icon = AppIcons.Sample, graphExplorerUrl = graphExplorerUrl, projectId = projectId, resourceType = "sample", onClick = { onSampleClick(sample.uniqueId) })
-                        }
+                        HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
                     }
                 } else groupedSamples.forEach { (groupKey, samplesInGroup) ->
                     val expanded = expandedGroups[groupKey] == true
@@ -788,18 +729,8 @@ private fun SamplesList(
 
                     if (expanded) {
                         items(sortedSamples.take(displayedCount), key = { it.uniqueId }) { sample ->
-                            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                                ResourceCard(
-                                    title = sample.name,
-
-                                    uniqueId = sample.uniqueId,
-                                    icon = AppIcons.Sample,
-                                    graphExplorerUrl = graphExplorerUrl,
-                                    projectId = projectId,
-                                    resourceType = "sample",
-                                    onClick = { onSampleClick(sample.uniqueId) }
-                                )
-                            }
+                            ResourceCard(title = sample.name, uniqueId = sample.uniqueId, icon = AppIcons.Sample, graphExplorerUrl = graphExplorerUrl, projectId = projectId, resourceType = "sample", onClick = { onSampleClick(sample.uniqueId) })
+                            HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
                         }
                         loadMoreItem("sample", groupKey, displayedCount, sortedSamples.size) {
                             displayedCounts[groupKey] = displayedCount + 50
@@ -878,9 +809,8 @@ private fun DatasetsList(
                 if (groupBy == DatasetGroupBy.NONE) {
                     val sortedDatasets = datasets.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTime ?: "" })
                     items(sortedDatasets, key = { it.uniqueId }) { dataset ->
-                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                             ResourceCard(title = dataset.name, uniqueId = dataset.uniqueId, icon = AppIcons.Dataset, graphExplorerUrl = graphExplorerUrl, projectId = projectId, resourceType = "dataset", onClick = { onDatasetClick(dataset.uniqueId) })
-                        }
+                        HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
                     }
                 } else groupedDatasets.forEach { (groupKey, datasetsInGroup) ->
                     val expanded = expandedGroups[groupKey] == true
@@ -899,18 +829,8 @@ private fun DatasetsList(
 
                     if (expanded) {
                         items(sortedDatasets.take(displayedCount), key = { it.uniqueId }) { dataset ->
-                            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                                ResourceCard(
-                                    title = dataset.name,
-
-                                    uniqueId = dataset.uniqueId,
-                                    icon = AppIcons.Dataset,
-                                    graphExplorerUrl = graphExplorerUrl,
-                                    projectId = projectId,
-                                    resourceType = "dataset",
-                                    onClick = { onDatasetClick(dataset.uniqueId) }
-                                )
-                            }
+                            ResourceCard(title = dataset.name, uniqueId = dataset.uniqueId, icon = AppIcons.Dataset, graphExplorerUrl = graphExplorerUrl, projectId = projectId, resourceType = "dataset", onClick = { onDatasetClick(dataset.uniqueId) })
+                            HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
                         }
                         loadMoreItem("dataset", groupKey, displayedCount, sortedDatasets.size) {
                             displayedCounts[groupKey] = displayedCount + 50
@@ -1008,46 +928,19 @@ private fun ResourceCard(
     } else null
 
     Box {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = { menuExpanded = true }
-                ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-        ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AppIcon(icon, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-
-                Text(
-                    text = uniqueId,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            AppIcon(AppIcons.NavigateNext,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-        } // end Card
+        ListItem(
+            headlineContent = {
+                Text(title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            },
+            supportingContent = {
+                Text(uniqueId, style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            },
+            leadingContent = { AppIcon(icon, tint = MaterialTheme.colorScheme.primary) },
+            trailingContent = { AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)) },
+            modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = { menuExpanded = true })
+        )
 
         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
             CopyIdMenuItem { menuExpanded = false; copyToClipboard(platformCtx, uniqueId) }

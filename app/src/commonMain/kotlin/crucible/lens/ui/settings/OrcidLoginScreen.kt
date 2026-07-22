@@ -1,11 +1,14 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.settings
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.multiplatform.webview.web.LoadingState
 import com.multiplatform.webview.web.WebView
@@ -26,7 +29,6 @@ private fun extractKey(rawJsResult: String?): String? {
     return KEY_REGEX.find(body)?.groupValues?.getOrNull(1)?.ifBlank { null }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OrcidLoginScreen(
     loginUrl: String,
@@ -63,29 +65,25 @@ fun OrcidLoginScreen(
 
     AppScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Sign in with ORCID") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
+            AppTopBar(
+                title = "Sign in with ORCID",
+                onBack = onBack
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             val loadingState = state.loadingState
-            if (loadingState is LoadingState.Loading) {
-                LinearProgressIndicator(
-                    progress = { loadingState.progress },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
             WebView(
                 state = state,
                 navigator = navigator,
-                modifier = Modifier.weight(1f).fillMaxWidth()
+                modifier = Modifier.fillMaxSize()
             )
+            if (loadingState is LoadingState.Loading) {
+                LinearProgressIndicator(
+                    progress = { loadingState.progress },
+                    modifier = Modifier.fillMaxWidth().align(Alignment.TopStart)
+                )
+            }
         }
     }
 }

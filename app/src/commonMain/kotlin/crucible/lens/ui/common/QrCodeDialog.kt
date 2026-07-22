@@ -1,7 +1,6 @@
 package crucible.lens.ui.common
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
@@ -117,8 +116,7 @@ fun QrCodeDialogWithNavigation(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (pagerState.currentPage > 0) {
-                    Icon(
-                        Icons.Default.ChevronLeft, contentDescription = "Previous",
+                    AppIcon(AppIcons.CarouselPrev,
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
@@ -158,8 +156,7 @@ fun QrCodeDialogWithNavigation(
                     }
                 }
                 if (pagerState.currentPage < resources.size - 1) {
-                    Icon(
-                        Icons.Default.ChevronRight, contentDescription = "Next",
+                    AppIcon(AppIcons.NavigateNext,
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )

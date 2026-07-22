@@ -1,7 +1,8 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.common
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
@@ -23,7 +24,6 @@ import kotlinx.datetime.toLocalDateTime
 
 private val isoFormatter: String = "yyyy-MM-dd'T'HH:mm"
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DateTimePickerField(
     value: String,
@@ -73,7 +73,7 @@ fun DateTimePickerField(
         onValueChange = {},
         readOnly = true,
         label = { Text(label) },
-        leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) },
+        leadingIcon = { AppIcon(AppIcons.CreationDate) },
         modifier = modifier,
         interactionSource = interactionSource
     )

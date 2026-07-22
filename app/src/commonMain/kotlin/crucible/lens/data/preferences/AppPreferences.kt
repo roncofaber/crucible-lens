@@ -2,35 +2,33 @@ package crucible.lens.data.preferences
 
 import crucible.lens.data.model.User
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 
 @Serializable
 data class HistoryItem(val uuid: String, val name: String, val timestamp: Long, val resourceType: String? = null)
 
 interface AppPreferences {
-    // Flows
-    val apiKey: Flow<String?>
-    val apiBaseUrl: Flow<String>
-    val graphExplorerUrl: Flow<String>
-    val themeMode: Flow<String>
-    val accentColor: Flow<String>
-    val useDynamicColor: Flow<Boolean>
-    val lastVisitedResource: Flow<String?>
-    val lastVisitedResourceName: Flow<String?>
-    val floatingScanButton: Flow<Boolean>
-    val pinnedProjects: Flow<Set<String>>
-    val hiddenProjects: Flow<Set<String>>
-    val pinnedInstruments: Flow<Set<String>>
-    val hiddenInstruments: Flow<Set<String>>
-    val userOrcid: Flow<String?>
-    val userProfile: Flow<User?>
-    val resourceHistory: Flow<List<HistoryItem>>
-    val sampleGroupBy: Flow<String>
-    val datasetGroupBy: Flow<String>
-    val defaultProjectTab: Flow<String>
-    val aiApiKey: Flow<String?>
-    val aiApiUrl: Flow<String>
-    val aiDirectMode: Flow<Boolean>
+    // StateFlows — always have a current value, no initial value needed at collection sites
+    val apiKey: StateFlow<String?>
+    val apiBaseUrl: StateFlow<String>
+    val graphExplorerUrl: StateFlow<String>
+    val themeMode: StateFlow<String>
+    val accentColor: StateFlow<String>
+    val useDynamicColor: StateFlow<Boolean>
+    val lastVisitedResource: StateFlow<String?>
+    val lastVisitedResourceName: StateFlow<String?>
+    val floatingScanButton: StateFlow<Boolean>
+    val pinnedProjects: StateFlow<Set<String>>
+    val hiddenProjects: StateFlow<Set<String>>
+    val pinnedInstruments: StateFlow<Set<String>>
+    val hiddenInstruments: StateFlow<Set<String>>
+    val userOrcid: StateFlow<String?>
+    val userProfile: StateFlow<User?>
+    val resourceHistory: StateFlow<List<HistoryItem>>
+    val sampleGroupBy: StateFlow<String>
+    val datasetGroupBy: StateFlow<String>
+    val defaultProjectTab: StateFlow<String>
 
     // Saves
     suspend fun saveApiKey(key: String)
@@ -54,9 +52,6 @@ interface AppPreferences {
     suspend fun saveSampleGroupBy(value: String)
     suspend fun saveDatasetGroupBy(value: String)
     suspend fun saveDefaultProjectTab(tab: String)
-    suspend fun saveAiApiKey(key: String)
-    suspend fun saveAiApiUrl(url: String)
-    suspend fun saveAiDirectMode(enabled: Boolean)
 
     companion object {
         const val PROJECT_TAB_SAMPLES = "SAMPLES"
@@ -67,6 +62,5 @@ interface AppPreferences {
         const val THEME_MODE_LIGHT = "light"
         const val THEME_MODE_DARK = "dark"
         const val DEFAULT_ACCENT_COLOR = "blue"
-        const val DEFAULT_AI_API_URL = "https://api.cborg.lbl.gov"
     }
 }

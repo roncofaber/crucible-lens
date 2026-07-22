@@ -14,13 +14,6 @@ object ApiClient {
     private var baseUrl: String = "https://crucible.lbl.gov/api/v2/"
     private var _service: CrucibleApiService? = null
 
-    var aiApiKey: String? = null
-        private set
-    var aiApiUrl: String = "https://api.cborg.lbl.gov"
-        private set
-    var aiDirectMode: Boolean = false
-        private set
-
     fun setApiKey(key: String) {
         apiKey = key
         _service = null // Force recreation with new API key
@@ -34,10 +27,6 @@ object ApiClient {
     fun getBaseUrl() = baseUrl
 
     fun getApiKey() = apiKey
-
-    fun setAiApiKey(key: String) { aiApiKey = key.ifBlank { null } }
-    fun setAiApiUrl(url: String) { if (url.isNotBlank()) aiApiUrl = url.trim().trimEnd('/') }
-    fun setAiDirectMode(enabled: Boolean) { aiDirectMode = enabled }
 
     private val httpClient: HttpClient = HttpClient {
         install(ContentNegotiation) {

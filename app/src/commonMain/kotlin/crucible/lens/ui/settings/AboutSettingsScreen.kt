@@ -1,7 +1,9 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.settings
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,8 +21,8 @@ import crucible.lens.composeapp.generated.resources.Res
 import crucible.lens.platform.appVersionName
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
+import crucible.lens.ui.common.AppScaffold
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutSettingsScreen(
     isDarkTheme: Boolean,
@@ -28,29 +30,15 @@ fun AboutSettingsScreen(
     onHome: () -> Unit
 ) {
     val context = getPlatformContext()
+    val lensIcon = Res.getUri("files/${if (isDarkTheme) "crucible_icon_dark.svg" else "crucible_icon_light.svg"}")
 
-    Scaffold(
+    AppScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("About") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
+            AppTopBar(
+                title = "About",
+                onBack = onBack,
                 actions = {
-                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        IconButton(
-                            onClick = onHome,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Home,
-                                contentDescription = "Home",
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
+                    IconButton(onClick = onHome) { AppIcon(AppIcons.Home) }
                 }
             )
         }
@@ -63,75 +51,45 @@ fun AboutSettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // App Info Card
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
+            // App identity
+            Card(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
+                    AboutCardHeader(title = "Crucible Lens") {
                         AsyncImage(
-                            model = Res.getUri("files/${if (isDarkTheme) "crucible_icon_dark.svg" else "crucible_icon_light.svg"}"),
-                            contentDescription = "Crucible Lens",
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Text(
-                            text = "Crucible Lens",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary
+                            model = lensIcon,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
-
                     Text(
-                        text = "Version ${appVersionName()}",
+                        "Version ${appVersionName()}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
+                    HorizontalDivider()
                     Text(
-                        text = "A mobile companion app for the Molecular Foundry's Crucible data system at Lawrence Berkeley National Laboratory. Scan QR codes or use full-text search to explore scientific samples, datasets, and projects. Browse relationships between materials, view dataset thumbnails and metadata, navigate research projects with pinning and archiving, and seamlessly integrate with the Crucible Graph Explorer. Designed to bring nanoscience research data to your fingertips.",
+                        "Crucible Lens is the mobile client for the Molecular Foundry's Crucible research data platform at Lawrence Berkeley National Laboratory.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            // Team Card
-            Card {
+            // Team
+            Card(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.Group,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = "Crucible Team",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                    AboutCardHeader(title = "Crucible Team") {
+                        AppIcon(AppIcons.Team, tint = MaterialTheme.colorScheme.primary)
                     }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                    // Team members
+                    HorizontalDivider()
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         TeamMember(
                             name = "Edward Barnard",
@@ -149,148 +107,81 @@ fun AboutSettingsScreen(
                 }
             }
 
-            // Resources section
-            Text(
-                text = "Resources",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 4.dp, start = 4.dp)
-            )
-
-            // Crucible Website Card
-            Card(
-                modifier = Modifier.clickable {
-                    openUrl(context, "https://crucible.lbl.gov/")
-                }
+            // Links — ordered: platform → app → tooling → contact → community → institution
+            ResourceLink(
+                title = "Crucible",
+                subtitle = "crucible.lbl.gov",
+                url = "https://crucible.lbl.gov/"
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AsyncImage(
-                            model = Res.getUri("files/crucible_old.svg"),
-                            contentDescription = "Crucible",
-                            modifier = Modifier.size(26.dp)
-                        )
-                        Column {
-                            Text("Crucible", style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                "crucible.lbl.gov",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                }
+                AsyncImage(
+                    model = Res.getUri("files/crucible_web.svg"),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp)
+                )
             }
 
-            // App Source Code Card
-            Card(
-                modifier = Modifier.clickable {
-                    openUrl(context, "https://github.com/roncofaber/crucible-lens")
-                }
+            ResourceLink(
+                title = "Crucible Lens",
+                subtitle = "github.com/roncofaber/crucible-lens",
+                url = "https://github.com/roncofaber/crucible-lens"
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AsyncImage(
-                            model = Res.getUri("files/${if (isDarkTheme) "crucible_icon_dark.svg" else "crucible_icon_light.svg"}"),
-                            contentDescription = "Crucible Lens",
-                            modifier = Modifier.size(26.dp)
-                        )
-                        Column {
-                            Text("Crucible Lens", style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                "github.com/roncofaber/crucible-lens",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                }
+                AsyncImage(
+                    model = lensIcon,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp)
+                )
             }
 
-            // Python Client Card
-            Card(
-                modifier = Modifier.clickable {
-                    openUrl(context, "https://github.com/MolecularFoundryCrucible/nano-crucible")
-                }
+            ResourceLink(
+                title = "nano-crucible",
+                subtitle = "Python client library",
+                url = "https://github.com/MolecularFoundryCrucible/nano-crucible"
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.DataObject, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Column {
-                            Text("nano-crucible", style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                "Python client library",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                }
+                AppIcon(
+                    AppIcons.Python,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
             }
 
-            // Molecular Foundry Card
-            Card(
-                modifier = Modifier.clickable {
-                    openUrl(context, "https://foundry.lbl.gov/")
-                }
+            ResourceLink(
+                title = "Contact",
+                subtitle = "crucible-dev@lbl.gov",
+                url = "mailto:crucible-dev@lbl.gov"
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Business, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Column {
-                            Text("Molecular Foundry", style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                "Lawrence Berkeley National Laboratory",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                }
+                AppIcon(
+                    AppIcons.Email,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            ResourceLink(
+                title = "Discord",
+                subtitle = "Join the Crucible community",
+                url = "https://discord.com/invite/Wrepphsgbx"
+            ) {
+                AppIcon(
+                    AppIcons.Discord,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            ResourceLink(
+                title = "Molecular Foundry",
+                subtitle = "Lawrence Berkeley National Laboratory",
+                url = "https://foundry.lbl.gov/"
+            ) {
+                AppIcon(
+                    AppIcons.Organization,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
             }
 
             Text(
-                text = "Licensed under BSD-3-Clause",
+                "Licensed under BSD-3-Clause",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -299,31 +190,40 @@ fun AboutSettingsScreen(
                 textAlign = TextAlign.Center
             )
 
-            // Developer credit
+            Text(
+                "Privacy Policy",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        openUrl(context, "https://github.com/roncofaber/crucible-lens/blob/main/PRIVACY.md")
+                    },
+                textAlign = TextAlign.Center
+            )
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 16.dp, bottom = 8.dp),
+                    .padding(top = 4.dp, bottom = 8.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Developed by ",
+                    "Developed by ",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "@roncofaber",
+                    "@roncofaber",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                    modifier = Modifier.clickable {
-                        openUrl(context, "https://github.com/roncofaber")
-                    }
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { openUrl(context, "https://github.com/roncofaber") }
                 )
                 Text(
-                    text = " with the help of Claude Code",
+                    " with the help of Claude Code",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -331,20 +231,71 @@ fun AboutSettingsScreen(
 }
 
 @Composable
-private fun TeamMember(
-    name: String,
-    role: String
+private fun AboutCardHeader(
+    title: String,
+    leadingIcon: @Composable () -> Unit
 ) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        leadingIcon()
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+private fun ResourceLink(
+    title: String,
+    subtitle: String,
+    url: String,
+    leadingContent: @Composable () -> Unit
+) {
+    val context = getPlatformContext()
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { openUrl(context, url) }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                leadingContent()
+                Column {
+                    Text(title, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            AppIcon(
+                AppIcons.OpenExternal,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TeamMember(name: String, role: String) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(
-            text = name,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold
-        )
-        Text(
-            text = role,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        Text(role, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

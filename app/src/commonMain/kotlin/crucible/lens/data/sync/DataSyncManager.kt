@@ -4,6 +4,7 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.util.fetchProjectData
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -40,6 +41,7 @@ object DataSyncManager {
                     batch.map { project ->
                         async {
                             try { fetchProjectData(project.projectId) }
+                            catch (e: CancellationException) { throw e }
                             catch (_: Exception) { }
                         }
                     }.awaitAll()

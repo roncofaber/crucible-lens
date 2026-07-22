@@ -1,7 +1,9 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.common
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIconToken
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -39,7 +41,6 @@ data class SearchFilters(
     ).count { it.isNotBlank() }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilterSheet(
     filters: SearchFilters,
@@ -79,7 +80,7 @@ fun FilterSheet(
                 value = local.projectId,
                 onValueChange = { local = local.copy(projectId = it) },
                 label = "Project ID",
-                icon = Icons.Default.Folder
+                icon = AppIcons.Project
             )
             OwnerPickerField(
                 ownerOrcid = local.ownerOrcid,
@@ -129,7 +130,7 @@ fun FilterSheet(
                 value = local.measurement,
                 onValueChange = { local = local.copy(measurement = it) },
                 label = "Measurement",
-                icon = Icons.Default.Science
+                icon = AppIcons.Sample
             )
             InstrumentPickerField(
                 value = local.instrumentName,
@@ -140,13 +141,13 @@ fun FilterSheet(
                 value = local.dataFormat,
                 onValueChange = { local = local.copy(dataFormat = it) },
                 label = "Data format",
-                icon = Icons.Default.FilePresent
+                icon = AppIcons.DataFormat
             )
             FilterTextField(
                 value = local.sessionName,
                 onValueChange = { local = local.copy(sessionName = it) },
                 label = "Session name",
-                icon = Icons.Default.Tag
+                icon = AppIcons.Tag
             )
 
             HorizontalDivider()
@@ -159,7 +160,7 @@ fun FilterSheet(
                 value = local.sampleType,
                 onValueChange = { local = local.copy(sampleType = it) },
                 label = "Sample type",
-                icon = Icons.Default.Category
+                icon = AppIcons.Category
             )
 
             // ── Apply ─────────────────────────────────────────────────────────
@@ -167,7 +168,7 @@ fun FilterSheet(
                 onClick = { onApply(local); onDismiss() },
                 modifier = Modifier.fillMaxWidth().height(52.dp)
             ) {
-                Icon(Icons.Default.FilterAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+                AppIcon(AppIcons.Filter, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(if (local.isActive) "Apply ${local.activeCount} filter${if (local.activeCount > 1) "s" else ""}" else "Apply")
             }
@@ -195,10 +196,10 @@ private fun OwnerPickerField(
             readOnly = true,
             label = { Text("Owner") },
             modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { Icon(Icons.Default.Person, null) },
+            leadingIcon = { AppIcon(AppIcons.User) },
             trailingIcon = {
                 IconButton(onClick = { query = ""; results = emptyList(); onOwnerCleared() }) {
-                    Icon(Icons.Default.Clear, "Clear owner")
+                    AppIcon(AppIcons.ClearInput)
                 }
             }
         )
@@ -249,7 +250,7 @@ private fun FilterTextField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector
+    icon: AppIconToken
 ) {
     OutlinedTextField(
         value = value,
@@ -257,9 +258,9 @@ private fun FilterTextField(
         label = { Text(label) },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
-        leadingIcon = { Icon(icon, contentDescription = null) },
+        leadingIcon = { AppIcon(icon) },
         trailingIcon = if (value.isNotBlank()) {
-            { IconButton(onClick = { onValueChange("") }) { Icon(Icons.Default.Clear, contentDescription = "Clear") } }
+            { IconButton(onClick = { onValueChange("") }) { AppIcon(AppIcons.ClearInput) } }
         } else null
     )
 }

@@ -5,11 +5,9 @@ import kotlinx.serialization.json.JsonObject
 object MetadataHolder {
     var metadata: JsonObject? = null
     var isDirty: Boolean = false
-    var resourceContext: String = ""
 
-    fun put(metadata: JsonObject?, resourceContext: String = "") {
+    fun put(metadata: JsonObject?) {
         this.metadata = metadata
-        this.resourceContext = resourceContext
         this.isDirty = false
     }
 

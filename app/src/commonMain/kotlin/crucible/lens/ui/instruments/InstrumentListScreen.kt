@@ -1,5 +1,7 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.instruments
 
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -9,8 +11,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.lifecycle.viewmodel.compose.viewModel
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -34,13 +38,13 @@ import crucible.lens.ui.common.RefreshMenuItem
 import crucible.lens.ui.common.ToggleHiddenMenuItem
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
+import crucible.lens.ui.common.LoadState
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.SearchBar
 import crucible.lens.platform.showToast
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InstrumentListScreen(
     onBack: () -> Unit,
@@ -54,10 +58,8 @@ fun InstrumentListScreen(
     onToggleHide: (String) -> Unit = {}
 ) {
     val platformContext = getPlatformContext()
-    var instruments by remember { mutableStateOf<List<Instrument>?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-    var isUserRefreshing by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val viewModel: InstrumentListViewModel = viewModel()
+    val loadState by viewModel.loadState.collectAsState()
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var hiddenExpanded by remember { mutableStateOf(false) }
     var sortMenuExpanded by remember { mutableStateOf(false) }
@@ -67,8 +69,9 @@ fun InstrumentListScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
+    val instruments = (loadState as? LoadState.Success)?.data ?: emptyList()
     val filteredInstruments = remember(instruments, searchQuery) {
-        val list = instruments ?: emptyList()
+        val list = instruments
         if (searchQuery.isBlank()) list
         else list.filter { it.matchesSearch(searchQuery) }
     }
@@ -84,72 +87,35 @@ fun InstrumentListScreen(
             )
     }
 
-    val hiddenInstrumentsList = remember(instruments, hiddenInstruments) {
-        instruments?.filter { it.uniqueId in hiddenInstruments } ?: emptyList()
+    val hiddenInstrumentsList = remember(loadState, hiddenInstruments) {
+        instruments.filter { it.uniqueId in hiddenInstruments }
     }
 
-    fun loadInstruments(forceRefresh: Boolean = false) {
-        if (forceRefresh) isUserRefreshing = true
-        scope.launch {
-            isLoading = true
-            error = null
-            try {
-                if (!forceRefresh) {
-                    val cached = CacheManager.getInstruments()
-                    if (cached != null) {
-                        instruments = cached
-                        isLoading = false
-                        return@launch
-                    }
-                }
-                when (val response = ApiClient.service.getInstruments()) {
-                    is crucible.lens.data.api.ApiResult.Success -> {
-                        val body = response.data
-                        CacheManager.cacheInstruments(body)
-                        instruments = body
-                    }
-                    is crucible.lens.data.api.ApiResult.Error -> {
-                        error = "Failed to load instruments"
-                    }
-                }
-            } catch (e: Exception) {
-                error = "Error: ${e.message}"
-            } finally {
-                isLoading = false
-                isUserRefreshing = false
-            }
-        }
-    }
 
-    LaunchedEffect(Unit) { loadInstruments() }
+
+    LaunchedEffect(Unit) { /* ViewModel loads on init */ }
 
     AppScaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("Instruments") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        AppIcon(AppIcons.Back)
-                    }
-                },
+            AppTopBar(
+                title = "Instruments",
+                onBack = onBack,
                 actions = {
                     var menuExpanded by remember { mutableStateOf(false) }
-                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
-                            AppIcon(AppIcons.Search, modifier = Modifier.size(24.dp))
+                    IconButton(onClick = onSearch) {
+                        AppIcon(AppIcons.Search)
+                    }
+                    IconButton(onClick = onHome) {
+                        AppIcon(AppIcons.Home)
+                    }
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            AppIcon(AppIcons.MoreVert)
                         }
-                        IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
-                            AppIcon(AppIcons.Home, modifier = Modifier.size(24.dp))
-                        }
-                        Box {
-                            IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(40.dp)) {
-                                AppIcon(AppIcons.MoreVert, modifier = Modifier.size(24.dp))
-                            }
-                            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                                ToggleHiddenMenuItem(hiddenExpanded) { hiddenExpanded = !hiddenExpanded; menuExpanded = false }
-                                RefreshMenuItem { menuExpanded = false; loadInstruments(forceRefresh = true) }
-                            }
+                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                            ToggleHiddenMenuItem(hiddenExpanded) { hiddenExpanded = !hiddenExpanded; menuExpanded = false }
+                            RefreshMenuItem { menuExpanded = false; viewModel.load(forceRefresh = true) }
                         }
                     }
                 }
@@ -157,8 +123,8 @@ fun InstrumentListScreen(
         }
     ) { padding ->
         PullToRefreshBox(
-            isRefreshing = isUserRefreshing,
-            onRefresh = { loadInstruments(forceRefresh = true) },
+            isRefreshing = loadState.isRefreshingNow,
+            onRefresh = { viewModel.load(forceRefresh = true) },
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -218,24 +184,24 @@ fun InstrumentListScreen(
                         }
                     }
 
-                    when {
-                        isLoading -> item(key = "__loading__") {
+                    when (val state = loadState) {
+                        is LoadState.Loading -> item(key = "__loading__") {
                             Box(
                                 modifier = Modifier.fillParentMaxWidth().fillParentMaxHeight(0.85f),
                                 contentAlignment = Alignment.Center
                             ) { LoadingContent(title = "Loading Instruments") }
                         }
-                        error != null -> item(key = "__error__") {
+                        is LoadState.Error -> item(key = "__error__") {
                             Box(modifier = Modifier.fillParentMaxWidth(), contentAlignment = Alignment.Center) {
                                 ErrorCard(
                                     title = "Error Loading Instruments",
-                                    message = error ?: "Unknown error",
+                                    message = state.message,
                                     modifier = Modifier.padding(horizontal = 16.dp),
-                                    onRetry = { loadInstruments(forceRefresh = true) }
+                                    onRetry = { viewModel.load(forceRefresh = true) }
                                 )
                             }
                         }
-                        activeInstruments.isEmpty() && hiddenInstrumentsList.isEmpty() -> item(key = "__empty__") {
+                        is LoadState.Success -> if (activeInstruments.isEmpty() && hiddenInstrumentsList.isEmpty()) item(key = "__empty__") {
                             Box(
                                 modifier = Modifier.fillParentMaxWidth().fillParentMaxHeight(0.7f),
                                 contentAlignment = Alignment.Center
@@ -265,9 +231,11 @@ fun InstrumentListScreen(
                                 }
                             }
                         }
-                        else -> {
+                        else {
                             // Active instruments with swipe-to-hide
                             items(activeInstruments, key = { it.uniqueId }) { instrument ->
+                                @Suppress("DEPRECATION")
+
                                 val dismissState = rememberSwipeToDismissBoxState(
                                     confirmValueChange = { value ->
                                         if (value == SwipeToDismissBoxValue.EndToStart) {
@@ -354,6 +322,8 @@ fun InstrumentListScreen(
 
                                 if (hiddenExpanded) {
                                     items(hiddenInstrumentsList, key = { "hidden_${it.uniqueId}" }) { instrument ->
+                                        @Suppress("DEPRECATION")
+
                                         val dismissState = rememberSwipeToDismissBoxState(
                                             confirmValueChange = { value ->
                                                 if (value == SwipeToDismissBoxValue.StartToEnd) {

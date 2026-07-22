@@ -1,9 +1,10 @@
 plugins {
-    id("com.android.application") version "9.2.1" apply false
-    id("com.android.library") version "9.2.1" apply false
-    id("org.jetbrains.kotlin.multiplatform") version "2.3.21" apply false
-    id("org.jetbrains.compose") version "1.10.3" apply false
-    id("org.jetbrains.kotlin.plugin.compose") version "2.3.21" apply false
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.3.21" apply false
-    id("com.google.devtools.ksp") version "2.3.7" apply false
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.android.kotlin.multiplatform.library) apply false
+    alias(libs.plugins.kotlin.multiplatform) apply false
+    alias(libs.plugins.compose.multiplatform) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
+    alias(libs.plugins.ksp) apply false
 }

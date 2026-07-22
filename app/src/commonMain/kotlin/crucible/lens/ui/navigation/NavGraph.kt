@@ -1,8 +1,12 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.navigation
+import androidx.compose.material3.ExperimentalMaterial3Api
 import crucible.lens.platform.*
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import crucible.lens.ui.common.NavEnterDuration
+import crucible.lens.ui.common.NavExitDuration
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -30,13 +34,13 @@ import crucible.lens.ui.scanner.QRCodeScannerView
 import crucible.lens.ui.search.SearchScreen
 import crucible.lens.ui.settings.SettingsScreen
 import crucible.lens.ui.settings.ApiSettingsScreen
-import crucible.lens.ui.settings.AiSettingsScreen
 import crucible.lens.ui.settings.OrcidLoginScreen
 import crucible.lens.ui.settings.AppearanceSettingsScreen
 import crucible.lens.ui.settings.CacheSettingsScreen
 import crucible.lens.ui.settings.AboutSettingsScreen
 import crucible.lens.ui.settings.AccountScreen
 import crucible.lens.ui.settings.AccountViewModel
+import crucible.lens.ui.settings.UserProfileScreen
 import crucible.lens.ui.detail.ResourceDetailViewModel
 import crucible.lens.ui.detail.UiState
 import crucible.lens.ui.detail.ResourceDetailScreen
@@ -49,6 +53,10 @@ import crucible.lens.ui.instruments.InstrumentDetailScreen
 import crucible.lens.ui.instruments.ManageInstrumentScreen
 import crucible.lens.ui.instruments.ManageInstrumentViewModel
 import crucible.lens.ui.common.LoadingContent
+import crucible.lens.ui.common.AppTopBar
+import crucible.lens.data.api.ApiClient
+import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.ui.create.DuplicateHolder
@@ -56,7 +64,9 @@ import crucible.lens.ui.create.CreateSampleScreen
 import crucible.lens.ui.create.CreateDatasetScreen
 import crucible.lens.ui.create.AddFilesScreen
 import crucible.lens.ui.metadata.MetadataEditorScreen
+import crucible.lens.ui.metadata.MetadataHolder
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
@@ -82,49 +92,14 @@ import kotlin.math.roundToInt
 
 
 
-@OptIn(ExperimentalAnimationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun NavGraph(
     navController: NavHostController,
-    apiKey: String?,
-    apiBaseUrl: String,
-    graphExplorerUrl: String,
-    themeMode: String,
-    accentColor: String,
-    useDynamicColor: Boolean = false,
-    darkTheme: Boolean,
-    lastVisitedResource: String?,
-    lastVisitedResourceName: String?,
-    floatingScanButton: Boolean,
+    prefs: AppPreferences,
     deepLinkUuid: String?,
     openScanner: Boolean = false,
     onScannerOpened: () -> Unit = {},
-    pinnedProjects: Set<String>,
-    resourceHistory: List<HistoryItem>,
-    onHistoryAdd: (String, String, String?) -> Unit,
-    onClearHistory: () -> Unit = {},
-    onApiKeySave: (String) -> Unit,
-    onApiBaseUrlSave: (String) -> Unit,
-    onGraphExplorerUrlSave: (String) -> Unit,
-    aiApiKey: String? = null,
-    aiApiUrl: String = crucible.lens.data.preferences.AppPreferences.DEFAULT_AI_API_URL,
-    aiDirectMode: Boolean = false,
-    onAiApiKeySave: (String) -> Unit = {},
-    onAiApiUrlSave: (String) -> Unit = {},
-    onAiDirectModeSave: (Boolean) -> Unit = {},
-    onThemeModeSave: (String) -> Unit,
-    onAccentColorSave: (String) -> Unit,
-    onUseDynamicColorSave: (Boolean) -> Unit = {},
-    onLastVisitedResourceSave: (String, String) -> Unit,
-    onFloatingScanButtonSave: (Boolean) -> Unit,
-    onTogglePinnedProject: (String) -> Unit,
-    hiddenProjects: Set<String>,
-    onToggleHideProject: (String) -> Unit,
-    pinnedInstruments: Set<String> = emptySet(),
-    onTogglePinnedInstrument: (String) -> Unit = {},
-    hiddenInstruments: Set<String> = emptySet(),
-    onToggleHideInstrument: (String) -> Unit = {},
-    prefs: AppPreferences,
     viewModel: ResourceDetailViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             override fun <T : androidx.lifecycle.ViewModel> create(modelClass: KClass<T>, extras: CreationExtras): T {
@@ -135,6 +110,30 @@ fun NavGraph(
     )
 ) {
     val platformCtx = getPlatformContext()
+    val scope = rememberCoroutineScope()
+
+    // ── Preference state ──────────────────────────────────────────────────────
+    val apiKey by prefs.apiKey.collectAsStateWithLifecycle()
+    val apiBaseUrl by prefs.apiBaseUrl.collectAsStateWithLifecycle()
+    val graphExplorerUrl by prefs.graphExplorerUrl.collectAsStateWithLifecycle()
+    val themeMode by prefs.themeMode.collectAsStateWithLifecycle()
+    val accentColor by prefs.accentColor.collectAsStateWithLifecycle()
+    val useDynamicColor by prefs.useDynamicColor.collectAsStateWithLifecycle()
+    val darkTheme = themeMode == AppPreferences.THEME_MODE_DARK ||
+        (themeMode == AppPreferences.THEME_MODE_SYSTEM && isSystemInDarkTheme())
+    val lastVisitedResource by prefs.lastVisitedResource.collectAsStateWithLifecycle()
+    val lastVisitedResourceName by prefs.lastVisitedResourceName.collectAsStateWithLifecycle()
+    val floatingScanButton by prefs.floatingScanButton.collectAsStateWithLifecycle()
+    val pinnedProjects by prefs.pinnedProjects.collectAsStateWithLifecycle()
+    val hiddenProjects by prefs.hiddenProjects.collectAsStateWithLifecycle()
+    val pinnedInstruments by prefs.pinnedInstruments.collectAsStateWithLifecycle()
+    val hiddenInstruments by prefs.hiddenInstruments.collectAsStateWithLifecycle()
+    val resourceHistory by prefs.resourceHistory.collectAsStateWithLifecycle()
+    val defaultProjectTab by prefs.defaultProjectTab.collectAsStateWithLifecycle()
+
+    // ── ApiClient sync ────────────────────────────────────────────────────────
+    LaunchedEffect(apiKey) { apiKey?.let { ApiClient.setApiKey(it) } }
+    LaunchedEffect(apiBaseUrl) { ApiClient.setBaseUrl(apiBaseUrl) }
 
     LaunchedEffect(deepLinkUuid) {
         if (!deepLinkUuid.isNullOrBlank()) {
@@ -142,8 +141,6 @@ fun NavGraph(
         }
     }
 
-    // Kick off full background data sync whenever the API key becomes available,
-    // so projects, samples, datasets and instruments are cached for instant search.
     LaunchedEffect(apiKey) {
         if (!apiKey.isNullOrBlank()) {
             viewModel.startBackgroundSync()
@@ -158,9 +155,9 @@ fun NavGraph(
             onScannerOpened()
         }
     }
-    val uiState by viewModel.uiState.collectAsState()
-    val isSyncing by viewModel.isSyncing.collectAsState()
-    val userProfile by prefs.userProfile.collectAsStateWithLifecycle(null)
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val userProfile by prefs.userProfile.collectAsStateWithLifecycle()
     val userUsername = userProfile?.username
     val userOrcid = userProfile?.uniqueId
 
@@ -214,21 +211,21 @@ fun NavGraph(
         // UNIFIED TRANSITIONS - Simple and consistent
         // Forward: slide in from right
         enterTransition = {
-            fadeIn(animationSpec = tween(300)) +
-            slideInHorizontally(initialOffsetX = { it / 4 }, animationSpec = tween(300))
+            fadeIn(animationSpec = tween(NavEnterDuration)) +
+            slideInHorizontally(initialOffsetX = { it / 4 }, animationSpec = tween(NavEnterDuration))
         },
         // Forward: fade out current screen
         exitTransition = {
-            fadeOut(animationSpec = tween(200))
+            fadeOut(animationSpec = tween(NavExitDuration))
         },
         // Back: fade in previous screen
         popEnterTransition = {
-            fadeIn(animationSpec = tween(300))
+            fadeIn(animationSpec = tween(NavEnterDuration))
         },
         // Back: slide out to right
         popExitTransition = {
-            fadeOut(animationSpec = tween(200)) +
-            slideOutHorizontally(targetOffsetX = { it / 4 }, animationSpec = tween(200))
+            fadeOut(animationSpec = tween(NavExitDuration)) +
+            slideOutHorizontally(targetOffsetX = { it / 4 }, animationSpec = tween(NavExitDuration))
         }
     ) {
         composable(
@@ -239,7 +236,7 @@ fun NavGraph(
                                          initialState.destination.route?.startsWith("project") == true
                 if (fromDetailOrProject) {
                     // Fade only - jumping contexts, not navigating linearly
-                    fadeIn(animationSpec = tween(300))
+                    fadeIn(animationSpec = tween(NavEnterDuration))
                 } else {
                     // Use default (slide from right)
                     null
@@ -250,9 +247,9 @@ fun NavGraph(
                                             targetState.destination.route?.startsWith("project") == true
                 if (goingToDetailOrProject) {
                     // Slide out left to coordinate with detail sliding in from right
-                    fadeOut(animationSpec = tween(200)) + slideOutHorizontally(
+                    fadeOut(animationSpec = tween(NavExitDuration)) + slideOutHorizontally(
                         targetOffsetX = { -it / 4 },
-                        animationSpec = tween(300)
+                        animationSpec = tween(NavExitDuration)
                     )
                 } else {
                     // Use default (fade)
@@ -310,12 +307,12 @@ fun NavGraph(
                 onProjectClick = { projectId ->
                     navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                 },
-                onTogglePinnedProject = onTogglePinnedProject,
+                onTogglePinnedProject = { id -> scope.launch { prefs.togglePinnedProject(id) } },
                 pinnedInstruments = pinnedInstruments,
                 onInstrumentClick = { id ->
                     navController.navigate(Screen.InstrumentDetail.createRoute(id))
                 },
-                onTogglePinnedInstrument = onTogglePinnedInstrument,
+                onTogglePinnedInstrument = { id -> scope.launch { prefs.togglePinnedInstrument(id) } },
                 onCreateSample = {
                     navController.navigate(Screen.CreateSample.createRoute())
                 },
@@ -357,21 +354,8 @@ fun NavGraph(
             ApiSettingsScreen(
                 currentApiBaseUrl = apiBaseUrl,
                 currentGraphExplorerUrl = graphExplorerUrl,
-                onApiBaseUrlSave = onApiBaseUrlSave,
-                onGraphExplorerUrlSave = onGraphExplorerUrlSave,
-                onBack = navigateBack,
-                onHome = navigateHome
-            )
-        }
-
-        composable(Screen.SettingsAi.route) {
-            AiSettingsScreen(
-                currentAiDirectMode = aiDirectMode,
-                currentAiApiKey = aiApiKey,
-                currentAiApiUrl = aiApiUrl,
-                onAiDirectModeSave = onAiDirectModeSave,
-                onAiApiKeySave = onAiApiKeySave,
-                onAiApiUrlSave = onAiApiUrlSave,
+                onApiBaseUrlSave = { url -> scope.launch { prefs.saveApiBaseUrl(url); ApiClient.setBaseUrl(url); CacheManager.clearAll(); PersistentProjectCache.clear(platformCtx) } },
+                onGraphExplorerUrlSave = { url -> scope.launch { prefs.saveGraphExplorerUrl(url) } },
                 onBack = navigateBack,
                 onHome = navigateHome
             )
@@ -382,7 +366,7 @@ fun NavGraph(
                 loginUrl = "${apiBaseUrl}auth/apikey",
                 onBack = navigateBack,
                 onKeyFound = { key ->
-                    onApiKeySave(key)
+                    scope.launch { prefs.saveApiKey(key); ApiClient.setApiKey(key); CacheManager.clearAll() }
                     showToast(platformCtx, "API key saved")
                     navController.popBackStack()
                 }
@@ -395,10 +379,12 @@ fun NavGraph(
                 currentAccentColor = accentColor,
                 currentFloatingScanButton = floatingScanButton,
                 currentUseDynamicColor = useDynamicColor,
-                onThemeModeSave = onThemeModeSave,
-                onAccentColorSave = onAccentColorSave,
-                onUseDynamicColorSave = onUseDynamicColorSave,
-                onFloatingScanButtonSave = onFloatingScanButtonSave,
+                currentDefaultProjectTab = defaultProjectTab,
+                onThemeModeSave = { mode -> scope.launch { prefs.saveThemeMode(mode) } },
+                onAccentColorSave = { color -> scope.launch { prefs.saveAccentColor(color) } },
+                onUseDynamicColorSave = { enabled -> scope.launch { prefs.saveUseDynamicColor(enabled) } },
+                onFloatingScanButtonSave = { enabled -> scope.launch { prefs.saveFloatingScanButton(enabled) } },
+                onDefaultProjectTabSave = { tab -> scope.launch { prefs.saveDefaultProjectTab(tab) } },
                 onBack = navigateBack,
                 onHome = navigateHome
             )
@@ -417,6 +403,7 @@ fun NavGraph(
             AccountScreen(
                 viewModel = accountViewModel,
                 onBack = navigateBack,
+                onHome = navigateHome,
                 onNavigateToOrcidLogin = { navController.navigate(Screen.OrcidLogin.route) }
             )
         }
@@ -440,6 +427,7 @@ fun NavGraph(
             val siblingGroupBy = backStackEntry.savedStateHandle.get<String>("groupBy")?.takeIf { it.isNotBlank() }
 
             LaunchedEffect(mfid) {
+                viewModel.reset()
                 viewModel.fetchResource(mfid)
             }
 
@@ -460,13 +448,15 @@ fun NavGraph(
                         when (state) {
                             is UiState.Idle    -> "idle"
                             is UiState.Loading -> "loading"
-                            is UiState.Success -> "success"
+                            // Treat a stale success (wrong resource still loaded) as loading
+                            // so the old resource never flashes during navigation
+                            is UiState.Success -> if (state.resource.uniqueId == mfid) "success" else "loading"
                             is UiState.Error   -> "error"
                         }
                     },
                     transitionSpec = {
                         // All transitions fade smoothly to work with NavGraph slide
-                        fadeIn(tween(220)) togetherWith fadeOut(tween(220))
+                        fadeIn(tween(NavExitDuration)) togetherWith fadeOut(tween(NavExitDuration))
                     },
                     label = "resource state"
                 ) { state ->
@@ -483,13 +473,9 @@ fun NavGraph(
                     is UiState.Loading -> {
                         Scaffold(
                             topBar = {
-                                TopAppBar(
-                                    title = { Text("Loading...") },
-                                    navigationIcon = {
-                                        IconButton(onClick = { navController.popBackStack() }) {
-                                            AppIcon(AppIcons.Back)
-                                        }
-                                    }
+                                AppTopBar(
+                                    title = "Loading...",
+                                    onBack = { navController.popBackStack() }
                                 )
                             }
                         ) { padding ->
@@ -499,12 +485,17 @@ fun NavGraph(
                             )
                         }
                     }
-                is UiState.Success -> {
+                is UiState.Success -> if (state.resource.uniqueId != mfid) {
+                    // Stale state from a previous navigation — show blank background
+                    // rather than flashing the wrong resource. LaunchedEffect will
+                    // call reset() + fetchResource(mfid) momentarily.
+                    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
+                } else {
                     // Save last visited resource and add to history
                     LaunchedEffect(state.resource) {
-                        onLastVisitedResourceSave(state.resource.uniqueId, state.resource.name)
+                        scope.launch { prefs.saveLastVisitedResource(state.resource.uniqueId, state.resource.name) }
                         val rtype = if (state.resource is Sample) "sample" else "dataset"
-                        onHistoryAdd(state.resource.uniqueId, state.resource.name, rtype)
+                        scope.launch { prefs.addToHistory(state.resource.uniqueId, state.resource.name, rtype) }
                     }
 
                     ResourceDetailScreen(
@@ -514,8 +505,8 @@ fun NavGraph(
                         graphExplorerUrl = graphExplorerUrl,
                         siblingGroupBy = siblingGroupBy,
                         onSaveToHistory = { uuid, name, resourceType ->
-                            onLastVisitedResourceSave(uuid, name)
-                            onHistoryAdd(uuid, name, resourceType)
+                            scope.launch { prefs.saveLastVisitedResource(uuid, name) }
+                            scope.launch { prefs.addToHistory(uuid, name, resourceType) }
                         },
                         onBack = {
                             navController.popBackStack()
@@ -536,16 +527,15 @@ fun NavGraph(
                         },
                         getCardState = { key -> viewModel.getCardState(state.resource.uniqueId, key) },
                         onCardStateChange = { key, value -> viewModel.setCardState(state.resource.uniqueId, key, value) },
-                        loadedResources = viewModel.loadedResources,
-                        enrichedUuids = viewModel.enrichedUuids,
-                        failedEnrichmentUuids = viewModel.failedEnrichmentUuids,
-                        loadedThumbnails = viewModel.loadedThumbnails,
-                        onSeedThumbnails = viewModel::seedThumbnails,
+                        cache = viewModel.resourceDetailCache,
                         onNavigateToAddFiles = { datasetUuid ->
                             navController.navigate(Screen.AddFiles.createRoute(datasetUuid))
                         },
                         onNavigateToMetadataEditor = {
                             navController.navigate(Screen.MetadataEditor.route)
+                        },
+                        onNavigateToUser = { identifier ->
+                            navController.navigate(Screen.UserProfile.createRoute(identifier))
                         },
                         recentHistory = resourceHistory,
                         onDuplicate = { resource ->
@@ -575,7 +565,7 @@ fun NavGraph(
                             }
                         }
                     )
-                }
+                } // end else (correct resource)
                 is UiState.Error -> {
                     Box(
                         modifier = Modifier
@@ -671,9 +661,9 @@ fun NavGraph(
                     navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                 },
                 pinnedProjects = pinnedProjects,
-                onTogglePin = onTogglePinnedProject,
+                onTogglePin = { id -> scope.launch { prefs.togglePinnedProject(id) } },
                 hiddenProjects = hiddenProjects,
-                onToggleHide = onToggleHideProject
+                onToggleHide = { id -> scope.launch { prefs.toggleHiddenProject(id) } }
             )
         }
 
@@ -693,7 +683,7 @@ fun NavGraph(
                     navController.navigate(Screen.Detail.createRoute(mfid, groupBy))
                 },
                 isPinned = projectId in pinnedProjects,
-                onTogglePin = { onTogglePinnedProject(projectId) },
+                onTogglePin = { scope.launch { prefs.togglePinnedProject(projectId) } },
                 isHidden = projectId in hiddenProjects,
                 onCreateSample = {
                     navController.navigate(Screen.CreateSample.createRoute(projectId))
@@ -703,6 +693,9 @@ fun NavGraph(
                 },
                 onManageProject = {
                     navController.navigate(Screen.ManageProject.createRoute(projectId))
+                },
+                onUserClick = { identifier ->
+                    navController.navigate(Screen.UserProfile.createRoute(identifier))
                 }
             )
         }
@@ -711,9 +704,9 @@ fun NavGraph(
             route = Screen.ManageProject.route,
             arguments = listOf(navArgument("projectId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val projectId = backStackEntry.arguments?.getString("projectId") ?: ""
+            val projectId = backStackEntry.savedStateHandle.get<String>("projectId") ?: ""
             val manageViewModel = viewModel<ManageProjectViewModel>()
-            val currentUsername by prefs.userProfile.collectAsStateWithLifecycle(null)
+            val currentUsername by prefs.userProfile.collectAsStateWithLifecycle()
             LaunchedEffect(projectId) { manageViewModel.init(projectId, currentUsername?.username) }
             ManageProjectScreen(viewModel = manageViewModel, onBack = navigateBack)
         }
@@ -727,9 +720,9 @@ fun NavGraph(
                     navController.navigate(Screen.InstrumentDetail.createRoute(id))
                 },
                 pinnedInstruments = pinnedInstruments,
-                onTogglePin = onTogglePinnedInstrument,
+                onTogglePin = { id -> scope.launch { prefs.togglePinnedInstrument(id) } },
                 hiddenInstruments = hiddenInstruments,
-                onToggleHide = onToggleHideInstrument
+                onToggleHide = { id -> scope.launch { prefs.toggleHiddenInstrument(id) } }
             )
         }
 
@@ -741,7 +734,7 @@ fun NavGraph(
             InstrumentDetailScreen(
                 instrumentId = instrumentId,
                 isPinned = instrumentId in pinnedInstruments,
-                onTogglePin = { onTogglePinnedInstrument(instrumentId) },
+                onTogglePin = { scope.launch { prefs.togglePinnedInstrument(instrumentId) } },
                 onBack = navigateBack,
                 onHome = navigateHome,
                 onSearch = navigateSearch,
@@ -758,7 +751,7 @@ fun NavGraph(
             route = Screen.ManageInstrument.route,
             arguments = listOf(navArgument("instrumentId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val instrumentId = backStackEntry.arguments?.getString("instrumentId") ?: ""
+            val instrumentId = backStackEntry.savedStateHandle.get<String>("instrumentId") ?: ""
             val manageViewModel = viewModel<ManageInstrumentViewModel>()
             LaunchedEffect(instrumentId) { manageViewModel.init(instrumentId) }
             ManageInstrumentScreen(viewModel = manageViewModel, onBack = navigateBack)
@@ -814,13 +807,27 @@ fun NavGraph(
 
         composable(Screen.MetadataEditor.route) {
             MetadataEditorScreen(
-                onBack = navigateBack,
+                onBack = {
+                    // Signal the edit sheet to reopen — MetadataHolder.metadata still holds
+                    // the original (unedited) value, so the sheet reopens unchanged.
+                    MetadataHolder.isDirty = true
+                    navigateBack()
+                },
                 onDone = {
                     navController.previousBackStackEntry
                         ?.savedStateHandle
                         ?.set("metadata_updated", true)
                     navController.popBackStack()
                 }
+            )
+        }
+
+        composable(Screen.UserProfile.route) { backStackEntry ->
+            val identifier = backStackEntry.savedStateHandle.get<String>("identifier") ?: return@composable
+            UserProfileScreen(
+                identifier = identifier,
+                onBack = navigateBack,
+                onHome = navigateHome
             )
         }
 
@@ -833,12 +840,18 @@ fun NavGraph(
                 onItemClick = { uuid ->
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 },
-                onClearHistory = onClearHistory,
+                onClearHistory = { scope.launch { prefs.clearHistory() } },
                 graphExplorerUrl = graphExplorerUrl
             )
         }
 
-        composable(Screen.Search.route) {
+        composable(
+            route = Screen.Search.route,
+            enterTransition = { fadeIn(animationSpec = tween(NavEnterDuration)) },
+            exitTransition = { fadeOut(animationSpec = tween(NavExitDuration)) },
+            popEnterTransition = { fadeIn(animationSpec = tween(NavEnterDuration)) },
+            popExitTransition = { fadeOut(animationSpec = tween(NavExitDuration)) }
+        ) {
             SearchScreen(
                 apiKey = apiKey,
                 userOrcid = userOrcid,

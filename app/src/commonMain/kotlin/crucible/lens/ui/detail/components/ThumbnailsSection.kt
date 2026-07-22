@@ -1,7 +1,6 @@
 package crucible.lens.ui.detail.components
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -29,7 +28,7 @@ internal fun ThumbnailsSection(
         if (showDeleteDialog && thumbnail.id >= 0) {
             AlertDialog(
                 onDismissRequest = { showDeleteDialog = false },
-                icon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
+                icon = { AppIcon(AppIcons.RequestDeletion) },
                 title = { Text("Delete thumbnail?") },
                 text = { Text("This thumbnail will be permanently removed from the dataset.") },
                 confirmButton = {
@@ -92,7 +91,7 @@ internal fun ThumbnailsSection(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.ErrorOutline, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.error)
+                        AppIcon(AppIcons.ErrorOutline, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.error)
                         Text("Failed to load image", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                     }
                 }

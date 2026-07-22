@@ -1,47 +1,28 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.metadata
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
-import crucible.lens.data.api.ApiClient
-import crucible.lens.data.api.ApiResult
-import crucible.lens.data.model.ExtractMetadataRequest
-import crucible.lens.data.model.MetadataImageData
 import crucible.lens.ui.metadata.MetadataHolder
-import crucible.lens.platform.PlatformBase64
-import crucible.lens.platform.rememberCameraPicker
-import crucible.lens.platform.rememberGalleryPicker
+import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.parseAsJsonObject
 import crucible.lens.ui.common.toPrettyString
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MetadataEditorScreen(
     onBack: () -> Unit,
@@ -54,14 +35,6 @@ fun MetadataEditorScreen(
         )
     }
     var parseError by remember { mutableStateOf<String?>(null) }
-    var photoBytesList by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
-    // Context hint is always visible so users can fill it before adding photos.
-    var extractionContext by rememberSaveable { mutableStateOf(MetadataHolder.resourceContext) }
-    var isExtracting by remember { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    val cameraPicker = rememberCameraPicker { bytes -> bytes?.let { photoBytesList = photoBytesList + it } }
-    val galleryPicker = rememberGalleryPicker { bytes -> bytes?.let { photoBytesList = photoBytesList + it } }
 
     // Derived field count — recomputed only when jsonText changes.
     val fieldCount by remember {
@@ -102,18 +75,12 @@ fun MetadataEditorScreen(
         }
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+    AppScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Metadata") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+            AppTopBar(
+                title = "Metadata",
+                onBack = onBack,
                 actions = {
-                    // Text button is clearer than a Code icon for "pretty-print JSON".
                     TextButton(onClick = ::formatJson) {
                         Text("{ }", style = MaterialTheme.typography.labelLarge)
                     }
@@ -147,7 +114,7 @@ fun MetadataEditorScreen(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.ErrorOutline, null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.error)
+                            AppIcon(AppIcons.ErrorOutline, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.error)
                             Text(parseError!!, color = MaterialTheme.colorScheme.error)
                         }
                         jsonText.isBlank() -> Text("Empty", color = MaterialTheme.colorScheme.onSurfaceVariant)

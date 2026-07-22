@@ -1,7 +1,6 @@
 package crucible.lens.ui.common
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -32,9 +31,7 @@ fun SearchBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(
-                Icons.Default.Search,
-                contentDescription = null,
+            AppIcon(AppIcons.Search,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp)
             )
@@ -58,9 +55,7 @@ fun SearchBar(
                 )
             }
             if (query.isNotEmpty()) {
-                Icon(
-                    Icons.Default.Clear,
-                    contentDescription = "Clear",
+                AppIcon(AppIcons.ClearInput,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp).clickable { onQueryChange("") }
                 )

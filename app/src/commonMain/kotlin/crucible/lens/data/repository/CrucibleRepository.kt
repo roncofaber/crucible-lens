@@ -6,6 +6,7 @@ import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Thumbnail
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -45,6 +46,8 @@ class CrucibleRepository {
                 }
                 is ApiResult.Error -> httpError(result.code)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             ResourceResult.Error("Network error: ${e.message ?: "check your connection"}")
         }
@@ -62,6 +65,8 @@ class CrucibleRepository {
                 is ApiResult.Success -> result.data
                 is ApiResult.Error -> emptyList()
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             emptyList()
         }

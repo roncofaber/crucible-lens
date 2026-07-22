@@ -1,12 +1,10 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.settings
+import androidx.compose.material3.ExperimentalMaterial3Api
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
-
+import crucible.lens.ui.common.AppTopBar
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -23,21 +21,20 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.User
-import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
+import crucible.lens.platform.openUrl
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.StandardSizeAnim
 import crucible.lens.ui.common.UserAvatar
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
-import crucible.lens.ui.detail.components.InfoRow
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountScreen(
     viewModel: AccountViewModel,
     onBack: () -> Unit,
+    onHome: () -> Unit,
     onNavigateToOrcidLogin: () -> Unit
 ) {
     val profileState by viewModel.profileState.collectAsState()
@@ -45,15 +42,40 @@ fun AccountScreen(
     var showSignOutDialog by remember { mutableStateOf(false) }
     var lastDraft by remember { mutableStateOf<EditUiState.Editing?>(null) }
     var advancedExpanded by remember { mutableStateOf(false) }
+    val currentApiKey by viewModel.currentApiKey.collectAsState()
     var apiKeyInput by remember { mutableStateOf("") }
     var apiKeyVisible by remember { mutableStateOf(false) }
 
-    LaunchedEffect(editState) {
-        if (editState is EditUiState.Editing) {
-            lastDraft = editState as EditUiState.Editing
+    val isEditing = editState !is EditUiState.Idle
+    val isSaving = editState is EditUiState.Saving
+    val activeDraft: EditUiState.Editing? = when (val es = editState) {
+        is EditUiState.Editing -> es
+        is EditUiState.Saving -> lastDraft
+        is EditUiState.SaveError -> es.draft
+        else -> null
+    }
+    val saveError: SaveErrorReason? = (editState as? EditUiState.SaveError)?.reason
+
+    val usernamePattern = Regex("^[a-z][a-z0-9_-]{2,31}$")
+    val usernameFormatValid = activeDraft == null ||
+        activeDraft.username.isBlank() ||
+        usernamePattern.matches(activeDraft.username.lowercase())
+    val canSave = !isSaving && activeDraft != null &&
+        activeDraft.firstName.isNotBlank() &&
+        activeDraft.lastName.isNotBlank() &&
+        activeDraft.usernameCheck !is UsernameCheckState.Checking &&
+        activeDraft.usernameCheck !is UsernameCheckState.Taken &&
+        usernameFormatValid
+
+    LaunchedEffect(currentApiKey) {
+        if (apiKeyInput.isEmpty() && !currentApiKey.isNullOrBlank()) {
+            apiKeyInput = currentApiKey!!
         }
     }
-
+    LaunchedEffect(editState) {
+        val es = editState
+        if (es is EditUiState.Editing) lastDraft = es
+    }
     LaunchedEffect(Unit) { viewModel.loadProfile() }
 
     if (showSignOutDialog) {
@@ -75,11 +97,33 @@ fun AccountScreen(
 
     AppScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Account") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        AppIcon(AppIcons.Back)
+            AppTopBar(
+                title = "Account",
+                onBack = if (isEditing) viewModel::cancelEdit else onBack,
+                navIcon = if (isEditing) AppIcons.ClearInput else AppIcons.Back,
+                actions = {
+                    if (isEditing) {
+                        if (isSaving) {
+                            Box(
+                                modifier = Modifier.size(48.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            }
+                        } else {
+                            IconButton(onClick = viewModel::saveProfile, enabled = canSave) {
+                                AppIcon(AppIcons.Check)
+                            }
+                        }
+                    } else {
+                        if (profileState is ProfileUiState.Loaded) {
+                            IconButton(onClick = viewModel::startEdit) {
+                                AppIcon(AppIcons.Edit)
+                            }
+                        }
+                        IconButton(onClick = onHome) {
+                            AppIcon(AppIcons.Home)
+                        }
                     }
                 }
             )
@@ -110,88 +154,315 @@ fun AccountScreen(
                 )
                 is ProfileUiState.Loaded -> {
                     val user = (profileState as ProfileUiState.Loaded).user
-                    AccountHeaderCard(user)
-                    when (val es = editState) {
-                        is EditUiState.Idle -> ProfileViewCard(user, onEdit = { viewModel.startEdit() })
-                        is EditUiState.Editing -> ProfileEditForm(
-                            draft = es,
-                            isSaving = false,
-                            onFirstNameChanged = viewModel::onFirstNameChanged,
-                            onLastNameChanged = viewModel::onLastNameChanged,
-                            onEmailChanged = viewModel::onEmailChanged,
-                            onUsernameChanged = viewModel::onUsernameChanged,
-                            onSave = { viewModel.saveProfile() },
-                            onCancel = { viewModel.cancelEdit() }
-                        )
-                        is EditUiState.Saving -> {
-                            val draftToShow = lastDraft ?: EditUiState.Editing("", "", "", "")
-                            ProfileEditForm(
-                                draft = draftToShow,
-                                isSaving = true,
-                                onFirstNameChanged = {},
-                                onLastNameChanged = {},
-                                onEmailChanged = {},
-                                onUsernameChanged = {},
-                                onSave = {},
-                                onCancel = {}
-                            )
+
+                    ProfileCard(
+                        user = user,
+                        isEditing = isEditing,
+                        isSaving = isSaving,
+                        draft = activeDraft,
+                        saveError = saveError,
+                        onFirstNameChanged = viewModel::onFirstNameChanged,
+                        onLastNameChanged = viewModel::onLastNameChanged,
+                        onEmailChanged = viewModel::onEmailChanged,
+                        onUsernameChanged = viewModel::onUsernameChanged,
+                    )
+
+                    if (!isEditing) {
+                        OutlinedButton(
+                            onClick = { showSignOutDialog = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            AppIcon(AppIcons.SignOut, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Sign out")
                         }
-                        is EditUiState.SaveError -> {
-                            ProfileEditForm(
-                                draft = es.draft,
-                                isSaving = false,
-                                saveError = es.reason,
-                                onFirstNameChanged = viewModel::onFirstNameChanged,
-                                onLastNameChanged = viewModel::onLastNameChanged,
-                                onEmailChanged = viewModel::onEmailChanged,
-                                onUsernameChanged = viewModel::onUsernameChanged,
-                                onSave = { viewModel.saveProfile() },
-                                onCancel = { viewModel.cancelEdit() }
-                            )
-                        }
-                    }
-                    OutlinedButton(
-                        onClick = { showSignOutDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        AppIcon(AppIcons.SignOut, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Sign out")
-                    }
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(horizontal = 16.dp).animateContentSize(StandardSizeAnim)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().clickable { advancedExpanded = !advancedExpanded }.padding(vertical = 16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier
+                                    .padding(horizontal = 16.dp)
+                                    .animateContentSize(StandardSizeAnim)
                             ) {
-                                Text("Advanced", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                ExpandChevron(expanded = advancedExpanded)
-                            }
-                            if (advancedExpanded) {
-                                Text("Manually set API key (for service accounts)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
-                                OutlinedTextField(
-                                    value = apiKeyInput,
-                                    onValueChange = { apiKeyInput = it },
-                                    label = { Text("API key") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                    visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                                    trailingIcon = {
-                                        IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
-                                            AppIcon(if (apiKeyVisible) AppIcons.HideContent else AppIcons.ShowContent)
-                                        }
-                                    }
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Button(onClick = { viewModel.saveApiKey(apiKeyInput.trim()) }, modifier = Modifier.fillMaxWidth(), enabled = apiKeyInput.isNotBlank()) {
-                                    Text("Apply key")
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { advancedExpanded = !advancedExpanded }
+                                        .padding(vertical = 16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "Advanced",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    ExpandChevron(expanded = advancedExpanded)
                                 }
-                                Spacer(Modifier.height(16.dp))
+                                if (advancedExpanded) {
+                                    Text(
+                                        "Manually set API key (for service accounts)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
+                                    OutlinedTextField(
+                                        value = apiKeyInput,
+                                        onValueChange = { apiKeyInput = it },
+                                        label = { Text("API key") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true,
+                                        visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                        trailingIcon = {
+                                            IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
+                                                AppIcon(if (apiKeyVisible) AppIcons.HideContent else AppIcons.ShowContent)
+                                            }
+                                        }
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    Button(
+                                        onClick = { viewModel.saveApiKey(apiKeyInput.trim()) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        enabled = apiKeyInput.isNotBlank()
+                                    ) {
+                                        Text("Apply key")
+                                    }
+                                    Spacer(Modifier.height(16.dp))
+                                }
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileCard(
+    user: User,
+    isEditing: Boolean,
+    isSaving: Boolean,
+    draft: EditUiState.Editing?,
+    saveError: SaveErrorReason?,
+    onFirstNameChanged: (String) -> Unit,
+    onLastNameChanged: (String) -> Unit,
+    onEmailChanged: (String) -> Unit,
+    onUsernameChanged: (String) -> Unit,
+) {
+    val platformCtx = getPlatformContext()
+    val displayName = listOfNotNull(user.firstName, user.lastName).joinToString(" ").ifBlank { null }
+    val usernamePattern = Regex("^[a-z][a-z0-9_-]{2,31}$")
+    val usernameFormatValid = draft == null ||
+        draft.username.isBlank() ||
+        usernamePattern.matches(draft.username.lowercase())
+
+    Card(modifier = Modifier.fillMaxWidth().animateContentSize(StandardSizeAnim)) {
+        Column {
+            // Header: avatar + composite name (view) or avatar + first/last fields (edit)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = if (isEditing) Alignment.Top else Alignment.CenterVertically
+            ) {
+                UserAvatar(
+                    firstName = if (isEditing) draft?.firstName else user.firstName,
+                    lastName = if (isEditing) draft?.lastName else user.lastName,
+                    size = 48.dp,
+                    modifier = if (isEditing) Modifier.padding(top = 8.dp) else Modifier
+                )
+                if (isEditing && draft != null) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = draft.firstName,
+                            onValueChange = onFirstNameChanged,
+                            label = { Text("First name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isSaving,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+                        )
+                        OutlinedTextField(
+                            value = draft.lastName,
+                            onValueChange = onLastNameChanged,
+                            label = { Text("Last name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isSaving,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+                        )
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            displayName ?: "No name set",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (displayName != null) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (!user.username.isNullOrBlank()) {
+                            Text(
+                                "@${user.username}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider()
+
+            // Body: email row (view) or email + username fields (edit)
+            if (isEditing && draft != null) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (saveError != null) {
+                        val msg = when (saveError) {
+                            SaveErrorReason.UsernameTaken -> "That username is already taken."
+                            SaveErrorReason.Generic -> "Failed to save — check your connection."
+                        }
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            )
+                        ) {
+                            Text(
+                                msg,
+                                modifier = Modifier.padding(12.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                    OutlinedTextField(
+                        value = draft.email,
+                        onValueChange = onEmailChanged,
+                        label = { Text("Email") },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isSaving,
+                        singleLine = true,
+                        leadingIcon = {
+                            AppIcon(AppIcons.Email, modifier = Modifier.size(20.dp))
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Next
+                        )
+                    )
+                    OutlinedTextField(
+                        value = draft.username,
+                        onValueChange = { onUsernameChanged(it.lowercase()) },
+                        label = { Text("Username") },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isSaving,
+                        singleLine = true,
+                        leadingIcon = {
+                            Text(
+                                "@",
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.padding(start = 12.dp)
+                            )
+                        },
+                        trailingIcon = {
+                            when (draft.usernameCheck) {
+                                is UsernameCheckState.Checking -> CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                is UsernameCheckState.Available -> AppIcon(
+                                    AppIcons.Success,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                is UsernameCheckState.Taken -> AppIcon(
+                                    AppIcons.UsernameTaken,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                                else -> {}
+                            }
+                        },
+                        supportingText = {
+                            when (draft.usernameCheck) {
+                                is UsernameCheckState.Available -> Text(
+                                    "Available",
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                is UsernameCheckState.Taken -> Text(
+                                    "Already taken",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                else -> if (!usernameFormatValid && draft.username.isNotBlank()) {
+                                    Text(
+                                        "3–32 chars: lowercase letters, digits, hyphens, underscores",
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                    )
+                }
+            } else if (!user.email.isNullOrBlank()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppIcon(
+                        AppIcons.Email,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(user.email, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+
+            // ORCID row — always read-only, tappable
+            if (!user.uniqueId.isNullOrBlank()) {
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { openUrl(platformCtx, "https://orcid.org/${user.uniqueId}") }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppIcon(
+                        AppIcons.Orcid,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(1.dp)
+                    ) {
+                        Text(
+                            "ORCID",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            user.uniqueId,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    AppIcon(
+                        AppIcons.OpenExternal,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
         }
@@ -235,164 +506,6 @@ private fun NotLoggedInCard(
             )
             Button(onClick = onApiKeySave, modifier = Modifier.fillMaxWidth(), enabled = apiKeyInput.isNotBlank()) {
                 Text("Sign in with API key")
-            }
-        }
-    }
-}
-
-@Composable
-private fun AccountHeaderCard(user: User) {
-    val platformCtx = getPlatformContext()
-    val displayName = listOfNotNull(user.firstName, user.lastName).joinToString(" ").ifBlank { "Unknown" }
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            UserAvatar(firstName = user.firstName, lastName = user.lastName, size = 52.dp)
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                if (!user.username.isNullOrBlank()) {
-                    Text("@${user.username}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-                } else {
-                    Text("No username set", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                if (!user.uniqueId.isNullOrBlank()) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(user.uniqueId, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        IconButton(
-                            onClick = { copyToClipboard(platformCtx, user.uniqueId) },
-                            modifier = Modifier.size(20.dp)
-                        ) {
-                            AppIcon(AppIcons.CopyToClipboard, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProfileViewCard(user: User, onEdit: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            InfoRow(icon = AppIcons.User, label = "First name", value = user.firstName ?: "—")
-            InfoRow(icon = AppIcons.User, label = "Last name", value = user.lastName ?: "—")
-            InfoRow(icon = AppIcons.Email, label = "Email", value = user.email ?: "—")
-            InfoRow(icon = AppIcons.Username, label = "Username", value = if (!user.username.isNullOrBlank()) "@${user.username}" else "—")
-            InfoRow(icon = AppIcons.Username, label = "ORCID", value = user.uniqueId ?: "—")
-            Spacer(Modifier.height(4.dp))
-            TextButton(onClick = onEdit, modifier = Modifier.align(Alignment.End)) {
-                AppIcon(AppIcons.Edit, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Edit profile")
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProfileEditForm(
-    draft: EditUiState.Editing,
-    isSaving: Boolean,
-    saveError: SaveErrorReason? = null,
-    onFirstNameChanged: (String) -> Unit,
-    onLastNameChanged: (String) -> Unit,
-    onEmailChanged: (String) -> Unit,
-    onUsernameChanged: (String) -> Unit,
-    onSave: () -> Unit,
-    onCancel: () -> Unit
-) {
-    val usernamePattern = Regex("^[a-z][a-z0-9_-]{2,31}$")
-    val usernameFormatValid = draft.username.isBlank() || usernamePattern.matches(draft.username.lowercase())
-    val canSave = !isSaving &&
-        draft.firstName.isNotBlank() &&
-        draft.lastName.isNotBlank() &&
-        draft.usernameCheck !is UsernameCheckState.Checking &&
-        draft.usernameCheck !is UsernameCheckState.Taken &&
-        usernameFormatValid
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (saveError != null) {
-                val msg = when (saveError) {
-                    SaveErrorReason.UsernameTaken -> "That username is already taken."
-                    SaveErrorReason.Generic -> "Failed to save — check your connection."
-                }
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
-                    Text(msg, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
-                }
-            }
-
-            OutlinedTextField(
-                value = draft.firstName,
-                onValueChange = onFirstNameChanged,
-                label = { Text("First name") },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isSaving,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
-            )
-            OutlinedTextField(
-                value = draft.lastName,
-                onValueChange = onLastNameChanged,
-                label = { Text("Last name") },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isSaving,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
-            )
-            OutlinedTextField(
-                value = draft.email,
-                onValueChange = onEmailChanged,
-                label = { Text("Email") },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isSaving,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next)
-            )
-            OutlinedTextField(
-                value = draft.username,
-                onValueChange = { onUsernameChanged(it.lowercase()) },
-                label = { Text("Username") },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isSaving,
-                singleLine = true,
-                leadingIcon = { Text("@", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp)) },
-                trailingIcon = {
-                    when (draft.usernameCheck) {
-                        is UsernameCheckState.Checking -> CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        is UsernameCheckState.Available -> AppIcon(AppIcons.Success, tint = MaterialTheme.colorScheme.primary)
-                        is UsernameCheckState.Taken -> AppIcon(AppIcons.UsernameTaken, tint = MaterialTheme.colorScheme.error)
-                        else -> {}
-                    }
-                },
-                supportingText = {
-                    when (draft.usernameCheck) {
-                        is UsernameCheckState.Available -> Text("Available", color = MaterialTheme.colorScheme.primary)
-                        is UsernameCheckState.Taken -> Text("Already taken", color = MaterialTheme.colorScheme.error)
-                        else -> if (!usernameFormatValid && draft.username.isNotBlank()) {
-                            Text("3–32 chars: lowercase letters, digits, hyphens, underscores", color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f), enabled = !isSaving) {
-                    Text("Cancel")
-                }
-                Button(onClick = onSave, modifier = Modifier.weight(1f), enabled = canSave) {
-                    if (isSaving) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                    else Text("Save")
-                }
             }
         }
     }

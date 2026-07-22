@@ -1,4 +1,6 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.detail
+import androidx.compose.material3.ExperimentalMaterial3Api
 import crucible.lens.platform.*
 
 
@@ -23,6 +25,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -47,9 +50,11 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import crucible.lens.ui.common.EffectsFastSpring
+import crucible.lens.ui.common.EffectsDefaultSpring
+import crucible.lens.ui.common.SpatialDefaultSizeSpring
+import crucible.lens.ui.common.SpatialFastSizeSpring
 import androidx.compose.ui.draw.rotate
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -97,6 +102,11 @@ import crucible.lens.ui.detail.components.*
 
 private data class UnlinkRequest(val name: String, val otherUuid: String, val action: suspend () -> Unit)
 
+/** Ensures [resource] is in the list and returns the list sorted by uniqueId. */
+private fun <T : CrucibleResource> List<T>.ensureContains(resource: T): List<T> =
+    if (any { it.uniqueId == resource.uniqueId }) sortedBy { it.uniqueId }
+    else (this + resource).sortedBy { it.uniqueId }
+
 private fun List<Sample>.filterSiblings(groupBy: String?, resource: Sample) =
     filter { s -> when (groupBy) {
         "DATE"  -> dateGroupKey(s.timestamp) == dateGroupKey(resource.timestamp)
@@ -126,7 +136,7 @@ private fun siblingGroupLabel(groupBy: String?, resource: CrucibleResource): Str
     else -> groupBy.lowercase().replaceFirstChar { it.uppercase() }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ResourceDetailScreen(
     resource: CrucibleResource,
@@ -147,14 +157,16 @@ fun ResourceDetailScreen(
     onSaveToHistory: (uuid: String, name: String, resourceType: String?) -> Unit = { _, _, _ -> },
     getCardState: (key: String) -> Boolean = { false },
     onCardStateChange: (key: String, value: Boolean) -> Unit = { _, _ -> },
-    // Resource/thumbnail caches owned by the ViewModel so they survive config changes.
-    loadedResources: androidx.compose.runtime.snapshots.SnapshotStateMap<String, CrucibleResource> = remember { androidx.compose.runtime.mutableStateMapOf() },
-    enrichedUuids: MutableSet<String> = remember { mutableSetOf() },
-    failedEnrichmentUuids: androidx.compose.runtime.snapshots.SnapshotStateSet<String> = remember { androidx.compose.runtime.mutableStateSetOf() },
-    loadedThumbnails: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<crucible.lens.data.model.Thumbnail>> = remember { androidx.compose.runtime.mutableStateMapOf() },
-    onSeedThumbnails: (uuid: String, thumbnails: List<crucible.lens.data.model.Thumbnail>) -> Unit = { _, _ -> },
+    cache: ResourceDetailCache = remember { ResourceDetailCache(
+        loadedResources = androidx.compose.runtime.mutableStateMapOf(),
+        enrichedUuids = mutableSetOf(),
+        failedEnrichmentUuids = androidx.compose.runtime.mutableStateSetOf(),
+        loadedThumbnails = androidx.compose.runtime.mutableStateMapOf(),
+        seedThumbnails = { _, _ -> }
+    ) },
     onNavigateToAddFiles: (datasetUuid: String) -> Unit = {},
     onNavigateToMetadataEditor: () -> Unit = {},
+    onNavigateToUser: (String) -> Unit = {},
 ) {
     var showQrDialog by remember { mutableStateOf(false) }
     var showSiblingGroupDialog by remember { mutableStateOf(false) }
@@ -166,7 +178,7 @@ fun ResourceDetailScreen(
     // configuration changes and don't lose enriched-resource state on rotation.
     LaunchedEffect(resource.uniqueId) {
         if (resource is Dataset && thumbnails.isNotEmpty()) {
-            onSeedThumbnails(resource.uniqueId, thumbnails)
+            cache.seedThumbnails(resource.uniqueId, thumbnails)
         }
     }
 
@@ -183,197 +195,102 @@ fun ResourceDetailScreen(
     // Stays false while the list is just the 1-item seed, so the counter shows "-- / --".
     var siblingsResolved by remember(resource) { mutableStateOf(false) }
 
-    // Batch load all project resources in background (for sibling navigation)
-    LaunchedEffect(resource) {
-        // Always seed with the authoritative incoming resource (handles post-refresh updates where
-        // the ViewModel has a fresh version but loadedResources still holds a stale one).
-        loadedResources[resource.uniqueId] = resource
-        enrichedUuids.add(resource.uniqueId)
-        // Clear stale thumbnails so the fresh ones from the ViewModel are displayed after refresh.
-        loadedThumbnails.remove(resource.uniqueId)
-
+    // Shared sibling-loading logic — used by both LaunchedEffects below.
+    // Fetches the sibling list from cache or API, applies groupBy filtering,
+    // ensures the current resource is included, and updates state.
+    suspend fun loadSiblings(groupBy: String?) {
         when (resource) {
             is Sample -> {
-                val projectId = resource.projectId
-                if (projectId == null) { siblingsResolved = true; return@LaunchedEffect }
-                // Fast path: use existing project cache
+                val projectId = resource.projectId ?: run { siblingsResolved = true; return }
                 val cached = CacheManager.getProjectSamples(projectId)
                 if (cached != null) {
-                    val filtered = cached.filterSiblings(siblingGroupBy, resource)
-                    val sorted = if (filtered.any { it.uniqueId == resource.uniqueId }) filtered else (filtered + resource).sortedBy { it.uniqueId }
-                    cached.forEach { s -> val rich = CacheManager.getResource(s.uniqueId) as? Sample; if (rich != null) { enrichedUuids.add(s.uniqueId); loadedResources[s.uniqueId] = rich } }
-                    sameTypeSamples = sorted
+                    sameTypeSamples = cached.filterSiblings(groupBy, resource).ensureContains(resource)
                     siblingsResolved = true
                 } else {
-                    // Fetch only matching siblings from the server
-                    launch {
-                        try {
-                            val bounds = if (siblingGroupBy == "DATE") monthBounds(resource.timestamp) else null
-                            val resp = withContext(Dispatchers.Default) {
-                                ApiClient.service.getFilteredSamples(
-                                    projectId = projectId,
-                                    sampleType = if (siblingGroupBy == null || siblingGroupBy == "TYPE") resource.sampleType else null,
-                                    ownerOrcid = if (siblingGroupBy == "OWNER") resource.ownerOrcid else null,
-                                    creationTimeGte = bounds?.first,
-                                    creationTimeLte = bounds?.second
-                                )
-                            }
-                            when (resp) {
-                                is ApiResult.Success -> {
-                                    val all = resp.data
-                                    val sorted = if (all.any { it.uniqueId == resource.uniqueId }) all.sortedBy { it.uniqueId }
-                                                 else (all + resource).sortedBy { it.uniqueId }
-                                    sorted.forEach { s -> loadedResources.getOrPut(s.uniqueId) { s } }
-                                    sameTypeSamples = sorted
-                                    siblingsResolved = true
-                                }
-                                is ApiResult.Error -> {
-                                    siblingsResolved = true
-                                }
-                            }
-                        } catch (e: kotlinx.coroutines.CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            println("Error: $e")
+                    val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
+                    when (val resp = withContext(Dispatchers.Default) {
+                        ApiClient.service.getFilteredSamples(
+                            projectId = projectId,
+                            sampleType = if (groupBy == null || groupBy == "TYPE") resource.sampleType else null,
+                            ownerOrcid = if (groupBy == "OWNER") resource.ownerOrcid else null,
+                            creationTimeGte = bounds?.first, creationTimeLte = bounds?.second
+                        )
+                    }) {
+                        is ApiResult.Success -> {
+                            val sorted = resp.data.ensureContains(resource)
+                            sorted.forEach { cache.loadedResources.getOrPut(it.uniqueId) { it } }
+                            sameTypeSamples = sorted
                             siblingsResolved = true
                         }
+                        is ApiResult.Error -> siblingsResolved = true
                     }
                 }
             }
             is Dataset -> {
-                val projectId = resource.projectId
-                if (projectId == null) { siblingsResolved = true; return@LaunchedEffect }
-                // Fast path: use existing project cache
+                val projectId = resource.projectId ?: run { siblingsResolved = true; return }
                 val cached = CacheManager.getProjectDatasets(projectId)
                 if (cached != null) {
-                    val filtered = cached.filterSiblings(siblingGroupBy, resource)
-                    val sorted = if (filtered.any { it.uniqueId == resource.uniqueId }) filtered else (filtered + resource).sortedBy { it.uniqueId }
-                    cached.forEach { d -> val rich = CacheManager.getResource(d.uniqueId) as? Dataset; if (rich != null) { enrichedUuids.add(d.uniqueId); loadedResources[d.uniqueId] = rich } }
-                    sameTypeDatasets = sorted
+                    sameTypeDatasets = cached.filterSiblings(groupBy, resource).ensureContains(resource)
                     siblingsResolved = true
                 } else {
-                    // Fetch only matching siblings from the server
-                    launch {
-                        try {
-                            val bounds = if (siblingGroupBy == "DATE") monthBounds(resource.timestamp) else null
-                            val resp = withContext(Dispatchers.Default) {
-                                ApiClient.service.getFilteredDatasets(
-                                    projectId = projectId,
-                                    measurement = if (siblingGroupBy == null || siblingGroupBy == "MEASUREMENT") resource.measurement else null,
-                                    instrumentName = if (siblingGroupBy == "INSTRUMENT") resource.instrumentName else null,
-                                    dataFormat = if (siblingGroupBy == "FORMAT") resource.dataFormat else null,
-                                    sessionName = if (siblingGroupBy == "SESSION") resource.sessionName else null,
-                                    ownerOrcid = if (siblingGroupBy == "OWNER") resource.ownerOrcid else null,
-                                    creationTimeGte = bounds?.first,
-                                    creationTimeLte = bounds?.second
-                                )
-                            }
-                            when (resp) {
-                                is ApiResult.Success -> {
-                                    val all = resp.data
-                                    val sorted = if (all.any { it.uniqueId == resource.uniqueId }) all.sortedBy { it.uniqueId }
-                                                 else (all + resource).sortedBy { it.uniqueId }
-                                    sorted.forEach { d -> loadedResources.getOrPut(d.uniqueId) { d } }
-                                    sameTypeDatasets = sorted
-                                    siblingsResolved = true
-                                }
-                                is ApiResult.Error -> {
-                                    siblingsResolved = true
-                                }
-                            }
-                        } catch (e: kotlinx.coroutines.CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            println("Error: $e")
+                    val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
+                    when (val resp = withContext(Dispatchers.Default) {
+                        ApiClient.service.getFilteredDatasets(
+                            projectId = projectId,
+                            measurement = if (groupBy == null || groupBy == "MEASUREMENT") resource.measurement else null,
+                            instrumentName = if (groupBy == "INSTRUMENT") resource.instrumentName else null,
+                            dataFormat = if (groupBy == "FORMAT") resource.dataFormat else null,
+                            sessionName = if (groupBy == "SESSION") resource.sessionName else null,
+                            ownerOrcid = if (groupBy == "OWNER") resource.ownerOrcid else null,
+                            creationTimeGte = bounds?.first, creationTimeLte = bounds?.second
+                        )
+                    }) {
+                        is ApiResult.Success -> {
+                            val sorted = resp.data.ensureContains(resource)
+                            sorted.forEach { cache.loadedResources.getOrPut(it.uniqueId) { it } }
+                            sameTypeDatasets = sorted
                             siblingsResolved = true
                         }
+                        is ApiResult.Error -> siblingsResolved = true
                     }
                 }
             }
         }
     }
-    // Re-filter siblings when the user changes groupBy mid-browse.
-    // Skips the initial value (the main LaunchedEffect(resource) already handles that).
-    LaunchedEffect(activeSiblingGroupBy) {
-        if (activeSiblingGroupBy == siblingGroupBy) return@LaunchedEffect
-        siblingsResolved = false
-        suspend fun loadFilteredSiblings(groupBy: String?) {
-            when (resource) {
-                is Sample -> {
-                    val projectId = resource.projectId ?: run { siblingsResolved = true; return }
-                    val cached = CacheManager.getProjectSamples(projectId)
-                    if (cached != null) {
-                        val sorted = cached.filterSiblings(groupBy, resource).let { f ->
-                            if (f.any { it.uniqueId == resource.uniqueId }) f else (f + resource).sortedBy { it.uniqueId }
-                        }
-                        sameTypeSamples = sorted
-                        siblingsResolved = true
-                    } else {
-                        val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
-                        val resp = withContext(Dispatchers.Default) {
-                            ApiClient.service.getFilteredSamples(
-                                projectId = projectId,
-                                sampleType = if (groupBy == null || groupBy == "TYPE") resource.sampleType else null,
-                                ownerOrcid = if (groupBy == "OWNER") resource.ownerOrcid else null,
-                                creationTimeGte = bounds?.first, creationTimeLte = bounds?.second
-                            )
-                        }
-                        when (resp) {
-                            is ApiResult.Success -> {
-                                val all = resp.data
-                                val sorted = if (all.any { it.uniqueId == resource.uniqueId }) all.sortedBy { it.uniqueId }
-                                             else (all + resource).sortedBy { it.uniqueId }
-                                sameTypeSamples = sorted
-                                siblingsResolved = true
-                            }
-                            is ApiResult.Error -> { siblingsResolved = true }
-                        }
-                    }
+
+    // Initial load: seed the cache with the authoritative resource, warm loadedResources
+    // from any cached siblings, then load the sibling list.
+    LaunchedEffect(resource) {
+        cache.loadedResources[resource.uniqueId] = resource
+        cache.enrichedUuids.add(resource.uniqueId)
+        cache.loadedThumbnails.remove(resource.uniqueId)
+        // Warm loadedResources from the project cache so sibling pages render instantly
+        when (resource) {
+            is Sample -> resource.projectId?.let { pid ->
+                CacheManager.getProjectSamples(pid)?.forEach { s ->
+                    val rich = CacheManager.getResource(s.uniqueId) as? Sample
+                    if (rich != null) { cache.enrichedUuids.add(s.uniqueId); cache.loadedResources[s.uniqueId] = rich }
                 }
-                is Dataset -> {
-                    val projectId = resource.projectId ?: run { siblingsResolved = true; return }
-                    val cached = CacheManager.getProjectDatasets(projectId)
-                    if (cached != null) {
-                        val sorted = cached.filterSiblings(groupBy, resource).let { f ->
-                            if (f.any { it.uniqueId == resource.uniqueId }) f else (f + resource).sortedBy { it.uniqueId }
-                        }
-                        sameTypeDatasets = sorted
-                        siblingsResolved = true
-                    } else {
-                        val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
-                        val resp = withContext(Dispatchers.Default) {
-                            ApiClient.service.getFilteredDatasets(
-                                projectId = projectId,
-                                measurement = if (groupBy == null || groupBy == "MEASUREMENT") resource.measurement else null,
-                                instrumentName = if (groupBy == "INSTRUMENT") resource.instrumentName else null,
-                                dataFormat = if (groupBy == "FORMAT") resource.dataFormat else null,
-                                sessionName = if (groupBy == "SESSION") resource.sessionName else null,
-                                ownerOrcid = if (groupBy == "OWNER") resource.ownerOrcid else null,
-                                creationTimeGte = bounds?.first, creationTimeLte = bounds?.second
-                            )
-                        }
-                        when (resp) {
-                            is ApiResult.Success -> {
-                                val all = resp.data
-                                val sorted = if (all.any { it.uniqueId == resource.uniqueId }) all.sortedBy { it.uniqueId }
-                                             else (all + resource).sortedBy { it.uniqueId }
-                                sameTypeDatasets = sorted
-                                siblingsResolved = true
-                            }
-                            is ApiResult.Error -> { siblingsResolved = true }
-                        }
-                    }
+            }
+            is Dataset -> resource.projectId?.let { pid ->
+                CacheManager.getProjectDatasets(pid)?.forEach { d ->
+                    val rich = CacheManager.getResource(d.uniqueId) as? Dataset
+                    if (rich != null) { cache.enrichedUuids.add(d.uniqueId); cache.loadedResources[d.uniqueId] = rich }
                 }
             }
         }
-        try {
-            loadFilteredSiblings(activeSiblingGroupBy)
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            println("Error: $e")
-            siblingsResolved = true
-        }
+        try { loadSiblings(siblingGroupBy) }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (e: Exception) { println("Error loading siblings: $e"); siblingsResolved = true }
+    }
+
+    // Re-filter siblings when the user changes groupBy mid-browse.
+    LaunchedEffect(activeSiblingGroupBy) {
+        if (activeSiblingGroupBy == siblingGroupBy) return@LaunchedEffect
+        siblingsResolved = false
+        try { loadSiblings(activeSiblingGroupBy) }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (e: Exception) { println("Error loading siblings: $e"); siblingsResolved = true }
     }
 
     val siblingList: List<CrucibleResource> = when (resource) {
@@ -403,7 +320,7 @@ fun ResourceDetailScreen(
     // Current resource shown in the pager — drives TopAppBar title and overflow menu
     val currentPageResource = siblingList.getOrNull(pagerState.currentPage) ?: resource
     val currentDisplayResource: CrucibleResource =
-        loadedResources[currentPageResource.uniqueId] ?: currentPageResource
+        cache.loadedResources[currentPageResource.uniqueId] ?: currentPageResource
 
     // Screen-level sheet/dialog state — operate on currentDisplayResource
     var showEditSheet by remember { mutableStateOf(false) }
@@ -428,10 +345,10 @@ fun ResourceDetailScreen(
     // a loading state. The enrichment LaunchedEffect would do this eventually, but
     // doing it eagerly avoids a 1-frame flash on first composition.
     LaunchedEffect(resource.uniqueId) {
-        loadedResources[resource.uniqueId] = resource
+        cache.loadedResources[resource.uniqueId] = resource
         val hasLinks = (resource is Sample && resource.links != null) ||
                        (resource is Dataset && resource.links != null)
-        if (hasLinks) enrichedUuids.add(resource.uniqueId)
+        if (hasLinks) cache.enrichedUuids.add(resource.uniqueId)
     }
 
     // Re-open edit sheet with updated metadata after returning from MetadataEditorScreen.
@@ -465,8 +382,8 @@ fun ResourceDetailScreen(
         // Filter pages that still need enrichment — check on main thread (safe for SnapshotStateMap)
         val toEnrich = pagesToLoad.filter { pageIndex ->
             val uuid = siblingList[pageIndex].uniqueId
-            if (uuid in enrichedUuids) return@filter false
-            when (val existing = loadedResources[uuid]) {
+            if (uuid in cache.enrichedUuids) return@filter false
+            when (val existing = cache.loadedResources[uuid]) {
                 is Sample  -> existing.links == null
                 is Dataset -> existing.links == null
                 else       -> true
@@ -492,8 +409,8 @@ fun ResourceDetailScreen(
                     }
                 ) {
                     withContext(Dispatchers.Main) {
-                        enrichedUuids.add(uuid)
-                        loadedResources[uuid] = cached
+                        cache.enrichedUuids.add(uuid)
+                        cache.loadedResources[uuid] = cached
                     }
                     return@forEachIndexed
                 }
@@ -505,19 +422,19 @@ fun ResourceDetailScreen(
                             (ApiClient.service.getDataset(uuid, includeMetadata = true) as? ApiResult.Success)?.data
                     }
                     withContext(Dispatchers.Main) {
-                        enrichedUuids.add(uuid)
+                        cache.enrichedUuids.add(uuid)
                         if (enriched != null) {
-                            loadedResources[uuid] = enriched
+                            cache.loadedResources[uuid] = enriched
                             CacheManager.cacheResource(uuid, enriched)
-                            failedEnrichmentUuids.remove(uuid)
+                            cache.failedEnrichmentUuids.remove(uuid)
                         } else {
-                            failedEnrichmentUuids.add(uuid)
+                            cache.failedEnrichmentUuids.add(uuid)
                         }
                     }
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    withContext(Dispatchers.Main) { failedEnrichmentUuids.add(uuid) }
+                    withContext(Dispatchers.Main) { cache.failedEnrichmentUuids.add(uuid) }
                 }
             }
         }
@@ -525,15 +442,15 @@ fun ResourceDetailScreen(
         // Clean up resources far from current page (keep memory usage bounded)
         launch {
             val cleanupThreshold = 20
-            val keysToRemove = loadedResources.keys.filter { uuid ->
+            val keysToRemove = cache.loadedResources.keys.filter { uuid ->
                 val index = siblingList.indexOfFirst { it.uniqueId == uuid }
                 index >= 0 && abs(index - currentPage) > cleanupThreshold
             }
             keysToRemove.forEach { uuid ->
-                loadedResources.remove(uuid)
-                loadedThumbnails.remove(uuid)
-                enrichedUuids.remove(uuid)
-                failedEnrichmentUuids.remove(uuid)
+                cache.loadedResources.remove(uuid)
+                cache.loadedThumbnails.remove(uuid)
+                cache.enrichedUuids.remove(uuid)
+                cache.failedEnrichmentUuids.remove(uuid)
             }
         }
     }
@@ -555,12 +472,12 @@ fun ResourceDetailScreen(
                 val uuid = pageResource.uniqueId
 
                 // Skip if already loaded or not a dataset
-                if (loadedThumbnails.containsKey(uuid) || pageResource !is Dataset) return@forEach
+                if (cache.loadedThumbnails.containsKey(uuid) || pageResource !is Dataset) return@forEach
 
                 // Prefer the ViewModel-cached thumbnails over a fresh API call
                 val cached = CacheManager.getThumbnails(uuid)
                 if (cached != null) {
-                    withContext(Dispatchers.Main) { loadedThumbnails[uuid] = cached }
+                    withContext(Dispatchers.Main) { cache.loadedThumbnails[uuid] = cached }
                     return@forEach
                 }
 
@@ -571,14 +488,14 @@ fun ResourceDetailScreen(
                         is ApiResult.Error -> emptyList()
                     }
                     withContext(Dispatchers.Main) {
-                        loadedThumbnails[uuid] = thumbs
+                        cache.loadedThumbnails[uuid] = thumbs
                         if (thumbs.isNotEmpty()) CacheManager.cacheThumbnails(uuid, thumbs)
                     }
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     println("Error: $e")
-                    withContext(Dispatchers.Main) { loadedThumbnails[uuid] = emptyList() }
+                    withContext(Dispatchers.Main) { cache.loadedThumbnails[uuid] = emptyList() }
                 }
             }
         }
@@ -586,13 +503,13 @@ fun ResourceDetailScreen(
         // Clean up thumbnails outside current ± 3 range to prevent memory bloat
         launch {
             val thumbnailCleanupThreshold = 3
-            val thumbnailKeysToRemove = loadedThumbnails.keys.filter { uuid ->
+            val thumbnailKeysToRemove = cache.loadedThumbnails.keys.filter { uuid ->
                 if (uuid == resource.uniqueId) return@filter false
                 val index = siblingList.indexOfFirst { it.uniqueId == uuid }
                 index >= 0 && abs(index - currentPage) > thumbnailCleanupThreshold
             }
             thumbnailKeysToRemove.forEach { uuid ->
-                loadedThumbnails.remove(uuid)
+                cache.loadedThumbnails.remove(uuid)
             }
         }
     }
@@ -615,7 +532,7 @@ fun ResourceDetailScreen(
             ?: resource.uniqueId
         if (currentUuid != resource.uniqueId) {
             // Sibling refresh: fetch inline without ViewModel involvement.
-            // Old loadedResources/enrichedUuids are kept so links stay visible.
+            // Old cache.loadedResources/cache.enrichedUuids are kept so links stay visible.
             scope.launch {
                 localRefreshState = true
                 try {
@@ -628,10 +545,10 @@ fun ResourceDetailScreen(
                             }
                         }
                         if (fresh != null) {
-                            loadedResources[currentUuid] = fresh
+                            cache.loadedResources[currentUuid] = fresh
                             CacheManager.cacheResource(currentUuid, fresh)
                         }
-                        loadedThumbnails.remove(currentUuid)
+                        cache.loadedThumbnails.remove(currentUuid)
                         siblingReloadTrigger++ // re-fetch thumbnails
                     }
                 } finally {
@@ -650,37 +567,20 @@ fun ResourceDetailScreen(
 
     AppScaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        if (resource is Sample) "Sample" else "Dataset",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        AppIcon(AppIcons.Back)
-                    }
-                },
+            AppTopBar(
+                title = if (resource is Sample) "Sample" else "Dataset",
+                onBack = onBack,
                 actions = {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy((-4).dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
-                            AppIcon(AppIcons.Search, modifier = Modifier.size(24.dp))
+                    IconButton(onClick = onSearch) {
+                        AppIcon(AppIcons.Search)
+                    }
+                    IconButton(onClick = onHome) {
+                        AppIcon(AppIcons.Home)
+                    }
+                    Box {
+                        IconButton(onClick = { overflowMenuExpanded = true }) {
+                            AppIcon(AppIcons.MoreVert)
                         }
-                        IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
-                            AppIcon(AppIcons.Home, modifier = Modifier.size(24.dp))
-                        }
-                        Box {
-                            IconButton(
-                                onClick = { overflowMenuExpanded = true },
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                AppIcon(AppIcons.MoreVert, modifier = Modifier.size(24.dp))
-                            }
                             DropdownMenu(
                                 expanded = overflowMenuExpanded,
                                 onDismissRequest = { overflowMenuExpanded = false }
@@ -759,7 +659,6 @@ fun ResourceDetailScreen(
                             }
                         }
                     }
-                }
             )
         }
     ) { padding ->
@@ -793,22 +692,22 @@ fun ResourceDetailScreen(
 
                         // Loading state is driven purely by per-page enrichment:
                         // show spinner while this page's data is in flight, content once done.
-                        val isPageEnriched = enrichedUuids.contains(pageResource.uniqueId) ||
-                                             failedEnrichmentUuids.contains(pageResource.uniqueId)
+                        val isPageEnriched = cache.enrichedUuids.contains(pageResource.uniqueId) ||
+                                             cache.failedEnrichmentUuids.contains(pageResource.uniqueId)
 
                         Box(modifier = Modifier.fillMaxSize()) {
             AnimatedVisibility(
                 visible = !isPageEnriched && !isRefreshing,
-                enter = fadeIn(animationSpec = tween(durationMillis = 300)),
-                exit = fadeOut(animationSpec = tween(durationMillis = 250))
+                enter = fadeIn(animationSpec = EffectsDefaultSpring),
+                exit = fadeOut(animationSpec = EffectsDefaultSpring)
             ) {
                 LoadingContent(title = "Loading Resource")
             }
 
             AnimatedVisibility(
                 visible = isPageEnriched,
-                enter = fadeIn(animationSpec = tween(durationMillis = 200)),
-                exit = fadeOut(animationSpec = tween(durationMillis = 150))
+                enter = fadeIn(animationSpec = EffectsFastSpring),
+                exit = fadeOut(animationSpec = EffectsFastSpring)
             ) {
                 Column(
                     modifier = Modifier
@@ -843,23 +742,23 @@ fun ResourceDetailScreen(
                         }
 
                 // Use fully loaded resource if available, otherwise fall back to basic or current
-                val displayResource = loadedResources[pageResource.uniqueId]
+                val displayResource = cache.loadedResources[pageResource.uniqueId]
                     ?: if (isCurrentResource) resource else pageResource
-                val displayThumbnails = loadedThumbnails[pageResource.uniqueId]
+                val displayThumbnails = cache.loadedThumbnails[pageResource.uniqueId]
                     ?: if (isCurrentResource) thumbnails else emptyList()
 
                 AnimatedVisibility(
-                    visible = pageResource.uniqueId in failedEnrichmentUuids,
-                    enter = fadeIn(tween(200)) + expandVertically(),
-                    exit = fadeOut(tween(150)) + shrinkVertically()
+                    visible = pageResource.uniqueId in cache.failedEnrichmentUuids,
+                    enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                    exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
                 ) {
                     ErrorCard(
                         title = "Could not load full data",
                         message = "Links and metadata may be incomplete.",
                         modifier = Modifier.padding(bottom = 16.dp),
                         onRetry = {
-                            enrichedUuids.remove(pageResource.uniqueId)
-                            failedEnrichmentUuids.remove(pageResource.uniqueId)
+                            cache.enrichedUuids.remove(pageResource.uniqueId)
+                            cache.failedEnrichmentUuids.remove(pageResource.uniqueId)
                             siblingReloadTrigger++
                         }
                     )
@@ -901,6 +800,7 @@ fun ResourceDetailScreen(
                         SampleDetailsCard(
                             sample = displayResource,
                             onProjectClick = onNavigateToProject,
+                            onUserClick = onNavigateToUser,
                             onShowQr = { showQrDialog = true },
                             initialAdvanced = pageGetCardState("advanced"),
                             onAdvancedChange = { pageSetCardState("advanced", it) }
@@ -910,6 +810,7 @@ fun ResourceDetailScreen(
                         DatasetDetailsCard(
                             dataset = displayResource,
                             onProjectClick = onNavigateToProject,
+                            onUserClick = onNavigateToUser,
                             onInstrumentClick = onNavigateToInstrument,
                             onShowQr = { showQrDialog = true },
                             initialAdvanced = pageGetCardState("advanced"),
@@ -922,8 +823,8 @@ fun ResourceDetailScreen(
                     is Dataset -> {
                         AnimatedVisibility(
                             visible = displayThumbnails.isNotEmpty(),
-                            enter = fadeIn(tween(200)) + expandVertically(),
-                            exit = fadeOut(tween(150)) + shrinkVertically()
+                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
                         ) {
                             Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), contentAlignment = Alignment.Center) {
                                 Column(modifier = Modifier.fillMaxWidth(0.9f)) {
@@ -934,8 +835,8 @@ fun ResourceDetailScreen(
                                             scope.launch {
                                                 val resp = ApiClient.service.deleteThumbnail(pageResource.uniqueId, thumbnailId)
                                                 if (resp is ApiResult.Success) {
-                                                    loadedThumbnails[pageResource.uniqueId] =
-                                                        loadedThumbnails[pageResource.uniqueId].orEmpty()
+                                                    cache.loadedThumbnails[pageResource.uniqueId] =
+                                                        cache.loadedThumbnails[pageResource.uniqueId].orEmpty()
                                                             .filter { it.id != thumbnailId }
                                                     CacheManager.clearThumbnail(pageResource.uniqueId)
                                                 }
@@ -947,8 +848,8 @@ fun ResourceDetailScreen(
                         }
                         AnimatedVisibility(
                             visible = displayResource.links?.any { it.resourceType == "sample" && it.relationship == "associated" } == true,
-                            enter = fadeIn(tween(200)) + expandVertically(),
-                            exit = fadeOut(tween(150)) + shrinkVertically()
+                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
                         ) {
                             Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                                 LinkedSamplesCard(
@@ -962,8 +863,8 @@ fun ResourceDetailScreen(
                         }
                         AnimatedVisibility(
                             visible = displayResource.links?.any { it.resourceType == "dataset" && it.relationship == "parent" } == true,
-                            enter = fadeIn(tween(200)) + expandVertically(),
-                            exit = fadeOut(tween(150)) + shrinkVertically()
+                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
                         ) {
                             Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                                 ParentDatasetsCard(
@@ -977,8 +878,8 @@ fun ResourceDetailScreen(
                         }
                         AnimatedVisibility(
                             visible = displayResource.links?.any { it.resourceType == "dataset" && it.relationship == "child" } == true,
-                            enter = fadeIn(tween(200)) + expandVertically(),
-                            exit = fadeOut(tween(150)) + shrinkVertically()
+                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
                         ) {
                             Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                                 ChildDatasetsCard(
@@ -992,8 +893,8 @@ fun ResourceDetailScreen(
                         }
                         AnimatedVisibility(
                             visible = !displayResource.scientificMetadata.isNullOrEmpty(),
-                            enter = fadeIn(tween(200)) + expandVertically(),
-                            exit = fadeOut(tween(150)) + shrinkVertically()
+                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
                         ) {
                             Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                                 ScientificMetadataCard(
@@ -1014,8 +915,8 @@ fun ResourceDetailScreen(
                     is Sample -> {
                         AnimatedVisibility(
                             visible = displayResource.links?.any { it.resourceType == "sample" && it.relationship == "parent" } == true,
-                            enter = fadeIn(tween(200)) + expandVertically(),
-                            exit = fadeOut(tween(150)) + shrinkVertically()
+                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
                         ) {
                             Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                                 ParentSamplesCard(
@@ -1029,8 +930,8 @@ fun ResourceDetailScreen(
                         }
                         AnimatedVisibility(
                             visible = displayResource.links?.any { it.resourceType == "sample" && it.relationship == "child" } == true,
-                            enter = fadeIn(tween(200)) + expandVertically(),
-                            exit = fadeOut(tween(150)) + shrinkVertically()
+                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
                         ) {
                             Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                                 ChildSamplesCard(
@@ -1044,8 +945,8 @@ fun ResourceDetailScreen(
                         }
                         AnimatedVisibility(
                             visible = displayResource.links?.any { it.resourceType == "dataset" && it.relationship == "associated" } == true,
-                            enter = fadeIn(tween(200)) + expandVertically(),
-                            exit = fadeOut(tween(150)) + shrinkVertically()
+                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
                         ) {
                             Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                                 LinkedDatasetsCard(
@@ -1059,8 +960,8 @@ fun ResourceDetailScreen(
                         }
                         AnimatedVisibility(
                             visible = !displayResource.scientificMetadata.isNullOrEmpty(),
-                            enter = fadeIn(tween(200)) + expandVertically(),
-                            exit = fadeOut(tween(150)) + shrinkVertically()
+                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
                         ) {
                             Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                                 ScientificMetadataCard(
@@ -1211,6 +1112,8 @@ fun ResourceDetailScreen(
                                 CacheManager.clearResource(req.otherUuid)
                                 pendingUnlink = null
                                 onRefresh(currentDisplayResource.uniqueId)
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
                             } catch (_: Exception) {
                                 pendingUnlink = null
                             }

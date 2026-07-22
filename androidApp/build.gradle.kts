@@ -1,12 +1,5 @@
 plugins {
-    id("com.android.application")
-}
-
-// Same M3 version force as :composeApp — moko transitive deps pull in an older M3.
-configurations.configureEach {
-    resolutionStrategy {
-        force("androidx.compose.material3:material3:1.3.1")
-    }
+    alias(libs.plugins.android.application)
 }
 
 android {
@@ -15,7 +8,7 @@ android {
 
     defaultConfig {
         applicationId = "crucible.lens"
-        minSdk = 34
+        minSdk = 26
         targetSdk = 36
         versionCode = (project.findProperty("app.versionCode") as String).toInt()
         versionName = project.findProperty("app.versionName") as String

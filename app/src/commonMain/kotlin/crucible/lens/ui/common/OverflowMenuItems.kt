@@ -1,7 +1,6 @@
 package crucible.lens.ui.common
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -12,7 +11,7 @@ import androidx.compose.runtime.Composable
 fun RefreshMenuItem(onClick: () -> Unit) {
     DropdownMenuItem(
         text = { Text("Refresh") },
-        leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+        leadingIcon = { AppIcon(AppIcons.Refresh) },
         onClick = onClick
     )
 }
@@ -21,7 +20,7 @@ fun RefreshMenuItem(onClick: () -> Unit) {
 fun ShareMenuItem(onClick: () -> Unit) {
     DropdownMenuItem(
         text = { Text("Share") },
-        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+        leadingIcon = { AppIcon(AppIcons.Share) },
         onClick = onClick
     )
 }
@@ -30,7 +29,7 @@ fun ShareMenuItem(onClick: () -> Unit) {
 fun CopyIdMenuItem(onClick: () -> Unit) {
     DropdownMenuItem(
         text = { Text("Copy ID") },
-        leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+        leadingIcon = { AppIcon(AppIcons.CopyToClipboard) },
         onClick = onClick
     )
 }
@@ -39,7 +38,7 @@ fun CopyIdMenuItem(onClick: () -> Unit) {
 fun OpenInWebMenuItem(onClick: () -> Unit) {
     DropdownMenuItem(
         text = { Text("Open in web") },
-        leadingIcon = { Icon(Icons.Default.Public, contentDescription = null) },
+        leadingIcon = { AppIcon(AppIcons.Public) },
         onClick = onClick
     )
 }
@@ -49,10 +48,7 @@ fun ToggleHiddenMenuItem(expanded: Boolean, onClick: () -> Unit) {
     DropdownMenuItem(
         text = { Text(if (expanded) "Collapse hidden" else "Show hidden") },
         leadingIcon = {
-            Icon(
-                if (expanded) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                contentDescription = null
-            )
+            AppIcon(if (expanded) AppIcons.HideContent else AppIcons.ShowContent)
         },
         onClick = onClick
     )

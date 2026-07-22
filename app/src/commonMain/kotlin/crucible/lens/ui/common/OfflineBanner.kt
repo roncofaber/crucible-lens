@@ -1,7 +1,6 @@
 package crucible.lens.ui.common
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
@@ -33,9 +32,7 @@ fun OfflineBanner(modifier: Modifier = Modifier) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    Icons.Default.WifiOff,
-                    contentDescription = null,
+                AppIcon(AppIcons.Offline,
                     modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onErrorContainer
                 )

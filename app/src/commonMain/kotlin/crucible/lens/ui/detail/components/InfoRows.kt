@@ -47,7 +47,8 @@ internal fun ClickableInfoRow(
     icon: AppIconToken,
     label: String,
     value: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    showTrailingIcon: Boolean = false
 ) {
     Row(
         modifier = Modifier
@@ -75,7 +76,9 @@ internal fun ClickableInfoRow(
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Medium
             )
-            AppIcon(AppIcons.OpenExternal, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+            if (showTrailingIcon) {
+                AppIcon(AppIcons.OpenExternal, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+            }
         }
     }
 }

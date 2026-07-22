@@ -13,6 +13,7 @@ import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.repository.ResourceResult
 import crucible.lens.data.sync.DataSyncManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,26 +40,24 @@ class ResourceDetailViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    // ── Per-page resource/thumbnail caches ────────────────────────────────────
-    // These live in the ViewModel so they survive configuration changes and are
-    // not recreated on every recomposition of ResourceDetailScreen.
+    // ── Sibling pager cache ───────────────────────────────────────────────────
+    // State owned by the ViewModel (survives config changes) and passed to
+    // ResourceDetailScreen as a single ResourceDetailCache object.
 
-    /** Enriched resources (with links + metadata) loaded during sibling navigation. */
-    val loadedResources = mutableStateMapOf<String, CrucibleResource>()
+    private val loadedResources = mutableStateMapOf<String, CrucibleResource>()
+    private val enrichedUuids = mutableSetOf<String>()
+    private val failedEnrichmentUuids = mutableStateSetOf<String>()
+    private val loadedThumbnails = mutableStateMapOf<String, List<Thumbnail>>()
 
-    /** UUIDs whose full metadata+links have been fetched. Plain set — only read on main thread. */
-    val enrichedUuids = mutableSetOf<String>()
-
-    /** UUIDs whose enrichment fetch failed so we don't retry in a tight loop. */
-    val failedEnrichmentUuids = mutableStateSetOf<String>()
-
-    /** Thumbnail URL lists for displayed resources. */
-    val loadedThumbnails = mutableStateMapOf<String, List<Thumbnail>>()
-
-    /** Seed thumbnails when they are already available (avoids a redundant network fetch). */
-    fun seedThumbnails(uuid: String, thumbnails: List<Thumbnail>) {
-        if (thumbnails.isNotEmpty()) loadedThumbnails[uuid] = thumbnails
-    }
+    val resourceDetailCache = ResourceDetailCache(
+        loadedResources = loadedResources,
+        enrichedUuids = enrichedUuids,
+        failedEnrichmentUuids = failedEnrichmentUuids,
+        loadedThumbnails = loadedThumbnails,
+        seedThumbnails = { uuid, thumbnails ->
+            if (thumbnails.isNotEmpty()) loadedThumbnails[uuid] = thumbnails
+        }
+    )
 
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -163,6 +162,8 @@ class ResourceDetailViewModel : ViewModel() {
                                 }
                                 else -> {}
                             }
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (_: Exception) {
                             // Background preload — silently ignore failures
                         }
@@ -180,7 +181,9 @@ class ResourceDetailViewModel : ViewModel() {
     fun startBackgroundSync() {
         _isSyncing.value = true
         syncJob = viewModelScope.launch {
-            try { DataSyncManager.syncAll() } catch (_: Exception) { }
+            try { DataSyncManager.syncAll() }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { }
             finally { _isSyncing.value = false }
         }
     }
@@ -220,6 +223,8 @@ class ResourceDetailViewModel : ViewModel() {
                         is ResourceResult.Error -> _uiState.value = UiState.Error(result.message)
                         else -> {}
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                     // Timeout or network failure — error state will be set by the result handling above
                 } finally {
@@ -237,6 +242,8 @@ class ResourceDetailViewModel : ViewModel() {
                         is ResourceResult.Success -> CacheManager.cacheResource(trimmedUuid, result.resource)
                         else -> {}
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                 } finally {
                     _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = false) else it }

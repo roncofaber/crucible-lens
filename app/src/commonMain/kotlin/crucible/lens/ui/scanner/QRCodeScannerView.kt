@@ -1,7 +1,6 @@
 package crucible.lens.ui.scanner
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -65,9 +64,7 @@ fun QRCodeScannerView(
                 color = Color.Black.copy(alpha = 0.45f)
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                    AppIcon(AppIcons.Back,
                         tint = Color.White
                     )
                 }

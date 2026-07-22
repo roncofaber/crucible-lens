@@ -1,7 +1,6 @@
 package crucible.lens.ui.common
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -47,9 +46,7 @@ fun ScrollToTopButton(
                 pressedElevation = 8.dp
             )
         ) {
-            Icon(
-                Icons.Default.KeyboardDoubleArrowUp,
-                contentDescription = "Scroll to top",
+            AppIcon(AppIcons.ScrollToTop,
                 modifier = Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.primary
             )

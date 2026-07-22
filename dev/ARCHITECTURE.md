@@ -212,6 +212,38 @@ See `dev/IOS_SETUP.md` for Xcode project setup instructions.
 
 ---
 
+## Known architectural debt
+
+**Repository pattern is inconsistently applied.** `CrucibleRepository` (`data/repository/CrucibleRepository.kt`)
+wraps `ApiClient` + `CacheManager` with proper error mapping (`ResourceResult` sealed class), but only
+`ResourceDetailViewModel` uses it. Every other ViewModel, and several leaf composables
+(`InstrumentPickerField`, `FilterSheet`, `AssociatedFilesCard`, `DatasetDetailsCard`), call
+`ApiClient.service.*` directly. This means there are currently two competing conventions for data
+access in the codebase, and new code has no clear signal which one to follow.
+
+Two ways to resolve this — not yet decided:
+1. Extend `CrucibleRepository` to cover all data access and migrate every ViewModel/composable to go
+   through it (better testability, single error-mapping point, matches the "MVVM + Repository"
+   architecture this project claims to use).
+2. Delete `CrucibleRepository` and standardize on direct `ApiClient` calls from ViewModels only —
+   simpler, matches current majority practice, but still requires moving the API calls currently
+   inside leaf composables (`InstrumentPickerField`, `FilterSheet`, `AssociatedFilesCard`,
+   `DatasetDetailsCard`) into their owning ViewModels, since calling the network from a composable
+   breaks the MVVM boundary regardless of which option is chosen.
+
+**Unused KSP plugin.** `com.google.devtools.ksp` is applied in `app/build.gradle.kts` but no
+`ksp(...)` dependency exists anywhere — likely a leftover from an abandoned codegen experiment
+(Room, Moshi, etc.). Should be removed to shave a small amount of build time, once confirmed nothing
+depends on it being present.
+
+**No DI framework is a deliberate, documented choice** (see Stack table above) appropriate for this
+project's size. The tradeoff: `ApiClient` and `CacheManager` are globally mutable singletons accessed
+directly from ~20 files. This is consistent today, but will make future test-writing harder than it
+would be with constructor-injected dependencies (e.g. via Koin, the common choice in KMP). Not worth
+introducing now, but worth remembering if/when the project adds a test suite.
+
+---
+
 ## Common gotchas
 
 **Phantom gaps in LazyColumn**: `Arrangement.spacedBy(N.dp)` adds N dp between *every* slot

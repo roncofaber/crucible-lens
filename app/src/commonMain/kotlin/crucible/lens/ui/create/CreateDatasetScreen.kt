@@ -1,7 +1,9 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.create
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -26,7 +28,6 @@ import crucible.lens.ui.create.CreateDatasetViewModel
 import crucible.lens.ui.create.SaveState
 import kotlinx.serialization.json.JsonObject
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateDatasetScreen(
     initialProjectId: String?,
@@ -80,13 +81,9 @@ fun CreateDatasetScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("New Dataset") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
+            AppTopBar(
+                title = "New Dataset",
+                onBack = onBack
             )
         }
     ) { padding ->
@@ -112,7 +109,7 @@ fun CreateDatasetScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.AttachFile, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        AppIcon(AppIcons.AttachFile, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                         Column {
                             Text("Attached files", style = MaterialTheme.typography.bodyMedium)
                             Text(
@@ -123,7 +120,7 @@ fun CreateDatasetScreen(
                             )
                         }
                     }
-                    Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -136,7 +133,7 @@ fun CreateDatasetScreen(
                 label = { Text("Name *") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                leadingIcon = { Icon(Icons.Default.Dataset, contentDescription = null) }
+                leadingIcon = { AppIcon(AppIcons.Dataset) }
             )
             OutlinedTextField(
                 value = measurement,
@@ -144,7 +141,7 @@ fun CreateDatasetScreen(
                 label = { Text("Measurement") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                leadingIcon = { Icon(Icons.Default.Science, contentDescription = null) }
+                leadingIcon = { AppIcon(AppIcons.Sample) }
             )
 
             if (initialProjectId == null) {
@@ -158,8 +155,8 @@ fun CreateDatasetScreen(
                         readOnly = true,
                         label = { Text("Project *") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = projectDropdownExpanded) },
-                        leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                        leadingIcon = { AppIcon(AppIcons.Project) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
                     )
                     ExposedDropdownMenu(
                         expanded = projectDropdownExpanded,
@@ -179,7 +176,7 @@ fun CreateDatasetScreen(
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Project *") },
-                    leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
+                    leadingIcon = { AppIcon(AppIcons.Project) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -206,7 +203,7 @@ fun CreateDatasetScreen(
                 label = { Text("Session") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                leadingIcon = { Icon(Icons.Default.Tag, contentDescription = null) }
+                leadingIcon = { AppIcon(AppIcons.Tag) }
             )
             InstrumentPickerField(value = instrumentName, onValueChange = { instrumentName = it }, modifier = Modifier.fillMaxWidth())
             DateTimePickerField(value = timestamp, onValueChange = { timestamp = it }, modifier = Modifier.fillMaxWidth())
@@ -216,7 +213,7 @@ fun CreateDatasetScreen(
                 label = { Text("Data Type") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) }
+                leadingIcon = { AppIcon(AppIcons.DataType) }
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -226,14 +223,7 @@ fun CreateDatasetScreen(
             OutlinedCard(
                 onClick = {
                     FilesHolder.put(pendingFiles)
-                    val ctx = listOfNotNull(
-                        name.trim().ifBlank { null }?.let { "Dataset: $it" },
-                        measurement.trim().ifBlank { null }?.let { "Measurement: $it" },
-                        instrumentName.trim().ifBlank { null }?.let { "Instrument: $it" },
-                        sessionName.trim().ifBlank { null }?.let { "Session: $it" },
-                        selectedProject?.title?.let { "Project: $it" }
-                    ).joinToString(", ")
-                    MetadataHolder.put(metadata, ctx)
+                    MetadataHolder.put(metadata)
                     onOpenMetadataEditor()
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -244,7 +234,7 @@ fun CreateDatasetScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.DataObject, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        AppIcon(AppIcons.FileJson, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                         Column {
                             Text("Scientific metadata", style = MaterialTheme.typography.bodyMedium)
                             Text(
@@ -255,7 +245,7 @@ fun CreateDatasetScreen(
                             )
                         }
                     }
-                    Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -270,10 +260,10 @@ fun CreateDatasetScreen(
                             sessionName = sessionName.trim().ifBlank { null },
                             timestamp = timestamp.trim().ifBlank { null },
                             dataType = dataType.trim().ifBlank { null },
-                            public = isPublic,
-                            scientificMetadata = metadata
+                            public = isPublic
                         ),
-                        files = pendingFiles
+                        files = pendingFiles,
+                        metadata = metadata
                     )
                 },
                 enabled = name.isNotBlank() && !selectedProjectId.isNullOrBlank() && !isSaving,
@@ -282,7 +272,7 @@ fun CreateDatasetScreen(
                 if (isSaving) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
                 } else {
-                    Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
+                    AppIcon(AppIcons.Add, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Create Dataset")
                 }

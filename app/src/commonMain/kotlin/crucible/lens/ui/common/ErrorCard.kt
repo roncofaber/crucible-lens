@@ -1,7 +1,6 @@
 package crucible.lens.ui.common
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -30,9 +29,7 @@ fun ErrorCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    Icons.Default.Error,
-                    contentDescription = null,
+                AppIcon(AppIcons.Error,
                     tint = MaterialTheme.colorScheme.onErrorContainer
                 )
                 Text(

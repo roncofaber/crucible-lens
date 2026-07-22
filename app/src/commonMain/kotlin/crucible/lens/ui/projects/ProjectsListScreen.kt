@@ -1,4 +1,6 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.projects
+import androidx.compose.material3.ExperimentalMaterial3Api
 import crucible.lens.platform.*
 
 import androidx.compose.animation.core.Spring
@@ -14,6 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -27,8 +30,6 @@ import crucible.lens.ui.common.SearchBar
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
-import crucible.lens.data.cache.PersistentProjectCache
-import crucible.lens.data.cache.ProjectSummary
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
@@ -42,12 +43,14 @@ import crucible.lens.ui.common.ToggleHiddenMenuItem
 import crucible.lens.platform.showToast
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
+import androidx.lifecycle.viewmodel.compose.viewModel
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.LoadState
 import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.data.util.fetchProjectData
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ProjectsListScreen(
     modifier: Modifier = Modifier,
@@ -61,136 +64,34 @@ fun ProjectsListScreen(
     onToggleHide: (String) -> Unit = {},
 ) {
     val platformContext = getPlatformContext()
-    var projects by remember { mutableStateOf<List<Project>?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-    var isUserRefreshing by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    // Map of projectId -> Pair(sampleCount, datasetCount), null means still loading
-    var projectCounts by remember { mutableStateOf<Map<String, Pair<Int?, Int?>>>(emptyMap()) }
+    val viewModel: ProjectsListViewModel = viewModel()
+    val loadState by viewModel.loadState.collectAsState()
+    val projectCounts by viewModel.projectCounts.collectAsState()
     // Persistent cache summaries - loaded immediately for instant display
-    var persistentSummaries by remember { mutableStateOf<List<ProjectSummary>?>(null) }
     var hiddenExpanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var sortState by remember { mutableStateOf(SortState(SortField.NAME, true)) }
     // Track which projects were manually unarchived (so we don't auto-archive them again)
     var manuallyShown by remember { mutableStateOf<Set<String>>(emptySet()) }
-    // Trigger for forcing background reload - increments on refresh
-    var reloadTrigger by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+    // Generation counter per project — incremented on undo to force a fresh SwipeToDismissBoxState
+    val undoGenerations = remember { mutableStateMapOf<String, Int>() }
+    // Projects pending hide — excluded from activeProjects so LazyColumn animates the removal
+    // cleanly. onToggleHide is only called after the snackbar window closes without undo.
+    val pendingHide = remember { mutableStateMapOf<String, Boolean>() }
 
-    // Load persistent cache immediately on startup for instant display
-    LaunchedEffect(Unit) {
-        persistentSummaries = PersistentProjectCache.loadProjectData(platformContext)
-        // If we have persistent cache, populate counts immediately
-        persistentSummaries?.let { summaries ->
-            projectCounts = summaries.associate {
-                it.projectId to Pair(it.sampleCount, it.datasetCount)
-            }
-        }
-    }
-
-    fun loadProjects(forceRefresh: Boolean = false) {
-        if (forceRefresh) isUserRefreshing = true
-        scope.launch(kotlinx.coroutines.Dispatchers.Default) {
-            try {
-                // Check cache first if not forcing refresh
-                if (!forceRefresh) {
-                    val cachedProjects = CacheManager.getProjects()
-                    if (cachedProjects != null) {
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            projects = cachedProjects
-                            // Initialize all projects with null counts to show loading spinners
-                            val newCounts = cachedProjects.associate { it.projectId to Pair<Int?, Int?>(null, null) }
-                            projectCounts = projectCounts + newCounts
-                            isLoading = false
-                        }
-                        return@launch
-                    }
-                } else {
-                    // Clear cache and counts when force refreshing so fresh data is loaded
-                    CacheManager.clearAll()
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        projectCounts = emptyMap()
-                        reloadTrigger++ // Trigger background reload
-                    }
-                }
-
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    isLoading = true
-                    error = null
-                }
-                when (val response = ApiClient.service.getProjects()) {
-                    is ApiResult.Success -> {
-                        val fetchedProjects = response.data
-                        // Cache the projects
-                        CacheManager.cacheProjects(fetchedProjects)
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            projects = fetchedProjects
-                            // Initialize all projects with null counts to show loading spinners
-                            val newCounts = fetchedProjects.associate { it.projectId to Pair<Int?, Int?>(null, null) }
-                            projectCounts = projectCounts + newCounts
-                        }
-                    }
-                    is ApiResult.Error -> {
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            error = "Failed to load projects: ${response.message}"
-                        }
-                    }
-                }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    error = "Error: ${e.message}"
-                }
-            } finally {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    isLoading = false
-                    isUserRefreshing = false
-                }
-            }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        loadProjects()
-    }
-
-    // Function to save current state to persistent cache
-    fun saveToPersistentCache() {
-        val currentProjects = projects ?: return
-        scope.launch(kotlinx.coroutines.Dispatchers.Default) {
-            try {
-                // Build maps of samples and datasets
-                val samplesMap = mutableMapOf<String, List<Sample>>()
-                val datasetsMap = mutableMapOf<String, List<Dataset>>()
-
-                currentProjects.forEach { project ->
-                    CacheManager.getProjectSamples(project.projectId)?.let {
-                        samplesMap[project.projectId] = it
-                    }
-                    CacheManager.getProjectDatasets(project.projectId)?.let {
-                        datasetsMap[project.projectId] = it
-                    }
-                }
-
-                PersistentProjectCache.saveProjectData(platformContext, currentProjects, samplesMap, datasetsMap)
-            } catch (e: Exception) {
-                // Fail silently
-            }
-        }
-    }
+    LaunchedEffect(Unit) { /* ViewModel loads on init */ }
 
     // Preload and cache samples/datasets per project in background (also populates counts).
     // Priority: pinned projects first, archived projects last (stage 2 skipped for archived).
     // This automatically cancels when the user navigates away from this screen.
     // Re-triggers when projects change OR when reloadTrigger increments (force refresh).
-    LaunchedEffect(projects, reloadTrigger) {
-        val projectList = projects ?: return@LaunchedEffect
+    LaunchedEffect(loadState) {
+        val projectList = (loadState as? LoadState.Success)?.data ?: return@LaunchedEffect
         val prioritizedProjects = projectList
             .sortedWith(compareByDescending<Project> { it.projectId in pinnedProjects }
                 .thenBy { it.projectId in hiddenProjects })
@@ -212,7 +113,7 @@ fun ProjectsListScreen(
                             projectId = project.projectId,
                             onCountsAvailable = { sampleCount, datasetCount ->
                                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                    projectCounts = projectCounts + (project.projectId to Pair(sampleCount, datasetCount))
+                                    viewModel.updateCount(project.projectId, sampleCount, datasetCount)
 
                                     if (sampleCount == 0 && datasetCount == 0 &&
                                         project.projectId !in manuallyShown &&
@@ -223,6 +124,8 @@ fun ProjectsListScreen(
                             }
                         )
                         consecutiveFailures = 0
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
                     } catch (_: Exception) {
                         consecutiveFailures++
                     }
@@ -232,58 +135,38 @@ fun ProjectsListScreen(
             kotlinx.coroutines.delay(150)
         }
 
-        // After all batches complete, save to persistent cache
-        saveToPersistentCache()
     }
 
     AppScaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            Column {
-            TopAppBar(
-                title = { Text("Projects") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        AppIcon(AppIcons.Back)
-                    }
-                },
+            AppTopBar(
+                title = "Projects",
+                onBack = onBack,
                 actions = {
-                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        IconButton(
-                            onClick = onSearch,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            AppIcon(AppIcons.Search,
-                                modifier = Modifier.size(24.dp)
-                            )
+                    IconButton(onClick = onSearch) {
+                        AppIcon(AppIcons.Search)
+                    }
+                    IconButton(onClick = onHome) {
+                        AppIcon(AppIcons.Home)
+                    }
+                    var listMenuExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { listMenuExpanded = true }) {
+                            AppIcon(AppIcons.MoreVert)
                         }
-                        IconButton(
-                            onClick = onHome,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            AppIcon(AppIcons.Home,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        var listMenuExpanded by remember { mutableStateOf(false) }
-                        Box {
-                            IconButton(onClick = { listMenuExpanded = true }, modifier = Modifier.size(40.dp)) {
-                                AppIcon(AppIcons.MoreVert, modifier = Modifier.size(24.dp))
-                            }
-                            DropdownMenu(expanded = listMenuExpanded, onDismissRequest = { listMenuExpanded = false }) {
-                                ToggleHiddenMenuItem(hiddenExpanded) { hiddenExpanded = !hiddenExpanded; listMenuExpanded = false }
-                                RefreshMenuItem { listMenuExpanded = false; loadProjects(forceRefresh = true) }
-                            }
+                        DropdownMenu(expanded = listMenuExpanded, onDismissRequest = { listMenuExpanded = false }) {
+                            ToggleHiddenMenuItem(hiddenExpanded) { hiddenExpanded = !hiddenExpanded; listMenuExpanded = false }
+                            RefreshMenuItem { listMenuExpanded = false; viewModel.load(forceRefresh = true) }
                         }
                     }
                 }
             )
-            } // end Column
         }
     ) { padding ->
         PullToRefreshBox(
-            isRefreshing = isUserRefreshing,
-            onRefresh = { loadProjects(forceRefresh = true) },
+            isRefreshing = loadState.isRefreshingNow,
+            onRefresh = { viewModel.load(forceRefresh = true) },
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -343,7 +226,7 @@ fun ProjectsListScreen(
                     }
 
                     when {
-                        isLoading && persistentSummaries == null -> item(key = "__loading__") {
+                        loadState is LoadState.Loading -> item(key = "__loading__") {
                             Box(
                                 modifier = Modifier.fillParentMaxWidth().fillParentMaxHeight(0.85f),
                                 contentAlignment = Alignment.Center
@@ -351,17 +234,17 @@ fun ProjectsListScreen(
                                 LoadingContent(title = "Loading Projects")
                             }
                         }
-                        error != null -> item(key = "__error__") {
+                        loadState is LoadState.Error -> item(key = "__error__") {
                             Box(modifier = Modifier.fillParentMaxWidth(), contentAlignment = Alignment.Center) {
                                 ErrorCard(
                                     title = "Error Loading Projects",
-                                    message = error ?: "Unknown error",
+                                    message = (loadState as LoadState.Error).message,
                                     modifier = Modifier.padding(horizontal = 16.dp),
-                                    onRetry = { loadProjects(forceRefresh = true) }
+                                    onRetry = { viewModel.load(forceRefresh = true) }
                                 )
                             }
                         }
-                        projects?.isEmpty() == true -> item(key = "__empty__") {
+                        (loadState as? LoadState.Success)?.data?.isEmpty() == true -> item(key = "__empty__") {
                             Box(
                                 modifier = Modifier.fillParentMaxWidth().fillParentMaxHeight(0.7f),
                                 contentAlignment = Alignment.Center
@@ -392,12 +275,7 @@ fun ProjectsListScreen(
                         }
                         else -> {
                             // Use real projects if available, otherwise convert persistent summaries
-                            val allProjects = projects ?: persistentSummaries?.map { summary ->
-                                Project(
-                                    projectId = summary.projectId,
-                                    title = summary.projectName
-                                )
-                            } ?: emptyList()
+                            val allProjects = (loadState as? LoadState.Success)?.data ?: emptyList()
 
                             // Filter projects based on search query (includes project, samples, and datasets with metadata)
                             val filteredProjects = if (searchQuery.isBlank()) {
@@ -423,7 +301,7 @@ fun ProjectsListScreen(
                             }
 
                             val activeProjects = filteredProjects
-                                .filter { it.projectId !in hiddenProjects }
+                                .filter { it.projectId !in hiddenProjects && pendingHide[it.projectId] != true }
                                 .applySortState(
                                     sortState,
                                     name = { title?.lowercase() ?: projectId.lowercase() },
@@ -464,11 +342,13 @@ fun ProjectsListScreen(
                                     }
                                 }
                             } else {
-                                items(activeProjects, key = { it.projectId }) { project ->
+                                items(activeProjects, key = { "${it.projectId}:${undoGenerations[it.projectId] ?: 0}" }) { project ->
+                                    @Suppress("DEPRECATION")
+
                                     val dismissState = rememberSwipeToDismissBoxState(
                                         confirmValueChange = { value ->
                                             if (value == SwipeToDismissBoxValue.EndToStart) {
-                                                onToggleHide(project.projectId)
+                                                pendingHide[project.projectId] = true
                                                 scope.launch {
                                                     val result = snackbarHostState.showSnackbar(
                                                         message = "\"${project.title ?: project.projectId}\" hidden",
@@ -476,10 +356,14 @@ fun ProjectsListScreen(
                                                         duration = SnackbarDuration.Short
                                                     )
                                                     if (result == SnackbarResult.ActionPerformed) {
+                                                        undoGenerations[project.projectId] = (undoGenerations[project.projectId] ?: 0) + 1
+                                                        pendingHide.remove(project.projectId)
+                                                    } else {
                                                         onToggleHide(project.projectId)
+                                                        pendingHide.remove(project.projectId)
                                                     }
                                                 }
-                                                true
+                                                false
                                             } else false
                                         },
                                         positionalThreshold = { totalDistance -> totalDistance * 0.5f }
@@ -566,6 +450,8 @@ fun ProjectsListScreen(
 
                                     if (hiddenExpanded) {
                                         items(hiddenProjectsList, key = { "hidden_${it.projectId}" }) { project ->
+                                            @Suppress("DEPRECATION")
+
                                             val dismissState = rememberSwipeToDismissBoxState(
                                                 confirmValueChange = { value ->
                                                     if (value == SwipeToDismissBoxValue.StartToEnd) {

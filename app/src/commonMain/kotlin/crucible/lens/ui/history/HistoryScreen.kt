@@ -1,7 +1,9 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.history
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -35,7 +37,7 @@ import kotlin.time.Clock
 private enum class HistorySortOrder { NEWEST, OLDEST }
 
 @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HistoryScreen(
     history: List<HistoryItem>,
@@ -58,7 +60,7 @@ fun HistoryScreen(
     if (showClearConfirm) {
         AlertDialog(
             onDismissRequest = { showClearConfirm = false },
-            icon = { Icon(Icons.Default.DeleteSweep, contentDescription = null) },
+            icon = { AppIcon(AppIcons.ClearAll) },
             title = { Text("Clear history") },
             text = { Text("Remove all ${history.size} items from your browsing history?") },
             confirmButton = {
@@ -75,42 +77,36 @@ fun HistoryScreen(
 
     AppScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("History") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
+            AppTopBar(
+                title = "History",
+                onBack = onBack,
                 actions = {
-                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
-                            Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(24.dp))
+                    IconButton(onClick = onSearch) {
+                        AppIcon(AppIcons.Search)
+                    }
+                    IconButton(onClick = onHome) {
+                        AppIcon(AppIcons.Home)
+                    }
+                    Box {
+                        IconButton(onClick = { overflowExpanded = true }) {
+                            AppIcon(AppIcons.MoreVert)
                         }
-                        IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
-                            Icon(Icons.Default.Home, contentDescription = "Home", modifier = Modifier.size(24.dp))
-                        }
-                        Box {
-                            IconButton(onClick = { overflowExpanded = true }, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(24.dp))
-                            }
-                            DropdownMenu(expanded = overflowExpanded, onDismissRequest = { overflowExpanded = false }) {
-                                DropdownMenuItem(
-                                    text = { Text(if (sortOrder == HistorySortOrder.NEWEST) "Show oldest first" else "Show newest first") },
-                                    leadingIcon = { Icon(Icons.Default.SwapVert, contentDescription = null) },
-                                    onClick = {
-                                        sortOrder = if (sortOrder == HistorySortOrder.NEWEST) HistorySortOrder.OLDEST else HistorySortOrder.NEWEST
-                                        overflowExpanded = false
-                                    }
-                                )
-                                if (history.isNotEmpty()) {
-                                    HorizontalDivider()
-                                    DropdownMenuItem(
-                                        text = { Text("Clear all history") },
-                                        leadingIcon = { Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                                        onClick = { overflowExpanded = false; showClearConfirm = true }
-                                    )
+                        DropdownMenu(expanded = overflowExpanded, onDismissRequest = { overflowExpanded = false }) {
+                            DropdownMenuItem(
+                                text = { Text(if (sortOrder == HistorySortOrder.NEWEST) "Show oldest first" else "Show newest first") },
+                                leadingIcon = { AppIcon(AppIcons.Sort) },
+                                onClick = {
+                                    sortOrder = if (sortOrder == HistorySortOrder.NEWEST) HistorySortOrder.OLDEST else HistorySortOrder.NEWEST
+                                    overflowExpanded = false
                                 }
+                            )
+                            if (history.isNotEmpty()) {
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Clear all history") },
+                                    leadingIcon = { AppIcon(AppIcons.ClearAll, tint = MaterialTheme.colorScheme.error) },
+                                    onClick = { overflowExpanded = false; showClearConfirm = true }
+                                )
                             }
                         }
                     }
@@ -129,7 +125,7 @@ fun HistoryScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Icon(Icons.Default.HistoryToggleOff, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        AppIcon(AppIcons.HistoryEmpty, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("No history yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("Resources you view will appear here", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -137,8 +133,7 @@ fun HistoryScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
                     items(sortedHistory, key = { it.uuid }) { item ->
                         HistoryCard(
@@ -146,6 +141,7 @@ fun HistoryScreen(
                             graphExplorerUrl = graphExplorerUrl,
                             onClick = { onItemClick(item.uuid) }
                         )
+                        HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
                     }
                 }
             }
@@ -179,9 +175,9 @@ private fun HistoryCard(
         }
     }
     val icon = when (item.resourceType ?: resourceType) {
-        "sample" -> Icons.Default.Science
-        "dataset" -> Icons.Default.Dataset
-        else -> Icons.Default.History
+        "sample" -> AppIcons.Sample
+        "dataset" -> AppIcons.Dataset
+        else -> AppIcons.History
     }
     val webUrl = if (projectId != null && graphExplorerUrl.isNotBlank()) {
         if (resourceType == "dataset") "$graphExplorerUrl/$projectId/dataset/${item.uuid}"
@@ -189,29 +185,32 @@ private fun HistoryCard(
     } else null
 
     Box {
-        Card(
-            modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = { menuExpanded = true }),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(item.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        ListItem(
+            headlineContent = {
+                Text(item.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            },
+            supportingContent = {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (projectName != null) {
-                        Text(projectName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(projectName, style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(formatRelativeTime(item.timestamp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(item.uuid, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
+                        Text(formatRelativeTime(item.timestamp), style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(item.uuid, style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 8.dp))
                     }
                 }
-                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-            }
-        }
+            },
+            leadingContent = { AppIcon(icon, tint = MaterialTheme.colorScheme.primary) },
+            trailingContent = { AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp)) },
+            modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = { menuExpanded = true })
+        )
 
         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
             CopyIdMenuItem {

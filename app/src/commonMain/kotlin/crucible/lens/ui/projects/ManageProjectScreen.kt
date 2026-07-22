@@ -1,11 +1,14 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.projects
 
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,7 +26,6 @@ import crucible.lens.ui.common.UserResultItem
 import crucible.lens.ui.common.UserSearchField
 import crucible.lens.ui.detail.components.InfoRow
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ManageProjectScreen(
     viewModel: ManageProjectViewModel,
@@ -57,13 +59,9 @@ fun ManageProjectScreen(
 
     AppScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Manage Project") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        AppIcon(AppIcons.Back)
-                    }
-                },
+            AppTopBar(
+                title = "Manage Project",
+                onBack = onBack,
                 actions = {
                     val loaded = state as? ManageProjectState.Loaded
                     if (loaded?.isLead == true && editState is ProjectEditState.Idle) {
@@ -253,7 +251,6 @@ private fun MembersCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddMemberSheet(viewModel: ManageProjectViewModel, onDismiss: () -> Unit) {
     var query by remember { mutableStateOf("") }

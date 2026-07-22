@@ -1,7 +1,9 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.settings
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -13,11 +15,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.cache.CacheManager
-import crucible.lens.platform.getPlatformContext
 import crucible.lens.data.util.formatDecimal
+import crucible.lens.ui.common.AppScaffold
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CacheSettingsScreen(
     onBack: () -> Unit,
@@ -33,29 +34,14 @@ fun CacheSettingsScreen(
         cacheStats = CacheManager.getDetailedStats()
     }
 
-    Scaffold(
+    AppScaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("Cache") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
+            AppTopBar(
+                title = "Cache",
+                onBack = onBack,
                 actions = {
-                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        IconButton(
-                            onClick = onHome,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Home,
-                                contentDescription = "Home",
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
+                    IconButton(onClick = onHome) { AppIcon(AppIcons.Home) }
                 }
             )
         }
@@ -68,20 +54,7 @@ fun CacheSettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Cache", style = MaterialTheme.typography.titleLarge)
-            Text(
-                "Pre-loaded data for faster browsing",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            // Cache stats card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
+            Card(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -90,15 +63,14 @@ fun CacheSettingsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            Icons.Default.Storage,
-                            contentDescription = null,
+                        AppIcon(
+                            AppIcons.FileStorage,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
                         Text(
-                            "Cache",
-                            style = MaterialTheme.typography.labelMedium,
+                            "Cached data",
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold
                         )
                         val stats = cacheStats
@@ -140,8 +112,6 @@ fun CacheSettingsScreen(
             OutlinedButton(
                 onClick = {
                     CacheManager.clearAll()
-                    // TODO: Persistent cache clear is Android-specific. For iOS, this will be a no-op.
-                    // PersistentThumbnailCache.clear(context)
                     cacheAge = null
                     cacheStats = CacheManager.getDetailedStats()
                     scope.launch {
@@ -153,7 +123,7 @@ fun CacheSettingsScreen(
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                AppIcon(AppIcons.Delete, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Clear All Cache")
             }

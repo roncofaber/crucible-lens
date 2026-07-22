@@ -1,7 +1,8 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.detail
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 
 
@@ -30,13 +31,13 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.ui.scanner.QRCodeScannerView
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 
 private enum class Direction { THEY_ARE_PARENT, THEY_ARE_CHILD }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LinkResourceSheet(
     resource: CrucibleResource,
@@ -105,6 +106,8 @@ fun LinkResourceSheet(
                 }
                 is ApiResult.Error -> null
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) { null }
         isResolving = false
     }
@@ -148,9 +151,8 @@ fun LinkResourceSheet(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(
-                                if (sel is Sample) Icons.Default.Science else Icons.Default.Dataset,
-                                contentDescription = null,
+                            AppIcon(
+                                if (sel is Sample) AppIcons.Sample else AppIcons.Dataset,
                                 modifier = Modifier.size(20.dp),
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer
                             )
@@ -165,7 +167,7 @@ fun LinkResourceSheet(
                             IconButton(onClick = {
                                 selectedResource = null; input = ""; resolvedUuid = null; resolvedType = null
                             }, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.Close, contentDescription = "Deselect",
+                                AppIcon(AppIcons.ClearInput,
                                     modifier = Modifier.size(16.dp),
                                     tint = MaterialTheme.colorScheme.onPrimaryContainer)
                             }
@@ -195,7 +197,7 @@ fun LinkResourceSheet(
                             onClick = { scanning = false },
                             modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close scanner")
+                            AppIcon(AppIcons.ClearInput)
                         }
                     }
                 }
@@ -213,18 +215,18 @@ fun LinkResourceSheet(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyMedium,
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    leadingIcon = { AppIcon(AppIcons.Search) },
                     trailingIcon = {
                         when {
                             isResolving || isSearchingNames -> CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                             input.isNotBlank() -> IconButton(onClick = { input = ""; resolvedUuid = null; resolvedType = null }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Clear")
+                                AppIcon(AppIcons.ClearInput)
                             }
                             else -> IconButton(onClick = {
                                 if (hasCameraPermission) scanning = true
                                 /* TODO: request camera permission on iOS */
                             }) {
-                                Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan QR")
+                                AppIcon(AppIcons.ScanQr)
                             }
                         }
                     },
@@ -243,8 +245,8 @@ fun LinkResourceSheet(
                             is Dataset -> "dataset"
                         }
                         val resultIcon = when (result) {
-                            is Sample -> Icons.Default.Science
-                            is Dataset -> Icons.Default.Dataset
+                            is Sample -> AppIcons.Sample
+                            is Dataset -> AppIcons.Dataset
                         }
                         val resultProjectId = when (result) {
                             is Sample -> result.projectId
@@ -266,7 +268,7 @@ fun LinkResourceSheet(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(resultIcon, contentDescription = null,
+                                AppIcon(resultIcon,
                                     modifier = Modifier.size(16.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Column(modifier = Modifier.weight(1f)) {
@@ -297,8 +299,8 @@ fun LinkResourceSheet(
                             readOnly = true,
                             label = { Text("Relationship direction") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = directionExpanded) },
-                            leadingIcon = { Icon(Icons.Default.AccountTree, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                            leadingIcon = { AppIcon(AppIcons.ResourceHierarchy) },
+                            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
                             textStyle = MaterialTheme.typography.bodyMedium,
                         )
                         ExposedDropdownMenu(
@@ -359,7 +361,7 @@ fun LinkResourceSheet(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Icons.Default.History, contentDescription = null,
+                                    AppIcon(AppIcons.History,
                                         modifier = Modifier.size(16.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Column(modifier = Modifier.weight(1f)) {
@@ -392,6 +394,8 @@ fun LinkResourceSheet(
                                 } else {
                                     snackbarHostState.showSnackbar("Link failed — check the ID and try again")
                                 }
+                            } catch (e: CancellationException) {
+                                throw e
                             } catch (e: Exception) {
                                 snackbarHostState.showSnackbar("Connection error — check your network")
                             } finally {
@@ -409,7 +413,7 @@ fun LinkResourceSheet(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(18.dp))
+                        AppIcon(AppIcons.LinkResource, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Link")
                     }

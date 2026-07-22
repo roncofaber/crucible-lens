@@ -1,13 +1,12 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.settings
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.showToast
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.HealthStatus
+import crucible.lens.data.preferences.AppPreferences
+import crucible.lens.ui.common.AppScaffold
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -29,7 +30,6 @@ private sealed interface HealthState {
     data class Failed(val message: String) : HealthState
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ApiSettingsScreen(
     currentApiBaseUrl: String,
@@ -59,13 +59,11 @@ fun ApiSettingsScreen(
         }
     }
 
-    // Auto-check with 800 ms debounce when the URL changes
     LaunchedEffect(apiBaseUrlInput) {
         delay(800)
         runHealthCheck(apiBaseUrlInput)
     }
 
-    // Immediate check when the user taps "Test"
     LaunchedEffect(healthManualTrigger) {
         if (healthManualTrigger > 0) runHealthCheck(apiBaseUrlInput)
     }
@@ -81,59 +79,17 @@ fun ApiSettingsScreen(
         graphExplorerUrlInput = currentGraphExplorerUrl
     }
 
-    Scaffold(
+    AppScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("API") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
+            AppTopBar(
+                title = "API",
+                onBack = onBack,
                 actions = {
-                    IconButton(onClick = onHome, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Default.Home, contentDescription = "Home", modifier = Modifier.size(24.dp))
-                    }
+                    IconButton(onClick = onHome) { AppIcon(AppIcons.Home) }
                 }
             )
         },
-        bottomBar = {
-            AnimatedVisibility(
-                visible = hasChanges,
-                enter = expandVertically(expandFrom = androidx.compose.ui.Alignment.Bottom),
-                exit = shrinkVertically(shrinkTowards = androidx.compose.ui.Alignment.Bottom)
-            ) {
-                Surface(
-                    tonalElevation = 8.dp,
-                    shadowElevation = 8.dp
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = ::discard,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Discard")
-                        }
-                        Button(
-                            onClick = ::save,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Save changes")
-                        }
-                    }
-                }
-            }
-        }
+        bottomBar = { SettingsSaveBar(hasChanges, ::discard, ::save) }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -143,9 +99,6 @@ fun ApiSettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
             Text("Endpoints", style = MaterialTheme.typography.titleLarge)
             Text(
                 "Leave as default unless you're using a custom deployment.",
@@ -157,24 +110,21 @@ fun ApiSettingsScreen(
                 value = apiBaseUrlInput,
                 onValueChange = { apiBaseUrlInput = it; healthState = HealthState.Idle },
                 label = { Text("API Base URL") },
-                placeholder = { Text(crucible.lens.data.preferences.AppPreferences.DEFAULT_API_BASE_URL) },
+                placeholder = { Text(AppPreferences.DEFAULT_API_BASE_URL) },
                 modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { Icon(Icons.Default.Cloud, contentDescription = null) },
+                leadingIcon = { AppIcon(AppIcons.ApiEndpoint) },
                 trailingIcon = {
-                    if (apiBaseUrlInput != crucible.lens.data.preferences.AppPreferences.DEFAULT_API_BASE_URL) {
+                    if (apiBaseUrlInput != AppPreferences.DEFAULT_API_BASE_URL) {
                         IconButton(onClick = {
-                            apiBaseUrlInput = crucible.lens.data.preferences.AppPreferences.DEFAULT_API_BASE_URL
+                            apiBaseUrlInput = AppPreferences.DEFAULT_API_BASE_URL
                             healthState = HealthState.Idle
-                        }) {
-                            Icon(Icons.Default.RestartAlt, contentDescription = "Reset to default")
-                        }
+                        }) { AppIcon(AppIcons.ResetToDefault) }
                     }
                 },
                 singleLine = true,
                 colors = if (apiBaseUrlDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
             )
 
-            // Connection test card
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
@@ -193,7 +143,7 @@ fun ApiSettingsScreen(
                                 Spacer(Modifier.width(6.dp))
                                 Text("Checking…", style = MaterialTheme.typography.labelMedium)
                             } else {
-                                Icon(Icons.Default.Wifi, null, modifier = Modifier.size(14.dp))
+                                AppIcon(AppIcons.TestConnection, modifier = Modifier.size(14.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text("Test connection", style = MaterialTheme.typography.labelMedium)
                             }
@@ -211,7 +161,7 @@ fun ApiSettingsScreen(
                             val ok = s.status == "ok"
                             val color = if (ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(if (ok) Icons.Default.CheckCircle else Icons.Default.Warning, null, modifier = Modifier.size(16.dp), tint = color)
+                                AppIcon(if (ok) AppIcons.Success else AppIcons.Warning, modifier = Modifier.size(16.dp), tint = color)
                                 Column {
                                     Text(if (ok) "Connected" else "Server error", style = MaterialTheme.typography.bodySmall, color = color)
                                     val details = listOfNotNull(
@@ -224,7 +174,7 @@ fun ApiSettingsScreen(
                             }
                         }
                         is HealthState.Failed -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CloudOff, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+                            AppIcon(AppIcons.Unreachable, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
                             Text(hs.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                         }
                     }
@@ -237,22 +187,13 @@ fun ApiSettingsScreen(
                 label = { Text("Crucible Web URL") },
                 placeholder = { Text("https://crucible.lbl.gov/explore/") },
                 modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { Icon(Icons.Default.Language, contentDescription = null) },
+                leadingIcon = { AppIcon(AppIcons.WebUrl) },
                 singleLine = true,
                 supportingText = { Text("Web interface for browsing and exploring resources", style = MaterialTheme.typography.bodySmall) },
                 colors = if (graphExplorerUrlDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
             )
 
-            // Extra bottom space so content isn't hidden behind the save bar
             Spacer(Modifier.height(16.dp))
         }
     }
 }
-
-@Composable
-private fun dirtyFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = MaterialTheme.colorScheme.primary,
-    unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-    focusedLabelColor = MaterialTheme.colorScheme.primary,
-    unfocusedLabelColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-)

@@ -1,7 +1,5 @@
 package crucible.lens.data.model
 
-import kotlinx.serialization.EncodeDefault
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -168,9 +166,14 @@ data class ProjectUpdateRequest(
 )
 
 @Serializable
-data class MetadataSearchResult(
-    val id: Int? = null,
+data class ResourceSearchResult(
     @SerialName("unique_id") val uniqueId: String,
+    @SerialName("resource_type") val resourceType: String? = null,
+    val name: String? = null,
+    @SerialName("owner_orcid") val ownerOrcid: String? = null,
+    @SerialName("creation_time") val creationTime: String? = null,
+    @SerialName("modification_time") val modificationTime: String? = null,
+    val rank: Float? = null,
     @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null
 )
 
@@ -209,8 +212,7 @@ data class SampleCreateRequest(
     @SerialName("description") val description: String? = null,
     @SerialName("project_id") val projectId: String? = null,
     @SerialName("timestamp") val timestamp: String? = null,
-    @SerialName("public") val public: Boolean = false,
-    @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null
+    @SerialName("public") val public: Boolean = false
 )
 
 @Serializable
@@ -223,8 +225,7 @@ data class DatasetCreateRequest(
     @SerialName("session_name") val sessionName: String? = null,
     @SerialName("timestamp") val timestamp: String? = null,
     @SerialName("public") val public: Boolean = false,
-    @SerialName("data_type") val dataType: String? = null,
-    @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null
+    @SerialName("data_type") val dataType: String? = null
 )
 
 @Serializable
@@ -240,8 +241,7 @@ data class SampleUpdateRequest(
     @SerialName("description") val description: String? = null,
     @SerialName("timestamp") val timestamp: String? = null,
     @SerialName("project_id") val projectId: String? = null,
-    @SerialName("public") val public: Boolean? = null,
-    @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null
+    @SerialName("public") val public: Boolean? = null
 )
 
 @Serializable
@@ -254,8 +254,7 @@ data class DatasetUpdateRequest(
     @SerialName("timestamp") val timestamp: String? = null,
     @SerialName("project_id") val projectId: String? = null,
     @SerialName("public") val public: Boolean? = null,
-    @SerialName("data_type") val dataType: String? = null,
-    @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null
+    @SerialName("data_type") val dataType: String? = null
 )
 
 @Serializable
@@ -264,12 +263,6 @@ data class HealthStatus(
     val db: String? = null,             // "ok" | "error"
     @SerialName("db_ms") val dbMs: Float? = null,
     val version: String? = null
-)
-
-@Serializable
-data class MetadataImageData(
-    val data: String,
-    @SerialName("media_type") val mediaType: String
 )
 
 // ── GCS resumable upload models ──────────────────────────────────────────────
@@ -293,22 +286,6 @@ data class UploadInitiateResponse(
 data class UploadCompleteRequest(
     @SerialName("upload_id") val uploadId: String,
     @SerialName("sha256_hash") val sha256Hash: String
-)
-
-@Serializable
-data class ExtractMetadataRequest(
-    val images: List<MetadataImageData>,
-    @OptIn(ExperimentalSerializationApi::class)
-    @EncodeDefault(EncodeDefault.Mode.NEVER)
-    val context: String? = null,
-    @SerialName("api_key")
-    @OptIn(ExperimentalSerializationApi::class)
-    @EncodeDefault(EncodeDefault.Mode.NEVER)
-    val apiKey: String? = null,
-    @SerialName("api_url")
-    @OptIn(ExperimentalSerializationApi::class)
-    @EncodeDefault(EncodeDefault.Mode.NEVER)
-    val apiUrl: String? = null
 )
 
 @Serializable

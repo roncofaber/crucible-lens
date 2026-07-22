@@ -1,19 +1,23 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.settings
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIconToken
+import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import crucible.lens.platform.appVersionName
+import crucible.lens.ui.common.AppScaffold
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     currentApiKey: String?,
@@ -26,28 +30,13 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onHome: () -> Unit
 ) {
-    Scaffold(
+    AppScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Settings") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
+            AppTopBar(
+                title = "Settings",
+                onBack = onBack,
                 actions = {
-                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp)) {
-                        IconButton(
-                            onClick = onHome,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Home,
-                                contentDescription = "Home",
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
+                    IconButton(onClick = onHome) { AppIcon(AppIcons.Home) }
                 }
             )
         }
@@ -56,11 +45,12 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             SettingsRow(
-                icon = Icons.Default.Person,
+                icon = AppIcons.User,
                 title = "Account",
                 subtitle = when {
                     !currentApiKey.isNullOrBlank() && !userUsername.isNullOrBlank() -> "@$userUsername"
@@ -69,9 +59,8 @@ fun SettingsScreen(
                 },
                 onClick = onNavigateToAccount
             )
-
             SettingsRow(
-                icon = Icons.Default.Cloud,
+                icon = AppIcons.ApiEndpoint,
                 title = "API",
                 subtitle = if (!currentApiKey.isNullOrBlank()) "Configured" else "Not configured — tap to set up",
                 subtitleColor = if (!currentApiKey.isNullOrBlank())
@@ -80,23 +69,20 @@ fun SettingsScreen(
                     MaterialTheme.colorScheme.error,
                 onClick = onNavigateToApi
             )
-
             SettingsRow(
-                icon = Icons.Default.Palette,
+                icon = AppIcons.Appearance,
                 title = "Appearance",
                 subtitle = "Theme, accent color, animations",
                 onClick = onNavigateToAppearance
             )
-
             SettingsRow(
-                icon = Icons.Default.Storage,
+                icon = AppIcons.FileStorage,
                 title = "Cache",
                 subtitle = "Pre-loaded data for faster browsing",
                 onClick = onNavigateToCache
             )
-
             SettingsRow(
-                icon = Icons.Default.Info,
+                icon = AppIcons.Info,
                 title = "About",
                 subtitle = "Crucible Lens v${appVersionName()}",
                 onClick = onNavigateToAbout
@@ -107,7 +93,7 @@ fun SettingsScreen(
 
 @Composable
 private fun SettingsRow(
-    icon: ImageVector,
+    icon: AppIconToken,
     title: String,
     subtitle: String,
     onClick: () -> Unit,
@@ -123,13 +109,13 @@ private fun SettingsRow(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                AppIcon(icon, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                 Column {
                     Text(title, style = MaterialTheme.typography.titleMedium)
                     Text(subtitle, style = MaterialTheme.typography.bodySmall, color = subtitleColor)
                 }
             }
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -8,7 +8,6 @@ sealed class Screen(val route: String) {
     object Scanner : Screen("scanner")
     object Settings : Screen("settings")
     object SettingsApi : Screen("settings/api")
-    object SettingsAi : Screen("settings/ai")
     object SettingsAppearance : Screen("settings/appearance")
     object SettingsCache : Screen("settings/cache")
     object SettingsAbout : Screen("settings/about")
@@ -46,5 +45,8 @@ sealed class Screen(val route: String) {
     object AddFiles : Screen("add-files?datasetId={datasetId}") {
         fun createRoute(datasetId: String? = null) =
             if (datasetId != null) "add-files?datasetId=$datasetId" else "add-files?datasetId="
+    }
+    object UserProfile : Screen("user/{identifier}") {
+        fun createRoute(identifier: String) = "user/${encodeRouteSegment(identifier)}"
     }
 }

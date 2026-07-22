@@ -3,19 +3,49 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
 
 plugins {
-    id("org.jetbrains.kotlin.multiplatform")
-    id("com.android.library")
-    id("org.jetbrains.compose")
-    id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.kotlin.plugin.serialization")
-    id("com.google.devtools.ksp")
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.android.kotlin.multiplatform.library)
+    alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
+}
+
+val versionNameProp = project.findProperty("app.versionName") as? String ?: "0.0.0"
+
+// Generate AppBuildConfig.kt for build-time constants unavailable in the new KMP plugin
+val generateAppBuildConfig by tasks.registering {
+    val isDebug = gradle.startParameter.taskNames.any { it.contains("debug", ignoreCase = true) }
+    val outputDir = layout.buildDirectory.dir("generated/appBuildConfig/kotlin")
+    outputs.dir(outputDir)
+    inputs.property("versionName", versionNameProp)
+    inputs.property("isDebug", isDebug)
+    doLast {
+        val dir = outputDir.get().asFile.resolve("crucible/lens")
+        dir.mkdirs()
+        dir.resolve("AppBuildConfig.kt").writeText("""
+package crucible.lens
+
+internal object AppBuildConfig {
+    const val VERSION_NAME: String = "$versionNameProp"
+    const val DEBUG: Boolean = $isDebug
+}
+""".trimIndent())
+    }
 }
 
 kotlin {
-    androidTarget {
-        @OptIn(ExperimentalKotlinGradlePluginApi::class)
+    android {
+        namespace = "crucible.lens"
+        compileSdk = 36
+        minSdk = 26
+
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
+        }
+
+        androidResources {
+            enable = true
         }
     }
 
@@ -39,42 +69,41 @@ kotlin {
     }
 
     sourceSets {
-        // Android-specific source — existing code lives here initially
         androidMain {
-            kotlin.srcDirs("src/main/java")
+            kotlin.srcDirs(generateAppBuildConfig)
             dependencies {
-                implementation("androidx.core:core-ktx:1.13.1")
-                implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.0")
-                implementation("androidx.activity:activity-compose:1.9.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+                implementation(libs.androidx.core.ktx)
+                implementation(libs.androidx.lifecycle.runtime.ktx)
+                implementation(libs.androidx.activity.compose)
+                implementation(libs.kotlinx.coroutines.android)
 
                 // Ktor Android engine
-                implementation("io.ktor:ktor-client-okhttp:3.0.3")
-                implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+                implementation(libs.ktor.client.okhttp)
+                implementation(libs.okhttp.logging.interceptor)
 
                 // CameraX
-                implementation("androidx.camera:camera-camera2:1.3.3")
-                implementation("androidx.camera:camera-lifecycle:1.3.3")
-                implementation("androidx.camera:camera-view:1.3.3")
+                implementation(libs.androidx.camera.camera2)
+                implementation(libs.androidx.camera.lifecycle)
+                implementation(libs.androidx.camera.view)
 
                 // ML Kit
-                implementation("com.google.mlkit:barcode-scanning:17.2.0")
+                implementation(libs.mlkit.barcode.scanning)
 
                 // ZXing
-                implementation("com.google.zxing:core:3.5.3")
+                implementation(libs.zxing.core)
 
                 // DataStore
-                implementation("androidx.datastore:datastore-preferences:1.1.1")
+                implementation(libs.androidx.datastore.preferences)
 
                 // Splash Screen
-                implementation("androidx.core:core-splashscreen:1.0.1")
+                implementation(libs.androidx.core.splashscreen)
 
                 // Coil SVG (Android only)
-                implementation("io.coil-kt:coil-svg:2.6.0")
-                implementation("com.caverock:androidsvg-aar:1.4")
+                implementation(libs.coil.svg.v2)
+                implementation(libs.androidsvg.aar)
 
                 // FileProvider
-                implementation("androidx.core:core:1.13.1")
+                implementation(libs.androidx.core)
             }
         }
 
@@ -84,56 +113,55 @@ kotlin {
                 implementation(compose.runtime)
                 implementation(compose.foundation)
                 implementation(compose.material3)
-                implementation(compose.materialIconsExtended)
                 implementation(compose.components.resources)
                 implementation(compose.components.uiToolingPreview)
 
                 // Ktor (multiplatform)
-                implementation("io.ktor:ktor-client-core:3.0.3")
-                implementation("io.ktor:ktor-client-content-negotiation:3.0.3")
-                implementation("io.ktor:ktor-serialization-kotlinx-json:3.0.3")
-                implementation("io.ktor:ktor-client-logging:3.0.3")
+                implementation(libs.ktor.client.core)
+                implementation(libs.ktor.client.content.negotiation)
+                implementation(libs.ktor.serialization.kotlinx.json)
+                implementation(libs.ktor.client.logging)
 
                 // Serialization
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+                implementation(libs.kotlinx.serialization.json)
 
                 // Coroutines
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+                implementation(libs.kotlinx.coroutines.core)
 
                 // Date/time
-                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.7.1")
+                implementation(libs.kotlinx.datetime)
 
                 // Multiplatform Settings
-                implementation("com.russhwolf:multiplatform-settings:1.2.0")
-                implementation("com.russhwolf:multiplatform-settings-coroutines:1.2.0")
+                implementation(libs.multiplatform.settings)
+                implementation(libs.multiplatform.settings.coroutines)
 
                 // Coil 3 (multiplatform)
-                implementation("io.coil-kt.coil3:coil-compose:3.0.4")
-                implementation("io.coil-kt.coil3:coil-network-ktor3:3.0.4")
-                implementation("io.coil-kt.coil3:coil-svg:3.0.4")
+                implementation(libs.coil3.compose)
+                implementation(libs.coil3.network.ktor3)
+                implementation(libs.coil3.svg)
 
                 // Lifecycle / ViewModel
-                implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
-                implementation("org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose:2.9.1")
+                implementation(libs.androidx.lifecycle.viewmodel.compose)
+                implementation(libs.androidx.lifecycle.runtime.compose)
 
                 // Navigation (multiplatform, 2.8+)
-                implementation("org.jetbrains.androidx.navigation:navigation-compose:2.9.2")
+                implementation(libs.androidx.navigation.compose)
 
                 // Multiplatform WebView (ORCID login)
-                api("io.github.kevinnzou:compose-webview-multiplatform:2.0.3")
+                api(libs.compose.webview.multiplatform)
 
                 // QR code scanning (EasyQRScan - KMP, handles lifecycle correctly)
-                implementation("io.github.kalinjul.easyqrscan:scanner:0.7.1")
+                implementation(libs.easyqrscan.scanner)
 
                 // QR code display/generation (qr-kit painter only)
-                implementation("network.chaintech:qr-kit:3.1.3")
+                implementation(libs.qr.kit)
             }
         }
 
         iosMain {
             dependencies {
                 // Ktor iOS engine
-                implementation("io.ktor:ktor-client-darwin:3.0.3")
+                implementation(libs.ktor.client.darwin)
             }
         }
 
@@ -147,36 +175,4 @@ kotlin {
 
 compose.resources {
     packageOfResClass = "crucible.lens.composeapp.generated.resources"
-}
-
-// easyqrscan 0.7.1 was compiled against M3 1.4.x and pulls it in transitively.
-// CMP 1.7.3 compiles against M3 1.3.x — the mangled Compose function names differ between
-// 1.3.x and 1.4.x, so letting 1.4.x win at runtime would break our compiled code.
-// Force 1.3.1 so only the version our code was compiled against is in the final APK.
-// easyqrscan is therefore only used on iOS (its native stack has no AndroidX M3 dependency).
-configurations.configureEach {
-    resolutionStrategy {
-        force("androidx.compose.material3:material3:1.3.1")
-    }
-}
-
-android {
-    namespace = "crucible.lens"
-    compileSdk = 36
-
-    defaultConfig {
-        minSdk = 34
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "VERSION_NAME", "\"" + (project.findProperty("app.versionName") as? String ?: "0.0.0") + "\"")
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    buildFeatures {
-        compose = true
-        buildConfig = true
-    }
 }

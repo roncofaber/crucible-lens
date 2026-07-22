@@ -1,7 +1,6 @@
 package crucible.lens.ui.detail.components
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
@@ -53,7 +52,7 @@ internal fun ScientificMetadataCard(
                 ) {
                     ExpandChevron(expanded = expanded, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Icon(Icons.AutoMirrored.Filled.ListAlt, contentDescription = null, modifier = Modifier.size(20.dp))
+                    AppIcon(AppIcons.ScientificMetadata, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Scientific Metadata",

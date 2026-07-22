@@ -1,36 +1,41 @@
 package crucible.lens.ui.common
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
 
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.material3.Icon
+import androidx.compose.animation.core.spring
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.unit.IntSize
 
-/** Standard animation duration — 200ms. */
-private const val STANDARD_MS = 200
+// Screen-level navigation transitions use tween (M3 spec: easing curves for screen-to-screen
+// transitions, springs for component-level). Enter is longer than exit — gives the incoming
+// screen time to settle while the outgoing screen exits quickly.
+const val NavEnterDuration = 300
+const val NavExitDuration = 200
 
-/** Fast animation duration — 150ms, for nested elements inside already-animated containers. */
-private const val FAST_MS = 150
+// Spatial spring specs — for movement, rotation, size (M3 standard scheme: no bounce)
+val SpatialDefaultSpring: FiniteAnimationSpec<Float> = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMedium)
+val SpatialFastSpring: FiniteAnimationSpec<Float> = spring(Spring.DampingRatioNoBouncy, 600f)
+val SpatialDefaultSizeSpring: FiniteAnimationSpec<IntSize> = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMedium)
+val SpatialFastSizeSpring: FiniteAnimationSpec<IntSize> = spring(Spring.DampingRatioNoBouncy, 600f)
 
-/** Float animation spec — used in animateFloatAsState (e.g. ExpandChevron rotation). */
-val StandardAnim = tween<Float>(STANDARD_MS)
-val FastAnim = tween<Float>(FAST_MS)
+// Effects spring specs — for opacity and color (no overshoot)
+val EffectsDefaultSpring: FiniteAnimationSpec<Float> = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMedium)
+val EffectsFastSpring: FiniteAnimationSpec<Float> = spring(Spring.DampingRatioNoBouncy, 600f)
 
-/** IntSize animation spec — used in animateContentSize. */
-val StandardSizeAnim = tween<IntSize>(STANDARD_MS)
-val FastSizeAnim = tween<IntSize>(FAST_MS)
+// Backward-compat aliases used across the app — now spring-based
+val StandardAnim: FiniteAnimationSpec<Float> = SpatialDefaultSpring
+val FastAnim: FiniteAnimationSpec<Float> = SpatialFastSpring
+val StandardSizeAnim: FiniteAnimationSpec<IntSize> = SpatialDefaultSizeSpring
+val FastSizeAnim: FiniteAnimationSpec<IntSize> = SpatialFastSizeSpring
 
 /**
- * A chevron icon that rotates smoothly between collapsed (-90°) and expanded (0°).
- * Use this everywhere an expandable section needs an animated indicator — it ensures
- * all expand/collapse affordances look and feel identical.
+ * Rotating chevron used consistently for all expand/collapse affordances.
+ * `fast = true` uses a stiffer spring for nested elements inside already-animating containers.
  */
 @Composable
 fun ExpandChevron(
@@ -40,12 +45,11 @@ fun ExpandChevron(
 ) {
     val rotation by animateFloatAsState(
         targetValue = if (expanded) 0f else -90f,
-        animationSpec = if (fast) FastAnim else StandardAnim,
+        animationSpec = if (fast) SpatialFastSpring else SpatialDefaultSpring,
         label = "expand_chevron"
     )
-    Icon(
-        imageVector = Icons.Default.ExpandMore,
-        contentDescription = if (expanded) "Collapse" else "Expand",
+    AppIcon(
+        AppIcons.ExpandMore,
         modifier = modifier.rotate(rotation),
         tint = MaterialTheme.colorScheme.primary
     )

@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!--
+      Official ORCID iD icon — paths scaled from 32×32 to 24×24 (factor 0.75).
+      Single path with evenOdd fill rule: the outer circle is filled with the tint
+      color; the iD letterforms inside are transparent cutouts, exactly matching
+      the official ORCID iD mark.
+    -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="
+          M24,12 C24,18.628 18.628,24 12,24 5.372,24 0,18.628 0,12 0,5.372 5.372,0 12,0 18.628,0 24,5.372 24,12Z
+          M14.11,7.228 h-4.088 v10.425 h4.106 c3.416,0 5.512,-2.534 5.512,-5.213 0,-1.226 -0.422,-2.529 -1.328,-3.528 -0.911,-1.002 -2.299,-1.684 -4.204,-1.684Z
+          M13.95,15.975 h-2.11 v-7.069 H13.875 c1.367,0 2.34,0.414 2.97,1.05 0.632,0.637 0.939,1.516 0.939,2.484 0,0.588 -0.179,1.475 -0.745,2.211 -0.559,0.727 -1.508,1.324 -3.089,1.324Z
+          M6.272,7.256 v10.415 h1.819 V7.256 H6.272Z
+          M7.181,5.366 c-0.628,0 -1.134,0.505 -1.134,1.134 0,0.617 0.504,1.134 1.134,1.134 0.63,0 1.135,-0.517 1.135,-1.134 0,-0.629 -0.505,-1.134 -1.135,-1.134Z
+        " />
+</vector>

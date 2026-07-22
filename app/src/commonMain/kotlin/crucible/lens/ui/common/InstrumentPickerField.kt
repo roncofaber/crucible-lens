@@ -1,7 +1,6 @@
 package crucible.lens.ui.common
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -55,12 +54,12 @@ fun InstrumentPickerField(
                 .onFocusChanged { if (it.isFocused && value.length >= 3) expanded = true },
             singleLine = true,
             textStyle = MaterialTheme.typography.bodyMedium,
-            leadingIcon = { Icon(Icons.Default.Biotech, contentDescription = null) },
+            leadingIcon = { AppIcon(AppIcons.Instrument) },
             trailingIcon = {
                 when {
                     isSearching -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     value.isNotEmpty() -> IconButton(onClick = { onValueChange(""); expanded = false }) {
-                        Icon(Icons.Default.Clear, contentDescription = "Clear")
+                        AppIcon(AppIcons.ClearInput)
                     }
                 }
             }

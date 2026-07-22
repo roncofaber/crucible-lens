@@ -10,8 +10,10 @@ import crucible.lens.data.preferences.AppPreferences
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -58,6 +60,9 @@ class AccountViewModel(private val prefs: AppPreferences) : ViewModel() {
 
     private val _editState = MutableStateFlow<EditUiState>(EditUiState.Idle)
     val editState: StateFlow<EditUiState> = _editState.asStateFlow()
+
+    val currentApiKey: StateFlow<String?> = prefs.apiKey
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private var usernameCheckJob: Job? = null
 

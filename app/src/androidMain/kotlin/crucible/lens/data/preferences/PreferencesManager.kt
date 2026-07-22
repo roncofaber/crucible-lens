@@ -7,12 +7,25 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import crucible.lens.data.model.User
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 class PreferencesManager(private val context: Context) : AppPreferences {
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** True once DataStore has emitted its first snapshot — all StateFlows have real values. */
+    val isLoaded: StateFlow<Boolean> = context.dataStore.data
+        .map { true }
+        .stateIn(scope, SharingStarted.Eagerly, false)
 
     companion object {
         private val API_KEY = stringPreferencesKey("api_key")
@@ -34,9 +47,6 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         private val USER_PROFILE = stringPreferencesKey("user_profile")
         private val PINNED_INSTRUMENTS = stringPreferencesKey("pinned_instruments")
         private val USE_DYNAMIC_COLOR = stringPreferencesKey("use_dynamic_color")
-        private val AI_API_KEY = stringPreferencesKey("ai_api_key")
-        private val AI_API_URL = stringPreferencesKey("ai_api_url")
-        private val AI_DIRECT_MODE = stringPreferencesKey("ai_direct_mode")
 
         const val PROJECT_TAB_SAMPLES = "SAMPLES"
         const val PROJECT_TAB_DATASETS = "DATASETS"
@@ -51,98 +61,105 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         private val profileJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true }
     }
 
-    override val apiKey: Flow<String?> = context.dataStore.data.map { preferences ->
+    override val apiKey: StateFlow<String?> = context.dataStore.data.map { preferences ->
         preferences[API_KEY]
     }
+        .stateIn(scope, SharingStarted.Eagerly, null)
 
-    override val apiBaseUrl: Flow<String> = context.dataStore.data.map { preferences ->
+    override val apiBaseUrl: StateFlow<String> = context.dataStore.data.map { preferences ->
         preferences[API_BASE_URL] ?: DEFAULT_API_BASE_URL
     }
+        .stateIn(scope, SharingStarted.Eagerly, DEFAULT_API_BASE_URL)
 
-    override val graphExplorerUrl: Flow<String> = context.dataStore.data.map { preferences ->
+    override val graphExplorerUrl: StateFlow<String> = context.dataStore.data.map { preferences ->
         preferences[GRAPH_EXPLORER_URL] ?: DEFAULT_GRAPH_EXPLORER_URL
     }
+        .stateIn(scope, SharingStarted.Eagerly, DEFAULT_GRAPH_EXPLORER_URL)
 
-    override val themeMode: Flow<String> = context.dataStore.data.map { preferences ->
+    override val themeMode: StateFlow<String> = context.dataStore.data.map { preferences ->
         preferences[THEME_MODE] ?: THEME_MODE_SYSTEM
     }
+        .stateIn(scope, SharingStarted.Eagerly, THEME_MODE_SYSTEM)
 
-    override val accentColor: Flow<String> = context.dataStore.data.map { preferences ->
+    override val accentColor: StateFlow<String> = context.dataStore.data.map { preferences ->
         preferences[ACCENT_COLOR] ?: DEFAULT_ACCENT_COLOR
     }
+        .stateIn(scope, SharingStarted.Eagerly, DEFAULT_ACCENT_COLOR)
 
-    override val lastVisitedResource: Flow<String?> = context.dataStore.data.map { preferences ->
+    override val lastVisitedResource: StateFlow<String?> = context.dataStore.data.map { preferences ->
         preferences[LAST_VISITED_RESOURCE]
     }
+        .stateIn(scope, SharingStarted.Eagerly, null)
 
-    override val lastVisitedResourceName: Flow<String?> = context.dataStore.data.map { preferences ->
+    override val lastVisitedResourceName: StateFlow<String?> = context.dataStore.data.map { preferences ->
         preferences[LAST_VISITED_RESOURCE_NAME]
     }
+        .stateIn(scope, SharingStarted.Eagerly, null)
 
-    override val floatingScanButton: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    override val floatingScanButton: StateFlow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[FLOATING_SCAN_BUTTON]?.toBoolean() ?: false
     }
+        .stateIn(scope, SharingStarted.Eagerly, false)
 
-    override val pinnedProjects: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+    override val pinnedProjects: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
         prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     }
+        .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
-    override val hiddenProjects: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+    override val hiddenProjects: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
         prefs[HIDDEN_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     }
+        .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
-    override val hiddenInstruments: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+    override val hiddenInstruments: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
         prefs[HIDDEN_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     }
+        .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
-    override val sampleGroupBy: Flow<String> = context.dataStore.data.map { prefs ->
+    override val sampleGroupBy: StateFlow<String> = context.dataStore.data.map { prefs ->
         prefs[SAMPLE_GROUP_BY] ?: "TYPE"
     }
+        .stateIn(scope, SharingStarted.Eagerly, "TYPE")
 
-    override val datasetGroupBy: Flow<String> = context.dataStore.data.map { prefs ->
+    override val datasetGroupBy: StateFlow<String> = context.dataStore.data.map { prefs ->
         prefs[DATASET_GROUP_BY] ?: "MEASUREMENT"
     }
+        .stateIn(scope, SharingStarted.Eagerly, "MEASUREMENT")
 
-    override val defaultProjectTab: Flow<String> = context.dataStore.data.map { prefs ->
+    override val defaultProjectTab: StateFlow<String> = context.dataStore.data.map { prefs ->
         prefs[DEFAULT_PROJECT_TAB] ?: PROJECT_TAB_SAMPLES
     }
+        .stateIn(scope, SharingStarted.Eagerly, PROJECT_TAB_SAMPLES)
 
-    override val useDynamicColor: Flow<Boolean> = context.dataStore.data.map { prefs ->
+    override val useDynamicColor: StateFlow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[USE_DYNAMIC_COLOR]?.toBoolean() ?: false
     }
+        .stateIn(scope, SharingStarted.Eagerly, false)
 
-    override val pinnedInstruments: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+    override val pinnedInstruments: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
         prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     }
+        .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
-    override val userOrcid: Flow<String?> = context.dataStore.data.map { preferences ->
+    override val userOrcid: StateFlow<String?> = context.dataStore.data.map { preferences ->
         preferences[USER_ORCID]
     }
+        .stateIn(scope, SharingStarted.Eagerly, null)
 
-    override val userProfile: Flow<User?> = context.dataStore.data.map { preferences ->
+    override val userProfile: StateFlow<User?> = context.dataStore.data.map { preferences ->
         preferences[USER_PROFILE]?.let { json ->
             runCatching { profileJson.decodeFromString<User>(json) }.getOrNull()
         }
     }
+        .stateIn(scope, SharingStarted.Eagerly, null)
 
-    override val aiApiKey: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences[AI_API_KEY]
-    }
-
-    override val aiApiUrl: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[AI_API_URL] ?: AppPreferences.DEFAULT_AI_API_URL
-    }
-
-    override val aiDirectMode: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[AI_DIRECT_MODE]?.toBoolean() ?: false
-    }
-
-    override val resourceHistory: Flow<List<HistoryItem>> = context.dataStore.data.map { prefs ->
+    override val resourceHistory: StateFlow<List<HistoryItem>> = context.dataStore.data.map { prefs ->
         prefs[RESOURCE_HISTORY]?.split(",")?.mapNotNull { entry ->
             val parts = entry.split("|||")
             if (parts.size >= 3) HistoryItem(parts[0], parts[1], parts[2].toLongOrNull() ?: 0L, parts.getOrNull(3)?.ifBlank { null }) else null
         } ?: emptyList()
     }
+        .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     override suspend fun saveApiKey(key: String) {
         context.dataStore.edit { preferences ->
@@ -263,18 +280,6 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         context.dataStore.edit { preferences ->
             preferences.remove(USER_PROFILE)
         }
-    }
-
-    override suspend fun saveAiApiKey(key: String) {
-        context.dataStore.edit { preferences -> preferences[AI_API_KEY] = key }
-    }
-
-    override suspend fun saveAiApiUrl(url: String) {
-        context.dataStore.edit { preferences -> preferences[AI_API_URL] = url }
-    }
-
-    override suspend fun saveAiDirectMode(enabled: Boolean) {
-        context.dataStore.edit { preferences -> preferences[AI_DIRECT_MODE] = enabled.toString() }
     }
 
     override suspend fun clearHistory() {

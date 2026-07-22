@@ -1,7 +1,6 @@
 package crucible.lens.ui.common
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -54,9 +53,7 @@ fun MetadataEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        Icons.Default.DataObject,
-                        contentDescription = null,
+                    AppIcon(AppIcons.FileJson,
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -81,9 +78,8 @@ fun MetadataEditor(
                     }
                 }
                 IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(28.dp)) {
-                    Icon(
-                        if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = if (expanded) "Collapse" else "Expand",
+                    AppIcon(
+                        if (expanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -144,9 +140,7 @@ fun MetadataEditor(
                                 },
                                 modifier = Modifier.size(36.dp)
                             ) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = "Remove field",
+                                AppIcon(AppIcons.Delete,
                                     modifier = Modifier.size(18.dp),
                                     tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
                                 )
@@ -160,7 +154,7 @@ fun MetadataEditor(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(vertical = 6.dp)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        AppIcon(AppIcons.Add, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Add field", style = MaterialTheme.typography.labelMedium)
                     }

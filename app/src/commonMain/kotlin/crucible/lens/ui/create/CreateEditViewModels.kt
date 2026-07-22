@@ -9,9 +9,11 @@ import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.DatasetUpdateRequest
 import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.model.SampleUpdateRequest
+import kotlinx.serialization.json.JsonObject
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.util.PlatformCrypto
 import crucible.lens.platform.PlatformBase64
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,7 +35,7 @@ class CreateSampleViewModel : ViewModel() {
     private val _saveState = MutableStateFlow<SaveState>(SaveState.Idle)
     val saveState: StateFlow<SaveState> = _saveState.asStateFlow()
 
-    fun create(request: SampleCreateRequest, projectId: String?) {
+    fun create(request: SampleCreateRequest, projectId: String?, metadata: JsonObject? = null) {
         if (_saveState.value is SaveState.Saving) return
         _saveState.value = SaveState.Saving
         viewModelScope.launch {
@@ -43,10 +45,15 @@ class CreateSampleViewModel : ViewModel() {
                         val sample = resp.data
                         CacheManager.cacheResource(sample.uniqueId, sample)
                         projectId?.let { CacheManager.clearProjectDetail(it) }
+                        if (!metadata.isNullOrEmpty()) {
+                            ApiClient.service.postResourceMetadata(sample.uniqueId, metadata)
+                        }
                         SaveState.Success(sample.uniqueId)
                     }
                     is ApiResult.Error -> SaveState.Error("Save failed (${resp.code})")
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 SaveState.Error("Connection error — check your network")
             }
@@ -63,7 +70,7 @@ class CreateDatasetViewModel : ViewModel() {
     private val _saveState = MutableStateFlow<SaveState>(SaveState.Idle)
     val saveState: StateFlow<SaveState> = _saveState.asStateFlow()
 
-    fun create(request: DatasetCreateRequest, files: List<Pair<ByteArray, Boolean>> = emptyList()) {
+    fun create(request: DatasetCreateRequest, files: List<Pair<ByteArray, Boolean>> = emptyList(), metadata: JsonObject? = null) {
         if (_saveState.value is SaveState.Saving) return
         _saveState.value = SaveState.Saving
         viewModelScope.launch {
@@ -132,7 +139,12 @@ class CreateDatasetViewModel : ViewModel() {
                     thumbnailFailures > 0 -> "Dataset created, but $thumbnailFailures thumbnail(s) failed to upload"
                     else -> null
                 }
+                if (!metadata.isNullOrEmpty()) {
+                    ApiClient.service.postResourceMetadata(newUuid, metadata)
+                }
                 SaveState.Success(newUuid, uploadWarning = warning)
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 SaveState.Error("Connection error — check your network")
             }
@@ -149,7 +161,8 @@ class EditResourceViewModel : ViewModel() {
     private val _saveState = MutableStateFlow<SaveState>(SaveState.Idle)
     val saveState: StateFlow<SaveState> = _saveState.asStateFlow()
 
-    fun updateSample(uuid: String, request: SampleUpdateRequest) {
+    // metadata: null = unchanged or empty, skip the API call. Non-null = changed and non-empty, post it.
+    fun updateSample(uuid: String, request: SampleUpdateRequest, metadata: JsonObject? = null) {
         if (_saveState.value is SaveState.Saving) return
         _saveState.value = SaveState.Saving
         viewModelScope.launch {
@@ -157,17 +170,22 @@ class EditResourceViewModel : ViewModel() {
                 when (val resp = ApiClient.service.updateSample(uuid, request)) {
                     is ApiResult.Success -> {
                         CacheManager.cacheResource(uuid, resp.data)
+                        if (metadata != null) {
+                            ApiClient.service.postResourceMetadata(uuid, metadata, overwrite = true)
+                        }
                         SaveState.Success(uuid)
                     }
                     is ApiResult.Error -> SaveState.Error("Save failed (${resp.code})")
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 SaveState.Error("Connection error — check your network")
             }
         }
     }
 
-    fun updateDataset(uuid: String, request: DatasetUpdateRequest) {
+    fun updateDataset(uuid: String, request: DatasetUpdateRequest, metadata: JsonObject? = null) {
         if (_saveState.value is SaveState.Saving) return
         _saveState.value = SaveState.Saving
         viewModelScope.launch {
@@ -175,10 +193,15 @@ class EditResourceViewModel : ViewModel() {
                 when (val resp = ApiClient.service.updateDataset(uuid, request)) {
                     is ApiResult.Success -> {
                         CacheManager.cacheResource(uuid, resp.data)
+                        if (metadata != null) {
+                            ApiClient.service.postResourceMetadata(uuid, metadata, overwrite = true)
+                        }
                         SaveState.Success(uuid)
                     }
                     is ApiResult.Error -> SaveState.Error("Save failed (${resp.code})")
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 SaveState.Error("Connection error — check your network")
             }

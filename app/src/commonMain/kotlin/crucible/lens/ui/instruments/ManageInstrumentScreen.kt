@@ -1,11 +1,14 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.instruments
 
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.AppTopBar
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -18,7 +21,6 @@ import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.detail.components.InfoRow
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ManageInstrumentScreen(
     viewModel: ManageInstrumentViewModel,
@@ -29,13 +31,9 @@ fun ManageInstrumentScreen(
 
     AppScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Manage Instrument") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        AppIcon(AppIcons.Back)
-                    }
-                },
+            AppTopBar(
+                title = "Manage Instrument",
+                onBack = onBack,
                 actions = {
                     if (state is InstrumentManageState.Loaded && editState is InstrumentEditState.Idle) {
                         IconButton(onClick = { viewModel.startEdit() }) {

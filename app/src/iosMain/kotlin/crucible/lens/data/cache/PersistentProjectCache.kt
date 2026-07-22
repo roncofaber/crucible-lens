@@ -2,9 +2,7 @@
 
 package crucible.lens.data.cache
 
-import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
-import crucible.lens.data.model.Sample
 import crucible.lens.platform.PlatformContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,50 +21,25 @@ private fun cacheFile(): String {
 
 actual object PersistentProjectCache {
 
-    actual suspend fun saveProjectData(
-        context: PlatformContext,
-        projects: List<Project>,
-        samplesMap: Map<String, List<Sample>>,
-        datasetsMap: Map<String, List<Dataset>>
-    ): Unit = withContext(Dispatchers.Default) {
+    actual suspend fun save(context: PlatformContext, projects: List<Project>): Unit = withContext(Dispatchers.Default) {
         try {
-            val summaries = projects.map { project ->
-                val samples = samplesMap[project.projectId] ?: emptyList()
-                val datasets = datasetsMap[project.projectId] ?: emptyList()
-                ProjectSummary(
-                    projectId = project.projectId,
-                    projectName = project.title,
-                    description = null,
-                    projectLeadEmail = project.lead?.email,
-                    createdAt = null,
-                    sampleCount = samples.size,
-                    datasetCount = datasets.size,
-                    sampleTypes = samples.mapNotNull { it.sampleType }.distinct().sorted(),
-                    measurements = datasets.mapNotNull { it.measurement }.distinct().sorted(),
-                    lastUpdated = NSDate().timeIntervalSince1970.toLong() * 1000
-                )
-            }
-            val cacheData = CachedProjectData(
-                summaries = summaries,
-                cachedAt = NSDate().timeIntervalSince1970.toLong() * 1000
-            )
-            val json = Json.encodeToString(cacheData)
-            (json as NSString).writeToFile(cacheFile(), atomically = true, encoding = NSUTF8StringEncoding, error = null)
+            val data = CachedProjects(projects, NSDate().timeIntervalSince1970.toLong() * 1000)
+            val encoded = Json.encodeToString(data)
+            (encoded as NSString).writeToFile(cacheFile(), atomically = true, encoding = NSUTF8StringEncoding, error = null)
         } catch (_: Exception) {}
     }
 
-    actual suspend fun loadProjectData(context: PlatformContext): List<ProjectSummary>? = withContext(Dispatchers.Default) {
+    actual suspend fun load(context: PlatformContext): List<Project>? = withContext(Dispatchers.Default) {
         try {
-            val path = cacheFile()
-            val json = NSString.stringWithContentsOfFile(path, encoding = NSUTF8StringEncoding, error = null)
+            val text = NSString.stringWithContentsOfFile(cacheFile(), encoding = NSUTF8StringEncoding, error = null)
                 ?.toString() ?: return@withContext null
-            val cacheData = Json.decodeFromString<CachedProjectData>(json)
+            val data = Json.decodeFromString<CachedProjects>(text)
             val now = NSDate().timeIntervalSince1970.toLong() * 1000
-            if (now - cacheData.cachedAt > MAX_CACHE_AGE_MS) {
-                NSFileManager.defaultManager.removeItemAtPath(path, error = null)
+            if (now - data.cachedAt > MAX_CACHE_AGE_MS) {
+                NSFileManager.defaultManager.removeItemAtPath(cacheFile(), error = null)
                 return@withContext null
             }
-            cacheData.summaries
+            data.projects
         } catch (_: Exception) { null }
     }
 
@@ -77,12 +50,11 @@ actual object PersistentProjectCache {
 
     actual suspend fun getCacheAgeHours(context: PlatformContext): Long? = withContext(Dispatchers.Default) {
         try {
-            val path = cacheFile()
-            val json = NSString.stringWithContentsOfFile(path, encoding = NSUTF8StringEncoding, error = null)
+            val text = NSString.stringWithContentsOfFile(cacheFile(), encoding = NSUTF8StringEncoding, error = null)
                 ?.toString() ?: return@withContext null
-            val cacheData = Json.decodeFromString<CachedProjectData>(json)
+            val data = Json.decodeFromString<CachedProjects>(text)
             val now = NSDate().timeIntervalSince1970.toLong() * 1000
-            (now - cacheData.cachedAt) / 3_600_000L
+            (now - data.cachedAt) / 3_600_000L
         } catch (_: Exception) { null }
     }
 }

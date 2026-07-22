@@ -1,9 +1,6 @@
 package crucible.lens.ui.detail.components
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
@@ -27,7 +24,6 @@ import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
 import crucible.lens.platform.showToast
-import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.StandardSizeAnim
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -35,6 +31,7 @@ import kotlinx.serialization.json.JsonPrimitive
 internal fun SampleDetailsCard(
     sample: Sample,
     onProjectClick: (String) -> Unit,
+    onUserClick: (String) -> Unit = {},
     onShowQr: () -> Unit = {},
     initialAdvanced: Boolean = false,
     onAdvancedChange: (Boolean) -> Unit = {}
@@ -151,12 +148,12 @@ internal fun SampleDetailsCard(
                             }
                             ClickableInfoRow(
                                 icon = AppIcons.User, label = "Owner", value = ownerLabel,
-                                onClick = { if (sample.ownerOrcid != null) openUrl(platformCtx, "https://orcid.org/${sample.ownerOrcid}") }
+                                onClick = { onUserClick(sample.owner.username) }
                             )
                         }
                         sample.ownerOrcid != null -> ClickableInfoRow(
-                            icon = AppIcons.User, label = "Owner ORCID", value = sample.ownerOrcid,
-                            onClick = { openUrl(platformCtx, "https://orcid.org/${sample.ownerOrcid}") }
+                            icon = AppIcons.User, label = "Owner", value = sample.ownerOrcid,
+                            onClick = { onUserClick(sample.ownerOrcid) }
                         )
                         else -> InfoRow(icon = AppIcons.User, label = "Owner", value = "None")
                     }
@@ -187,7 +184,11 @@ internal fun SampleDetailsCard(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    ExpandChevron(expanded = advanced, modifier = Modifier.size(16.dp))
+                    AppIcon(
+                        if (advanced) AppIcons.HideContent else AppIcons.ShowContent,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
