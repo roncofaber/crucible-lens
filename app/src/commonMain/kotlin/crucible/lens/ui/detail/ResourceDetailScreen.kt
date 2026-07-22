@@ -187,15 +187,19 @@ fun ResourceDetailScreen(
     // Sibling navigation: same type within the same project
     // Samples grouped by sampleType, Datasets grouped by measurement
     // Initialize with cached data to avoid flash of "-- / --" when navigating
-    var sameTypeSamples by remember(resource) {
+    // Keyed on uniqueId (not the resource object) — fetchResource() emits a cached
+    // placeholder followed by the enriched network result for the SAME uuid, and those
+    // two objects are structurally unequal (data class), which would otherwise reset
+    // the resolved sibling list and cause a momentary loading flash mid-browse.
+    var sameTypeSamples by remember(resource.uniqueId) {
         mutableStateOf(if (resource is Sample) listOf(resource) else emptyList())
     }
-    var sameTypeDatasets by remember(resource) {
+    var sameTypeDatasets by remember(resource.uniqueId) {
         mutableStateOf(if (resource is Dataset) listOf(resource) else emptyList())
     }
     // True once the full sibling list has been resolved (cache hit or batch load done).
     // Stays false while the list is just the 1-item seed, so the counter shows "-- / --".
-    var siblingsResolved by remember(resource) { mutableStateOf(false) }
+    var siblingsResolved by remember(resource.uniqueId) { mutableStateOf(false) }
 
     // Shared sibling-loading logic — used by both LaunchedEffects below.
     // Fetches the sibling list from cache or API, applies groupBy filtering,
@@ -260,11 +264,23 @@ fun ResourceDetailScreen(
         }
     }
 
-    // Initial load: seed the cache with the authoritative resource, warm loadedResources
-    // from any cached siblings, then load the sibling list.
+    // Re-seed cache.loadedResources whenever the resource content changes — including the
+    // cached-placeholder → enriched-network-result transition for the SAME uuid, so the
+    // current page always reflects the latest data. Keyed on the full object (not just
+    // uniqueId) so it re-runs on that transition; unlike the sibling-list load below, this
+    // is cheap and side-effect-free to repeat.
     LaunchedEffect(resource) {
         cache.loadedResources[resource.uniqueId] = resource
-        cache.enrichedUuids.add(resource.uniqueId)
+        val hasLinks = (resource is Sample && resource.links != null) ||
+                       (resource is Dataset && resource.links != null)
+        if (hasLinks) cache.enrichedUuids.add(resource.uniqueId)
+    }
+
+    // Initial load: warm loadedResources from any cached siblings, then load the sibling
+    // list. Keyed on uniqueId only — must NOT re-run when the resource is merely enriched
+    // in place (cache placeholder -> network result for the same uuid), or the resolved
+    // sibling list would reset and briefly show the loading state again mid-browse.
+    LaunchedEffect(resource.uniqueId) {
         cache.loadedThumbnails.remove(resource.uniqueId)
         // Warm loadedResources from the project cache so sibling pages render instantly
         when (resource) {
@@ -341,16 +357,6 @@ fun ResourceDetailScreen(
             val rtype = if (targetResource is Sample) "sample" else "dataset"
             onSaveToHistory(targetResource.uniqueId, targetResource.name, rtype)
         }
-    }
-
-    // Seed the primary resource into local maps immediately so its page never shows
-    // a loading state. The enrichment LaunchedEffect would do this eventually, but
-    // doing it eagerly avoids a 1-frame flash on first composition.
-    LaunchedEffect(resource.uniqueId) {
-        cache.loadedResources[resource.uniqueId] = resource
-        val hasLinks = (resource is Sample && resource.links != null) ||
-                       (resource is Dataset && resource.links != null)
-        if (hasLinks) cache.enrichedUuids.add(resource.uniqueId)
     }
 
     // Re-open edit sheet with updated metadata after returning from MetadataEditorScreen.
