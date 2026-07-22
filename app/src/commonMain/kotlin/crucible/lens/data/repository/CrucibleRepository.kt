@@ -3,6 +3,7 @@ package crucible.lens.data.repository
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.cache.ObservableCache
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Instrument
@@ -13,6 +14,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -45,13 +47,18 @@ class CrucibleRepository(
     // Per-project mutex prevents duplicate concurrent fetches of the same project.
     private val projectFetchMutexes = mutableMapOf<String, Mutex>()
 
+    private val resourceObservableCache = ObservableCache<String, CrucibleResource>(
+        ttlMillis = 10 * 60 * 1000L,
+        maxSize = 50
+    )
+
     /**
      * Fetches any resource by UUID using the unified /resources/{uuid} endpoint.
      * Single call — no type lookup needed, links and metadata included.
      */
     suspend fun fetchResourceByUuid(uuid: String): ResourceResult = withContext(Dispatchers.Default) {
         try {
-            val cached = cacheManager.getResource(uuid)
+            val cached = resourceObservableCache.get(uuid)
             // Check if we have a fully-loaded cached version (with links)
             if (cached != null && hasLinks(cached)) {
                 return@withContext ResourceResult.Success(cached)
@@ -60,7 +67,7 @@ class CrucibleRepository(
             when (val result = api.getResource(uuid)) {
                 is ApiResult.Success -> {
                     val resource = result.data
-                    cacheManager.cacheResource(uuid, resource)
+                    resourceObservableCache.put(uuid, resource)
                     ResourceResult.Success(resource)
                 }
                 is ApiResult.Error -> httpError(result.code)
@@ -71,6 +78,18 @@ class CrucibleRepository(
             ResourceResult.Error("Network error: ${e.message ?: "check your connection"}")
         }
     }
+
+    /** Reactive read — emits the current cached resource (or null) and re-emits on any change. */
+    fun observeResource(uuid: String): Flow<CrucibleResource?> = resourceObservableCache.observe(uuid)
+
+    /** One-shot synchronous read — null if absent or expired. */
+    fun getCachedResource(uuid: String): CrucibleResource? = resourceObservableCache.get(uuid)
+
+    /** Evicts a single resource, forcing the next fetch to hit the network. */
+    fun invalidateResource(uuid: String) = resourceObservableCache.invalidate(uuid)
+
+    /** Age of the cached entry in milliseconds, or null if absent/expired. */
+    fun resourceAgeMillis(uuid: String): Long? = resourceObservableCache.ageMillis(uuid)
 
     /** Returns true if the resource was loaded with links (i.e. from a detail fetch, not a list fetch). */
     private fun hasLinks(resource: CrucibleResource): Boolean = when (resource) {

@@ -1,0 +1,41 @@
+package crucible.lens.data.repository
+
+import crucible.lens.data.api.ApiClient
+import crucible.lens.data.cache.CacheManager
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertNull
+
+class CrucibleRepositoryTest {
+
+    @Test
+    fun getCachedResourceReturnsNullWhenNotCached() {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        assertNull(repository.getCachedResource("unknown-uuid"))
+    }
+
+    @Test
+    fun invalidateResourceIsSafeNoOpWhenNotCached() {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        // Populating the cache first would require a real network call through
+        // fetchResourceByUuid — no ApiClient mock exists in this project yet (see
+        // Task 3 preamble). This test only confirms invalidate() doesn't throw on an
+        // absent key; invalidate's actual removal behavior is covered directly by
+        // ObservableCacheTest.invalidateRemovesEntry, which this method delegates to.
+        repository.invalidateResource("unknown-uuid")
+        assertNull(repository.getCachedResource("unknown-uuid"))
+    }
+
+    @Test
+    fun resourceAgeMillisReturnsNullWhenNotCached() {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        assertNull(repository.resourceAgeMillis("unknown-uuid"))
+    }
+
+    @Test
+    fun observeResourceEmitsNullWhenNotCached() = runTest {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        assertNull(repository.observeResource("unknown-uuid").first())
+    }
+}
