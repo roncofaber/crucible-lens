@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="app/src/main/res/drawable/crucible_text_light.png" alt="Crucible Lens" width="640">
+  <img src="app/src/commonMain/composeResources/drawable/crucible_text_light.png" alt="Crucible Lens" width="640">
 </p>
 
-Android app for browsing and scanning samples and datasets from the [Molecular Foundry](https://foundry.lbl.gov/)'s Crucible data system.
+Android + iOS app (Kotlin Multiplatform + Compose Multiplatform) for browsing and scanning samples and datasets from the [Molecular Foundry](https://foundry.lbl.gov/)'s Crucible data system.
 
 ## Features
 
@@ -16,7 +16,8 @@ Android app for browsing and scanning samples and datasets from the [Molecular F
 - Create and edit samples and datasets
 - QR code sharing for any resource
 - Browsing history and last-visited shortcut
-- Light/dark theme with accent color picker and switchable app icon
+- Light/dark theme with accent color picker
+- ORCID sign-in
 
 ## Requirements
 
@@ -40,12 +41,19 @@ Crucible Lens is distributed as an APK (not on the Play Store).
 1. Clone the repository
 2. Open in Android Studio (Hedgehog 2023.1.1 or newer)
 3. Let Gradle sync complete
-4. Run on a device or emulator (API 26+)
-5. On first launch, go to **Settings → API Settings** and enter your Crucible API key
+4. Build the installable app with `:androidApp:assembleDebug` (see `CLAUDE.md` for exact commands)
+5. Run on a device or emulator (API 26+)
+6. On first launch, go to **Settings → API Settings** and enter your Crucible API key
+
+iOS builds require Xcode on macOS — see `dev/IOS_SETUP.md`.
 
 ## Tech Stack
 
-Kotlin · Jetpack Compose · Material 3 · CameraX · ML Kit · Retrofit · Moshi · Coil
+Kotlin Multiplatform · Compose Multiplatform · Material 3 · Ktor · kotlinx.serialization · Koin · CameraX / ML Kit (QR scanning) · Coil
+
+## Privacy
+
+See [PRIVACY.md](PRIVACY.md) for what data the app accesses and how it's used.
 
 ## License
 

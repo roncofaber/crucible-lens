@@ -1,7 +1,7 @@
 # Architecture Notes
 
-Branch: `ios-development`  
-Last updated: 2026-05-01
+Branch: `main`
+Last updated: 2026-07-21
 
 ---
 
@@ -9,22 +9,23 @@ Last updated: 2026-05-01
 
 | Concern | Library |
 |---|---|
-| Language | Kotlin Multiplatform (KMP) + Compose Multiplatform (CMP) 1.7.3 |
+| Language | Kotlin Multiplatform (KMP) + Compose Multiplatform (CMP) 1.10.3 |
 | UI | Jetpack Compose / Material 3 — identical on Android and iOS |
 | Networking | Ktor 3.0.3 (OkHttp engine on Android, Darwin engine on iOS) |
 | Serialization | kotlinx.serialization 1.7.3 |
-| Preferences | multiplatform-settings (NSUserDefaults on iOS, DataStore on Android) |
+| Preferences | DataStore Preferences (Android) / NSUserDefaults via multiplatform-settings (iOS), behind the shared `AppPreferences` interface |
 | Date/time | kotlinx-datetime 0.7.1 |
-| QR scan + display | qr-kit 3.1.3 (Chaintech Network) |
-| Image picking | moko-media 0.12.0 (iOS); ActivityResultContracts (Android) |
+| QR scan + display | easyqrscan (scanning) + qr-kit (display/generation) |
+| Image picking | Native `UIImagePickerController`/`PHPickerViewController` (iOS); `ActivityResultContracts` + CameraX (Android) — no third-party picker library |
 | WebView (ORCID) | compose-webview-multiplatform 2.0.3 |
 | Navigation | org.jetbrains.androidx.navigation 2.9.2 |
+| Dependency injection | Koin 4.2.0 — see "Dependency injection (Koin)" below |
 | Min SDK | 26 (Android) |
 | Target/Compile SDK | 36 (Android) |
-| Kotlin | 2.1.0 |
-| AGP | 9.2.0 |
-| Gradle | 9.4.1 |
-| Dependency injection | Koin — see "Dependency injection (Koin)" below |
+| Kotlin | 2.3.21 |
+| AGP | 9.2.1 |
+| Gradle | 9.5.1 |
+| Version catalog | `gradle/libs.versions.toml` — all dependency versions declared once, referenced via `libs.*` |
 
 ---
 
@@ -32,38 +33,46 @@ Last updated: 2026-05-01
 
 ```
 app/src/
-├── commonMain/        Shared code — all UI screens, API, models, cache, navigation
-├── androidMain/       Android actuals + Android-only screens (CreateDataset, Widget)
-├── iosMain/           iOS actuals
-└── main/java/         Android entry point (MainActivity) + PreferencesManager
+├── commonMain/        Shared code — all UI screens, API, models, cache, navigation, DI modules
+├── androidMain/       Android actuals (MainActivity, PreferencesManager, camera/QR platform code)
+└── iosMain/           iOS actuals (App.kt entry point, IosAppPreferences, native pickers)
+androidApp/            Thin Android application shell (signing, ProGuard, manifest) — depends on app/
+iosApp/                Xcode project (via XcodeGen) + Swift entry point — depends on app/
 ```
+
+Migrated from `com.android.library` + `src/main/` to `com.android.kotlin.multiplatform.library` +
+`src/androidMain/` — there is no `src/main/` anymore. See "Things that have bitten us before" in
+`CLAUDE.md` for details.
 
 ### Package layout (commonMain)
 
 ```
 crucible.lens
 ├── data
-│   ├── api/          CrucibleApiService (Ktor), ApiClient singleton, ApiResult sealed class
-│   ├── cache/        CacheManager (in-memory 10min TTL), PersistentProject/ThumbnailCache
+│   ├── api/          CrucibleApiService (Ktor), ApiClient, ApiResult sealed class
+│   ├── cache/        CacheManager (in-memory 10min TTL), PersistentProjectCache
 │   ├── model/        CrucibleResource.kt — all data classes
 │   ├── network/      ConnectivityObserver (expect/actual)
 │   ├── preferences/  AppPreferences interface, PreferencesFactory (expect/actual)
-│   └── util/         SearchExtensions, DateTimeUtils, SortUtils, ProjectFetcher, DuplicateHolder
+│   ├── repository/   CrucibleRepository — single point of contact for resource/project/instrument fetches
+│   ├── sync/         DataSyncManager — background cache preload via CrucibleRepository
+│   └── util/         SearchExtensions, DateTimeUtils, SortUtils, FormatUtils, CryptoUtils, DuplicateHolder
+├── di/               AppModule (Koin module), KoinInit (initKoin())
 └── ui
-    ├── common/       QrCodeDialog, AnimatedPullToRefresh, LazyColumnScrollbar, BrowserUtils, …
-    ├── create/       CreateSampleScreen (+ expect for CreateDatasetScreen)
-    ├── detail/       ResourceDetailScreen
+    ├── common/       QrCodeDialog, AppTopBar, AppIcons, LazyColumnScrollbar, …
+    ├── create/       CreateSampleScreen, CreateDatasetScreen, CreateEditViewModels, AddFilesScreen
+    ├── detail/       ResourceDetailScreen, ResourceDetailViewModel, EditResourceSheet, LinkResourceSheet
     ├── history/      HistoryScreen
     ├── home/         HomeScreen
-    ├── instruments/  InstrumentListScreen, InstrumentDetailScreen
+    ├── instruments/  InstrumentListScreen/ViewModel, InstrumentDetailScreen/ViewModel, ManageInstrumentScreen/ViewModel
+    ├── metadata/     MetadataEditorScreen, MetadataHolder
     ├── navigation/   NavGraph, Screen sealed class
-    ├── projects/     ProjectsListScreen, ProjectDetailScreen
-    ├── scanner/      QRScannerPlatform (QRCodeScannerView via qr-kit)
+    ├── projects/     ProjectsListScreen/ViewModel, ProjectDetailScreen/ViewModel, ManageProjectScreen/ViewModel
+    ├── scanner/      QRScannerPlatform (QRCodeScannerView via easyqrscan)
     ├── search/       SearchScreen
-    ├── settings/     ApiSettingsScreen, AppearanceSettingsScreen, CacheSettingsScreen,
-    │                 OrcidLoginScreen (compose-webview-multiplatform), SettingsScreen, AboutSettingsScreen
-    ├── theme/        CrucibleScannerTheme, Typography
-    └── viewmodel/    ScannerViewModel
+    ├── settings/     SettingsScreen, ApiSettingsScreen, AppearanceSettingsScreen, CacheSettingsScreen,
+    │                 AboutSettingsScreen, AccountScreen/ViewModel, UserProfileScreen, OrcidLoginScreen
+    └── theme/        CrucibleScannerTheme, Typography
 ```
 
 ---
@@ -131,9 +140,15 @@ Cache is cleared entirely on API key or base URL change.
 
 ---
 
-## ViewModel (`ResourceDetailViewModel`)
+## ViewModels
 
-Single `ViewModel` (commonMain, platform-agnostic) for the resource detail flow:
+Every list/detail/manage/create screen has its own `ViewModel` (commonMain, platform-agnostic),
+constructor-injected via Koin (see "Dependency injection (Koin)" below): `ResourceDetailViewModel`,
+`ProjectsListViewModel`, `ProjectDetailViewModel`, `ManageProjectViewModel`, `InstrumentListViewModel`,
+`InstrumentDetailViewModel`, `ManageInstrumentViewModel`, `AccountViewModel`, `CreateSampleViewModel`,
+`CreateDatasetViewModel`, `EditResourceViewModel`.
+
+`ResourceDetailViewModel` is the most involved — it drives the resource detail pager:
 - `uiState: StateFlow<UiState>` — `Idle | Loading | Success(resource, thumbnails, isRefreshing) | Error`
 - `isSyncing: StateFlow<Boolean>` — true while `DataSyncManager.syncAll()` is running (drives home screen spinner)
 - `fetchResource(uuid)` — shows cached version immediately, always fetches fresh for full detail
@@ -141,8 +156,6 @@ Single `ViewModel` (commonMain, platform-agnostic) for the resource detail flow:
 - `getCardState` / `setCardState` — persists expand/collapse state across pager pages
 - `startBackgroundSync()` / sync is paused during user-initiated refresh and resumed after
 - `preloadRelatedResources(resource)` — background prefetch of linked resource UUIDs
-
-Project/Instrument/List/Detail screens manage their own local coroutine state — they do not use `ResourceDetailViewModel`.
 
 ---
 
@@ -169,9 +182,10 @@ Content does **not** move during pull-to-refresh — the M3 `PullToRefreshBox` i
 `Screen` sealed class with `route` strings. Optional args use query params `?argName={argName}`.  
 Special characters in route segments encoded via `encodeRouteSegment()`.
 
-All 18 routes: `Home`, `Scanner`, `Detail`, `History`, `Search`, `Projects`, `ProjectDetail`,
-`Instruments`, `InstrumentDetail`, `Settings`, `SettingsApi`, `SettingsAppearance`,
-`SettingsCache`, `SettingsAbout`, `OrcidLogin`, `CreateSample`, `CreateDataset`
+All 22 routes (see `Screen.kt` for the exact list): `Home`, `Scanner`, `Detail`, `History`, `Search`,
+`Projects`, `ProjectDetail`, `ManageProject`, `Instruments`, `InstrumentDetail`, `ManageInstrument`,
+`Settings`, `SettingsApi`, `SettingsAppearance`, `SettingsCache`, `SettingsAbout`, `SettingsAccount`,
+`OrcidLogin`, `CreateSample`, `CreateDataset`, `AddFiles`, `MetadataEditor`, `UserProfile`
 
 ---
 
@@ -207,8 +221,13 @@ See `dev/IOS_SETUP.md` for Xcode project setup instructions.
 | `SearchExtensions.kt` | `matchesSearch()` for Sample, Dataset, Instrument, JsonObject, Project |
 | `DateTimeUtils.kt` | `MONTH_NAMES`, `dateGroupKey(String?)` — ISO timestamp → "Mon YYYY" |
 | `SortUtils.kt` | `SortField` enum, `SortState`, `List<T>.applySortState()` |
-| `ProjectFetcher.kt` | `fetchProjectData(projectId)` — parallel sample+dataset fetch with mutex |
+| `FormatUtils.kt` | File size / date formatting helpers |
+| `CryptoUtils.kt` | `PlatformCrypto.sha256Hex()` (expect/actual) for upload dedup |
 | `DuplicateHolder.kt` | In-memory clipboard for sample/dataset duplication flow |
+
+`fetchProjectData(projectId)` (parallel sample+dataset fetch with a per-project mutex) used to live in
+a standalone `ProjectFetcher.kt`; it is now a method on `CrucibleRepository` — see
+"Dependency injection (Koin)" below.
 
 ---
 
