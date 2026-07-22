@@ -26,8 +26,8 @@ actual fun shareText(context: PlatformContext, text: String, subject: String) {
 }
 
 actual fun showToast(context: PlatformContext, message: String) {
-    // iOS has no native Toast — log for now; a Compose snackbar overlay is the proper solution
-    println("[Toast] $message")
+    // iOS has no native Toast — posted to ToastBus, rendered by ToastHost in NavGraph
+    ToastBus.post(message)
 }
 
 actual fun currentIsoDateTime(): String {

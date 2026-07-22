@@ -52,6 +52,7 @@ import crucible.lens.ui.instruments.ManageInstrumentScreen
 import crucible.lens.ui.instruments.ManageInstrumentViewModel
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.AppTopBar
+import crucible.lens.ui.common.ToastHost
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.cache.PersistentProjectCache
@@ -910,6 +911,7 @@ fun NavGraph(
             )
         }
     }
+    ToastHost()
     } // end BoxWithConstraints
 }
 

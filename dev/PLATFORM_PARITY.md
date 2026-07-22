@@ -36,6 +36,7 @@ The iOS entry point is `iosMain/App.kt` (called via `MainViewController.kt` → 
 | Preferences reactivity | Both platforms expose `StateFlow` — Android via DataStore, iOS via NSUserDefaults (`multiplatform-settings`) |
 | App logo | Both platforms render the actual logo image resource (`crucible_text_dark`/`crucible_text_light`) — no plain-text fallback on either platform |
 | App version string | Android reads `AppBuildConfig.VERSION_NAME` (generated at build time); iOS reads `NSBundle.mainBundle`'s `CFBundleShortVersionString`, falling back to a hardcoded string only if that Info.plist key is missing |
+| Toast notifications | Native `Toast.makeText` | `showToast()` posts to `platform.ToastBus` (`MutableSharedFlow<String>`), rendered by `ui.common.ToastHost` — a Compose banner hosted once in `NavGraph`'s root `BoxWithConstraints` |
 
 ---
 
@@ -47,7 +48,6 @@ The iOS entry point is `iosMain/App.kt` (called via `MainViewController.kt` → 
 |---|---|---|
 | **Splash screen** | `androidx.core:core-splashscreen` | None configured — needs an Xcode launch screen |
 | **Deep links** | `intent.data` parsed in `MainActivity` | `deepLinkUuid = null` (future: URL scheme registration) |
-| **Toast notifications** | `Toast.makeText` | `println` only — see gap below |
 
 ### Features with different underlying implementation
 
@@ -64,12 +64,9 @@ The iOS entry point is `iosMain/App.kt` (called via `MainViewController.kt` → 
 
 ## Known gaps on iOS
 
-### High priority
-1. **Toast notifications** — `showToast()` on iOS currently calls `println` only. Any save confirmation, copy feedback, or error toast is invisible to the user. Fix: replace with a Compose `SnackbarHost` overlay hosted in `AppScaffold`, or a small platform-native banner.
-
 ### Low priority
-2. **Deep links** — need iOS URL scheme (or universal link) registration in `Info.plist` plus parsing in `MainViewController`/`App.kt`.
-3. **Splash screen** — no iOS launch screen configured. Add via Xcode project settings (`LaunchScreen.storyboard` or the newer `UILaunchScreen` Info.plist key).
+1. **Deep links** — need iOS URL scheme (or universal link) registration in `Info.plist` plus parsing in `MainViewController`/`App.kt`.
+2. **Splash screen** — no iOS launch screen configured. Add via Xcode project settings (`LaunchScreen.storyboard` or the newer `UILaunchScreen` Info.plist key).
 
 This app is currently submitted to app stores on Android only; the iOS gaps above do not block that submission and are tracked here for whenever iOS distribution becomes a priority.
 
