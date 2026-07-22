@@ -156,6 +156,15 @@ class CrucibleRepository(
      * [onCountsAvailable] fires as soon as both the sample total and dataset total are known
      * (from the first page of each paginated response), before full data is loaded.
      */
+    private val projectSamplesObservableCache = ObservableCache<String, List<Sample>>(
+        ttlMillis = 10 * 60 * 1000L,
+        maxSize = 30
+    )
+    private val projectDatasetsObservableCache = ObservableCache<String, List<Dataset>>(
+        ttlMillis = 10 * 60 * 1000L,
+        maxSize = 30
+    )
+
     suspend fun fetchProjectData(
         projectId: String,
         forceRefresh: Boolean = false,
@@ -163,8 +172,8 @@ class CrucibleRepository(
     ): Pair<List<Sample>, List<Dataset>> {
         val mutex = projectFetchMutexes.getOrPut(projectId) { Mutex() }
         return mutex.withLock {
-            val cachedSamples = if (!forceRefresh) cacheManager.getProjectSamples(projectId) else null
-            val cachedDatasets = if (!forceRefresh) cacheManager.getProjectDatasets(projectId) else null
+            val cachedSamples = if (!forceRefresh) projectSamplesObservableCache.get(projectId) else null
+            val cachedDatasets = if (!forceRefresh) projectDatasetsObservableCache.get(projectId) else null
             if (cachedSamples != null && cachedDatasets != null) {
                 onCountsAvailable?.invoke(cachedSamples.size, cachedDatasets.size)
                 return@withLock cachedSamples to cachedDatasets
@@ -200,7 +209,7 @@ class CrucibleRepository(
                         val result = api.getSamplesByProject(projectId, onTotalKnown = sOnTotal)
                         (result as? ApiResult.Success)?.data
                             ?.also {
-                                cacheManager.cacheProjectSamples(projectId, it)
+                                projectSamplesObservableCache.put(projectId, it)
                                 it.forEach { s -> cacheManager.cacheResourceType(s.uniqueId, "sample") }
                             } ?: emptyList()
                     }
@@ -213,7 +222,7 @@ class CrucibleRepository(
                         val result = api.getDatasetsByProject(projectId, onTotalKnown = dOnTotal)
                         (result as? ApiResult.Success)?.data
                             ?.also {
-                                cacheManager.cacheProjectDatasets(projectId, it)
+                                projectDatasetsObservableCache.put(projectId, it)
                                 it.forEach { ds -> cacheManager.cacheResourceType(ds.uniqueId, "dataset") }
                             } ?: emptyList()
                     }
@@ -221,5 +230,16 @@ class CrucibleRepository(
                 s.await() to d.await()
             }
         }
+    }
+
+    fun observeProjectSamples(projectId: String): Flow<List<Sample>?> =
+        projectSamplesObservableCache.observe(projectId)
+
+    fun observeProjectDatasets(projectId: String): Flow<List<Dataset>?> =
+        projectDatasetsObservableCache.observe(projectId)
+
+    fun invalidateProjectData(projectId: String) {
+        projectSamplesObservableCache.invalidate(projectId)
+        projectDatasetsObservableCache.invalidate(projectId)
     }
 }

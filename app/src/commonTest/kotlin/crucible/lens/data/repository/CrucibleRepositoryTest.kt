@@ -62,4 +62,22 @@ class CrucibleRepositoryTest {
         val repository = CrucibleRepository(ApiClient(), CacheManager())
         repository.invalidateInstruments()
     }
+
+    @Test
+    fun observeProjectSamplesEmitsNullWhenNotCached() = runTest {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        assertNull(repository.observeProjectSamples("project-1").first())
+    }
+
+    @Test
+    fun observeProjectDatasetsEmitsNullWhenNotCached() = runTest {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        assertNull(repository.observeProjectDatasets("project-1").first())
+    }
+
+    @Test
+    fun invalidateProjectDataIsSafeNoOpWhenNotCached() {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        repository.invalidateProjectData("project-1")
+    }
 }
