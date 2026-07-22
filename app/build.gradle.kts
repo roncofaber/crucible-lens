@@ -46,6 +46,8 @@ kotlin {
         androidResources {
             enable = true
         }
+
+        withHostTestBuilder {}.configure {}
     }
 
     @OptIn(ExperimentalKotlinGradlePluginApi::class)
