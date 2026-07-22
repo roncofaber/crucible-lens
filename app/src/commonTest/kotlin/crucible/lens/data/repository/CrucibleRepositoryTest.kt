@@ -38,4 +38,28 @@ class CrucibleRepositoryTest {
         val repository = CrucibleRepository(ApiClient(), CacheManager())
         assertNull(repository.observeResource("unknown-uuid").first())
     }
+
+    @Test
+    fun observeProjectsEmitsNullWhenNotCached() = runTest {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        assertNull(repository.observeProjects().first())
+    }
+
+    @Test
+    fun observeInstrumentsEmitsNullWhenNotCached() = runTest {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        assertNull(repository.observeInstruments().first())
+    }
+
+    @Test
+    fun invalidateProjectsIsSafeNoOpWhenNotCached() {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        repository.invalidateProjects()
+    }
+
+    @Test
+    fun invalidateInstrumentsIsSafeNoOpWhenNotCached() {
+        val repository = CrucibleRepository(ApiClient(), CacheManager())
+        repository.invalidateInstruments()
+    }
 }

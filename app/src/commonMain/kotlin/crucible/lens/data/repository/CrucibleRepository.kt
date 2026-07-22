@@ -110,25 +110,42 @@ class CrucibleRepository(
         }
     }
 
+    private val projectsObservableCache = ObservableCache<Unit, List<Project>>(
+        ttlMillis = 10 * 60 * 1000L,
+        maxSize = 1
+    )
+    private val instrumentsObservableCache = ObservableCache<Unit, List<Instrument>>(
+        ttlMillis = 10 * 60 * 1000L,
+        maxSize = 1
+    )
+
     /** Cache-first project list fetch. Caches on success. */
     suspend fun fetchProjects(forceRefresh: Boolean = false): ApiResult<List<Project>> {
         if (!forceRefresh) {
-            cacheManager.getProjects()?.let { return ApiResult.Success(it) }
+            projectsObservableCache.get(Unit)?.let { return ApiResult.Success(it) }
         }
         return api.getProjects().also { result ->
-            if (result is ApiResult.Success) cacheManager.cacheProjects(result.data)
+            if (result is ApiResult.Success) projectsObservableCache.put(Unit, result.data)
         }
     }
+
+    fun observeProjects(): Flow<List<Project>?> = projectsObservableCache.observe(Unit)
+
+    fun invalidateProjects() = projectsObservableCache.invalidate(Unit)
 
     /** Cache-first instrument list fetch. Caches on success. */
     suspend fun fetchInstruments(forceRefresh: Boolean = false): ApiResult<List<Instrument>> {
         if (!forceRefresh) {
-            cacheManager.getInstruments()?.let { return ApiResult.Success(it) }
+            instrumentsObservableCache.get(Unit)?.let { return ApiResult.Success(it) }
         }
         return api.getInstruments().also { result ->
-            if (result is ApiResult.Success) cacheManager.cacheInstruments(result.data)
+            if (result is ApiResult.Success) instrumentsObservableCache.put(Unit, result.data)
         }
     }
+
+    fun observeInstruments(): Flow<List<Instrument>?> = instrumentsObservableCache.observe(Unit)
+
+    fun invalidateInstruments() = instrumentsObservableCache.invalidate(Unit)
 
     /**
      * Fetches samples and datasets for a project in parallel, using the cache when available.
