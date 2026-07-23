@@ -19,6 +19,9 @@ When you sign in, the app fetches and locally caches your Crucible profile: firs
 ### Camera
 The app requests camera access solely to scan QR codes printed on Crucible sample and dataset labels. Camera frames are processed on-device to decode the QR code and are not stored, saved, or transmitted anywhere.
 
+### Photos and files you choose to upload
+When you add a file to a dataset, the app lets you take a new photo, pick an existing photo from your device's photo library, or choose a file from local storage. A file or photo you select this way is uploaded only when you explicitly do so, directly to the Crucible API server, and is not stored, cached, or transmitted anywhere else by the app.
+
 ### Browsing history
 The app keeps a local list of recently viewed samples, datasets, and projects so you can quickly return to them. This history is stored only on your device and is never transmitted to us or anyone else.
 
@@ -40,6 +43,7 @@ All data described above (API key, cached profile, browsing history) is stored l
 
 The app communicates only with:
 - The Crucible API server (`crucible.lbl.gov` by default, or a custom server you configure in Settings)
+- Google Cloud Storage, when uploading a file or photo you've chosen to attach to a dataset — the Crucible API server issues a temporary, direct upload link for this purpose
 - The Crucible Graph Explorer web interface, when you choose to open a resource in the browser
 - ORCID's own servers, during ORCID sign-in
 

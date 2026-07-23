@@ -43,7 +43,7 @@ app/src/
       util/         DateTimeUtils.kt, SearchExtensions.kt, SortUtils.kt, ...
     ui/
       common/       AppIcons.kt, AppAnimations.kt, LoadState.kt, ErrorCard.kt, FilterSheet.kt, ...
-      detail/       ResourceDetailScreen.kt, ResourceDetailViewModel.kt, ResourceDetailCache.kt, components/
+      detail/       ResourceDetailScreen.kt, ResourceDetailViewModel.kt, components/
       home/         HomeScreen.kt
       instruments/  InstrumentListScreen/ViewModel, InstrumentDetailScreen/ViewModel, ManageInstrumentScreen/ViewModel
       navigation/   NavGraph.kt, Screen.kt
@@ -62,8 +62,8 @@ androidApp/         Shell application module (depends on composeApp)
 - **ViewModels** — all feature screens that load data have a ViewModel. Data loading lives in `viewModelScope`, not in composables. State is `StateFlow<LoadState<T>>` (see `ui/common/LoadState.kt`). Screens that currently lack a ViewModel still use `remember`-based state.
 - **`LoadState<T>`** — sealed class replacing the `isLoading/error/data/fromCache/isRefreshing` five-variable pattern. States: `Loading`, `Error(message)`, `Success(data, isRefreshing, fromCache)`.
 - **`NavGraph`** takes 6 parameters: `navController`, `prefs`, `deepLinkUuid`, `openScanner`, `onScannerOpened`, `viewModel`. All preference flows are collected internally via `collectAsStateWithLifecycle`. All save operations call `prefs.saveXxx()` directly inside NavGraph.
-- **`ResourceDetailCache`** — bundles the 5 sibling-pager state maps owned by `ResourceDetailViewModel` into a single typed object passed to `ResourceDetailScreen`.
-- **`CacheManager`** is a singleton in-memory cache (10-min TTL, LRU eviction). Cleared on sign-out.
+- **`ResourceDetailScreen`** takes a `uuid: String`, not a resource object — it and every pager page observe `CrucibleRepository.observeResource(uuid)`/`.observeThumbnails(uuid)` directly. There is no resource-object-keyed Compose state anywhere in this screen; "enriched" is derived from `resource?.links != null`, not tracked in a separate set.
+- **`CrucibleRepository`** is being migrated to the single source of truth for all cached data (resources, projects, instruments, project/instrument sample/dataset lists, thumbnails), backed by `ObservableCache<K, V>` (10-min TTL, LRU eviction) — this migration is in progress. `CacheManager` (10-min TTL, LRU eviction, cleared on sign-out) still exists and is still used by screens/ViewModels not yet migrated onto the repository; it will be deleted once every remaining consumer moves over.
 - **`userProfile`** stored as a JSON-serialized `User` object in DataStore under key `user_profile`. `userProfile?.uniqueId` is the source of truth for ORCID.
 - **`ApiResult<T>`** sealed class wraps all API calls via `safeCall { }`. Always `is ApiResult.Success` / `is ApiResult.Error`.
 - **Pagination**: list endpoints use `fetchAllPagesCursor` (datasets/samples use keyset cursor) or `fetchAllPages` (offset-based). Search endpoints return a flat list.
@@ -121,6 +121,14 @@ All animation specs are defined in `ui/common/AppAnimations.kt` — never inline
 - **Nav timing constants**: `NavEnterDuration = 300`, `NavExitDuration = 200` — also in `AppAnimations.kt`
 - **`ExpandChevron`**: the single composable for all expand/collapse chevrons — use `fast = true` for nested elements
 - Navigation screen transitions keep tween-based specs (`NavEnterDuration`/`NavExitDuration`)
+
+## Theming
+
+- **`ui/theme/Theme.kt`** — `CrucibleScannerTheme` composable. Passes `colorScheme`, `typography = Typography`, and `shapes = Shapes` to `MaterialTheme`.
+- **`ui/theme/Type.kt`** — full M3 type scale declared explicitly (all 15 roles), matching Compose Material3 1.4.0's `TypographyTokens` defaults, so the type ramp is visible and intentional rather than implicit. `bodyLarge` is the one deliberate customization (`FontFamily.Default` instead of the M3-default `SansSerif`).
+- **`ui/theme/Shape.kt`** — full M3 shape scale declared explicitly (`extraSmall` 4dp, `small` 8dp, `medium` 12dp, `large` 16dp, `extraLarge` 28dp), matching Compose Material3 1.4.0's `ShapeTokens` defaults. Always reference `MaterialTheme.shapes.X` in UI code — never a hardcoded `RoundedCornerShape(N.dp)`.
+- **Accent colors**: 10 named palettes (blue, purple, green, orange, red, teal, pink, indigo, amber, brown) plus a custom-hex path, each with light/dark `ColorScheme` variants — all defined in `Theme.kt`. Dynamic color (`dynamicLightColorScheme`/`dynamicDarkColorScheme`, Android 12+/API 31+) takes priority when enabled.
+- **No adaptive/window-size-class layout** — the app targets phones only; this is a deliberate scope decision, not an oversight. `ProjectDetailScreen`/`ResourceDetailScreen` use a single fixed-width column with no multi-pane list-detail behavior on large screens/tablets.
 
 ## Version management
 
