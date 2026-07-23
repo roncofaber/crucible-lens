@@ -60,31 +60,36 @@ class ManageProjectViewModel(
     val isAddingMember: StateFlow<Boolean> = _isAddingMember.asStateFlow()
 
     private var projectId: String = ""
-    private var currentUserUsername: String? = null
+    private var currentUserOrcid: String? = null
     private var memberSearchJob: Job? = null
     private var leadSearchJob: Job? = null
 
-    fun init(projectId: String, currentUserUsername: String?) {
+    fun init(projectId: String, currentUserOrcid: String?) {
         this.projectId = projectId
-        this.currentUserUsername = currentUserUsername
+        this.currentUserOrcid = currentUserOrcid
         load()
     }
 
     fun load() {
         viewModelScope.launch {
             _state.value = ManageProjectState.Loading
-            val projectResult = apiClient.service.getProjects()
-            val project = (projectResult as? ApiResult.Success)?.data?.find { it.projectId == projectId }
+            val projectResult = apiClient.service.getProject(projectId)
+            val project = (projectResult as? ApiResult.Success)?.data
             if (project == null) {
                 _state.value = ManageProjectState.Error("Project not found")
                 return@launch
             }
             val members = (apiClient.service.getProjectUsers(projectId) as? ApiResult.Success)?.data ?: emptyList()
-            val uname = currentUserUsername
-            val isLead = uname != null &&
-                project.lead?.username?.lowercase() == uname.lowercase()
+            val isLead = isCurrentUserLead(project)
             _state.value = ManageProjectState.Loaded(project, members, isLead)
         }
+    }
+
+    // ORCID (Project.projectLeadOrcid) is the source of truth for identity, not username —
+    // usernames can be absent or stale, while ORCID is the account's unique, unchanging id.
+    private fun isCurrentUserLead(project: Project): Boolean {
+        val orcid = currentUserOrcid ?: return false
+        return project.projectLeadOrcid == orcid || project.lead?.uniqueId == orcid
     }
 
     // ── Edit project info ─────────────────────────────────────────────────────
@@ -139,9 +144,7 @@ class ManageProjectViewModel(
                 is ApiResult.Success -> {
                     cacheManager.clearProjectsCache()
                     val members = loaded?.members ?: emptyList()
-                    val uname2 = currentUserUsername
-                    val isLead = uname2 != null &&
-                        result.data.lead?.username?.lowercase() == uname2.lowercase()
+                    val isLead = isCurrentUserLead(result.data)
                     _state.value = ManageProjectState.Loaded(result.data, members, isLead)
                     _editState.value = ProjectEditState.Idle
                 }

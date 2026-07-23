@@ -2,10 +2,6 @@
 package crucible.lens.ui.instruments
 
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,7 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,6 +34,11 @@ import crucible.lens.ui.common.LoadState
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.common.SearchBar
+import crucible.lens.ui.common.ResourceListDividerInset
+import crucible.lens.ui.common.SectionHeader
+import crucible.lens.ui.common.SwipeAction
+import crucible.lens.ui.common.SwipeToHideItem
+import crucible.lens.ui.common.hideWithUndo
 import crucible.lens.platform.showToast
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -66,6 +66,12 @@ fun InstrumentListScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+    // Instruments pending hide — excluded from activeInstruments so LazyColumn animates the
+    // removal cleanly. onToggleHide is only called after the snackbar window closes without undo.
+    val pendingHide = remember { mutableStateMapOf<String, Boolean>() }
+    // Generation counter per instrument — bumped on undo so the re-shown item's items() key
+    // changes, giving it a fresh SwipeToDismissBoxState (see SwipeToHideItem's doc).
+    val undoGenerations = remember { mutableStateMapOf<String, Int>() }
 
     val instruments = (loadState as? LoadState.Success)?.data ?: emptyList()
     val filteredInstruments = remember(instruments, searchQuery) {
@@ -74,15 +80,19 @@ fun InstrumentListScreen(
         else list.filter { it.matchesSearch(searchQuery) }
     }
 
-    val activeInstruments = remember(filteredInstruments, hiddenInstruments, sortState) {
-        filteredInstruments
-            .filter { it.uniqueId !in hiddenInstruments }
-            .applySortState(
-                sortState,
-                name = { instrumentName?.lowercase() ?: uniqueId.lowercase() },
-                mfid = { instrumentType?.lowercase() ?: "" },
-                date = { "" }
-            )
+    // Not wrapped in remember: pendingHide is a SnapshotStateMap, and reading it directly here
+    // (during composition) is what makes this recompute correctly when a hide/undo toggles it —
+    // wrapping in remember(pendingHide) would need a stable equality key, which a mutable map
+    // doesn't give us.
+    val activeInstrumentsUnsorted = filteredInstruments
+        .filter { it.uniqueId !in hiddenInstruments && pendingHide[it.uniqueId] != true }
+    val activeInstruments = remember(activeInstrumentsUnsorted, sortState) {
+        activeInstrumentsUnsorted.applySortState(
+            sortState,
+            name = { instrumentName?.lowercase() ?: uniqueId.lowercase() },
+            mfid = { instrumentType?.lowercase() ?: "" },
+            date = { "" }
+        )
     }
 
     val hiddenInstrumentsList = remember(loadState, hiddenInstruments) {
@@ -131,8 +141,9 @@ fun InstrumentListScreen(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    // Bottom padding clears the ScrollToTopButton FAB (42dp + 16dp margin) so the
+                    // last item — including the Hidden section header/rows — is never obscured.
+                    contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
                     stickyHeader(key = "search_bar") {
                         Surface(color = MaterialTheme.colorScheme.background) {
@@ -231,58 +242,30 @@ fun InstrumentListScreen(
                         }
                         else {
                             // Active instruments with swipe-to-hide
-                            items(activeInstruments, key = { it.uniqueId }) { instrument ->
-                                @Suppress("DEPRECATION")
-
-                                val dismissState = rememberSwipeToDismissBoxState(
-                                    confirmValueChange = { value ->
-                                        if (value == SwipeToDismissBoxValue.EndToStart) {
-                                            onToggleHide(instrument.uniqueId)
-                                            scope.launch {
-                                                val result = snackbarHostState.showSnackbar(
-                                                    message = "${instrument.instrumentName ?: instrument.uniqueId} hidden",
-                                                    actionLabel = "Undo",
-                                                    duration = SnackbarDuration.Short
-                                                )
-                                                if (result == SnackbarResult.ActionPerformed) {
-                                                    onToggleHide(instrument.uniqueId)
-                                                }
+                            items(activeInstruments, key = { "${it.uniqueId}:${undoGenerations[it.uniqueId] ?: 0}" }) { instrument ->
+                                SwipeToHideItem(
+                                    direction = SwipeToDismissBoxValue.EndToStart,
+                                    action = SwipeAction(
+                                        icon = AppIcons.HideContent,
+                                        label = "Hide",
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                    ),
+                                    onDismiss = {
+                                        hideWithUndo(
+                                            scope = scope,
+                                            snackbarHostState = snackbarHostState,
+                                            itemLabel = instrument.instrumentName ?: instrument.uniqueId,
+                                            onPending = { pending ->
+                                                if (pending) pendingHide[instrument.uniqueId] = true
+                                                else pendingHide.remove(instrument.uniqueId)
+                                            },
+                                            onConfirmedHide = { onToggleHide(instrument.uniqueId) },
+                                            onUndone = {
+                                                onToggleHide(instrument.uniqueId)
+                                                undoGenerations[instrument.uniqueId] = (undoGenerations[instrument.uniqueId] ?: 0) + 1
                                             }
-                                            true
-                                        } else false
-                                    },
-                                    positionalThreshold = { it * 0.5f }
-                                )
-                                val hideIconScale by animateFloatAsState(
-                                    targetValue = 0.75f + 0.5f * dismissState.progress,
-                                    animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMedium),
-                                    label = "hideIconScale"
-                                )
-                                SwipeToDismissBox(
-                                    state = dismissState,
-                                    enableDismissFromStartToEnd = false,
-                                    enableDismissFromEndToStart = true,
-                                    modifier = Modifier
-                                        .padding(horizontal = 16.dp)
-                                        .animateItem(spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMediumLow)),
-                                    backgroundContent = {
-                                        val color = MaterialTheme.colorScheme.secondaryContainer
-                                        val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .background(color.copy(alpha = 0.4f + 0.6f * dismissState.progress), MaterialTheme.shapes.medium)
-                                                .padding(end = 20.dp),
-                                            contentAlignment = Alignment.CenterEnd
-                                        ) {
-                                            Column(
-                                                horizontalAlignment = Alignment.CenterHorizontally,
-                                                modifier = Modifier.scale(hideIconScale)
-                                            ) {
-                                                AppIcon(AppIcons.HideContent, tint = contentColor, modifier = Modifier.size(24.dp))
-                                                Text("Hide", style = MaterialTheme.typography.labelSmall, color = contentColor)
-                                            }
-                                        }
+                                        )
                                     }
                                 ) {
                                     InstrumentCard(
@@ -295,73 +278,34 @@ fun InstrumentListScreen(
                                         onClick = { onInstrumentClick(instrument.uniqueId) }
                                     )
                                 }
+                                HorizontalDivider(modifier = Modifier.padding(start = ResourceListDividerInset))
                             }
 
                             // Hidden instruments section
                             if (hiddenInstrumentsList.isNotEmpty()) {
                                 item(key = "__hidden_header__") {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { hiddenExpanded = !hiddenExpanded }
-                                            .padding(vertical = 4.dp, horizontal = 20.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            AppIcon(AppIcons.HideContent, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                                            Text("Hidden (${hiddenInstrumentsList.size})", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                        AppIcon(if (hiddenExpanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
+                                    SectionHeader(
+                                        title = "Hidden",
+                                        count = hiddenInstrumentsList.size,
+                                        icon = AppIcons.HideContent,
+                                        expanded = hiddenExpanded,
+                                        onToggle = { hiddenExpanded = !hiddenExpanded }
+                                    )
                                 }
 
                                 if (hiddenExpanded) {
                                     items(hiddenInstrumentsList, key = { "hidden_${it.uniqueId}" }) { instrument ->
-                                        @Suppress("DEPRECATION")
-
-                                        val dismissState = rememberSwipeToDismissBoxState(
-                                            confirmValueChange = { value ->
-                                                if (value == SwipeToDismissBoxValue.StartToEnd) {
-                                                    showToast(platformContext, "Instrument shown")
-                                                    onToggleHide(instrument.uniqueId)
-                                                    true
-                                                } else false
-                                            },
-                                            positionalThreshold = { it * 0.65f }
-                                        )
-                                        val showIconScale by animateFloatAsState(
-                                            targetValue = 0.75f + 0.5f * dismissState.progress,
-                                            animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMedium),
-                                            label = "showIconScale"
-                                        )
-                                        SwipeToDismissBox(
-                                            state = dismissState,
-                                            enableDismissFromStartToEnd = true,
-                                            enableDismissFromEndToStart = false,
-                                            modifier = Modifier
-                                                .padding(horizontal = 16.dp)
-                                                .animateItem(spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMediumLow)),
-                                            backgroundContent = {
-                                                val color = MaterialTheme.colorScheme.primary
-                                                val contentColor = MaterialTheme.colorScheme.onPrimary
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxSize()
-                                                        .background(color.copy(alpha = 0.4f + 0.6f * dismissState.progress), MaterialTheme.shapes.medium)
-                                                        .padding(start = 20.dp),
-                                                    contentAlignment = Alignment.CenterStart
-                                                ) {
-                                                    Column(
-                                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                                        modifier = Modifier.scale(showIconScale)
-                                                    ) {
-                                                        AppIcon(AppIcons.ShowContent, tint = contentColor, modifier = Modifier.size(24.dp))
-                                                        Text("Show", style = MaterialTheme.typography.labelSmall, color = contentColor)
-                                                    }
-                                                }
+                                        SwipeToHideItem(
+                                            direction = SwipeToDismissBoxValue.StartToEnd,
+                                            action = SwipeAction(
+                                                icon = AppIcons.ShowContent,
+                                                label = "Show",
+                                                containerColor = MaterialTheme.colorScheme.primary,
+                                                contentColor = MaterialTheme.colorScheme.onPrimary
+                                            ),
+                                            onDismiss = {
+                                                showToast(platformContext, "Instrument shown")
+                                                onToggleHide(instrument.uniqueId)
                                             }
                                         ) {
                                             InstrumentCard(
@@ -372,6 +316,7 @@ fun InstrumentListScreen(
                                                 onClick = { onInstrumentClick(instrument.uniqueId) }
                                             )
                                         }
+                                        HorizontalDivider(modifier = Modifier.padding(start = ResourceListDividerInset))
                                     }
                                 }
                             }
@@ -397,51 +342,39 @@ private fun InstrumentCard(
     onTogglePin: () -> Unit = {},
     onClick: () -> Unit
 ) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isHidden) 0.dp else 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isHidden) MaterialTheme.colorScheme.surfaceVariant
-                             else MaterialTheme.colorScheme.surfaceContainerHigh
-        )
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            AppIcon(if (isHidden) AppIcons.HideContent else AppIcons.Instrument,
-                tint = if (isHidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
+    ListItem(
+        headlineContent = {
+            Text(
+                text = instrument.instrumentName ?: instrument.uniqueId,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = instrument.instrumentName ?: instrument.uniqueId,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                val subtitle = listOfNotNull(instrument.instrumentType, instrument.manufacturer).joinToString(" · ")
-                if (subtitle.isNotBlank()) {
-                    Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                if (!instrument.location.isNullOrBlank()) {
-                    Text(text = instrument.location, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+        },
+        supportingContent = if (!instrument.location.isNullOrBlank()) {
+            {
+                Text(instrument.location, style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (!isHidden) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
-                    IconButton(onClick = onTogglePin, modifier = Modifier.size(36.dp)) {
+        } else null,
+        leadingContent = {
+            AppIcon(if (isHidden) AppIcons.HideContent else AppIcons.Instrument,
+                tint = if (isHidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
+            )
+        },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
+                if (!isHidden) {
+                    IconButton(onClick = onTogglePin, modifier = Modifier.size(40.dp)) {
                         AppIcon(AppIcons.Pinned, filled = isPinned,
                             tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                    AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                 }
+                AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
             }
-        }
-    }
+        },
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+    )
 }

@@ -26,7 +26,6 @@ import crucible.lens.data.util.formatFileSize
 import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
-import crucible.lens.platform.showToast
 import crucible.lens.ui.common.StandardSizeAnim
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -65,10 +64,7 @@ internal fun DatasetDetailsCard(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
-                        onClick = {
-                            copyToClipboard(platformCtx, dataset.uniqueId)
-                            showToast(platformCtx, "ID copied")
-                        },
+                        onClick = { copyToClipboard(platformCtx, dataset.uniqueId) },
                         modifier = Modifier.size(38.dp)
                     ) {
                         AppIcon(AppIcons.CopyToClipboard,

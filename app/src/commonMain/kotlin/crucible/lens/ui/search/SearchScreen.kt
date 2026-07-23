@@ -370,7 +370,7 @@ private fun SearchResultItem(result: ResourceSearchResult, onClick: () -> Unit) 
         ?.joinToString(" · ") { (k, v) -> "$k: $v" }
     ListItem(
         headlineContent = {
-            Text(result.name ?: result.uniqueId, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(result.name ?: result.uniqueId, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         },
         supportingContent = {
             Column {

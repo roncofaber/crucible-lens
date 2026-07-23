@@ -22,6 +22,8 @@ import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppTopBar
+import crucible.lens.ui.common.ExpandChevron
+import crucible.lens.ui.common.SectionHeader
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -872,46 +874,7 @@ private fun GroupStickyHeader(
     icon: AppIconToken,
     expanded: Boolean,
     onToggle: () -> Unit
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.background,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onToggle)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
-            ) {
-                AppIcon(icon, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Surface(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                    shape = MaterialTheme.shapes.small
-                ) {
-                    Text(
-                        text = "$count",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-            }
-            AppIcon(if (expanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-    }
-}
+) = SectionHeader(title = title, count = count, icon = icon, expanded = expanded, onToggle = onToggle)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -933,19 +896,28 @@ private fun ResourceCard(
     } else null
 
     Box {
-        ListItem(
-            headlineContent = {
-                Text(title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            },
-            supportingContent = {
-                Text(uniqueId, style = MaterialTheme.typography.labelSmall,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(onClick = onClick, onLongClick = { menuExpanded = true })
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            AppIcon(icon, tint = MaterialTheme.colorScheme.primary)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = uniqueId,
+                    style = MaterialTheme.typography.labelSmall,
                     fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            },
-            leadingContent = { AppIcon(icon, tint = MaterialTheme.colorScheme.primary) },
-            trailingContent = { AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)) },
-            modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = { menuExpanded = true })
-        )
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+        }
 
         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
             CopyIdMenuItem { menuExpanded = false; copyToClipboard(platformCtx, uniqueId) }

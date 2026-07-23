@@ -270,6 +270,10 @@ class CrucibleApiService(
         }.body<PaginatedResponse<Project>>()
     }
 
+    suspend fun getProject(projectId: String): ApiResult<Project> = safeCall {
+        get("projects/$projectId")
+    }
+
     suspend fun getSamplesByProject(
         projectId: String,
         onTotalKnown: (suspend (Int) -> Unit)? = null

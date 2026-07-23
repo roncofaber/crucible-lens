@@ -66,6 +66,7 @@ fun HomeScreen(
     onHistory: () -> Unit = {},
     onSearch: () -> Unit = {},
     pinnedProjects: Set<String> = emptySet(),
+    hiddenProjects: Set<String> = emptySet(),
     onProjectClick: (String) -> Unit = {},
     onTogglePinnedProject: (String) -> Unit = {},
     pinnedInstruments: Set<String> = emptySet(),
@@ -145,13 +146,16 @@ fun HomeScreen(
         } catch (_: Exception) { }
     }
 
-    LaunchedEffect(allProjects, pinnedProjects) {
+    LaunchedEffect(allProjects, pinnedProjects, hiddenProjects) {
         if (apiKey.isNullOrBlank() || allProjects.isEmpty()) return@LaunchedEffect
         isPreloading = true
         try {
         kotlinx.coroutines.delay(500)
 
-        val prioritizedProjects = allProjects.sortedByDescending { it.projectId in pinnedProjects }
+        // Hidden projects are skipped entirely — no network call until the user unhides them.
+        val prioritizedProjects = allProjects
+            .filter { it.projectId !in hiddenProjects }
+            .sortedByDescending { it.projectId in pinnedProjects }
         var consecutiveFailures = 0
         val maxConsecutiveFailures = 5
 
@@ -613,17 +617,17 @@ private fun HomePinnedProjects(
                         onClick = { onProjectClick(project.projectId) },
                         onLongClick = { pendingUnpinProjectId = project.projectId }
                     ),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        AppIcon(AppIcons.Project, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        AppIcon(AppIcons.Project, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
                         Text(
                             text = project.title ?: project.projectId,
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -639,17 +643,17 @@ private fun HomePinnedProjects(
                         onClick = { onInstrumentClick(instrument.uniqueId) },
                         onLongClick = { pendingUnpinInstrumentId = instrument.uniqueId }
                     ),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        AppIcon(AppIcons.Instrument, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        AppIcon(AppIcons.Instrument, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
                         Text(
                             text = instrument.instrumentName ?: instrument.uniqueId,
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -707,7 +711,7 @@ private fun HomeFooter(graphExplorerUrl: String) {
         }) {
             AppIcon(AppIcons.WebUrl, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("Open Web Explorer", style = MaterialTheme.typography.labelLarge)
+            Text("Open Crucible Web", style = MaterialTheme.typography.labelLarge)
         }
         val footerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
         val footerStyle = MaterialTheme.typography.labelSmall
@@ -730,10 +734,7 @@ private fun HomeFooter(graphExplorerUrl: String) {
 private fun HelpDialog(onDismiss: () -> Unit, onSettings: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = {
-            AppIcon(AppIcons.Info, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-        },
-        title = { Text("How to Use Crucible Lens", style = MaterialTheme.typography.titleLarge) },
+        title = { Text("How to use Crucible Lens", style = MaterialTheme.typography.titleLarge) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 HelpSection(AppIcons.ScanQr, "Scan QR Codes",
@@ -748,8 +749,8 @@ private fun HelpDialog(onDismiss: () -> Unit, onSettings: () -> Unit) {
                     "The home screen shows your last visited resource. Tap \"See all\" to view your full browsing history.")
                 HelpSection(AppIcons.Info, "Resource Details",
                     "From any sample or dataset: view metadata and thumbnails, copy the ID, generate a QR code, or open in the web interface.")
-                HelpSection(AppIcons.WebUrl, "Web Explorer",
-                    "Opens the resource in the Crucible Graph Explorer for full data management.")
+                HelpSection(AppIcons.WebUrl, "Crucible Web",
+                    "Opens the resource in Crucible Web for full data management.")
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Need to configure your API key? ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

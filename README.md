@@ -12,7 +12,7 @@ Android + iOS app (Kotlin Multiplatform + Compose Multiplatform) for browsing an
 - Instrument browser with search and per-instrument dataset listing
 - Sample and dataset detail views with swipe-based sibling navigation
 - Dataset thumbnails and scientific metadata viewer
-- Parent/child relationship navigation and Graph Explorer integration
+- Parent/child relationship navigation and Crucible Web integration
 - Create and edit samples and datasets
 - QR code sharing for any resource
 - Browsing history and last-visited shortcut

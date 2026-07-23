@@ -136,8 +136,13 @@ fun NavGraph(
     }
 
     LaunchedEffect(apiKey) {
+        // Reads hiddenProjects as a one-time snapshot at sync start, not as a reactive key —
+        // this is a one-shot-per-session background preload, not something that should
+        // trigger a full re-sync (including forceRefresh on the whole projects list) every
+        // time a single project is hidden/unhidden. HomeScreen/ProjectsListScreen's own
+        // preload effects already pick up newly-unhidden projects on their next composition.
         if (!apiKey.isNullOrBlank()) {
-            viewModel.startBackgroundSync()
+            viewModel.startBackgroundSync(hiddenProjects)
         }
     }
 
@@ -298,6 +303,7 @@ fun NavGraph(
                     navController.navigate(Screen.Search.route)
                 },
                 pinnedProjects = pinnedProjects,
+                hiddenProjects = hiddenProjects,
                 onProjectClick = { projectId ->
                     navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                 },
@@ -360,7 +366,12 @@ fun NavGraph(
                 loginUrl = "${apiBaseUrl}auth/apikey",
                 onBack = navigateBack,
                 onKeyFound = { key ->
-                    scope.launch { prefs.saveApiKey(key); apiClient.setApiKey(key); cacheManager.clearAll() }
+                    scope.launch {
+                        prefs.saveApiKey(key)
+                        apiClient.setApiKey(key)
+                        prefs.clearUserProfile()
+                        cacheManager.clearAll()
+                    }
                     showToast(platformCtx, "API key saved")
                     navController.popBackStack()
                 }
@@ -444,7 +455,7 @@ fun NavGraph(
                             is UiState.Loading -> "loading"
                             // Treat a stale success (wrong resource still loaded) as loading
                             // so the old resource never flashes during navigation
-                            is UiState.Success -> if (state.resource.uniqueId == mfid) "success" else "loading"
+                            is UiState.Success -> if (state.uuid == mfid) "success" else "loading"
                             is UiState.Error   -> "error"
                         }
                     },
@@ -479,22 +490,14 @@ fun NavGraph(
                             )
                         }
                     }
-                is UiState.Success -> if (state.resource.uniqueId != mfid) {
+                is UiState.Success -> if (state.uuid != mfid) {
                     // Stale state from a previous navigation — show blank background
                     // rather than flashing the wrong resource. LaunchedEffect will
                     // call reset() + fetchResource(mfid) momentarily.
                     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
                 } else {
-                    // Save last visited resource and add to history
-                    LaunchedEffect(state.resource) {
-                        scope.launch { prefs.saveLastVisitedResource(state.resource.uniqueId, state.resource.name) }
-                        val rtype = if (state.resource is Sample) "sample" else "dataset"
-                        scope.launch { prefs.addToHistory(state.resource.uniqueId, state.resource.name, rtype) }
-                    }
-
                     ResourceDetailScreen(
-                        resource = state.resource,
-                        thumbnails = state.thumbnails,
+                        uuid = mfid,
                         isRefreshing = state.isRefreshing,
                         graphExplorerUrl = graphExplorerUrl,
                         siblingGroupBy = siblingGroupBy,
@@ -519,9 +522,8 @@ fun NavGraph(
                         onRefresh = { uuid ->
                             viewModel.refreshResource(uuid)
                         },
-                        getCardState = { key -> viewModel.getCardState(state.resource.uniqueId, key) },
-                        onCardStateChange = { key, value -> viewModel.setCardState(state.resource.uniqueId, key, value) },
-                        cache = viewModel.resourceDetailCache,
+                        getCardState = { key -> viewModel.getCardState(mfid, key) },
+                        onCardStateChange = { key, value -> viewModel.setCardState(mfid, key, value) },
                         onNavigateToAddFiles = { datasetUuid ->
                             navController.navigate(Screen.AddFiles.createRoute(datasetUuid))
                         },
@@ -700,8 +702,8 @@ fun NavGraph(
         ) { backStackEntry ->
             val projectId = backStackEntry.savedStateHandle.get<String>("projectId") ?: ""
             val manageViewModel: ManageProjectViewModel = koinViewModel()
-            val currentUsername by prefs.userProfile.collectAsStateWithLifecycle()
-            LaunchedEffect(projectId) { manageViewModel.init(projectId, currentUsername?.username) }
+            val currentUserProfile by prefs.userProfile.collectAsStateWithLifecycle()
+            LaunchedEffect(projectId) { manageViewModel.init(projectId, currentUserProfile?.uniqueId) }
             ManageProjectScreen(viewModel = manageViewModel, onBack = navigateBack)
         }
 

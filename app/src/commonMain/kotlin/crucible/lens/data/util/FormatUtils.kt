@@ -2,7 +2,21 @@ package crucible.lens.data.util
 
 import kotlin.math.pow
 import kotlin.math.round
+import kotlin.time.Instant
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
+import kotlinx.datetime.toLocalDateTime
 
+/**
+ * Backend-generated timestamps (creation/modification time) are ISO 8601 UTC with an explicit
+ * offset (e.g. "2026-07-23T14:32:10.123456+00:00") and are converted to the device's local
+ * timezone before display. Some timestamp fields (e.g. Sample/Dataset.timestamp) are free-text —
+ * pre-filled from [crucible.lens.platform.currentIsoDateTime] (which has no UTC offset, since
+ * it's already local) but editable by the user, so they may arrive without an offset at all.
+ * For those, parsing as an absolute [Instant] fails and we fall back to treating the string as
+ * an already-local [LocalDateTime] and format it as-is, without converting it again.
+ */
 fun formatDateTime(raw: String?): String {
     if (raw == null) return "None"
     val s = raw.trim()
@@ -13,20 +27,17 @@ fun formatDateTime(raw: String?): String {
         if (m < 1 || m > 12) return raw
         return "${MONTH_NAMES[m - 1]} ${d.trimStart('0').ifEmpty { "0" }}, $y · ${ampm.uppercase()}"
     }
+    val local = try {
+        Instant.parse(s).toLocalDateTime(TimeZone.currentSystemDefault())
+    } catch (_: Exception) {
+        try { LocalDateTime.parse(s) } catch (_: Exception) { null }
+    } ?: return raw
     return try {
-        val datePart = s.substring(0, 10)
-        val year = datePart.substring(0, 4).toInt()
-        val month = datePart.substring(5, 7).toInt()
-        val day = datePart.substring(8, 10).toInt()
-        if (month < 1 || month > 12) return raw
-        val dateStr = "${MONTH_NAMES[month - 1]} $day, $year"
-        if (s.length < 13) return dateStr
-        val timePart = s.substring(11, 16)
-        val hour = timePart.substring(0, 2).toInt()
-        val minute = timePart.substring(3, 5).toInt()
+        val dateStr = "${MONTH_NAMES[local.month.number - 1]} ${local.day}, ${local.year}"
+        val hour = local.hour
         val ampm = if (hour < 12) "AM" else "PM"
         val hour12 = when { hour == 0 -> 12; hour > 12 -> hour - 12; else -> hour }
-        "$dateStr · $hour12:${minute.toString().padStart(2, '0')} $ampm"
+        "$dateStr · $hour12:${local.minute.toString().padStart(2, '0')} $ampm"
     } catch (_: Exception) { raw }
 }
 

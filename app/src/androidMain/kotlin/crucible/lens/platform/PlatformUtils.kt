@@ -13,10 +13,16 @@ import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
+// Owns all copy feedback so callers never need their own showToast() alongside this. Android
+// 13+ (API 33) already shows its own system clipboard toast for every copy — showing ours too
+// would double-toast — so we only show one below that OS version, where there's no system
+// feedback at all.
 actual fun copyToClipboard(context: PlatformContext, text: String, label: String) {
     val clipboard = context.getSystemService(ClipboardManager::class.java)
     clipboard?.setPrimaryClip(ClipData.newPlainText(label, text))
-    Toast.makeText(context, "ID copied", Toast.LENGTH_SHORT).show()
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) {
+        Toast.makeText(context, "ID copied", Toast.LENGTH_SHORT).show()
+    }
 }
 
 actual fun openUrl(context: PlatformContext, url: String) {

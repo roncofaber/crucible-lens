@@ -115,6 +115,7 @@ fun ManageProjectScreen(
                     MembersCard(
                         members = s.members,
                         isLead = s.isLead,
+                        leadOrcid = s.project.projectLeadOrcid,
                         onAddMember = { viewModel.showAddMemberSheet() },
                         onRemoveMember = { viewModel.confirmRemove(it) }
                     )
@@ -130,8 +131,15 @@ private fun ProjectInfoCard(project: Project) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             InfoRow(icon = AppIcons.Project, label = "Title", value = project.title ?: "—")
             InfoRow(icon = AppIcons.Business, label = "Organization", value = project.organization ?: "—")
-            val leadDisplay = project.lead?.username?.let { "@$it" }
-                ?: listOfNotNull(project.lead?.firstName, project.lead?.lastName).joinToString(" ").ifBlank { "—" }
+            val leadDisplay = project.lead?.let { lead ->
+                val name = listOfNotNull(lead.firstName?.firstOrNull()?.let { "$it." }, lead.lastName).joinToString(" ")
+                when {
+                    name.isNotBlank() && lead.username != null -> "$name (@${lead.username})"
+                    name.isNotBlank() -> name
+                    lead.username != null -> "@${lead.username}"
+                    else -> null
+                }
+            } ?: "—"
             InfoRow(icon = AppIcons.Person, label = "Project lead", value = leadDisplay)
             InfoRow(icon = AppIcons.Tag, label = "Project ID", value = project.projectId)
         }
@@ -208,6 +216,7 @@ private fun ProjectEditCard(
 private fun MembersCard(
     members: List<User>,
     isLead: Boolean,
+    leadOrcid: String?,
     onAddMember: () -> Unit,
     onRemoveMember: (User) -> Unit
 ) {
@@ -237,7 +246,8 @@ private fun MembersCard(
                         if (displayName != null) Text(displayName, style = MaterialTheme.typography.bodyMedium)
                         if (!member.username.isNullOrBlank()) Text("@${member.username}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     }
-                    if (isLead && member.uniqueId != null) {
+                    // The lead can't remove themselves from their own project via this list.
+                    if (isLead && member.uniqueId != null && member.uniqueId != leadOrcid) {
                         IconButton(onClick = { onRemoveMember(member) }, modifier = Modifier.size(32.dp)) {
                             AppIcon(AppIcons.PersonRemove, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
                         }

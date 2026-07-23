@@ -30,7 +30,6 @@ import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.openUrl
 import org.koin.compose.koinInject
 import crucible.lens.platform.shareText
-import crucible.lens.platform.showToast
 import crucible.lens.ui.common.AppScaffold
 import kotlin.math.abs
 import kotlin.time.Clock
@@ -218,7 +217,6 @@ private fun HistoryCard(
             CopyIdMenuItem {
                 menuExpanded = false
                 copyToClipboard(platformContext, item.uuid, "ID")
-                showToast(platformContext, "ID copied")
             }
             if (webUrl != null) {
                 OpenInWebMenuItem { menuExpanded = false; openUrl(platformContext, webUrl) }

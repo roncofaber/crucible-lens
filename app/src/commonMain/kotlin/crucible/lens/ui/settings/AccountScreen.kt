@@ -76,7 +76,11 @@ fun AccountScreen(
         val es = editState
         if (es is EditUiState.Editing) lastDraft = es
     }
-    LaunchedEffect(Unit) { viewModel.loadProfile() }
+    // Keyed on currentApiKey (not Unit) so a key set outside this screen's own save flow —
+    // e.g. OrcidLoginScreen writes the key straight to prefs/ApiClient without going through
+    // this ViewModel — still triggers a profile refresh once the key change propagates here,
+    // instead of leaving a stale pre-login profileState until the screen is recreated.
+    LaunchedEffect(currentApiKey) { viewModel.loadProfile() }
 
     if (showSignOutDialog) {
         AlertDialog(
@@ -505,7 +509,7 @@ private fun NotLoggedInCard(
                 }
             )
             Button(onClick = onApiKeySave, modifier = Modifier.fillMaxWidth(), enabled = apiKeyInput.isNotBlank()) {
-                Text("Sign in with API key")
+                Text("API key")
             }
         }
     }

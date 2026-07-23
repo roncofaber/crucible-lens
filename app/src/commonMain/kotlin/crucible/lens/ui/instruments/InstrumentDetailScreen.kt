@@ -131,7 +131,6 @@ fun InstrumentDetailScreen(
                                 CopyIdMenuItem {
                                     overflowMenuExpanded = false
                                     copyToClipboard(platformCtx, instr.uniqueId)
-                                    showToast(platformCtx, "ID copied")
                                 }
                                 ShareMenuItem {
                                     overflowMenuExpanded = false

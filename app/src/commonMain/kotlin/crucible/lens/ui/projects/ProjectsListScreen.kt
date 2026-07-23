@@ -3,11 +3,7 @@ package crucible.lens.ui.projects
 import androidx.compose.material3.ExperimentalMaterial3Api
 import crucible.lens.platform.*
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,13 +13,18 @@ import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppTopBar
+import crucible.lens.ui.common.ResourceListDividerInset
+import crucible.lens.ui.common.SectionHeader
+import crucible.lens.ui.common.SwipeAction
+import crucible.lens.ui.common.SwipeToHideItem
+import crucible.lens.ui.common.hideWithUndo
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.ui.common.SearchBar
 
@@ -79,23 +80,27 @@ fun ProjectsListScreen(
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
-    // Generation counter per project — incremented on undo to force a fresh SwipeToDismissBoxState
-    val undoGenerations = remember { mutableStateMapOf<String, Int>() }
     // Projects pending hide — excluded from activeProjects so LazyColumn animates the removal
     // cleanly. onToggleHide is only called after the snackbar window closes without undo.
     val pendingHide = remember { mutableStateMapOf<String, Boolean>() }
+    // Generation counter per project — bumped on undo so the re-shown item's items() key changes,
+    // giving it a fresh SwipeToDismissBoxState (there's no supported way to reset a committed
+    // SwipeToDismissBoxState back to Settled without fighting an in-progress drag).
+    val undoGenerations = remember { mutableStateMapOf<String, Int>() }
 
     LaunchedEffect(Unit) { /* ViewModel loads on init */ }
 
     // Preload and cache samples/datasets per project in background (also populates counts).
-    // Priority: pinned projects first, archived projects last (stage 2 skipped for archived).
+    // Priority: pinned projects first. Hidden projects are skipped entirely — no network call
+    // is made for them until the user unhides them (this effect re-runs on the next hiddenProjects
+    // change and naturally picks up newly-unhidden projects).
     // This automatically cancels when the user navigates away from this screen.
-    // Re-triggers when projects change OR when reloadTrigger increments (force refresh).
-    LaunchedEffect(loadState) {
+    // Re-triggers when projects change, hiddenProjects changes, OR reloadTrigger increments.
+    LaunchedEffect(loadState, hiddenProjects) {
         val projectList = (loadState as? LoadState.Success)?.data ?: return@LaunchedEffect
         val prioritizedProjects = projectList
-            .sortedWith(compareByDescending<Project> { it.projectId in pinnedProjects }
-                .thenBy { it.projectId in hiddenProjects })
+            .filter { it.projectId !in hiddenProjects }
+            .sortedByDescending { it.projectId in pinnedProjects }
 
         // Track consecutive failures to stop on network errors (thread-safe for concurrent launches)
         var consecutiveFailures = 0
@@ -176,8 +181,9 @@ fun ProjectsListScreen(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    // Bottom padding clears the ScrollToTopButton FAB (42dp + 16dp margin) so the
+                    // last item — including the Hidden section header/rows — is never obscured.
+                    contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
                     stickyHeader(key = "search_bar") {
                         Surface(color = MaterialTheme.colorScheme.background) {
@@ -344,69 +350,29 @@ fun ProjectsListScreen(
                                 }
                             } else {
                                 items(activeProjects, key = { "${it.projectId}:${undoGenerations[it.projectId] ?: 0}" }) { project ->
-                                    @Suppress("DEPRECATION")
-
-                                    val dismissState = rememberSwipeToDismissBoxState(
-                                        confirmValueChange = { value ->
-                                            if (value == SwipeToDismissBoxValue.EndToStart) {
-                                                pendingHide[project.projectId] = true
-                                                scope.launch {
-                                                    val result = snackbarHostState.showSnackbar(
-                                                        message = "\"${project.title ?: project.projectId}\" hidden",
-                                                        actionLabel = "Undo",
-                                                        duration = SnackbarDuration.Short
-                                                    )
-                                                    if (result == SnackbarResult.ActionPerformed) {
-                                                        undoGenerations[project.projectId] = (undoGenerations[project.projectId] ?: 0) + 1
-                                                        pendingHide.remove(project.projectId)
-                                                    } else {
-                                                        onToggleHide(project.projectId)
-                                                        pendingHide.remove(project.projectId)
-                                                    }
-                                                }
-                                                false
-                                            } else false
-                                        },
-                                        positionalThreshold = { totalDistance -> totalDistance * 0.5f }
-                                    )
-                                    val iconScale by animateFloatAsState(
-                                        targetValue = 0.75f + 0.5f * dismissState.progress,
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioNoBouncy,
-                                            stiffness = Spring.StiffnessMedium
+                                    SwipeToHideItem(
+                                        direction = SwipeToDismissBoxValue.EndToStart,
+                                        action = SwipeAction(
+                                            icon = AppIcons.HideContent,
+                                            label = "Hide",
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                         ),
-                                        label = "hideIconScale"
-                                    )
-                                    SwipeToDismissBox(
-                                        state = dismissState,
-                                        enableDismissFromStartToEnd = false,
-                                        enableDismissFromEndToStart = true,
-                                        modifier = Modifier
-                                            .padding(horizontal = 16.dp)
-                                            .animateItem(
-                                                spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-                                            ),
-                                        backgroundContent = {
-                                            val color = MaterialTheme.colorScheme.secondaryContainer
-                                            val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .background(
-                                                        color.copy(alpha = 0.4f + 0.6f * dismissState.progress),
-                                                        MaterialTheme.shapes.medium
-                                                    )
-                                                    .padding(end = 20.dp),
-                                                contentAlignment = Alignment.CenterEnd
-                                            ) {
-                                                Column(
-                                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                                    modifier = Modifier.scale(iconScale)
-                                                ) {
-                                                    AppIcon(AppIcons.HideContent, tint = contentColor, modifier = Modifier.size(24.dp))
-                                                    Text("Hide", style = MaterialTheme.typography.labelSmall, color = contentColor)
+                                        onDismiss = {
+                                            hideWithUndo(
+                                                scope = scope,
+                                                snackbarHostState = snackbarHostState,
+                                                itemLabel = project.title ?: project.projectId,
+                                                onPending = { pending ->
+                                                    if (pending) pendingHide[project.projectId] = true
+                                                    else pendingHide.remove(project.projectId)
+                                                },
+                                                onConfirmedHide = { onToggleHide(project.projectId) },
+                                                onUndone = {
+                                                    onToggleHide(project.projectId)
+                                                    undoGenerations[project.projectId] = (undoGenerations[project.projectId] ?: 0) + 1
                                                 }
-                                            }
+                                            )
                                         }
                                     ) {
                                         ProjectCard(
@@ -420,88 +386,34 @@ fun ProjectsListScreen(
                                             }
                                         )
                                     }
+                                    HorizontalDivider(modifier = Modifier.padding(start = ResourceListDividerInset))
                                 }
 
                                 if (hiddenProjectsList.isNotEmpty()) {
                                     item(key = "__hidden_header__") {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable { hiddenExpanded = !hiddenExpanded }
-                                                .padding(vertical = 4.dp, horizontal = 20.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                AppIcon(AppIcons.HideContent,
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                                Text(
-                                                    "Hidden (${hiddenProjectsList.size})",
-                                                    style = MaterialTheme.typography.labelLarge,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                            AppIcon(if (hiddenExpanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
+                                        SectionHeader(
+                                            title = "Hidden",
+                                            count = hiddenProjectsList.size,
+                                            icon = AppIcons.HideContent,
+                                            expanded = hiddenExpanded,
+                                            onToggle = { hiddenExpanded = !hiddenExpanded }
+                                        )
                                     }
 
                                     if (hiddenExpanded) {
                                         items(hiddenProjectsList, key = { "hidden_${it.projectId}" }) { project ->
-                                            @Suppress("DEPRECATION")
-
-                                            val dismissState = rememberSwipeToDismissBoxState(
-                                                confirmValueChange = { value ->
-                                                    if (value == SwipeToDismissBoxValue.StartToEnd) {
-                                                        manuallyShown = manuallyShown + project.projectId
-                                                        showToast(platformContext, "Project shown")
-                                                        onToggleHide(project.projectId)
-                                                        true
-                                                    } else false
-                                                },
-                                                positionalThreshold = { totalDistance -> totalDistance * 0.65f }
-                                            )
-                                            val showIconScale by animateFloatAsState(
-                                                targetValue = 0.75f + 0.5f * dismissState.progress,
-                                                animationSpec = spring(
-                                                    dampingRatio = Spring.DampingRatioNoBouncy,
-                                                    stiffness = Spring.StiffnessMedium
+                                            SwipeToHideItem(
+                                                direction = SwipeToDismissBoxValue.StartToEnd,
+                                                action = SwipeAction(
+                                                    icon = AppIcons.ShowContent,
+                                                    label = "Show",
+                                                    containerColor = MaterialTheme.colorScheme.primary,
+                                                    contentColor = MaterialTheme.colorScheme.onPrimary
                                                 ),
-                                                label = "showIconScale"
-                                            )
-                                            SwipeToDismissBox(
-                                                state = dismissState,
-                                                enableDismissFromStartToEnd = true,
-                                                enableDismissFromEndToStart = false,
-                                                modifier = Modifier
-                                                    .padding(horizontal = 16.dp)
-                                                    .animateItem(
-                                                        spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-                                                    ),
-                                                backgroundContent = {
-                                                    val color = MaterialTheme.colorScheme.primary
-                                                    val contentColor = MaterialTheme.colorScheme.onPrimary
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .fillMaxSize()
-                                                            .background(
-                                                                color.copy(alpha = 0.4f + 0.6f * dismissState.progress),
-                                                                MaterialTheme.shapes.medium
-                                                            )
-                                                            .padding(start = 20.dp),
-                                                        contentAlignment = Alignment.CenterStart
-                                                    ) {
-                                                        Column(
-                                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                                            modifier = Modifier.scale(showIconScale)
-                                                        ) {
-                                                            AppIcon(AppIcons.ShowContent, tint = contentColor, modifier = Modifier.size(24.dp))
-                                                            Text("Show", style = MaterialTheme.typography.labelSmall, color = contentColor)
-                                                        }
-                                                    }
+                                                onDismiss = {
+                                                    manuallyShown = manuallyShown + project.projectId
+                                                    showToast(platformContext, "Project shown")
+                                                    onToggleHide(project.projectId)
                                                 }
                                             ) {
                                                 ProjectCard(
@@ -513,6 +425,7 @@ fun ProjectsListScreen(
                                                     isHidden = true
                                                 )
                                             }
+                                            HorizontalDivider(modifier = Modifier.padding(start = ResourceListDividerInset))
                                         }
                                     }
                                 }
@@ -543,98 +456,63 @@ private fun ProjectCard(
     onTogglePin: () -> Unit = {},
     isHidden: Boolean = false
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isHidden) 0.dp else 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isHidden) MaterialTheme.colorScheme.surfaceVariant
-                             else MaterialTheme.colorScheme.surfaceContainerHigh
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                AppIcon(if (isHidden) AppIcons.HideContent else AppIcons.Project,
-                    tint = if (isHidden) MaterialTheme.colorScheme.onSurfaceVariant
-                           else MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
+    // Only show ID when it differs from the display name
+    val showId = project.title != null && project.title != project.projectId
+    ListItem(
+        headlineContent = {
+            Text(
+                text = project.title ?: project.projectId,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        supportingContent = if (showId) {
+            {
                 Text(
-                    text = project.title ?: project.projectId,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                // Only show ID when it differs from the display name
-                if (project.title != null && project.title != project.projectId) {
-                    Text(
-                        text = "ID: ${project.projectId}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                // Count chips — spinner while loading, numbers once ready
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CountChip(
-                        icon = AppIcons.Sample,
-                        count = counts?.first,
-                        loading = counts?.first == null,
-                        contentDescription = "Samples"
-                    )
-                    CountChip(
-                        icon = AppIcons.Dataset,
-                        count = counts?.second,
-                        loading = counts?.second == null,
-                        contentDescription = "Datasets"
-                    )
-                }
-            } // Column
-            } // inner Row (icon + text)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy((-8).dp)
-            ) {
-                if (!isHidden) {
-                    IconButton(
-                        onClick = { onTogglePin() },
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        AppIcon(AppIcons.Pinned, filled = isPinned,
-                            modifier = Modifier.size(24.dp),
-                            tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                AppIcon(AppIcons.NavigateNext,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "ID: ${project.projectId}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
-        }
-    }
+        } else null,
+        leadingContent = {
+            AppIcon(if (isHidden) AppIcons.HideContent else AppIcons.Project,
+                tint = if (isHidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
+            )
+        },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (!isHidden) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
+                        CountChip(icon = AppIcons.Sample, count = counts?.first, loading = counts?.first == null)
+                        CountChip(icon = AppIcons.Dataset, count = counts?.second, loading = counts?.second == null)
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
+                    if (!isHidden) {
+                        IconButton(onClick = onTogglePin, modifier = Modifier.size(40.dp)) {
+                            AppIcon(AppIcons.Pinned, filled = isPinned,
+                                modifier = Modifier.size(20.dp),
+                                tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                }
+            }
+        },
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+    )
 }
 
 @Composable
 private fun CountChip(
     icon: AppIconToken,
     count: Int?,
-    loading: Boolean,
-    contentDescription: String
+    loading: Boolean
 ) {
     Surface(
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
@@ -642,15 +520,13 @@ private fun CountChip(
     ) {
         Row(
             modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-                .height(16.dp),
+                .padding(horizontal = 6.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
         ) {
-            Icon(
-                painter = org.jetbrains.compose.resources.painterResource(if (icon.filledResource != null) icon.resource else icon.resource),
-                contentDescription = contentDescription,
-                modifier = Modifier.size(12.dp),
+            AppIcon(
+                icon,
+                modifier = Modifier.size(11.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
             if (loading) {
