@@ -40,21 +40,31 @@ jobs:
       - name: Run unit tests
         run: ./gradlew :composeApp:testAndroidHostTest
 
-      - name: Build signed release bundle and debug APK
+      - name: Build signed release bundle and APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew :androidApp:bundleRelease :androidApp:assembleDebug
+        run: ./gradlew :androidApp:bundleRelease :androidApp:assembleRelease
 
-      - name: Verify the bundle is actually signed
+      - name: Verify the bundle and APK are actually signed
         run: |
           AAB="androidApp/build/outputs/bundle/release/androidApp-release.aab"
+          APK="androidApp/build/outputs/apk/release/androidApp-release.apk"
+
           if ! unzip -l "$AAB" | grep -qE "META-INF/.*\.(RSA|EC|DSA)$"; then
             echo "::error::$AAB has no signature block (META-INF/*.RSA|EC|DSA) — signing config was not applied. Refusing to publish an unsigned bundle."
             exit 1
           fi
-          echo "Signature block found — bundle is signed."
+          echo "AAB signature block found."
+
+          # APKs use the APK Signing Block (v2/v3), not META-INF/*.RSA — verify with apksigner.
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          if ! "$BUILD_TOOLS/apksigner" verify "$APK"; then
+            echo "::error::$APK failed apksigner verification — refusing to publish an unsigned/invalid APK."
+            exit 1
+          fi
+          echo "APK signature verified."
 
       - name: Read version from gradle.properties
         id: version
@@ -69,8 +79,8 @@ jobs:
           mkdir -p release-artifacts
           cp androidApp/build/outputs/bundle/release/androidApp-release.aab \
             "release-artifacts/crucible-lens-v${{ steps.version.outputs.name }}-${{ steps.version.outputs.code }}-release.aab"
-          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk \
-            "release-artifacts/crucible-lens-v${{ steps.version.outputs.name }}-debug.apk"
+          cp androidApp/build/outputs/apk/release/androidApp-release.apk \
+            "release-artifacts/crucible-lens-v${{ steps.version.outputs.name }}-release.apk"
 
       - name: Create draft GitHub release
         env:
