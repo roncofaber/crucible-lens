@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,7 +48,7 @@ fun QRCodeScannerView(
                     .border(
                         width = 3.dp,
                         color = accentColor,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = MaterialTheme.shapes.medium
                     )
             )
         }
@@ -60,7 +60,7 @@ fun QRCodeScannerView(
                     .statusBarsPadding()
                     .padding(8.dp)
                     .align(Alignment.TopStart),
-                shape = RoundedCornerShape(50),
+                shape = CircleShape,
                 color = Color.Black.copy(alpha = 0.45f)
             ) {
                 IconButton(onClick = onBack) {

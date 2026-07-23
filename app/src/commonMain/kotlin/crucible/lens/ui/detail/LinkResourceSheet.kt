@@ -12,7 +12,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -184,8 +183,8 @@ fun LinkResourceSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(240.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
+                            .clip(MaterialTheme.shapes.medium)
+                            .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium)
                     ) {
                         QRCodeScannerView(
                             modifier = Modifier.fillMaxSize(),

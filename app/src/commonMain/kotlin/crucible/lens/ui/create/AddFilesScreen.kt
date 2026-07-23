@@ -7,7 +7,6 @@ import crucible.lens.ui.common.AppTopBar
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -161,7 +160,7 @@ fun AddFilesScreen(
                                 model = bytes,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp))
+                                modifier = Modifier.size(80.dp).clip(MaterialTheme.shapes.small)
                             )
                             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text("File ${index + 1}", style = MaterialTheme.typography.bodyMedium)

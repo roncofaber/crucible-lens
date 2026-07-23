@@ -1,15 +1,9 @@
 package crucible.lens.ui.detail
 
 import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import crucible.lens.data.cache.CacheManager
-import crucible.lens.data.model.CrucibleResource
-import crucible.lens.data.model.Dataset
-import crucible.lens.data.model.Sample
-import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.repository.ResourceResult
 import crucible.lens.data.sync.DataSyncManager
@@ -24,7 +18,7 @@ import kotlinx.coroutines.launch
 sealed class UiState {
     object Idle : UiState()
     object Loading : UiState()
-    data class Success(val resource: CrucibleResource, val thumbnails: List<Thumbnail> = emptyList(), val isRefreshing: Boolean = false) : UiState()
+    data class Success(val uuid: String, val isRefreshing: Boolean = false) : UiState()
     data class Error(val message: String) : UiState()
 }
 
@@ -32,7 +26,6 @@ private const val MAX_CARD_STATE_ENTRIES = 50
 
 class ResourceDetailViewModel(
     private val repository: CrucibleRepository,
-    private val cacheManager: CacheManager,
     private val dataSyncManager: DataSyncManager
 ) : ViewModel() {
 
@@ -42,27 +35,6 @@ class ResourceDetailViewModel(
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
-
-    // ── Sibling pager cache ───────────────────────────────────────────────────
-    // State owned by the ViewModel (survives config changes) and passed to
-    // ResourceDetailScreen as a single ResourceDetailCache object.
-
-    private val loadedResources = mutableStateMapOf<String, CrucibleResource>()
-    private val enrichedUuids = mutableSetOf<String>()
-    private val failedEnrichmentUuids = mutableStateSetOf<String>()
-    private val loadedThumbnails = mutableStateMapOf<String, List<Thumbnail>>()
-
-    val resourceDetailCache = ResourceDetailCache(
-        loadedResources = loadedResources,
-        enrichedUuids = enrichedUuids,
-        failedEnrichmentUuids = failedEnrichmentUuids,
-        loadedThumbnails = loadedThumbnails,
-        seedThumbnails = { uuid, thumbnails ->
-            if (thumbnails.isNotEmpty()) loadedThumbnails[uuid] = thumbnails
-        }
-    )
-
-    // ─────────────────────────────────────────────────────────────────────────
 
     /** Persists expanded/collapsed state of detail screen cards across navigation. */
     private val resourceCardState = mutableStateMapOf<String, SnapshotStateMap<String, Boolean>>()
@@ -81,63 +53,28 @@ class ResourceDetailViewModel(
         resourceCardState.getOrPut(resourceId) { mutableStateMapOf() }[key] = value
     }
 
-    // ── Thumbnail helpers (L1 memory → L2 disk → network) ────────────────────
-
-    private fun getThumbnails(uuid: String): List<Thumbnail>? =
-        cacheManager.getThumbnails(uuid)
-
-    private suspend fun fetchAndCacheThumbnails(uuid: String): List<Thumbnail> {
-        val fetched = repository.fetchThumbnails(uuid)
-        cacheManager.cacheThumbnails(uuid, fetched)
-        // L2 disk cache stubbed: PersistentThumbnailCache not available in commonMain
-        return fetched
-    }
-
-    private fun evictThumbnails(uuid: String) {
-        cacheManager.clearThumbnail(uuid)
-        // L2 disk cache stubbed: PersistentThumbnailCache not available in commonMain
-    }
-
     fun refreshThumbnails(uuid: String) {
         viewModelScope.launch {
-            loadedThumbnails.remove(uuid)
-            evictThumbnails(uuid)
-            val fresh = fetchAndCacheThumbnails(uuid)
-            if (fresh.isNotEmpty()) loadedThumbnails[uuid] = fresh
+            repository.invalidateThumbnails(uuid)
+            repository.fetchThumbnails(uuid, forceRefresh = true)
         }
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
 
     fun fetchResource(uuid: String) {
         activeFetchJob?.cancel()
         activeFetchJob = viewModelScope.launch {
             val trimmedUuid = uuid.trim()
 
-            val cachedResource = cacheManager.getResource(trimmedUuid)
-            val cachedThumbnails = getThumbnails(trimmedUuid)
-
-            // Show cached version immediately for snappy navigation, but always
-            // fetch fresh data so the detail view has links and full metadata.
-            if (cachedResource != null) {
-                _uiState.value = UiState.Success(cachedResource, cachedThumbnails ?: emptyList())
-            }
-
-            val current = _uiState.value
-            _uiState.value = if (current is UiState.Success) current.copy(isRefreshing = true)
-                             else UiState.Loading
+            // Show cached version immediately for snappy navigation (Success emits as soon
+            // as ANY cached data exists for this uuid — the screen observes the repository
+            // directly for the actual resource content), but always fetch fresh data so the
+            // detail view has links and full metadata.
+            val hasCached = repository.getCachedResource(trimmedUuid) != null
+            _uiState.value = if (hasCached) UiState.Success(trimmedUuid, isRefreshing = true) else UiState.Loading
 
             when (val result = repository.fetchResourceByUuid(trimmedUuid)) {
                 is ResourceResult.Success -> {
-                    val resource = result.resource
-                    cacheManager.cacheResource(trimmedUuid, resource)
-
-                    val thumbnails = if (resource is Dataset) {
-                        getThumbnails(resource.uniqueId) ?: fetchAndCacheThumbnails(resource.uniqueId)
-                    } else emptyList()
-
-                    _uiState.value = UiState.Success(resource, thumbnails)
-                    preloadRelatedResources(resource)
+                    _uiState.value = UiState.Success(trimmedUuid)
                 }
                 is ResourceResult.Error -> _uiState.value = UiState.Error(result.message)
                 is ResourceResult.Loading -> {}
@@ -145,59 +82,28 @@ class ResourceDetailViewModel(
         }
     }
 
-    private fun preloadRelatedResources(resource: CrucibleResource) {
-        viewModelScope.launch {
-            val uuidsToPreload = when (resource) {
-                is Sample -> resource.links?.map { it.uniqueId } ?: emptyList()
-                is Dataset -> resource.links?.map { it.uniqueId } ?: emptyList()
-            }
-
-            uuidsToPreload.filter { it != resource.uniqueId }.distinct().forEach { uuid ->
-                if (cacheManager.getResource(uuid) == null) {
-                    launch {
-                        try {
-                            when (val result = repository.fetchResourceByUuid(uuid)) {
-                                is ResourceResult.Success -> {
-                                    cacheManager.cacheResource(uuid, result.resource)
-                                    if (result.resource is Dataset && getThumbnails(uuid) == null) {
-                                        fetchAndCacheThumbnails(uuid)
-                                    }
-                                }
-                                else -> {}
-                            }
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (_: Exception) {
-                            // Background preload — silently ignore failures
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     private var syncJob: Job? = null
+    // Remembered so refreshResource()'s finally block can resume sync with the same
+    // hidden-project filter, without needing NavGraph to call startBackgroundSync() again.
+    private var lastHiddenProjectIds: Set<String> = emptySet()
 
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
-    fun startBackgroundSync() {
+    /** [hiddenProjectIds] are skipped entirely — no network call until the user unhides them. */
+    fun startBackgroundSync(hiddenProjectIds: Set<String> = emptySet()) {
+        lastHiddenProjectIds = hiddenProjectIds
         _isSyncing.value = true
         syncJob = viewModelScope.launch {
-            try { dataSyncManager.syncAll() }
+            try { dataSyncManager.syncAll(hiddenProjectIds) }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) { }
             finally { _isSyncing.value = false }
         }
     }
 
-    /** UUID of the sibling the user last scrolled to — survives navigation to sub-screens. */
     fun reset() {
         _uiState.value = UiState.Idle
-        loadedResources.clear()
-        enrichedUuids.clear()
-        failedEnrichmentUuids.clear()
-        loadedThumbnails.clear()
     }
 
     fun refreshResource(uuid: String) {
@@ -209,49 +115,32 @@ class ResourceDetailViewModel(
 
         activeFetchJob = viewModelScope.launch {
             val trimmedUuid = uuid.trim()
-            cacheManager.clearResource(trimmedUuid)
-            evictThumbnails(trimmedUuid)
+            repository.invalidateResource(trimmedUuid)
+            repository.invalidateThumbnails(trimmedUuid)
 
             val current = _uiState.value
-            if (current is UiState.Success && current.resource.uniqueId == trimmedUuid) {
-                _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = true) else it }
-                try {
-                    when (val result = repository.fetchResourceByUuid(trimmedUuid)) {
-                        is ResourceResult.Success -> {
-                            val thumbnails = if (result.resource is Dataset)
-                                fetchAndCacheThumbnails(trimmedUuid) else emptyList()
-                            cacheManager.cacheResource(trimmedUuid, result.resource)
-                            _uiState.value = UiState.Success(result.resource, thumbnails)
-                        }
-                        is ResourceResult.Error -> _uiState.value = UiState.Error(result.message)
-                        else -> {}
+            val isPrimary = current is UiState.Success && current.uuid == trimmedUuid
+            _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = true) else it }
+            try {
+                when (val result = repository.fetchResourceByUuid(trimmedUuid)) {
+                    is ResourceResult.Success -> {
+                        // isPrimary distinguishes refreshing the currently-displayed resource
+                        // from refreshing a sibling reached via the pager — either way the
+                        // fresh data lands in the repository's cache and every page observing
+                        // this uuid picks it up automatically; only the primary case updates
+                        // this ViewModel's own uiState.
+                        if (isPrimary) _uiState.value = UiState.Success(trimmedUuid)
                     }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    // Timeout or network failure — error state will be set by the result handling above
-                } finally {
-                    // Always clear the spinner — prevents stuck refresh if anything goes wrong
-                    _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = false) else it }
-                    if (syncWasActive) startBackgroundSync()
+                    is ResourceResult.Error -> if (isPrimary) _uiState.value = UiState.Error(result.message)
+                    is ResourceResult.Loading -> {}
                 }
-            } else {
-                // Refreshing a sibling: toggle isRefreshing, fetch+cache, never touch primary resource.
-                // The screen's LaunchedEffect(isRefreshing) increments siblingReloadTrigger when done,
-                // which causes the enrichment effect to pick up the fresh data from cache.
-                _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = true) else it }
-                try {
-                    when (val result = repository.fetchResourceByUuid(trimmedUuid)) {
-                        is ResourceResult.Success -> cacheManager.cacheResource(trimmedUuid, result.resource)
-                        else -> {}
-                    }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                } finally {
-                    _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = false) else it }
-                    if (syncWasActive) startBackgroundSync()
-                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Timeout or network failure — error state (if primary) was set above
+            } finally {
+                _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = false) else it }
+                if (syncWasActive) startBackgroundSync(lastHiddenProjectIds)
             }
         }
     }
