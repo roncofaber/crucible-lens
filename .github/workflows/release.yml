@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_FILE"
+          echo "KEYSTORE_PATH=$KEYSTORE_FILE" >> "$GITHUB_ENV"
+
+      - name: Compile check
+        run: ./gradlew :composeApp:compileAndroidMain
+
+      - name: Run unit tests
+        run: ./gradlew :composeApp:testAndroidHostTest
+
+      - name: Build signed release bundle and debug APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew :androidApp:bundleRelease :androidApp:assembleDebug
+
+      - name: Verify the bundle is actually signed
+        run: |
+          AAB="androidApp/build/outputs/bundle/release/androidApp-release.aab"
+          if ! unzip -l "$AAB" | grep -qE "META-INF/.*\.(RSA|EC|DSA)$"; then
+            echo "::error::$AAB has no signature block (META-INF/*.RSA|EC|DSA) — signing config was not applied. Refusing to publish an unsigned bundle."
+            exit 1
+          fi
+          echo "Signature block found — bundle is signed."
+
+      - name: Read version from gradle.properties
+        id: version
+        run: |
+          VERSION_NAME=$(grep '^app.versionName=' gradle.properties | cut -d'=' -f2)
+          VERSION_CODE=$(grep '^app.versionCode=' gradle.properties | cut -d'=' -f2)
+          echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Rename artifacts to release convention
+        run: |
+          mkdir -p release-artifacts
+          cp androidApp/build/outputs/bundle/release/androidApp-release.aab \
+            "release-artifacts/crucible-lens-v${{ steps.version.outputs.name }}-${{ steps.version.outputs.code }}-release.aab"
+          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk \
+            "release-artifacts/crucible-lens-v${{ steps.version.outputs.name }}-debug.apk"
+
+      - name: Create draft GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="v${{ steps.version.outputs.name }}"
+          fi
+          cat > release-notes.md <<'EOF'
+          ## Changes
+
+          - _fill in release notes before publishing_
+          EOF
+          gh release create "$TAG" \
+            --draft \
+            --title "$TAG" \
+            --notes-file release-notes.md \
+            release-artifacts/*
