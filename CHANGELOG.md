@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.6.0] – 2026-07-23
+
+### Changed
+- Project/instrument/sample/dataset rows switched to Material 3 list items — consistent row height, typography, and dividers across Projects, Instruments, and detail lists
+- Swipe-to-hide redesigned: standard 56dp swipe threshold, hide is applied immediately with an Undo snackbar (previously deferred until the snackbar timed out, which lost the hide if you navigated away first)
+- "Hidden" sections and grouped list headers now share one component (icon, count badge, animated chevron, divider)
+- Home screen pinned cards match the styling of regular project/instrument rows
+- Creation, modification, and timestamp dates now convert from UTC to your device's local time (previously showed the raw UTC clock time)
+- "Web Explorer" renamed to "Crucible Web" throughout
+- `ResourceDetailScreen` reads directly from the shared repository cache instead of its own local cache
+- Repository cache (projects, instruments, resources, thumbnails) migrated to a shared TTL-based cache with reactive reads
+
+### Fixed
+- Account screen not refreshing after signing in with ORCID until you left and came back
+- Project lead permission check used username instead of ORCID, so some leads couldn't remove members from their own project
+- A project lead could remove themselves from their own project
+- Copy ID showed two toasts on Android 13+ (the OS already shows one)
+- Hidden projects/instruments not staying hidden after navigating away and back
+- Release bundle wasn't actually signed due to a build script bug — fixed and added a CI check that fails the build if signing didn't happen
+
 ## [0.4.2] – 2026-07-16
 
 ### Added
