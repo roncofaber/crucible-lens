@@ -45,7 +45,7 @@ Crucible Lens is distributed as an APK (not on the Play Store).
 5. Run on a device or emulator (API 26+)
 6. On first launch, go to **Settings → API Settings** and enter your Crucible API key
 
-iOS builds require Xcode on macOS — see `dev/IOS_SETUP.md`.
+iOS builds require Xcode on macOS — see `dev/platform-parity.md`.
 
 ## Tech Stack
 

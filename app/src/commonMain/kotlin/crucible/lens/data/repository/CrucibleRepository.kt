@@ -39,7 +39,7 @@ private fun httpError(code: Int): ResourceResult.Error = when (code) {
 /**
  * Single point of contact between ViewModels and the network/cache layers.
  * Every ViewModel that fetches Crucible data goes through here — see
- * dev/ARCHITECTURE.md "Known architectural debt" for the three leaf-composable
+ * dev/architecture.md's "Leaf-composable exception" for the three leaf-composable
  * exceptions that call [ApiClient]/[CacheManager] directly instead.
  */
 class CrucibleRepository(

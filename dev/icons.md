@@ -18,7 +18,7 @@ Icons marked **FILLED** need to be downloaded twice:
 |-----------|------|---------|---------------|
 | science | 0 | `ic_science.xml` | `Sample` |
 | dataset | 0 | `ic_dataset.xml` | `Dataset` |
-| biotech | 0 | `ic_biotech.xml` | `Instrument` |
+| biotech | 1 | `ic_biotech.xml` | `Instrument` |
 | folder | 0 | `ic_folder.xml` | `Project` |
 | folder_open | 0 | `ic_folder_open.xml` | `SourceFolder` |
 | folder_zip | 0 | `ic_folder_zip.xml` | `FileArchive` |

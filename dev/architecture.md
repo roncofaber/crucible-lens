@@ -1,7 +1,7 @@
 # Architecture Notes
 
 Branch: `main`
-Last updated: 2026-07-21
+Last updated: 2026-07-27
 
 ---
 
@@ -113,30 +113,42 @@ Key endpoints:
 - `GET /samples/{uuid}?include_links=true` — full sample with relationships
 - `GET /datasets/{uuid}?include_links=true&include_metadata=true` — dataset + scientific metadata inline
 - `GET /projects`, `GET /projects/{id}/users`
+- `GET /projects/search`, `GET /projects/{id}` — readable by any authenticated user, not just members. `lead` is full `UserRead` (with email) and `scientific_metadata` populated only for members/admins; non-members get `lead` as `UserPublicRead` (no email) and `scientific_metadata` always null, regardless of `?include_metadata=`. This is what makes discover-search (`SearchScreen`'s "Discover" chip) and the non-member view in `ProjectDetailScreen` possible.
 - `GET /instruments`, `GET /instruments/{id}`
 - `GET /datasets?instrument_name=X&limit=N` — datasets by instrument
 - `GET /idtype/{uuid}` — resolve resource type before fetching
 - `POST /deletion_requests` — soft-delete request
+- `POST /access_groups/{group_name}/join` — request to join a project (`group_name` is always a `project_id` for now); 409 if already a member or already has a pending request
+- `GET /join_requests?group_name=&status=&requester_id=` — list join requests; admin or the project's lead only (lead must pass `group_name`)
+- `PATCH /join_requests/{request_id}` — approve/reject a pending request; admin or the request's project lead only; approval adds the requester as a project member server-side
+- `GET /account/join_requests?status=` — the caller's own join-request history across all projects
+
+Join-request calls (`requestToJoinProject`, `getJoinRequests`, `reviewJoinRequest`, `getMyJoinRequests`) are one-shot mutations/lookups called directly from the owning ViewModel/screen via `apiClient.service.*` — no `CrucibleRepository` wrapper, since there's no caching need shared across them.
 
 ---
 
 ## Caching layers
 
+`CrucibleRepository` (`data/repository/CrucibleRepository.kt`) is the primary cache — every read that's worth caching goes through it, backed by one `ObservableCache<K, V>` per data type (in-memory, 10-min TTL, LRU eviction), each exposing `observeX()` (reactive `Flow`), `fetchX(forceRefresh)` (cache-first network fetch), and `getCachedX()` (synchronous read):
+
 ```
-CacheManager (in-memory, 10-min TTL, LRU eviction)
-  ├── resources        Map<uuid, CrucibleResource>          (max 50)
-  ├── thumbnails       Map<uuid, List<String>>               (max 20, base64 PNG)
-  ├── projects         List<Project>
-  ├── instruments      List<Instrument>
-  ├── projectSamples   Map<projectId, List<Sample>>          (max 30)
-  ├── projectDatasets  Map<projectId, List<Dataset>>         (max 30)
-  └── instrumentDatasets Map<instrumentName, List<Dataset>>  (max 15)
+CrucibleRepository
+  ├── resourceObservableCache    ObservableCache<uuid, CrucibleResource>
+  ├── thumbnailObservableCache   ObservableCache<uuid, List<Thumbnail>>
+  ├── projectsObservableCache    ObservableCache<Unit, List<Project>>       — member projects list
+  ├── projectObservableCache     ObservableCache<projectId, Project>        — per-project, incl. non-member
+  │                                                                          projects reached via discover-search
+  ├── instrumentsObservableCache ObservableCache<Unit, List<Instrument>>
+  ├── projectSamplesObservableCache   ObservableCache<projectId, List<Sample>>
+  └── projectDatasetsObservableCache  ObservableCache<projectId, List<Dataset>>
 
 PersistentProjectCache  (disk, 24h TTL)   — project summary lists only
 PersistentThumbnailCache (disk, 7 day TTL) — thumbnail base64 blobs per dataset uuid
 ```
 
-Cache is cleared entirely on API key or base URL change.
+`CacheManager` (in-memory, 10-min TTL, LRU eviction, same shape as the above minus the reactive `Flow`s) is the legacy cache — it predates `CrucibleRepository` and is only still used by a handful of not-yet-migrated call sites (e.g. `HomeScreen`'s pinned-projects preload). New code should go through `CrucibleRepository`; `CacheManager` will be deleted once the remaining consumers move over.
+
+Both caches are cleared entirely on API key or base URL change.
 
 ---
 
@@ -182,7 +194,7 @@ Content does **not** move during pull-to-refresh — the M3 `PullToRefreshBox` i
 `Screen` sealed class with `route` strings. Optional args use query params `?argName={argName}`.  
 Special characters in route segments encoded via `encodeRouteSegment()`.
 
-All 22 routes (see `Screen.kt` for the exact list): `Home`, `Scanner`, `Detail`, `History`, `Search`,
+All 23 routes (see `Screen.kt` for the exact list): `Home`, `Scanner`, `Detail`, `History`, `Search`,
 `Projects`, `ProjectDetail`, `ManageProject`, `Instruments`, `InstrumentDetail`, `ManageInstrument`,
 `Settings`, `SettingsApi`, `SettingsAppearance`, `SettingsCache`, `SettingsAbout`, `SettingsAccount`,
 `OrcidLogin`, `CreateSample`, `CreateDataset`, `AddFiles`, `MetadataEditor`, `UserProfile`
@@ -210,7 +222,7 @@ Siblings are all samples (or datasets) of the same type within the same project,
 `App.kt` mirrors `MainActivity` but using `IosAppPreferences` (NSUserDefaults via multiplatform-settings).
 ConnectivityObserver uses NWPathMonitor on iOS (no context needed).
 
-See `dev/IOS_SETUP.md` for Xcode project setup instructions.
+See `dev/platform-parity.md` for Xcode project setup instructions.
 
 ---
 
@@ -291,3 +303,11 @@ Build for iOS on macOS only.
 
 **API auth**: header is `Authorization: Bearer <key>` (FastAPI HTTPBearer scheme).
 Not `Api-Key` or `Token`.
+
+---
+
+## Known gaps
+
+- `ProjectDetailScreen`'s `ResourceCard` is still a custom `Row`, not the M3 `ListItem` composable already used by `HistoryScreen` and `InstrumentDetailScreen` — migrate when next touching that file.
+- iOS: no deep-link/URL-scheme handling, no launch screen configured — see `dev/platform-parity.md`. Not blocking; iOS distribution isn't active yet.
+- `CacheManager` still backs a few not-yet-migrated call sites (e.g. `HomeScreen`'s pinned-projects preload) — see "Caching layers" above.

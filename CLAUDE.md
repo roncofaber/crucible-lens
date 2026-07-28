@@ -9,6 +9,17 @@ Android + iOS app (KMP + Compose Multiplatform) for browsing and managing scient
 - **Architecture**: MVVM + Repository, single-module, Koin for DI
 - **Main branch**: `main`
 
+## Documentation map
+
+Deep reference material (concepts, design decisions, full structure) lives in `dev/*.md`, not here — this file is the fast-reference/operational layer. **When you change something one of these files describes, update that file in the same change**, not just this one; two sources of truth for the same fact is exactly how this file went stale before (Koin, signing, join requests all drifted here at once).
+
+| File | Covers | Update it when you... |
+|---|---|---|
+| `dev/architecture.md` | Full stack table, package-by-package layout, data models, full API endpoint list, caching layers (`CrucibleRepository`/`ObservableCache` vs legacy `CacheManager`), ViewModels, pull-to-refresh pattern, navigation routes, Koin DI details, common gotchas, known gaps | Add/rename a package, add an API endpoint, change caching behavior, add a ViewModel, change DI wiring |
+| `dev/style.md` | Compose `@OptIn` conventions, spacing/layout values, card/typography styles, `AnimatedVisibility` list-item pattern, "no comments" rule | Establish or change a UI styling convention that should apply project-wide |
+| `dev/platform-parity.md` | What's shared vs. Android/iOS-only, known iOS gaps, iOS build/Xcode setup instructions | Add a platform-specific feature, close an iOS gap, change the iOS build process |
+| `dev/icons.md` | Material Symbols download manifest — exact icon names/fill variants per `AppIcons` token | Add a new icon token |
+
 ## Build
 
 ```bash
@@ -17,89 +28,66 @@ JAVA_HOME=/home/roncofaber/software/android-studio/jbr ./gradlew :composeApp:com
 
 # Debug APK (arm64-v8a only, signed with debug key, installable)
 JAVA_HOME=/home/roncofaber/software/android-studio/jbr ./gradlew :androidApp:assembleDebug
-
-# Release APK (signed — reads keystore from env vars or local.properties, see "Signing" below)
-JAVA_HOME=/home/roncofaber/software/android-studio/jbr ./gradlew :androidApp:assembleRelease
-
-# Release AAB (signed, for Play Console upload)
-JAVA_HOME=/home/roncofaber/software/android-studio/jbr ./gradlew :androidApp:bundleRelease
 ```
 
-APK/AAB output: `androidApp/build/outputs/apk/{debug,release}/androidApp-{debug,release}.apk`, `androidApp/build/outputs/bundle/release/androidApp-release.aab`
-Drive folder: `/home/roncofaber/WORK/Crucible/App/apk/` (symlink to `~/Insync/GDrive_LBL/WORK/Crucible/App/apk/`)
-Naming convention: `crucible-lens-v{version}-debug.apk`, `crucible-lens-v{version}-release.aab`
+Expected build output: `BUILD SUCCESSFUL` with no warnings.
 
-Expected build output: `BUILD SUCCESSFUL` with no warnings. The AGP/KMP deprecation warning is resolved — migrated to `com.android.kotlin.multiplatform.library`.
+## Release process
 
-Verify a release build is actually signed before uploading anywhere: `apksigner verify --print-certs androidApp/build/outputs/apk/release/androidApp-release.apk` (or unzip the `.aab` and check for `META-INF/*.RSA`) — a silently-unsigned release previously shipped undetected because `signingConfig` no-ops instead of failing when the keystore path resolves to `null`.
+Follow all of these steps, in order, every time — not just when explicitly asked to build:
 
-`.github/workflows/release.yml` builds and signs a release APK/AAB in CI on a pushed `v*.*.*` tag (or manual `workflow_dispatch`), using `KEYSTORE_BASE64`/`KEYSTORE_PASSWORD`/`KEY_ALIAS`/`KEY_PASSWORD` repo secrets, and includes the same signature verification step.
+1. Bump `gradle.properties` (`app.versionName`, `app.versionCode`) and add a `CHANGELOG.md` entry.
+2. Verify: `:composeApp:compileAndroidMain`, `:composeApp:testAndroidHostTest`, `:composeApp:compileKotlinIosArm64`.
+3. Build both release artifacts:
+   ```bash
+   JAVA_HOME=/home/roncofaber/software/android-studio/jbr ./gradlew :androidApp:assembleDebug :androidApp:bundleRelease
+   ```
+   Output: `androidApp/build/outputs/apk/debug/androidApp-debug.apk`, `androidApp/build/outputs/bundle/release/androidApp-release.aab`.
+4. **Verify the release bundle is actually signed** before going any further: `apksigner verify --print-certs androidApp/build/outputs/apk/release/androidApp-release.apk` (or unzip the `.aab` and check for `META-INF/*.RSA`). A past release silently shipped unsigned because `signingConfig` no-ops instead of failing when the keystore path resolves to `null` — don't skip this.
+5. **Always copy both artifacts to the Drive folder** — every release, not just on request:
+   ```bash
+   cp androidApp/build/outputs/apk/debug/androidApp-debug.apk \
+     ~/WORK/Crucible/App/apk/crucible-lens-v{version}-debug.apk
+   cp androidApp/build/outputs/bundle/release/androidApp-release.aab \
+     ~/WORK/Crucible/App/apk/crucible-lens-v{version}-release.aab
+   ```
+   (`~/WORK` is a symlink to `~/Insync/GDrive_LBL/WORK`.)
+6. Commit, then push. `.github/workflows/release.yml` builds and signs a release APK/AAB in CI on a pushed `v*.*.*` tag (or manual `workflow_dispatch`), using `KEYSTORE_BASE64`/`KEYSTORE_PASSWORD`/`KEY_ALIAS`/`KEY_PASSWORD` repo secrets, and includes the same signature-verification step.
 
 ## Project structure
 
+Top-level module layout only — see `dev/architecture.md` for the full package-by-package breakdown.
+
 ```
-app/src/
-  commonMain/kotlin/crucible/lens/
-    data/
-      api/          CrucibleApiService.kt, ApiClient.kt
-      cache/        CacheManager.kt, PersistentProjectCache.kt
-      model/        CrucibleResource.kt (all models), ResourceSearchResult
-      preferences/  AppPreferences.kt (interface)
-      repository/   CrucibleRepository.kt
-      sync/         DataSyncManager.kt
-      util/         DateTimeUtils.kt, SearchExtensions.kt, SortUtils.kt, ...
-    di/             AppModule.kt (Koin module), KoinInit.kt (initKoin())
-    ui/
-      common/       AppIcons.kt, AppAnimations.kt, LoadState.kt, ErrorCard.kt, FilterSheet.kt, ...
-      detail/       ResourceDetailScreen.kt, ResourceDetailViewModel.kt, components/
-      home/         HomeScreen.kt
-      instruments/  InstrumentListScreen/ViewModel, InstrumentDetailScreen/ViewModel, ManageInstrumentScreen/ViewModel
-      navigation/   NavGraph.kt, Screen.kt
-      projects/     ProjectsListScreen/ViewModel, ProjectDetailScreen/ViewModel, ManageProjectScreen/ViewModel
-      search/       SearchScreen.kt
-      settings/     AccountScreen/ViewModel, ApiSettingsScreen, AppearanceSettingsScreen, ...
-  androidMain/      Android actuals (camera picker, Base64, preferences, AppBuildConfig)
-  iosMain/          iOS actuals (Base64, NSUserDefaults preferences)
-androidApp/         Shell application module (depends on composeApp)
+app/src/commonMain/  Shared code — all UI screens, API, models, cache, navigation, DI modules
+app/src/androidMain/ Android actuals (camera picker, Base64, preferences, AppBuildConfig)
+app/src/iosMain/     iOS actuals (Base64, NSUserDefaults preferences)
+androidApp/          Thin Android application shell (signing, manifest) — depends on app/
+iosApp/              Xcode project (via XcodeGen) — depends on app/
 ```
+
+`composeApp` (the `app/` module) is the KMP library with all app logic; `androidApp` is a thin shell. Always build `:androidApp:assembleDebug`, never `:app:assembleDebug`.
 
 ## Key architecture decisions
 
-- **`composeApp`** is the KMP library module with all app logic. **`androidApp`** is a thin application shell. Always build `:androidApp:assembleDebug`.
-- **Koin DI** — `ApiClient`, `CacheManager`, `CrucibleRepository`, and `DataSyncManager` are registered as Koin `single`s; ViewModels are registered via `viewModelOf(::MyViewModel)`, all in `di/AppModule.kt`. Screens obtain them via `koinInject<T>()` / `koinViewModel()`. `initKoin(platformModule)` runs once at app start (guarded against double-init) — see `dev/ARCHITECTURE.md`'s "Dependency injection (Koin)" section for the platform-module pattern and the small set of leaf composables (`InstrumentPickerField`, `FilterSheet`, `AssociatedFilesCard`) that call `koinInject` directly instead of receiving dependencies as parameters (documented architectural debt, not an oversight).
+- **Koin DI** — `ApiClient`, `CacheManager`, `CrucibleRepository`, and `DataSyncManager` are registered as Koin `single`s; ViewModels are registered via `viewModelOf(::MyViewModel)`, all in `di/AppModule.kt`. Screens obtain them via `koinInject<T>()` / `koinViewModel()`. Full platform-module pattern and the leaf-composable exceptions (`InstrumentPickerField`, `FilterSheet`, `AssociatedFilesCard`) are documented in `dev/architecture.md`.
 - **ViewModels** — all feature screens that load data have a ViewModel. Data loading lives in `viewModelScope`, not in composables. State is `StateFlow<LoadState<T>>` (see `ui/common/LoadState.kt`). Screens that currently lack a ViewModel still use `remember`-based state.
 - **`LoadState<T>`** — sealed class replacing the `isLoading/error/data/fromCache/isRefreshing` five-variable pattern. States: `Loading`, `Error(message)`, `Success(data, isRefreshing, fromCache)`.
 - **`NavGraph`** takes 6 parameters: `navController`, `prefs`, `deepLinkUuid`, `openScanner`, `onScannerOpened`, `viewModel`. All preference flows are collected internally via `collectAsStateWithLifecycle`. All save operations call `prefs.saveXxx()` directly inside NavGraph.
 - **`ResourceDetailScreen`** takes a `uuid: String`, not a resource object — it and every pager page observe `CrucibleRepository.observeResource(uuid)`/`.observeThumbnails(uuid)` directly. There is no resource-object-keyed Compose state anywhere in this screen; "enriched" is derived from `resource?.links != null`, not tracked in a separate set.
-- **`CrucibleRepository`** is the single source of truth for cached reads — resources, projects (list + per-project, including non-member projects reached via discover-search), instruments, project/instrument sample/dataset lists, and thumbnails are all backed by `ObservableCache<K, V>` (10-min TTL, LRU eviction) and exposed via `observeX()`/`fetchX()`/`getCachedX()`. `CacheManager` (10-min TTL, LRU eviction, cleared on sign-out) still exists for a few screens/ViewModels not yet migrated (e.g. `HomeScreen`'s pinned-projects preload), and will be deleted once those move over. One-shot mutation/lookup calls that don't need caching (add/remove member, review a join request, `getProjectUsers`) go straight through `ApiClient` from the owning ViewModel instead — that's an accepted pattern, not debt.
+- **`CrucibleRepository`** is the single source of truth for cached reads (resources, projects, instruments, sample/dataset lists, thumbnails) via `ObservableCache<K, V>`. Legacy `CacheManager` still backs a few not-yet-migrated call sites. Full breakdown, including which caches exist and what's left to migrate, is in `dev/architecture.md`'s "Caching layers" section.
 - **`userProfile`** stored as a JSON-serialized `User` object in DataStore under key `user_profile`. `userProfile?.uniqueId` is the source of truth for ORCID.
 - **`ApiResult<T>`** sealed class wraps all API calls via `safeCall { }`. Always `is ApiResult.Success` / `is ApiResult.Error`.
 - **Pagination**: list endpoints use `fetchAllPagesCursor` (datasets/samples use keyset cursor) or `fetchAllPages` (offset-based). Search endpoints return a flat list.
 
 ## API
 
-- Base URL default: `https://crucible.lbl.gov/api/v2/`
-- Auth: `Authorization: Bearer {apiKey}` on every request
-- Two HTTP clients: `httpClient` (authenticated, 30s timeouts) and `gcsClient` (no auth, 10-min timeouts for large file uploads)
-- Key endpoints to know:
-  - `GET /account/profile` / `PATCH /account/profile` — own profile
-  - `GET /datasets/{id}?include_owner=true&include_links=true` — enriched dataset
-  - `GET /samples/{id}?include_owner=true&include_links=true` — enriched sample
-  - `POST /datasets/{dsid}/upload/initiate` → `PUT {resumable_uri}` → `POST /datasets/{dsid}/upload/complete` → `POST /files/{mfid}/ingest`
-  - `GET /{datasets,samples,projects,instruments}/search?q=` — fuzzy search, flat list. `GET /projects/search` and `GET /projects/{proj_id}` are readable by any authenticated user (not just members) — `lead` is full `UserRead` (with email) and `scientific_metadata` is populated only for members/admins; non-members get `lead` as `UserPublicRead` (no email) and `scientific_metadata` always null, regardless of `?include_metadata=`.
-  - `POST /resources/{id}/metadata` — create or replace scientific metadata (`?overwrite=true` to replace)
-  - `PATCH /resources/{id}/metadata` — merge update (safe even if no metadata exists yet)
-  - `POST /projects/{id}/users/0?username=` — add member by username
-  - `DELETE /projects/{id}/users/{orcid}` — remove member by ORCID
-  - `GET /users/by-username/{username}` — public profile lookup
-  - `POST /users/resolve` — batch resolve ORCIDs/usernames to public profiles
-  - `POST /access_groups/{group_name}/join` — request to join a project (`group_name` is always a `project_id` for now); 409 if already a member or already has a pending request
-  - `GET /join_requests?group_name=&status=&requester_id=` — list join requests; admin or the project's lead only (lead must pass `group_name`)
-  - `PATCH /join_requests/{request_id}` — approve/reject a pending request; admin or the request's project lead only; approval adds the requester as a project member server-side
-  - `GET /account/join_requests?status=` — the caller's own join-request history across all projects
+Full endpoint list is in `dev/architecture.md`. The rules that matter while coding:
 
-- **Scientific metadata** always uses dedicated `/resources/{id}/metadata` routes — it is NOT part of `SampleUpdateRequest` or `DatasetUpdateRequest`. Create/edit flows make two API calls: one structural PATCH, one metadata POST.
-- **Join requests** are one-shot mutations/lookups called directly from ViewModels (`ManageProjectViewModel`, `AccountViewModel`, `ProjectDetailScreen`) via `apiClient.service.*` — no `CrucibleRepository` wrapper, since there's no shared caching need across them.
+- Auth header is `Authorization: Bearer {apiKey}` on every request — not `Api-Key` or `Token`.
+- **Scientific metadata** always uses dedicated `POST`/`PATCH /resources/{id}/metadata` routes — it is NOT part of `SampleUpdateRequest`, `DatasetUpdateRequest`, `SampleCreateRequest`, or `DatasetCreateRequest`. Create/edit flows make two API calls: one structural PATCH/POST, one metadata call.
+- **Join requests** (`requestToJoinProject`, `getJoinRequests`, `reviewJoinRequest`, `getMyJoinRequests`) are one-shot mutations/lookups called directly from the owning ViewModel/screen via `apiClient.service.*` — no `CrucibleRepository` wrapper, since there's no caching need shared across them.
+- `GET /projects/search` and `GET /projects/{proj_id}` are readable by any authenticated user, not just members — `lead`/`scientific_metadata` are populated only for members/admins. This is what makes discover-search and non-member project browsing possible.
 
 ## User identity conventions
 
@@ -166,9 +154,7 @@ No version force needed. CMP 1.10.x naturally resolves to `androidx.compose.mate
 
 ## iOS
 
-Build via XcodeGen (`iosApp/project.yml`). iOS actuals use Foundation for Base64 and `NSUserDefaults`-backed `IosAppPreferences` for preferences. The iOS preferences implementation uses `MutableStateFlow` updated in-place on write.
-
-Note: iOS compilation (`compileKotlinIosArm64`) runs on Linux and verifies Kotlin correctness but cannot produce a runnable app — that requires macOS + Xcode.
+`compileKotlinIosArm64` runs on Linux and verifies Kotlin correctness but cannot produce a runnable app — that requires macOS + Xcode. Full iOS build/Xcode setup and platform-parity details: `dev/platform-parity.md`.
 
 ## Things that have bitten us before
 
