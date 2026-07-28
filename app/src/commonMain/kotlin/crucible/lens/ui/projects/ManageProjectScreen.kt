@@ -13,6 +13,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -261,10 +263,16 @@ private fun PendingRequestsCard(
                         }
                         Text(formatDateTime(request.requestTime), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    IconButton(onClick = { onApprove(request) }, modifier = Modifier.size(32.dp)) {
+                    IconButton(
+                        onClick = { onApprove(request) },
+                        modifier = Modifier.size(32.dp).semantics { contentDescription = "Approve request" }
+                    ) {
                         AppIcon(AppIcons.Check, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                     }
-                    IconButton(onClick = { onReject(request) }, modifier = Modifier.size(32.dp)) {
+                    IconButton(
+                        onClick = { onReject(request) },
+                        modifier = Modifier.size(32.dp).semantics { contentDescription = "Reject request" }
+                    ) {
                         AppIcon(AppIcons.UsernameTaken, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
                     }
                 }

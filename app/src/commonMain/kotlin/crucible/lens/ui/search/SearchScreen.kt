@@ -443,7 +443,7 @@ private fun SearchResultItem(
             // projects/instruments elsewhere — a non-member project isn't hidden, but the
             // muted treatment reads the same way: "this isn't fully yours yet". Tapping still
             // opens ProjectDetailScreen, which can cold-open a non-member project's basic
-            // info; a "Request to join" action belongs here once that API exists.
+            // info; the "Request to join" action lives there, not here.
             AppIcon(iconForType(result.resourceType), tint = if (isNonMemberProject) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary)
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
