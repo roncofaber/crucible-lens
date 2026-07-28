@@ -6,6 +6,9 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.DatasetUpdateRequest
 import crucible.lens.data.model.Instrument
+import crucible.lens.data.model.JoinRequest
+import crucible.lens.data.model.JoinRequestCreate
+import crucible.lens.data.model.JoinRequestReview
 import crucible.lens.data.model.ResourceSearchResult
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
@@ -507,6 +510,40 @@ class CrucibleApiService(
         client.delete("${baseUrl}projects/$projectId/users/$userOrcid") {
             header("Authorization", "Bearer $apiKey")
         }.status.value in 200..299
+    }
+
+    suspend fun requestToJoinProject(projectId: String, reason: String? = null): ApiResult<JoinRequest> = safeCall {
+        post("access_groups/$projectId/join", JoinRequestCreate(reason = reason?.ifBlank { null }))
+    }
+
+    suspend fun getJoinRequests(
+        groupName: String? = null,
+        status: String? = null
+    ): ApiResult<List<JoinRequest>> = fetchAllPages { limit, offset ->
+        client.get("${baseUrl}join_requests") {
+            header("Authorization", "Bearer $apiKey")
+            if (groupName != null) url.parameters.append("group_name", groupName)
+            if (status != null) url.parameters.append("status", status)
+            url.parameters.append("limit", limit.toString())
+            url.parameters.append("offset", offset.toString())
+        }.body<PaginatedResponse<JoinRequest>>()
+    }
+
+    suspend fun reviewJoinRequest(
+        requestId: Int,
+        status: String,
+        reviewerNotes: String? = null
+    ): ApiResult<JoinRequest> = safeCall {
+        patch("join_requests/$requestId", JoinRequestReview(status = status, reviewerNotes = reviewerNotes))
+    }
+
+    suspend fun getMyJoinRequests(status: String? = null): ApiResult<List<JoinRequest>> = fetchAllPages { limit, offset ->
+        client.get("${baseUrl}account/join_requests") {
+            header("Authorization", "Bearer $apiKey")
+            if (status != null) url.parameters.append("status", status)
+            url.parameters.append("limit", limit.toString())
+            url.parameters.append("offset", offset.toString())
+        }.body<PaginatedResponse<JoinRequest>>()
     }
 
     suspend fun searchSamples(q: String, projectId: String? = null, limit: Int = 20): ApiResult<List<Sample>> = safeCall {

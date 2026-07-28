@@ -20,7 +20,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.model.User
+import crucible.lens.data.util.formatDateTime
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
 import crucible.lens.ui.common.AppScaffold
@@ -39,9 +41,11 @@ fun AccountScreen(
 ) {
     val profileState by viewModel.profileState.collectAsState()
     val editState by viewModel.editState.collectAsState()
+    val joinRequests by viewModel.joinRequests.collectAsState()
     var showSignOutDialog by remember { mutableStateOf(false) }
     var lastDraft by remember { mutableStateOf<EditUiState.Editing?>(null) }
     var advancedExpanded by remember { mutableStateOf(false) }
+    var joinRequestsExpanded by remember { mutableStateOf(false) }
     val currentApiKey by viewModel.currentApiKey.collectAsState()
     var apiKeyInput by remember { mutableStateOf("") }
     var apiKeyVisible by remember { mutableStateOf(false) }
@@ -232,6 +236,40 @@ fun AccountScreen(
                                         Text("Apply key")
                                     }
                                     Spacer(Modifier.height(16.dp))
+                                }
+                            }
+                        }
+
+                        if (joinRequests.isNotEmpty()) {
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Column(
+                                    modifier = Modifier
+                                        .padding(horizontal = 16.dp)
+                                        .animateContentSize(StandardSizeAnim)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { joinRequestsExpanded = !joinRequestsExpanded }
+                                            .padding(vertical = 16.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            "My Join Requests (${joinRequests.size})",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        ExpandChevron(expanded = joinRequestsExpanded)
+                                    }
+                                    if (joinRequestsExpanded) {
+                                        Column(
+                                            modifier = Modifier.padding(bottom = 16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            joinRequests.forEach { request -> JoinRequestRow(request) }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -470,6 +508,27 @@ private fun ProfileCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun JoinRequestRow(request: JoinRequest) {
+    val (statusLabel, statusColor) = when (request.status) {
+        "approved" -> "Approved" to MaterialTheme.colorScheme.primary
+        "rejected" -> "Rejected" to MaterialTheme.colorScheme.error
+        else -> "Pending" to MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        AppIcon(AppIcons.Project, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(request.groupName, style = MaterialTheme.typography.bodyMedium)
+            Text(formatDateTime(request.requestTime), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(statusLabel, style = MaterialTheme.typography.labelMedium, color = statusColor, fontWeight = FontWeight.SemiBold)
     }
 }
 

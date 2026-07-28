@@ -10,6 +10,9 @@ import crucible.lens.data.model.Instrument
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.Thumbnail
+import crucible.lens.data.model.creationTimeOrEmpty
+import crucible.lens.data.util.SortState
+import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.monthBounds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -56,12 +59,19 @@ class CrucibleRepository(
     /**
      * Fetches any resource by UUID using the unified /resources/{uuid} endpoint.
      * Single call — no type lookup needed, links and metadata included.
+     *
+     * [forceRefresh] skips the cache short-circuit and always hits the network, but — unlike
+     * calling [invalidateResource] first — never evicts the existing cache entry beforehand.
+     * Every [observeResource] collector keeps rendering the old value until [put] overwrites
+     * it with the fresh result, so a pull-to-refresh never has a window where the resource is
+     * momentarily absent (which previously collapsed every links/metadata-gated card and then
+     * popped them back in once the new fetch landed).
      */
-    suspend fun fetchResourceByUuid(uuid: String): ResourceResult = withContext(Dispatchers.Default) {
+    suspend fun fetchResourceByUuid(uuid: String, forceRefresh: Boolean = false): ResourceResult = withContext(Dispatchers.Default) {
         try {
             val cached = resourceObservableCache.get(uuid)
             // Check if we have a fully-loaded cached version (with links)
-            if (cached != null && hasLinks(cached)) {
+            if (!forceRefresh && cached != null && hasLinks(cached)) {
                 return@withContext ResourceResult.Success(cached)
             }
 
@@ -127,6 +137,16 @@ class CrucibleRepository(
         ttlMillis = 10 * 60 * 1000L,
         maxSize = 1
     )
+    // Per-project entries, keyed by projectId — populated both in bulk (every project from a
+    // fetchProjects() list fetch is written through here too) and individually (fetchProject()
+    // for a single project, e.g. one found via discover-search that isn't in the member list).
+    // This is what ProjectDetailScreen should observe for its cold-open header, instead of the
+    // older CacheManager.getProjects() lookup, which only ever holds member projects and isn't
+    // kept in sync with this cache.
+    private val projectObservableCache = ObservableCache<String, Project>(
+        ttlMillis = 10 * 60 * 1000L,
+        maxSize = 50
+    )
     private val instrumentsObservableCache = ObservableCache<Unit, List<Instrument>>(
         ttlMillis = 10 * 60 * 1000L,
         maxSize = 1
@@ -138,13 +158,41 @@ class CrucibleRepository(
             projectsObservableCache.get(Unit)?.let { return ApiResult.Success(it) }
         }
         return api.getProjects().also { result ->
-            if (result is ApiResult.Success) projectsObservableCache.put(Unit, result.data)
+            if (result is ApiResult.Success) {
+                projectsObservableCache.put(Unit, result.data)
+                result.data.forEach { projectObservableCache.put(it.projectId, it) }
+            }
         }
     }
 
     fun observeProjects(): Flow<List<Project>?> = projectsObservableCache.observe(Unit)
 
     fun invalidateProjects() = projectsObservableCache.invalidate(Unit)
+
+    /**
+     * Fetches a single project by ID. Used both for a member project's detail screen (usually
+     * already warm from [fetchProjects]) and for a non-member project found via discover-search
+     * (never in the list cache, since the list endpoint only returns the caller's projects).
+     *
+     * [forceRefresh] behaves like [fetchResourceByUuid]'s — always hits the network but never
+     * evicts the existing entry first, so observers keep the old value until the new one lands.
+     */
+    suspend fun fetchProject(projectId: String, forceRefresh: Boolean = false): ApiResult<Project> {
+        if (!forceRefresh) {
+            projectObservableCache.get(projectId)?.let { return ApiResult.Success(it) }
+        }
+        return api.getProject(projectId).also { result ->
+            if (result is ApiResult.Success) projectObservableCache.put(projectId, result.data)
+        }
+    }
+
+    /** Reactive read — emits the current cached project (or null) and re-emits on any change. */
+    fun observeProject(projectId: String): Flow<Project?> = projectObservableCache.observe(projectId)
+
+    /** One-shot synchronous read — null if absent or expired. */
+    fun getCachedProject(projectId: String): Project? = projectObservableCache.get(projectId)
+
+    fun invalidateProject(projectId: String) = projectObservableCache.invalidate(projectId)
 
     /** Cache-first instrument list fetch. Caches on success. */
     suspend fun fetchInstruments(forceRefresh: Boolean = false): ApiResult<List<Instrument>> {
@@ -286,13 +334,13 @@ class CrucibleRepository(
      * filtered API call scoped to the group when no cached project list is available.
      * Always returns a list containing at least [resource] itself.
      */
-    suspend fun fetchSiblings(resource: CrucibleResource, groupBy: String?): List<CrucibleResource> {
+    suspend fun fetchSiblings(resource: CrucibleResource, groupBy: String?, sortState: SortState = SortState()): List<CrucibleResource> {
         return when (resource) {
             is Sample -> {
                 val projectId = resource.projectId ?: return listOf(resource)
                 val cached = projectSamplesObservableCache.get(projectId)
                 if (cached != null) {
-                    cached.filterSiblings(groupBy, resource).ensureContains(resource)
+                    cached.filterSiblings(groupBy, resource).ensureContains(resource, sortState)
                 } else {
                     val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
                     when (val resp = withContext(Dispatchers.Default) {
@@ -303,7 +351,7 @@ class CrucibleRepository(
                             creationTimeGte = bounds?.first, creationTimeLte = bounds?.second
                         )
                     }) {
-                        is ApiResult.Success -> resp.data.ensureContains(resource)
+                        is ApiResult.Success -> resp.data.ensureContains(resource, sortState)
                         is ApiResult.Error -> listOf(resource)
                     }
                 }
@@ -312,7 +360,7 @@ class CrucibleRepository(
                 val projectId = resource.projectId ?: return listOf(resource)
                 val cached = projectDatasetsObservableCache.get(projectId)
                 if (cached != null) {
-                    cached.filterSiblings(groupBy, resource).ensureContains(resource)
+                    cached.filterSiblings(groupBy, resource).ensureContains(resource, sortState)
                 } else {
                     val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
                     when (val resp = withContext(Dispatchers.Default) {
@@ -326,7 +374,7 @@ class CrucibleRepository(
                             creationTimeGte = bounds?.first, creationTimeLte = bounds?.second
                         )
                     }) {
-                        is ApiResult.Success -> resp.data.ensureContains(resource)
+                        is ApiResult.Success -> resp.data.ensureContains(resource, sortState)
                         is ApiResult.Error -> listOf(resource)
                     }
                 }
@@ -335,16 +383,16 @@ class CrucibleRepository(
     }
 }
 
-private fun <T : CrucibleResource> List<T>.ensureContains(resource: T): List<T> =
-    if (any { it.uniqueId == resource.uniqueId }) sortedBy { it.uniqueId }
-    else (this + resource).sortedBy { it.uniqueId }
+private fun <T : CrucibleResource> List<T>.ensureContains(resource: T, sortState: SortState): List<T> =
+    (if (any { it.uniqueId == resource.uniqueId }) this else this + resource)
+        .applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTimeOrEmpty() })
 
 private fun List<Sample>.filterSiblings(groupBy: String?, resource: Sample) =
     filter { s -> when (groupBy) {
         "DATE"  -> crucible.lens.data.util.dateGroupKey(s.timestamp) == crucible.lens.data.util.dateGroupKey(resource.timestamp)
         "OWNER" -> s.ownerOrcid == resource.ownerOrcid
         else    -> s.sampleType == resource.sampleType
-    } }.sortedBy { it.uniqueId }
+    } }
 
 private fun List<Dataset>.filterSiblings(groupBy: String?, resource: Dataset) =
     filter { d -> when (groupBy) {
@@ -354,4 +402,4 @@ private fun List<Dataset>.filterSiblings(groupBy: String?, resource: Dataset) =
         "SESSION"    -> d.sessionName == resource.sessionName
         "OWNER"      -> d.ownerOrcid == resource.ownerOrcid
         else         -> d.measurement == resource.measurement
-    } }.sortedBy { it.uniqueId }
+    } }

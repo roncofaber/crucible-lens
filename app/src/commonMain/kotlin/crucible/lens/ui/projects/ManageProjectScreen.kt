@@ -16,8 +16,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.User
+import crucible.lens.data.util.formatDateTime
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
@@ -29,7 +31,8 @@ import crucible.lens.ui.detail.components.InfoRow
 @Composable
 fun ManageProjectScreen(
     viewModel: ManageProjectViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onHome: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
     val editState by viewModel.editState.collectAsState()
@@ -68,6 +71,9 @@ fun ManageProjectScreen(
                         IconButton(onClick = { viewModel.startEdit() }) {
                             AppIcon(AppIcons.Edit)
                         }
+                    }
+                    IconButton(onClick = onHome) {
+                        AppIcon(AppIcons.Home)
                     }
                 }
             )
@@ -111,6 +117,14 @@ fun ManageProjectScreen(
                                 onCancel = { viewModel.cancelEdit() }
                             )
                         }
+                    }
+                    if (s.isLead && s.joinRequests.isNotEmpty()) {
+                        PendingRequestsCard(
+                            requests = s.joinRequests,
+                            requesterInfo = s.requesterInfo,
+                            onApprove = { viewModel.approveJoinRequest(it) },
+                            onReject = { viewModel.rejectJoinRequest(it) }
+                        )
                     }
                     MembersCard(
                         members = s.members,
@@ -206,6 +220,53 @@ private fun ProjectEditCard(
                 Button(onClick = onSave, modifier = Modifier.weight(1f), enabled = !isSaving && draft.title.isNotBlank()) {
                     if (isSaving) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                     else Text("Save")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PendingRequestsCard(
+    requests: List<JoinRequest>,
+    requesterInfo: Map<String, User>,
+    onApprove: (JoinRequest) -> Unit,
+    onReject: (JoinRequest) -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Pending Requests (${requests.size})", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            requests.forEach { request ->
+                val requester = requesterInfo[request.requesterId]
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    UserAvatar(
+                        firstName = requester?.firstName,
+                        lastName = requester?.lastName,
+                        size = 36.dp,
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        val displayName = listOfNotNull(requester?.firstName, requester?.lastName).joinToString(" ").ifBlank { null }
+                        Text(displayName ?: request.requesterId, style = MaterialTheme.typography.bodyMedium)
+                        if (!requester?.username.isNullOrBlank()) {
+                            Text("@${requester.username}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        }
+                        if (!request.reason.isNullOrBlank()) {
+                            Text(request.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Text(formatDateTime(request.requestTime), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    IconButton(onClick = { onApprove(request) }, modifier = Modifier.size(32.dp)) {
+                        AppIcon(AppIcons.Check, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+                    IconButton(onClick = { onReject(request) }, modifier = Modifier.size(32.dp)) {
+                        AppIcon(AppIcons.UsernameTaken, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
         }

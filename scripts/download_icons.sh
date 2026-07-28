@@ -24,7 +24,7 @@ echo ""
 echo "Resources"
 download science        default  ic_science.xml
 download dataset        default  ic_dataset.xml
-download biotech        default  ic_biotech.xml
+download biotech        fill1    ic_biotech.xml
 download folder         default  ic_folder.xml
 download folder_open    default  ic_folder_open.xml
 download folder_zip     default  ic_folder_zip.xml

@@ -4,7 +4,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import crucible.lens.platform.*
 
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -20,13 +19,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import crucible.lens.ui.common.EffectsFastSpring
-import crucible.lens.ui.common.EffectsDefaultSpring
 import crucible.lens.ui.common.SpatialDefaultSizeSpring
 import crucible.lens.ui.common.SpatialFastSizeSpring
 import androidx.compose.runtime.derivedStateOf
@@ -47,6 +46,10 @@ import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.Thumbnail
+import crucible.lens.data.model.creationTimeOrEmpty
+import crucible.lens.data.util.SortField
+import crucible.lens.data.util.SortState
+import crucible.lens.data.util.applySortState
 import crucible.lens.ui.metadata.MetadataHolder
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.parseAsJsonObject
@@ -61,23 +64,6 @@ import crucible.lens.ui.detail.components.*
 import org.koin.compose.koinInject
 
 private data class UnlinkRequest(val name: String, val otherUuid: String, val action: suspend () -> Unit)
-
-private fun hasLinks(resource: CrucibleResource): Boolean = when (resource) {
-    is Sample -> resource.links != null
-    is Dataset -> resource.links != null
-}
-
-private fun siblingGroupLabel(groupBy: String?, resource: CrucibleResource): String = when (groupBy) {
-    "MEASUREMENT" -> "Measurement"
-    "INSTRUMENT"  -> "Instrument"
-    "DATE"        -> "Date"
-    "FORMAT"      -> "Format"
-    "SESSION"     -> "Session"
-    "OWNER"       -> "Owner"
-    "TYPE"        -> "Type"
-    null -> when (resource) { is Sample -> "Type"; else -> "Measurement" }
-    else -> groupBy.lowercase().replaceFirstChar { it.uppercase() }
-}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -106,9 +92,15 @@ fun ResourceDetailScreen(
     val apiClient = koinInject<ApiClient>()
     val repository = koinInject<CrucibleRepository>()
     var showQrDialog by remember { mutableStateOf(false) }
-    var showSiblingGroupDialog by remember { mutableStateOf(false) }
+    // Combined "Order by" / "Group by" dropdown, opened from its own top-bar icon.
+    var siblingOrganizeMenuExpanded by remember { mutableStateOf(false) }
     // Local groupBy that can be changed while browsing; starts from the nav argument.
     var activeSiblingGroupBy by remember { mutableStateOf(siblingGroupBy) }
+    // Sibling ordering — which field siblings are ordered by. Swipe direction (right = next,
+    // left = previous) already expresses "forward"/"backward" through that order, so there is
+    // deliberately no separate ascending/descending toggle here (unlike the list-screen sort
+    // controls, which need one since a list has no inherent direction).
+    var siblingSortField by remember { mutableStateOf(SortField.NAME) }
 
     // The primary resource this screen was navigated to. Observed reactively from the
     // repository — NavGraph's LaunchedEffect(mfid) { viewModel.fetchResource(mfid) } drives
@@ -133,6 +125,9 @@ fun ResourceDetailScreen(
         }
     }
 
+    // Sort field is deliberately NOT a key here: it never changes which resources are
+    // siblings, only their order, so changing it re-sorts the already-fetched list below
+    // in place — no network call, no siblingsResolved reset, no counter/content flash.
     LaunchedEffect(uuid, currentProjectId, activeSiblingGroupBy) {
         val r = resource
         if (r == null) return@LaunchedEffect
@@ -149,8 +144,12 @@ fun ResourceDetailScreen(
         }
     }
 
-    val siblingIndex = remember(siblingList, uuid) {
-        siblingList.indexOfFirst { it.uniqueId == uuid }
+    val sortedSiblingList = remember(siblingList, siblingSortField) {
+        siblingList.applySortState(SortState(siblingSortField, ascending = true), name = { name }, mfid = { uniqueId }, date = { creationTimeOrEmpty() })
+    }
+
+    val siblingIndex = remember(sortedSiblingList, uuid) {
+        sortedSiblingList.indexOfFirst { it.uniqueId == uuid }
     }
 
     // HorizontalPager state. initialPage uses siblingIndex directly so the pager
@@ -158,7 +157,7 @@ fun ResourceDetailScreen(
     // fallback below handles the rare case where siblingList isn't ready yet).
     val pagerState = rememberPagerState(
         initialPage = siblingIndex.coerceAtLeast(0),
-        pageCount = { siblingList.size.coerceAtLeast(1) }
+        pageCount = { sortedSiblingList.size.coerceAtLeast(1) }
     )
 
     // Scroll to the resource's position once siblings are resolved and pageCount is updated.
@@ -170,7 +169,7 @@ fun ResourceDetailScreen(
     }
 
     // Current resource shown in the pager — drives TopAppBar title and overflow menu
-    val currentPageUuid = siblingList.getOrNull(pagerState.currentPage)?.uniqueId ?: uuid
+    val currentPageUuid = sortedSiblingList.getOrNull(pagerState.currentPage)?.uniqueId ?: uuid
     val currentDisplayResource: CrucibleResource? by repository.observeResource(currentPageUuid)
         .collectAsStateWithLifecycle(initialValue = repository.getCachedResource(currentPageUuid))
 
@@ -186,7 +185,7 @@ fun ResourceDetailScreen(
     // Track history and last-viewed sibling continuously as user scrolls through pages
     LaunchedEffect(pagerState.currentPage, pagerState.targetPage) {
         val targetPage = if (pagerState.isScrollInProgress) pagerState.targetPage else pagerState.currentPage
-        val targetResource = siblingList.getOrNull(targetPage)
+        val targetResource = sortedSiblingList.getOrNull(targetPage)
         if (targetResource != null) {
             val rtype = if (targetResource is Sample) "sample" else "dataset"
             onSaveToHistory(targetResource.uniqueId, targetResource.name, rtype)
@@ -211,7 +210,7 @@ fun ResourceDetailScreen(
     var localRefreshState by remember { mutableStateOf(false) }
 
     fun triggerRefresh() {
-        val currentUuid = siblingList.getOrNull(pagerState.currentPage)?.uniqueId ?: uuid
+        val currentUuid = sortedSiblingList.getOrNull(pagerState.currentPage)?.uniqueId ?: uuid
         if (currentUuid != uuid) {
             // Sibling refresh: fetch inline without ViewModel involvement. The fresh result
             // lands in the repository's cache; that page's own observeResource collection
@@ -219,8 +218,10 @@ fun ResourceDetailScreen(
             scope.launch {
                 localRefreshState = true
                 try {
-                    repository.invalidateResource(currentUuid)
-                    repository.fetchResourceByUuid(currentUuid)
+                    // forceRefresh (not invalidate-then-fetch) keeps serving the existing
+                    // cached resource to every observer until the fresh result lands, so
+                    // links/metadata-gated cards never collapse and pop back in mid-refresh.
+                    repository.fetchResourceByUuid(currentUuid, forceRefresh = true)
                 } finally {
                     localRefreshState = false
                 }
@@ -246,6 +247,72 @@ fun ResourceDetailScreen(
                     }
                     IconButton(onClick = onHome) {
                         AppIcon(AppIcons.Home)
+                    }
+                    // Sibling order/group — only when the resource belongs to a project.
+                    // Order changes are purely local (re-sorts the already-fetched sibling
+                    // list); group changes trigger a real re-fetch since they can change
+                    // which resources are siblings at all — both live in one dropdown since
+                    // they're the same category of decision ("how are siblings organized").
+                    val organizeResource = currentDisplayResource
+                    val organizeProjectId = when (organizeResource) {
+                        is Sample -> organizeResource.projectId
+                        is Dataset -> organizeResource.projectId
+                        null -> null
+                    }
+                    if (organizeResource != null && organizeProjectId != null) {
+                        Box {
+                            IconButton(onClick = { siblingOrganizeMenuExpanded = true }) {
+                                AppIcon(AppIcons.Sort)
+                            }
+                            DropdownMenu(
+                                expanded = siblingOrganizeMenuExpanded,
+                                onDismissRequest = { siblingOrganizeMenuExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Order by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                                    onClick = {}, enabled = false
+                                )
+                                SortField.entries.forEach { field ->
+                                    DropdownMenuItem(
+                                        text = { Text(field.label) },
+                                        leadingIcon = {
+                                            if (siblingSortField == field) AppIcon(AppIcons.Check, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                                            else Spacer(modifier = Modifier.size(18.dp))
+                                        },
+                                        onClick = { siblingSortField = field; siblingOrganizeMenuExpanded = false }
+                                    )
+                                }
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                DropdownMenuItem(
+                                    text = { Text("Group by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                                    onClick = {}, enabled = false
+                                )
+                                val groupOptions: List<Pair<String, String>> = when (organizeResource) {
+                                    is Sample  -> listOf("TYPE" to "Type", "DATE" to "Date", "OWNER" to "Owner")
+                                    is Dataset -> listOf(
+                                        "MEASUREMENT" to "Measurement",
+                                        "INSTRUMENT"  to "Instrument",
+                                        "DATE"        to "Date",
+                                        "FORMAT"      to "Format",
+                                        "SESSION"     to "Session",
+                                        "OWNER"       to "Owner"
+                                    )
+                                }
+                                val effectiveGroup = activeSiblingGroupBy ?: when (organizeResource) {
+                                    is Sample -> "TYPE"; is Dataset -> "MEASUREMENT"
+                                }
+                                groupOptions.forEach { (value, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        leadingIcon = {
+                                            if (effectiveGroup == value) AppIcon(AppIcons.Check, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                                            else Spacer(modifier = Modifier.size(18.dp))
+                                        },
+                                        onClick = { activeSiblingGroupBy = value; siblingOrganizeMenuExpanded = false }
+                                    )
+                                }
+                            }
+                        }
                     }
                     Box {
                         IconButton(onClick = { overflowMenuExpanded = true }) {
@@ -319,19 +386,6 @@ fun ResourceDetailScreen(
                                     )
                                 }
                             }
-                            // Sibling grouping — only when resource belongs to a project
-                            if (displayForMenu != null && projectId != null) {
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                val groupLabel = siblingGroupLabel(activeSiblingGroupBy, displayForMenu)
-                                DropdownMenuItem(
-                                    text = { Text("Siblings: $groupLabel") },
-                                    leadingIcon = { AppIcon(AppIcons.SwapResource) },
-                                    onClick = {
-                                        overflowMenuExpanded = false
-                                        showSiblingGroupDialog = true
-                                    }
-                                )
-                            }
                         }
                     }
                 }
@@ -345,32 +399,36 @@ fun ResourceDetailScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            if (siblingList.isNotEmpty() && siblingIndex >= 0) {
+            if (sortedSiblingList.isNotEmpty() && siblingIndex >= 0) {
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
                     userScrollEnabled = true
                 ) { pageIndex ->
-                    if (pageIndex >= siblingList.size) return@HorizontalPager
-                    val pageResource = siblingList[pageIndex]
+                    if (pageIndex >= sortedSiblingList.size) return@HorizontalPager
+                    val pageResource = sortedSiblingList[pageIndex]
                     val pageUuid = pageResource.uniqueId
 
                     key(pageUuid) {
                         // Each page independently observes its own resource and (for datasets)
                         // thumbnails from the repository. Any fetch anywhere in the app that
                         // updates this uuid's cache entry is picked up automatically here.
+                        // displayResource starts as the lightweight sibling-list stub (no links)
+                        // and updates in place once the enriched fetch below lands — rendered
+                        // unconditionally from the first composition, so there is no loading
+                        // state to animate through and no full-screen spinner/content flash.
                         val displayResource by repository.observeResource(pageUuid)
                             .collectAsStateWithLifecycle(initialValue = repository.getCachedResource(pageUuid) ?: pageResource)
-                        val isEnriched = displayResource?.let { hasLinks(it) } == true
                         var enrichmentFailed by remember { mutableStateOf(false) }
 
-                        LaunchedEffect(pageUuid, isEnriched) {
-                            if (!isEnriched) {
-                                when (repository.fetchResourceByUuid(pageUuid)) {
-                                    is ResourceResult.Error -> enrichmentFailed = true
-                                    is ResourceResult.Success -> enrichmentFailed = false
-                                    is ResourceResult.Loading -> {}
-                                }
+                        // fetchResourceByUuid already short-circuits to the cached value when it
+                        // has links (i.e. came from a previous full fetch), so this is a no-op
+                        // network call on repeat visits — no need to gate it on link presence here.
+                        LaunchedEffect(pageUuid) {
+                            when (repository.fetchResourceByUuid(pageUuid)) {
+                                is ResourceResult.Error -> enrichmentFailed = true
+                                is ResourceResult.Success -> enrichmentFailed = false
+                                is ResourceResult.Loading -> {}
                             }
                         }
 
@@ -382,8 +440,10 @@ fun ResourceDetailScreen(
                         // case that's just as correct handled uniformly.
                         val displayThumbnails by repository.observeThumbnails(pageUuid)
                             .collectAsStateWithLifecycle(initialValue = null)
-                        LaunchedEffect(pageUuid, isEnriched) {
-                            if (isEnriched && pageResource is Dataset && displayThumbnails == null) {
+                        // Thumbnails come from their own endpoint independent of resource links,
+                        // so this fetch doesn't need to wait on the resource enrichment above.
+                        LaunchedEffect(pageUuid) {
+                            if (pageResource is Dataset && displayThumbnails == null) {
                                 repository.fetchThumbnails(pageUuid)
                             }
                         }
@@ -396,270 +456,256 @@ fun ResourceDetailScreen(
                         val pageSetCardState: (String, Boolean) -> Unit = { k, value -> onCardStateChange("$pageUuid/$k", value) }
 
                         Box(modifier = Modifier.fillMaxSize()) {
-                            AnimatedVisibility(
-                                visible = !isEnriched && !isRefreshing,
-                                enter = fadeIn(animationSpec = EffectsDefaultSpring),
-                                exit = fadeOut(animationSpec = EffectsDefaultSpring)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(scrollState)
+                                    .padding(16.dp)
                             ) {
-                                LoadingContent(title = "Loading Resource")
-                            }
+                                val hasPrev = pageIndex > 0 && siblingsResolved
+                                val hasNext = pageIndex < sortedSiblingList.size - 1 && siblingsResolved
 
-                            AnimatedVisibility(
-                                visible = isEnriched,
-                                enter = fadeIn(animationSpec = EffectsFastSpring),
-                                exit = fadeOut(animationSpec = EffectsFastSpring)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .verticalScroll(scrollState)
-                                        .padding(16.dp)
+                                Box(modifier = Modifier.padding(bottom = 16.dp)) {
+                                    BasicInfoCard(
+                                        resource = displayResource ?: pageResource,
+                                        onPrev = if (hasPrev) {
+                                            { scope.launch { pagerState.animateScrollToPage(pageIndex - 1) } }
+                                        } else null,
+                                        onNext = if (hasNext) {
+                                            { scope.launch { pagerState.animateScrollToPage(pageIndex + 1) } }
+                                        } else null,
+                                        currentIndex = pageIndex,
+                                        totalCount = sortedSiblingList.size,
+                                        siblingsResolved = siblingsResolved
+                                    )
+                                }
+
+                                val resolved = displayResource ?: pageResource
+
+                                AnimatedVisibility(
+                                    visible = enrichmentFailed,
+                                    enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                                    exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
                                 ) {
-                                    val hasPrev = pageIndex > 0
-                                    val hasNext = pageIndex < siblingList.size - 1
+                                    ErrorCard(
+                                        title = "Could not load full data",
+                                        message = "Links and metadata may be incomplete.",
+                                        modifier = Modifier.padding(bottom = 16.dp),
+                                        onRetry = { enrichmentFailed = false }
+                                    )
+                                }
 
-                                    Box(modifier = Modifier.padding(bottom = 16.dp)) {
-                                        BasicInfoCard(
-                                            resource = displayResource ?: pageResource,
-                                            onPrev = if (hasPrev) {
-                                                { scope.launch { pagerState.animateScrollToPage(pageIndex - 1) } }
-                                            } else null,
-                                            onNext = if (hasNext) {
-                                                { scope.launch { pagerState.animateScrollToPage(pageIndex + 1) } }
-                                            } else null,
-                                            currentIndex = pageIndex,
-                                            totalCount = siblingList.size,
-                                            siblingsResolved = siblingsResolved
-                                        )
-                                    }
-
-                                    val resolved = displayResource ?: pageResource
-
-                                    AnimatedVisibility(
-                                        visible = enrichmentFailed,
-                                        enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
-                                        exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
+                                val displayDeletionRequest = when (resolved) {
+                                    is Sample -> resolved.deletionRequest
+                                    is Dataset -> resolved.deletionRequest
+                                }
+                                if (displayDeletionRequest != null) {
+                                    val delStatus = (displayDeletionRequest["status"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "pending"
+                                    val delReason = (displayDeletionRequest["reason"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.ifBlank { null }
+                                    Card(
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
                                     ) {
-                                        ErrorCard(
-                                            title = "Could not load full data",
-                                            message = "Links and metadata may be incomplete.",
-                                            modifier = Modifier.padding(bottom = 16.dp),
-                                            onRetry = { enrichmentFailed = false }
-                                        )
-                                    }
-
-                                    val displayDeletionRequest = when (resolved) {
-                                        is Sample -> resolved.deletionRequest
-                                        is Dataset -> resolved.deletionRequest
-                                    }
-                                    if (displayDeletionRequest != null) {
-                                        val delStatus = (displayDeletionRequest["status"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "pending"
-                                        val delReason = (displayDeletionRequest["reason"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.ifBlank { null }
-                                        Card(
-                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                                        Row(
+                                            modifier = Modifier.padding(12.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Row(
-                                                modifier = Modifier.padding(12.dp),
-                                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                AppIcon(AppIcons.RequestDeletion, tint = MaterialTheme.colorScheme.onErrorContainer)
-                                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                                    Text(
-                                                        "Deletion ${delStatus.replaceFirstChar { it.uppercase() }}",
-                                                        style = MaterialTheme.typography.titleSmall,
-                                                        color = MaterialTheme.colorScheme.onErrorContainer
-                                                    )
-                                                    if (delReason != null) {
-                                                        Text(delReason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
-                                                    }
+                                            AppIcon(AppIcons.RequestDeletion, tint = MaterialTheme.colorScheme.onErrorContainer)
+                                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                Text(
+                                                    "Deletion ${delStatus.replaceFirstChar { it.uppercase() }}",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                                )
+                                                if (delReason != null) {
+                                                    Text(delReason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
                                                 }
                                             }
                                         }
                                     }
+                                }
 
-                                    when (resolved) {
-                                        is Sample -> Box(modifier = Modifier.padding(bottom = 16.dp)) {
-                                            SampleDetailsCard(
-                                                sample = resolved,
-                                                onProjectClick = onNavigateToProject,
-                                                onUserClick = onNavigateToUser,
-                                                onShowQr = { showQrDialog = true },
-                                                initialAdvanced = pageGetCardState("advanced"),
-                                                onAdvancedChange = { pageSetCardState("advanced", it) }
-                                            )
-                                        }
-                                        is Dataset -> Box(modifier = Modifier.padding(bottom = 16.dp)) {
-                                            DatasetDetailsCard(
-                                                dataset = resolved,
-                                                onProjectClick = onNavigateToProject,
-                                                onUserClick = onNavigateToUser,
-                                                onInstrumentClick = onNavigateToInstrument,
-                                                onShowQr = { showQrDialog = true },
-                                                initialAdvanced = pageGetCardState("advanced"),
-                                                onAdvancedChange = { pageSetCardState("advanced", it) }
-                                            )
-                                        }
+                                when (resolved) {
+                                    is Sample -> Box(modifier = Modifier.padding(bottom = 16.dp)) {
+                                        SampleDetailsCard(
+                                            sample = resolved,
+                                            onProjectClick = onNavigateToProject,
+                                            onUserClick = onNavigateToUser,
+                                            onShowQr = { showQrDialog = true },
+                                            initialAdvanced = pageGetCardState("advanced"),
+                                            onAdvancedChange = { pageSetCardState("advanced", it) }
+                                        )
                                     }
+                                    is Dataset -> Box(modifier = Modifier.padding(bottom = 16.dp)) {
+                                        DatasetDetailsCard(
+                                            dataset = resolved,
+                                            onProjectClick = onNavigateToProject,
+                                            onUserClick = onNavigateToUser,
+                                            onInstrumentClick = onNavigateToInstrument,
+                                            onShowQr = { showQrDialog = true },
+                                            initialAdvanced = pageGetCardState("advanced"),
+                                            onAdvancedChange = { pageSetCardState("advanced", it) }
+                                        )
+                                    }
+                                }
 
-                                    when (resolved) {
-                                        is Dataset -> {
-                                            AnimatedVisibility(
-                                                visible = resolvedThumbnails.isNotEmpty(),
-                                                enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
-                                                exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
-                                            ) {
-                                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), contentAlignment = Alignment.Center) {
-                                                    Column(modifier = Modifier.fillMaxWidth(0.9f)) {
-                                                        ThumbnailsSection(
-                                                            uuid = pageUuid,
-                                                            thumbnails = resolvedThumbnails,
-                                                            onDelete = { thumbnailId ->
-                                                                scope.launch {
-                                                                    val resp = apiClient.service.deleteThumbnail(pageUuid, thumbnailId)
-                                                                    if (resp is ApiResult.Success) {
-                                                                        repository.invalidateThumbnails(pageUuid)
-                                                                        repository.fetchThumbnails(pageUuid, forceRefresh = true)
-                                                                    }
+                                when (resolved) {
+                                    is Dataset -> {
+                                        AnimatedVisibility(
+                                            visible = resolvedThumbnails.isNotEmpty(),
+                                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
+                                        ) {
+                                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), contentAlignment = Alignment.Center) {
+                                                Column(modifier = Modifier.fillMaxWidth(0.9f)) {
+                                                    ThumbnailsSection(
+                                                        uuid = pageUuid,
+                                                        thumbnails = resolvedThumbnails,
+                                                        onDelete = { thumbnailId ->
+                                                            scope.launch {
+                                                                val resp = apiClient.service.deleteThumbnail(pageUuid, thumbnailId)
+                                                                if (resp is ApiResult.Success) {
+                                                                    repository.invalidateThumbnails(pageUuid)
+                                                                    repository.fetchThumbnails(pageUuid, forceRefresh = true)
                                                                 }
                                                             }
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                            AnimatedVisibility(
-                                                visible = resolved.links?.any { it.resourceType == "sample" && it.relationship == "associated" } == true,
-                                                enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
-                                                exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
-                                            ) {
-                                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                                                    LinkedSamplesCard(
-                                                        samples = resolved.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "associated" }.sortedBy { it.uniqueId },
-                                                        onNavigateToResource = onNavigateToResource,
-                                                        onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasetSample(resolved.uniqueId, u) } },
-                                                        initialExpanded = pageGetCardState("linked_samples"),
-                                                        onExpandChange = { pageSetCardState("linked_samples", it) }
+                                                        }
                                                     )
                                                 }
                                             }
-                                            AnimatedVisibility(
-                                                visible = resolved.links?.any { it.resourceType == "dataset" && it.relationship == "parent" } == true,
-                                                enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
-                                                exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
-                                            ) {
-                                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                                                    ParentDatasetsCard(
-                                                        parents = resolved.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "parent" }.sortedBy { it.uniqueId },
-                                                        onNavigateToResource = onNavigateToResource,
-                                                        onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasets(u, resolved.uniqueId) } },
-                                                        initialExpanded = pageGetCardState("parent_datasets"),
-                                                        onExpandChange = { pageSetCardState("parent_datasets", it) }
-                                                    )
-                                                }
-                                            }
-                                            AnimatedVisibility(
-                                                visible = resolved.links?.any { it.resourceType == "dataset" && it.relationship == "child" } == true,
-                                                enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
-                                                exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
-                                            ) {
-                                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                                                    ChildDatasetsCard(
-                                                        children = resolved.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "child" }.sortedBy { it.uniqueId },
-                                                        onNavigateToResource = onNavigateToResource,
-                                                        onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasets(resolved.uniqueId, u) } },
-                                                        initialExpanded = pageGetCardState("child_datasets"),
-                                                        onExpandChange = { pageSetCardState("child_datasets", it) }
-                                                    )
-                                                }
-                                            }
-                                            AnimatedVisibility(
-                                                visible = !resolved.scientificMetadata.isNullOrEmpty(),
-                                                enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
-                                                exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
-                                            ) {
-                                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                                                    ScientificMetadataCard(
-                                                        metadata = resolved.scientificMetadata ?: emptyMap(),
-                                                        initialExpanded = pageGetCardState("sci_meta_expanded"),
-                                                        initialExpandAll = pageGetCardState("sci_meta_expand_all"),
-                                                        onExpandedChange = { pageSetCardState("sci_meta_expanded", it) },
-                                                        onExpandAllChange = { pageSetCardState("sci_meta_expand_all", it) }
-                                                    )
-                                                }
-                                            }
-                                            AssociatedFilesCard(
-                                                datasetUuid = pageUuid,
-                                                initialExpanded = pageGetCardState("download_links"),
-                                                onExpandedChange = { pageSetCardState("download_links", it) }
-                                            )
                                         }
-                                        is Sample -> {
-                                            AnimatedVisibility(
-                                                visible = resolved.links?.any { it.resourceType == "sample" && it.relationship == "parent" } == true,
-                                                enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
-                                                exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
-                                            ) {
-                                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                                                    ParentSamplesCard(
-                                                        parents = resolved.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "parent" }.sortedBy { it.uniqueId },
-                                                        onNavigateToResource = onNavigateToResource,
-                                                        onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkSamples(u, resolved.uniqueId) } },
-                                                        initialExpanded = pageGetCardState("parent_samples"),
-                                                        onExpandChange = { pageSetCardState("parent_samples", it) }
-                                                    )
-                                                }
+                                        AnimatedVisibility(
+                                            visible = resolved.links?.any { it.resourceType == "sample" && it.relationship == "associated" } == true,
+                                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
+                                        ) {
+                                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                                                LinkedSamplesCard(
+                                                    samples = resolved.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "associated" }.sortedBy { it.uniqueId },
+                                                    onNavigateToResource = onNavigateToResource,
+                                                    onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasetSample(resolved.uniqueId, u) } },
+                                                    initialExpanded = pageGetCardState("linked_samples"),
+                                                    onExpandChange = { pageSetCardState("linked_samples", it) }
+                                                )
                                             }
-                                            AnimatedVisibility(
-                                                visible = resolved.links?.any { it.resourceType == "sample" && it.relationship == "child" } == true,
-                                                enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
-                                                exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
-                                            ) {
-                                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                                                    ChildSamplesCard(
-                                                        children = resolved.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "child" }.sortedBy { it.uniqueId },
-                                                        onNavigateToResource = onNavigateToResource,
-                                                        onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkSamples(resolved.uniqueId, u) } },
-                                                        initialExpanded = pageGetCardState("child_samples"),
-                                                        onExpandChange = { pageSetCardState("child_samples", it) }
-                                                    )
-                                                }
+                                        }
+                                        AnimatedVisibility(
+                                            visible = resolved.links?.any { it.resourceType == "dataset" && it.relationship == "parent" } == true,
+                                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
+                                        ) {
+                                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                                                ParentDatasetsCard(
+                                                    parents = resolved.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "parent" }.sortedBy { it.uniqueId },
+                                                    onNavigateToResource = onNavigateToResource,
+                                                    onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasets(u, resolved.uniqueId) } },
+                                                    initialExpanded = pageGetCardState("parent_datasets"),
+                                                    onExpandChange = { pageSetCardState("parent_datasets", it) }
+                                                )
                                             }
-                                            AnimatedVisibility(
-                                                visible = resolved.links?.any { it.resourceType == "dataset" && it.relationship == "associated" } == true,
-                                                enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
-                                                exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
-                                            ) {
-                                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                                                    LinkedDatasetsCard(
-                                                        datasets = resolved.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "associated" }.sortedBy { it.uniqueId },
-                                                        onNavigateToResource = onNavigateToResource,
-                                                        onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasetSample(u, resolved.uniqueId) } },
-                                                        initialExpanded = pageGetCardState("linked_datasets"),
-                                                        onExpandChange = { pageSetCardState("linked_datasets", it) }
-                                                    )
-                                                }
+                                        }
+                                        AnimatedVisibility(
+                                            visible = resolved.links?.any { it.resourceType == "dataset" && it.relationship == "child" } == true,
+                                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
+                                        ) {
+                                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                                                ChildDatasetsCard(
+                                                    children = resolved.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "child" }.sortedBy { it.uniqueId },
+                                                    onNavigateToResource = onNavigateToResource,
+                                                    onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasets(resolved.uniqueId, u) } },
+                                                    initialExpanded = pageGetCardState("child_datasets"),
+                                                    onExpandChange = { pageSetCardState("child_datasets", it) }
+                                                )
                                             }
-                                            AnimatedVisibility(
-                                                visible = !resolved.scientificMetadata.isNullOrEmpty(),
-                                                enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
-                                                exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
-                                            ) {
-                                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                                                    ScientificMetadataCard(
-                                                        metadata = resolved.scientificMetadata ?: emptyMap(),
-                                                        initialExpanded = pageGetCardState("sci_meta_expanded"),
-                                                        initialExpandAll = pageGetCardState("sci_meta_expand_all"),
-                                                        onExpandedChange = { pageSetCardState("sci_meta_expanded", it) },
-                                                        onExpandAllChange = { pageSetCardState("sci_meta_expand_all", it) }
-                                                    )
-                                                }
+                                        }
+                                        AnimatedVisibility(
+                                            visible = !resolved.scientificMetadata.isNullOrEmpty(),
+                                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
+                                        ) {
+                                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                                                ScientificMetadataCard(
+                                                    metadata = resolved.scientificMetadata ?: emptyMap(),
+                                                    initialExpanded = pageGetCardState("sci_meta_expanded"),
+                                                    initialExpandAll = pageGetCardState("sci_meta_expand_all"),
+                                                    onExpandedChange = { pageSetCardState("sci_meta_expanded", it) },
+                                                    onExpandAllChange = { pageSetCardState("sci_meta_expand_all", it) }
+                                                )
+                                            }
+                                        }
+                                        AssociatedFilesCard(
+                                            datasetUuid = pageUuid,
+                                            initialExpanded = pageGetCardState("download_links"),
+                                            onExpandedChange = { pageSetCardState("download_links", it) }
+                                        )
+                                    }
+                                    is Sample -> {
+                                        AnimatedVisibility(
+                                            visible = resolved.links?.any { it.resourceType == "sample" && it.relationship == "parent" } == true,
+                                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
+                                        ) {
+                                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                                                ParentSamplesCard(
+                                                    parents = resolved.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "parent" }.sortedBy { it.uniqueId },
+                                                    onNavigateToResource = onNavigateToResource,
+                                                    onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkSamples(u, resolved.uniqueId) } },
+                                                    initialExpanded = pageGetCardState("parent_samples"),
+                                                    onExpandChange = { pageSetCardState("parent_samples", it) }
+                                                )
+                                            }
+                                        }
+                                        AnimatedVisibility(
+                                            visible = resolved.links?.any { it.resourceType == "sample" && it.relationship == "child" } == true,
+                                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
+                                        ) {
+                                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                                                ChildSamplesCard(
+                                                    children = resolved.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "child" }.sortedBy { it.uniqueId },
+                                                    onNavigateToResource = onNavigateToResource,
+                                                    onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkSamples(resolved.uniqueId, u) } },
+                                                    initialExpanded = pageGetCardState("child_samples"),
+                                                    onExpandChange = { pageSetCardState("child_samples", it) }
+                                                )
+                                            }
+                                        }
+                                        AnimatedVisibility(
+                                            visible = resolved.links?.any { it.resourceType == "dataset" && it.relationship == "associated" } == true,
+                                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
+                                        ) {
+                                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                                                LinkedDatasetsCard(
+                                                    datasets = resolved.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "associated" }.sortedBy { it.uniqueId },
+                                                    onNavigateToResource = onNavigateToResource,
+                                                    onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasetSample(u, resolved.uniqueId) } },
+                                                    initialExpanded = pageGetCardState("linked_datasets"),
+                                                    onExpandChange = { pageSetCardState("linked_datasets", it) }
+                                                )
+                                            }
+                                        }
+                                        AnimatedVisibility(
+                                            visible = !resolved.scientificMetadata.isNullOrEmpty(),
+                                            enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                                            exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
+                                        ) {
+                                            Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                                                ScientificMetadataCard(
+                                                    metadata = resolved.scientificMetadata ?: emptyMap(),
+                                                    initialExpanded = pageGetCardState("sci_meta_expanded"),
+                                                    initialExpandAll = pageGetCardState("sci_meta_expand_all"),
+                                                    onExpandedChange = { pageSetCardState("sci_meta_expanded", it) },
+                                                    onExpandAllChange = { pageSetCardState("sci_meta_expand_all", it) }
+                                                )
                                             }
                                         }
                                     }
-
-                                    Spacer(Modifier.height(16.dp))
                                 }
+
+                                Spacer(Modifier.height(16.dp))
                             }
 
                             ScrollToTopButton(
@@ -683,52 +729,6 @@ fun ResourceDetailScreen(
     } // end AppScaffold
 
     // Screen-level sheets and dialogs — operate on currentDisplayResource
-    if (showSiblingGroupDialog) {
-        val forGroupOptions = currentDisplayResource
-        if (forGroupOptions != null) {
-            val options: List<Pair<String, String>> = when (forGroupOptions) {
-                is Sample  -> listOf("TYPE" to "Type", "DATE" to "Date", "OWNER" to "Owner")
-                is Dataset -> listOf(
-                    "MEASUREMENT" to "Measurement",
-                    "INSTRUMENT"  to "Instrument",
-                    "DATE"        to "Date",
-                    "FORMAT"      to "Format",
-                    "SESSION"     to "Session",
-                    "OWNER"       to "Owner"
-                )
-            }
-            val effectiveActive = activeSiblingGroupBy ?: when (forGroupOptions) {
-                is Sample -> "TYPE"; is Dataset -> "MEASUREMENT"
-            }
-            AlertDialog(
-                onDismissRequest = { showSiblingGroupDialog = false },
-                icon = { AppIcon(AppIcons.SwapResource) },
-                title = { Text("Sibling grouping") },
-                text = {
-                    Column {
-                        options.forEach { (value, label) ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        activeSiblingGroupBy = value
-                                        showSiblingGroupDialog = false
-                                    }
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(selected = effectiveActive == value, onClick = null)
-                                Text(label, style = MaterialTheme.typography.bodyLarge)
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showSiblingGroupDialog = false }) { Text("Cancel") }
-                }
-            )
-        }
-    }
     val editSheetResource = currentDisplayResource
     if (showEditSheet && editSheetResource != null) {
         EditResourceSheet(
@@ -804,10 +804,10 @@ fun ResourceDetailScreen(
 
     // QR Code Dialog with horizontal navigation
     if (showQrDialog) {
-        if (siblingList.isNotEmpty() && siblingIndex >= 0) {
+        if (sortedSiblingList.isNotEmpty() && siblingIndex >= 0) {
             QrCodeDialogWithNavigation(
-                resources = siblingList,
-                initialIndex = pagerState.currentPage % siblingList.size,
+                resources = sortedSiblingList,
+                initialIndex = pagerState.currentPage % sortedSiblingList.size,
                 onDismiss = { showQrDialog = false },
                 onPageChange = { pageIndex ->
                     scope.launch { pagerState.animateScrollToPage(pageIndex) }

@@ -24,7 +24,8 @@ import crucible.lens.ui.detail.components.InfoRow
 @Composable
 fun ManageInstrumentScreen(
     viewModel: ManageInstrumentViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onHome: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
     val editState by viewModel.editState.collectAsState()
@@ -39,6 +40,9 @@ fun ManageInstrumentScreen(
                         IconButton(onClick = { viewModel.startEdit() }) {
                             AppIcon(AppIcons.Edit)
                         }
+                    }
+                    IconButton(onClick = onHome) {
+                        AppIcon(AppIcons.Home)
                     }
                 }
             )

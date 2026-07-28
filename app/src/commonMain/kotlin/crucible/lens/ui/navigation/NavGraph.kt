@@ -296,6 +296,13 @@ fun NavGraph(
                 onSettingsClick = {
                     navController.navigate(Screen.Settings.route)
                 },
+                onAccountClick = {
+                    if (apiKey.isNullOrBlank()) {
+                        navController.navigate(Screen.Settings.route)
+                    } else {
+                        navController.navigate(Screen.SettingsAccount.route)
+                    }
+                },
                 onHistory = {
                     navController.navigate(Screen.History.route)
                 },
@@ -704,7 +711,7 @@ fun NavGraph(
             val manageViewModel: ManageProjectViewModel = koinViewModel()
             val currentUserProfile by prefs.userProfile.collectAsStateWithLifecycle()
             LaunchedEffect(projectId) { manageViewModel.init(projectId, currentUserProfile?.uniqueId) }
-            ManageProjectScreen(viewModel = manageViewModel, onBack = navigateBack)
+            ManageProjectScreen(viewModel = manageViewModel, onBack = navigateBack, onHome = navigateHome)
         }
 
         composable(Screen.Instruments.route) {
@@ -750,7 +757,7 @@ fun NavGraph(
             val instrumentId = backStackEntry.savedStateHandle.get<String>("instrumentId") ?: ""
             val manageViewModel: ManageInstrumentViewModel = koinViewModel()
             LaunchedEffect(instrumentId) { manageViewModel.init(instrumentId) }
-            ManageInstrumentScreen(viewModel = manageViewModel, onBack = navigateBack)
+            ManageInstrumentScreen(viewModel = manageViewModel, onBack = navigateBack, onHome = navigateHome)
         }
 
         composable(

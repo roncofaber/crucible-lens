@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0] – 2026-07-27
+
+### Added
+- **Project join requests**: request to join a project you're not a member of, project leads (or admins) review pending requests, and your own request history is visible from the Account screen
+- **Discover projects**: search can now find projects you're not a member of ("Discover" filter chip in Search), shown with a muted, non-clickable-to-open treatment
+- Non-member project view: samples/datasets tabs are replaced with a clear "You're not a member of this project" message and a "Request to join" action, instead of a misleading empty list
+- Home screen: dedicated Account icon in the top bar, separate from Settings
+- Manage Project and Manage Instrument screens: added a Home button, matching every other screen's top bar
+
+### Changed
+- Instrument icon switched to a filled/solid glyph, matching the Project icon's visual weight
+- Loading and empty-state content on Project Detail biased toward the upper half of the screen instead of centering within the area below the header, which read as too low
+
 ## [0.6.0] – 2026-07-23
 
 ### Changed

@@ -4,6 +4,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import crucible.lens.data.model.Dataset
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.repository.ResourceResult
 import crucible.lens.data.sync.DataSyncManager
@@ -115,15 +116,19 @@ class ResourceDetailViewModel(
 
         activeFetchJob = viewModelScope.launch {
             val trimmedUuid = uuid.trim()
-            repository.invalidateResource(trimmedUuid)
-            repository.invalidateThumbnails(trimmedUuid)
 
             val current = _uiState.value
             val isPrimary = current is UiState.Success && current.uuid == trimmedUuid
             _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = true) else it }
             try {
-                when (val result = repository.fetchResourceByUuid(trimmedUuid)) {
+                // forceRefresh (not invalidate-then-fetch) keeps serving the existing cached
+                // resource/thumbnails to every observer until the fresh result lands, so
+                // links/metadata/thumbnail-gated cards never collapse and pop back in mid-refresh.
+                when (val result = repository.fetchResourceByUuid(trimmedUuid, forceRefresh = true)) {
                     is ResourceResult.Success -> {
+                        if (result.resource is Dataset) {
+                            repository.fetchThumbnails(trimmedUuid, forceRefresh = true)
+                        }
                         // isPrimary distinguishes refreshing the currently-displayed resource
                         // from refreshing a sibling reached via the pager — either way the
                         // fresh data lands in the repository's cache and every page observing

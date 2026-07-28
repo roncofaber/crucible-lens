@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.model.User
 import crucible.lens.data.preferences.AppPreferences
 import kotlinx.coroutines.Job
@@ -68,6 +69,9 @@ class AccountViewModel(
     val currentApiKey: StateFlow<String?> = prefs.apiKey
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    private val _joinRequests = MutableStateFlow<List<JoinRequest>>(emptyList())
+    val joinRequests: StateFlow<List<JoinRequest>> = _joinRequests.asStateFlow()
+
     private var usernameCheckJob: Job? = null
 
     fun loadProfile() {
@@ -93,6 +97,7 @@ class AccountViewModel(
         val apiKey = prefs.apiKey.first()
         if (apiKey.isNullOrBlank()) {
             _profileState.value = ProfileUiState.NotLoggedIn
+            _joinRequests.value = emptyList()
             return
         }
         when (val result = apiClient.service.getProfile()) {
@@ -107,6 +112,7 @@ class AccountViewModel(
                 }
             }
         }
+        _joinRequests.value = (apiClient.service.getMyJoinRequests() as? ApiResult.Success)?.data ?: emptyList()
     }
 
     fun retryLoad() {
@@ -209,6 +215,7 @@ class AccountViewModel(
             cacheManager.clearAll()
             _profileState.value = ProfileUiState.NotLoggedIn
             _editState.value = EditUiState.Idle
+            _joinRequests.value = emptyList()
         }
     }
 

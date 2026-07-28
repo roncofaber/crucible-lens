@@ -63,6 +63,7 @@ fun HomeScreen(
     onBrowseProjects: () -> Unit,
     onBrowseInstruments: () -> Unit = {},
     onSettingsClick: () -> Unit,
+    onAccountClick: () -> Unit = {},
     onHistory: () -> Unit = {},
     onSearch: () -> Unit = {},
     pinnedProjects: Set<String> = emptySet(),
@@ -221,6 +222,7 @@ fun HomeScreen(
                             }
                         }
                         IconButton(onClick = { showHelpDialog = true }) { AppIcon(AppIcons.Help) }
+                        IconButton(onClick = onAccountClick) { AppIcon(AppIcons.User) }
                         IconButton(onClick = onSettingsClick) { AppIcon(AppIcons.Settings) }
                     }
                 )

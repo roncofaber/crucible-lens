@@ -43,6 +43,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -53,11 +54,14 @@ import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
+import crucible.lens.data.model.JoinRequest
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.util.dateGroupKey
 import crucible.lens.data.util.SortField
 import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import crucible.lens.ui.common.AppScaffold
@@ -71,6 +75,7 @@ import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.fadeEndEdge
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
+import crucible.lens.ui.common.UpperCenterAlignment
 import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.platform.openUrl
 import androidx.compose.ui.graphics.SolidColor
@@ -201,8 +206,32 @@ fun ProjectDetailScreen(
     onManageProject: () -> Unit = {},
     onUserClick: (String) -> Unit = {}) {
     val cacheManager = koinInject<CacheManager>()
-    val project = remember(projectId) {
-        cacheManager.getProjects()?.find { it.projectId == projectId }
+    val repository = koinInject<CrucibleRepository>()
+    // Observed reactively so the header updates in place once fetched — covers both member
+    // projects (usually warm already from the Projects list fetch) and non-member projects
+    // reached via discover-search (never in that list, so this is a cold single fetch).
+    val project by repository.observeProject(projectId)
+        .collectAsStateWithLifecycle(initialValue = repository.getCachedProject(projectId))
+    LaunchedEffect(projectId) {
+        if (repository.getCachedProject(projectId) == null) {
+            repository.fetchProject(projectId)
+        }
+    }
+
+    // Membership check for the join-request banner. null = not loaded yet (treated as
+    // "assume member" to avoid flashing the banner before the list arrives) — mirrors the
+    // "confidently non-member" condition already used in SearchScreen's discover toggle.
+    val apiClient = koinInject<ApiClient>()
+    val memberProjects by repository.observeProjects().collectAsStateWithLifecycle(initialValue = null)
+    val isConfidentlyNonMember = memberProjects != null && memberProjects!!.none { it.projectId == projectId }
+    var joinRequestState by remember(projectId) { mutableStateOf<JoinRequest?>(null) }
+    var joinRequestChecked by remember(projectId) { mutableStateOf(false) }
+    var showJoinDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(projectId, isConfidentlyNonMember) {
+        if (!isConfidentlyNonMember) { joinRequestChecked = false; return@LaunchedEffect }
+        joinRequestState = (apiClient.service.getMyJoinRequests(status = "pending") as? ApiResult.Success)?.data
+            ?.find { it.groupName == projectId }
+        joinRequestChecked = true
     }
 
     val ctx = getPlatformContext()
@@ -320,97 +349,112 @@ fun ProjectDetailScreen(
                         onUserClick = onUserClick)
                 }
 
-                // TabRow — fixed below the header, above the pager
-                PrimaryTabRow(selectedTabIndex = pagerState.currentPage) {
-                    Tab(
-                        selected = pagerState.currentPage == 0,
-                        onClick = {
-                            scope.launch {
-                                pagerState.animateScrollToPage(
-                                    page = 0,
-                                    animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
-                                )
-                            }
-                        },
-                        text = {
-                            val count = filteredSamples.size
-                            val total = samples.size
-                            val label = if (searchQuery.isBlank()) "Samples ($total)"
-                                else "Samples ($count/$total)"
-                            AnimatedContent(
-                                targetState = label,
-                                transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
-                                label = "samples_tab_label"
-                            ) { Text(it) }
-                        },
-                        icon = { AppIcon(AppIcons.Sample) }
-                    )
-                    Tab(
-                        selected = pagerState.currentPage == 1,
-                        onClick = {
-                            scope.launch {
-                                pagerState.animateScrollToPage(
-                                    page = 1,
-                                    animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
-                                )
-                            }
-                        },
-                        text = {
-                            val count = filteredDatasets.size
-                            val total = datasets.size
-                            val label = when {
-                                searchQuery.isBlank() -> "Datasets ($total)"
-                                else -> "Datasets ($count/$total)"
-                            }
-                            AnimatedContent(
-                                targetState = label,
-                                transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
-                                label = "datasets_tab_label"
-                            ) { Text(it) }
-                        },
-                        icon = { AppIcon(AppIcons.Dataset) }
-                    )
-                }
-
-                // Pager — only list content swipes, header+tabs stay fixed above
-                when {
-                    loadState is LoadState.Loading -> LoadingContent(
-                        title = "Loading Project Data",
+                if (isConfidentlyNonMember) {
+                    // Non-members never see actual samples/datasets (the list endpoints
+                    // silently filter to public/ACL-visible resources), so the normal
+                    // tabs+pager would just show a misleading "No Samples"/"No Datasets"
+                    // empty state. Replace the whole content area with an explicit
+                    // not-a-member message and the join action instead.
+                    NonMemberContent(
+                        isPending = joinRequestState != null,
+                        isChecking = !joinRequestChecked,
+                        onRequestJoin = { showJoinDialog = true },
                         modifier = Modifier.fillMaxWidth().weight(1f)
                     )
-                    loadState is LoadState.Error -> Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                        ErrorCard(
-                            title = "Error Loading Data",
-                            message = (loadState as LoadState.Error).message,
-                            modifier = Modifier.padding(16.dp),
-                            onRetry = { viewModel.load(projectId, isHidden = isHidden, forceRefresh = true) }
+                } else {
+                    // TabRow — fixed below the header, above the pager
+                    PrimaryTabRow(selectedTabIndex = pagerState.currentPage) {
+                        Tab(
+                            selected = pagerState.currentPage == 0,
+                            onClick = {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(
+                                        page = 0,
+                                        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
+                                    )
+                                }
+                            },
+                            text = {
+                                val count = filteredSamples.size
+                                val total = samples.size
+                                val label = if (searchQuery.isBlank()) "Samples ($total)"
+                                    else "Samples ($count/$total)"
+                                AnimatedContent(
+                                    targetState = label,
+                                    transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
+                                    label = "samples_tab_label"
+                                ) { Text(it) }
+                            },
+                            icon = { AppIcon(AppIcons.Sample) }
+                        )
+                        Tab(
+                            selected = pagerState.currentPage == 1,
+                            onClick = {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(
+                                        page = 1,
+                                        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
+                                    )
+                                }
+                            },
+                            text = {
+                                val count = filteredDatasets.size
+                                val total = datasets.size
+                                val label = when {
+                                    searchQuery.isBlank() -> "Datasets ($total)"
+                                    else -> "Datasets ($count/$total)"
+                                }
+                                AnimatedContent(
+                                    targetState = label,
+                                    transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
+                                    label = "datasets_tab_label"
+                                ) { Text(it) }
+                            },
+                            icon = { AppIcon(AppIcons.Dataset) }
                         )
                     }
-                    else -> HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxWidth().weight(1f)
-                    ) { page ->
-                        when (page) {
-                            0 -> SamplesList(
-                                samples = filteredSamples,
-                                isFiltered = searchQuery.isNotBlank(),
-                                fromCache = (loadState as? LoadState.Success)?.fromCache ?: false,
-                                projectId = projectId,
-                                graphExplorerUrl = graphExplorerUrl,
-                                groupBy = sampleGroupBy,
-                                sortState = sortState,
-                                onSampleClick = { uuid -> onResourceClick(uuid, sampleGroupBy.name) }
+
+                    // Pager — only list content swipes, header+tabs stay fixed above
+                    when {
+                        loadState is LoadState.Loading -> LoadingContent(
+                            title = "Loading Project Data",
+                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            contentAlignment = UpperCenterAlignment
+                        )
+                        loadState is LoadState.Error -> Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                            ErrorCard(
+                                title = "Error Loading Data",
+                                message = (loadState as LoadState.Error).message,
+                                modifier = Modifier.padding(16.dp),
+                                onRetry = { viewModel.load(projectId, isHidden = isHidden, forceRefresh = true) }
                             )
-                            1 -> DatasetsList(
-                                datasets = filteredDatasets,
-                                isFiltered = searchQuery.isNotBlank(),
-                                fromCache = (loadState as? LoadState.Success)?.fromCache ?: false,
-                                projectId = projectId,
-                                graphExplorerUrl = graphExplorerUrl,
-                                groupBy = datasetGroupBy,
-                                sortState = sortState,
-                                onDatasetClick = { uuid -> onResourceClick(uuid, datasetGroupBy.name) }
-                            )
+                        }
+                        else -> HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier.fillMaxWidth().weight(1f)
+                        ) { page ->
+                            when (page) {
+                                0 -> SamplesList(
+                                    samples = filteredSamples,
+                                    isFiltered = searchQuery.isNotBlank(),
+                                    fromCache = (loadState as? LoadState.Success)?.fromCache ?: false,
+                                    projectId = projectId,
+                                    graphExplorerUrl = graphExplorerUrl,
+                                    groupBy = sampleGroupBy,
+                                    sortState = sortState,
+                                    onSampleClick = { uuid -> onResourceClick(uuid, sampleGroupBy.name) }
+                                )
+                                1 -> DatasetsList(
+                                    datasets = filteredDatasets,
+                                    isFiltered = searchQuery.isNotBlank(),
+                                    fromCache = (loadState as? LoadState.Success)?.fromCache ?: false,
+                                    projectId = projectId,
+                                    graphExplorerUrl = graphExplorerUrl,
+                                    groupBy = datasetGroupBy,
+                                    sortState = sortState,
+                                    onDatasetClick = { uuid -> onResourceClick(uuid, datasetGroupBy.name) }
+                                )
+                            }
                         }
                     }
                 }
@@ -418,8 +462,143 @@ fun ProjectDetailScreen(
         }
     }
 
+    if (showJoinDialog) {
+        JoinRequestDialog(
+            projectId = projectId,
+            onDismiss = { showJoinDialog = false },
+            onSubmitted = { request -> showJoinDialog = false; joinRequestState = request }
+        )
+    }
 }
 
+@Composable
+private fun NonMemberContent(
+    isPending: Boolean,
+    isChecking: Boolean,
+    onRequestJoin: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier, contentAlignment = UpperCenterAlignment) {
+        if (isChecking) {
+            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(32.dp))
+            return@Box
+        }
+        Column(
+            modifier = Modifier.padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            AppIcon(
+                if (isPending) AppIcons.Pending else AppIcons.PersonAdd,
+                modifier = Modifier.size(40.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            )
+            Text(
+                text = "You're not a member of this project",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = "Samples and datasets are only visible to members.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            if (isPending) {
+                Text(
+                    text = "Join request pending",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                Button(onClick = onRequestJoin) {
+                    Text("Request to join")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun JoinRequestDialog(
+    projectId: String,
+    onDismiss: () -> Unit,
+    onSubmitted: (JoinRequest) -> Unit
+) {
+    var reason by remember { mutableStateOf("") }
+    var isSubmitting by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val apiClient = koinInject<ApiClient>()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { AppIcon(AppIcons.PersonAdd) },
+        title = { Text("Request to join") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Ask the project lead to add you as a member.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                OutlinedTextField(
+                    value = reason,
+                    onValueChange = { reason = it },
+                    label = { Text("Reason (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 4,
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                )
+                if (errorMsg != null) {
+                    Text(
+                        errorMsg!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    scope.launch {
+                        isSubmitting = true
+                        errorMsg = null
+                        try {
+                            val resp = apiClient.service.requestToJoinProject(
+                                projectId = projectId,
+                                reason = reason.trim().ifBlank { null }
+                            )
+                            when (resp) {
+                                is ApiResult.Success -> onSubmitted(resp.data)
+                                is ApiResult.Error -> errorMsg = when (resp.code) {
+                                    409 -> "You already have a pending request, or are already a member"
+                                    else -> "Failed (${resp.code})"
+                                }
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            errorMsg = "Network error: ${e.message}"
+                        } finally {
+                            isSubmitting = false
+                        }
+                    }
+                },
+                enabled = !isSubmitting
+            ) {
+                if (isSubmitting) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                else Text("Submit")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
 
 @Composable
 private fun ProjectHeader(
@@ -598,8 +777,7 @@ private fun ProjectHeader(
                     DropdownMenu(expanded = groupMenuExpanded, onDismissRequest = { groupMenuExpanded = false }) {
                         DropdownMenuItem(
                             text = { Text("Group by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                            onClick = {}, enabled = false,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                            onClick = {}, enabled = false
                         )
                         if (currentPage == 0) {
                             SampleGroupBy.entries.forEach { opt ->
@@ -611,8 +789,7 @@ private fun ProjectHeader(
                                             Text(opt.label)
                                         }
                                     },
-                                    onClick = { onSampleGroupByChange(opt); groupMenuExpanded = false },
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                    onClick = { onSampleGroupByChange(opt); groupMenuExpanded = false }
                                 )
                             }
                         } else {
@@ -625,8 +802,7 @@ private fun ProjectHeader(
                                             Text(opt.label)
                                         }
                                     },
-                                    onClick = { onDatasetGroupByChange(opt); groupMenuExpanded = false },
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                    onClick = { onDatasetGroupByChange(opt); groupMenuExpanded = false }
                                 )
                             }
                         }
@@ -639,8 +815,7 @@ private fun ProjectHeader(
                     DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
                         DropdownMenuItem(
                             text = { Text("Sort by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                            onClick = {}, enabled = false,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                            onClick = {}, enabled = false
                         )
                         SortField.entries.forEach { field ->
                             DropdownMenuItem(
@@ -656,8 +831,7 @@ private fun ProjectHeader(
                                         if (sortState.field == field) sortState.copy(ascending = !sortState.ascending)
                                         else SortState(field, true)
                                     )
-                                },
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                }
                             )
                         }
                     }

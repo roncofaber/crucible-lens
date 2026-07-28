@@ -32,8 +32,10 @@ import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.ResourceSearchResult
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.FilterSheet
 import crucible.lens.ui.common.SearchFilters
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
@@ -56,10 +58,19 @@ fun SearchScreen(
     userOrcid: String? = null
 ) {
     val apiClient = koinInject<ApiClient>()
+    val repository = koinInject<CrucibleRepository>()
     var query by rememberSaveable { mutableStateOf("") }
     var showMineOnly by rememberSaveable { mutableStateOf(false) }
+    // Off (default): project search results are limited to projects the user is already a
+    // member of, matching /projects/search's old member-only scope. On: shows every project
+    // matching the query, including ones the user isn't a member of — surfaced with a
+    // "not a member" visual treatment and a way to request access instead of opening directly.
+    var discoverAllProjects by rememberSaveable { mutableStateOf(false) }
     // Search mode: false = name search, true = metadata search
     var metadataMode by rememberSaveable { mutableStateOf(false) }
+    val memberProjects by repository.observeProjects()
+        .collectAsStateWithLifecycle(initialValue = null)
+    val memberProjectIds = remember(memberProjects) { memberProjects?.map { it.projectId }?.toSet() }
 
     var activeFilters by remember { mutableStateOf(SearchFilters()) }
     var isFilterLoading by remember { mutableStateOf(false) }
@@ -80,7 +91,7 @@ fun SearchScreen(
     LaunchedEffect(query) { metadataResults = null }
 
     // Name search — fires in name mode
-    LaunchedEffect(query, metadataMode, activeFilters.isActive) {
+    LaunchedEffect(query, metadataMode, activeFilters.isActive, discoverAllProjects) {
         if (metadataMode) {
             nameResults = emptyList(); isNameSearching = false; return@LaunchedEffect
         }
@@ -97,9 +108,15 @@ fun SearchScreen(
         val datasets = (apiClient.service.searchDatasets(q) as? ApiResult.Success)?.data
             ?.map { ResourceSearchResult(it.uniqueId, "dataset", it.name, it.ownerOrcid) }
             ?: emptyList()
-        val projects = (apiClient.service.searchProjects(q) as? ApiResult.Success)?.data
-            ?.map { ResourceSearchResult(it.projectId, "project", it.title ?: it.projectId) }
+        // /projects/search returns every matching project regardless of membership — when the
+        // discover toggle is off, drop results the user isn't a member of, matching this
+        // endpoint's old member-only scope. memberProjectIds == null (list not loaded yet)
+        // means "don't filter" rather than "filter everything out".
+        val allProjectMatches = (apiClient.service.searchProjects(q) as? ApiResult.Success)?.data
             ?: emptyList()
+        val projects = (if (discoverAllProjects || memberProjectIds == null) allProjectMatches
+                        else allProjectMatches.filter { it.projectId in memberProjectIds })
+            .map { ResourceSearchResult(it.projectId, "project", it.title ?: it.projectId) }
         val combined = projects + samples + datasets
         nameResults = if (showMineOnly && userOrcid != null)
             combined.filter { it.ownerOrcid == userOrcid || it.resourceType == "project" }
@@ -260,6 +277,23 @@ fun SearchScreen(
                                         } else null
                                     )
                                 }
+                                // Off (default): projects you're not a member of are excluded
+                                // from results, matching the historical member-only search
+                                // scope. On: search every project — results you're not a
+                                // member of show a "Request to join" action instead of opening.
+                                if (!metadataMode) {
+                                    FilterChip(
+                                        selected = discoverAllProjects,
+                                        onClick = { discoverAllProjects = !discoverAllProjects },
+                                        label = { Text("Discover") },
+                                        leadingIcon = {
+                                            AppIcon(
+                                                if (discoverAllProjects) AppIcons.Check else AppIcons.Public,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    )
+                                }
                                 if (!metadataMode && activeFilters.isActive) {
                                     FilterChip(
                                         selected = true,
@@ -319,7 +353,10 @@ fun SearchScreen(
                                 if (projectResults.isNotEmpty()) {
                                     item(key = "header_projects") { SearchSectionHeader("Projects (${projectResults.size})") }
                                     items(projectResults, key = { it.uniqueId }) { result ->
-                                        SearchResultItem(result) { onProjectClick(result.uniqueId) }
+                                        SearchResultItem(
+                                            result = result,
+                                            isNonMemberProject = memberProjectIds != null && result.uniqueId !in memberProjectIds
+                                        ) { onProjectClick(result.uniqueId) }
                                         HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
                                     }
                                 }
@@ -364,7 +401,11 @@ fun SearchScreen(
 }
 
 @Composable
-private fun SearchResultItem(result: ResourceSearchResult, onClick: () -> Unit) {
+private fun SearchResultItem(
+    result: ResourceSearchResult,
+    isNonMemberProject: Boolean = false,
+    onClick: () -> Unit
+) {
     val snippet = result.scientificMetadata
         ?.entries?.take(2)
         ?.joinToString(" · ") { (k, v) -> "$k: $v" }
@@ -374,7 +415,13 @@ private fun SearchResultItem(result: ResourceSearchResult, onClick: () -> Unit) 
         },
         supportingContent = {
             Column {
-                if (snippet != null) {
+                if (isNonMemberProject) {
+                    Text(
+                        "Not a member",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else if (snippet != null) {
                     Text(
                         snippet,
                         style = MaterialTheme.typography.bodySmall,
@@ -391,7 +438,14 @@ private fun SearchResultItem(result: ResourceSearchResult, onClick: () -> Unit) 
                 )
             }
         },
-        leadingContent = { AppIcon(iconForType(result.resourceType), tint = MaterialTheme.colorScheme.primary) },
+        leadingContent = {
+            // Muted tint signals "not fully accessible", same convention used for hidden
+            // projects/instruments elsewhere — a non-member project isn't hidden, but the
+            // muted treatment reads the same way: "this isn't fully yours yet". Tapping still
+            // opens ProjectDetailScreen, which can cold-open a non-member project's basic
+            // info; a "Request to join" action belongs here once that API exists.
+            AppIcon(iconForType(result.resourceType), tint = if (isNonMemberProject) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary)
+        },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         modifier = Modifier.clickable(onClick = onClick)
     )

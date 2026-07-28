@@ -60,6 +60,12 @@ data class Dataset(
     override val name: String get() = datasetName ?: uniqueId
 }
 
+/** Shared accessor for date-based sorting — Sample and Dataset each declare their own field. */
+fun CrucibleResource.creationTimeOrEmpty(): String = when (this) {
+    is Sample -> creationTime ?: ""
+    is Dataset -> creationTime ?: ""
+}
+
 @Serializable
 data class ResourceLink(
     @SerialName("unique_id") val uniqueId: String,
@@ -163,6 +169,30 @@ data class ProjectUpdateRequest(
     @SerialName("title") val title: String? = null,
     @SerialName("organization") val organization: String? = null,
     @SerialName("project_lead_username") val projectLeadUsername: String? = null
+)
+
+@Serializable
+data class JoinRequest(
+    @SerialName("id") val id: Int,
+    @SerialName("group_name") val groupName: String,
+    @SerialName("requester_id") val requesterId: String,
+    @SerialName("reason") val reason: String? = null,
+    @SerialName("status") val status: String,
+    @SerialName("request_time") val requestTime: String? = null,
+    @SerialName("review_time") val reviewTime: String? = null,
+    @SerialName("reviewer_id") val reviewerId: String? = null,
+    @SerialName("reviewer_notes") val reviewerNotes: String? = null
+)
+
+@Serializable
+data class JoinRequestCreate(
+    @SerialName("reason") val reason: String? = null
+)
+
+@Serializable
+data class JoinRequestReview(
+    @SerialName("status") val status: String,
+    @SerialName("reviewer_notes") val reviewerNotes: String? = null
 )
 
 @Serializable

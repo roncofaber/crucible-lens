@@ -89,24 +89,29 @@ internal fun BasicInfoCard(
                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
                     )
                 }
-                // Animated counter — placeholder while siblings are loading
-                val counterText = when {
-                    !siblingsResolved || currentIndex < 0 || totalCount == 0 -> "-- / --"
-                    else -> "${currentIndex + 1} / $totalCount"
-                }
-                AnimatedContent(
-                    targetState = counterText,
-                    transitionSpec = {
-                        fadeIn(animationSpec = EffectsFastSpring) togetherWith
-                            fadeOut(animationSpec = EffectsFastSpring)
-                    },
-                    label = "sibling_counter"
-                ) { text ->
-                    Text(
-                        text = text,
-                        style = MaterialTheme.typography.labelMedium,
+                // Small inline spinner while siblings are still loading (a rare,
+                // sibling-set-changing event, e.g. changing group-by) instead of "-- / --".
+                if (!siblingsResolved || currentIndex < 0 || totalCount == 0) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(12.dp),
+                        strokeWidth = 1.5.dp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                } else {
+                    AnimatedContent(
+                        targetState = "${currentIndex + 1} / $totalCount",
+                        transitionSpec = {
+                            fadeIn(animationSpec = EffectsFastSpring) togetherWith
+                                fadeOut(animationSpec = EffectsFastSpring)
+                        },
+                        label = "sibling_counter"
+                    ) { text ->
+                        Text(
+                            text = text,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 IconButton(
                     onClick = { onNext?.invoke() },

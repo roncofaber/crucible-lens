@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.User
 import kotlinx.coroutines.Job
@@ -16,7 +17,13 @@ import kotlinx.coroutines.launch
 
 sealed class ManageProjectState {
     object Loading : ManageProjectState()
-    data class Loaded(val project: Project, val members: List<User>, val isLead: Boolean) : ManageProjectState()
+    data class Loaded(
+        val project: Project,
+        val members: List<User>,
+        val isLead: Boolean,
+        val joinRequests: List<JoinRequest> = emptyList(),
+        val requesterInfo: Map<String, User> = emptyMap()
+    ) : ManageProjectState()
     data class Error(val message: String) : ManageProjectState()
 }
 
@@ -81,7 +88,16 @@ class ManageProjectViewModel(
             }
             val members = (apiClient.service.getProjectUsers(projectId) as? ApiResult.Success)?.data ?: emptyList()
             val isLead = isCurrentUserLead(project)
-            _state.value = ManageProjectState.Loaded(project, members, isLead)
+            // Only leads (or admins) are authorized by GET /join_requests?group_name= — skip
+            // the call entirely for non-leads rather than eating a guaranteed 403.
+            val joinRequests = if (isLead) {
+                (apiClient.service.getJoinRequests(groupName = projectId, status = "pending") as? ApiResult.Success)?.data ?: emptyList()
+            } else emptyList()
+            val requesterInfo = if (joinRequests.isNotEmpty()) {
+                (apiClient.service.resolveUsers(orcids = joinRequests.map { it.requesterId }) as? ApiResult.Success)?.data
+                    ?.mapNotNull { (orcid, user) -> user?.let { orcid to it } }?.toMap() ?: emptyMap()
+            } else emptyMap()
+            _state.value = ManageProjectState.Loaded(project, members, isLead, joinRequests, requesterInfo)
         }
     }
 
@@ -145,7 +161,11 @@ class ManageProjectViewModel(
                     cacheManager.clearProjectsCache()
                     val members = loaded?.members ?: emptyList()
                     val isLead = isCurrentUserLead(result.data)
-                    _state.value = ManageProjectState.Loaded(result.data, members, isLead)
+                    _state.value = ManageProjectState.Loaded(
+                        result.data, members, isLead,
+                        joinRequests = loaded?.joinRequests ?: emptyList(),
+                        requesterInfo = loaded?.requesterInfo ?: emptyMap()
+                    )
                     _editState.value = ProjectEditState.Idle
                 }
                 is ApiResult.Error -> _editState.value = ProjectEditState.SaveError(draft, "Save failed (${result.code})")
@@ -187,6 +207,31 @@ class ManageProjectViewModel(
 
     fun confirmRemove(user: User) { _pendingRemove.value = user }
     fun cancelRemove() { _pendingRemove.value = null }
+
+    // ── Join request review ───────────────────────────────────────────────────
+
+    fun approveJoinRequest(request: JoinRequest) = reviewJoinRequest(request, "approved")
+    fun rejectJoinRequest(request: JoinRequest) = reviewJoinRequest(request, "rejected")
+
+    private fun reviewJoinRequest(request: JoinRequest, status: String) {
+        viewModelScope.launch {
+            val result = apiClient.service.reviewJoinRequest(request.id, status)
+            if (result is ApiResult.Success) {
+                val loaded = _state.value as? ManageProjectState.Loaded ?: return@launch
+                val updatedRequests = loaded.joinRequests.filter { it.id != request.id }
+                if (status == "approved") {
+                    // Refresh members from the server rather than constructing a User locally —
+                    // resolveUsers only carries partial fields, and the member list must reflect
+                    // the server's actual post-approval membership state.
+                    val members = (apiClient.service.getProjectUsers(projectId) as? ApiResult.Success)?.data
+                        ?: loaded.members
+                    _state.value = loaded.copy(joinRequests = updatedRequests, members = members)
+                } else {
+                    _state.value = loaded.copy(joinRequests = updatedRequests)
+                }
+            }
+        }
+    }
 
     fun removeMember() {
         val user = _pendingRemove.value ?: return
