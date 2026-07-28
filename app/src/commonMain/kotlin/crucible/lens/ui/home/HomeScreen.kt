@@ -634,7 +634,7 @@ private fun HomePinnedProjects(
                     ) {
                         BadgedBox(badge = {
                             if (pendingRequestCount != null && pendingRequestCount!! > 0) {
-                                Badge { Text(pendingRequestCount.toString()) }
+                                Badge()
                             }
                         }) {
                             AppIcon(AppIcons.Project, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)

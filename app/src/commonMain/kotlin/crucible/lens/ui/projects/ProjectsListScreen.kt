@@ -485,7 +485,7 @@ private fun ProjectCard(
         leadingContent = {
             BadgedBox(badge = {
                 if (!isHidden && pendingRequestCount != null && pendingRequestCount!! > 0) {
-                    Badge { Text(pendingRequestCount.toString()) }
+                    Badge()
                 }
             }) {
                 AppIcon(if (isHidden) AppIcons.HideContent else AppIcons.Project,

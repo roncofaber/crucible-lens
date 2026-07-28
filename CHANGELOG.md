@@ -11,7 +11,7 @@
 - Manage Project: project lead, member rows, and pending join-request requesters are now tappable, opening their profile — matching the rest of the app (sample/dataset owners, project detail header)
 - Manage Project: Members card is now collapsible, matching the pattern used elsewhere (Account screen's Advanced/Join Requests cards)
 - Account screen: a reviewed join request now shows who reviewed it ("Reviewed by ..."), tappable to open their profile
-- Project leads now see a badge on a project's icon (Home's pinned cards, Projects list) when it has a pending join request — previously the only way to notice one was opening that project's Manage screen
+- Project leads now see a dot indicator (Home's pinned cards, Projects list, and the Project screen's overflow/Manage-project icons) when a project has a pending join request — previously the only way to notice one was opening that project's Manage screen
 
 ### Changed
 - Instrument icon switched to a filled/solid glyph, matching the Project icon's visual weight

@@ -698,7 +698,8 @@ fun NavGraph(
                 },
                 onUserClick = { identifier ->
                     navController.navigate(Screen.UserProfile.createRoute(identifier))
-                }
+                },
+                currentUserOrcid = userOrcid
             )
         }
 

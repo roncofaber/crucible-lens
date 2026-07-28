@@ -204,7 +204,8 @@ fun ProjectDetailScreen(
     onCreateSample: () -> Unit = {},
     onCreateDataset: () -> Unit = {},
     onManageProject: () -> Unit = {},
-    onUserClick: (String) -> Unit = {}) {
+    onUserClick: (String) -> Unit = {},
+    currentUserOrcid: String? = null) {
     val cacheManager = koinInject<CacheManager>()
     val repository = koinInject<CrucibleRepository>()
     // HomeScreen/ProjectsListViewModel still fetch the projects list directly into
@@ -241,6 +242,17 @@ fun ProjectDetailScreen(
             ?.find { it.groupName == projectId }
         joinRequestChecked = true
     }
+
+    // Pending-request dot on the overflow menu, for the project's lead only — same
+    // ORCID-based lead check ManageProjectViewModel uses (project.lead is member-only-populated,
+    // projectLeadOrcid always is). The count itself comes from CrucibleRepository's cache,
+    // populated by DataSyncManager's background sync (see dev/architecture.md); no fetch is
+    // triggered from here, this only renders whatever's already known.
+    val isCurrentUserLead = currentUserOrcid != null &&
+        (project?.projectLeadOrcid == currentUserOrcid || project?.lead?.uniqueId == currentUserOrcid)
+    val pendingRequestCount by repository.observePendingJoinRequestCount(projectId)
+        .collectAsStateWithLifecycle(initialValue = repository.getCachedPendingJoinRequestCount(projectId))
+    val hasPendingRequests = isCurrentUserLead && (pendingRequestCount ?: 0) > 0
 
     val ctx = getPlatformContext()
     val prefs = remember(ctx) { createAppPreferences(ctx) }
@@ -293,7 +305,9 @@ fun ProjectDetailScreen(
                     var topBarMenuExpanded by remember { mutableStateOf(false) }
                     Box {
                         IconButton(onClick = { topBarMenuExpanded = true }) {
-                            AppIcon(AppIcons.MoreVert)
+                            BadgedBox(badge = { if (hasPendingRequests) Badge() }) {
+                                AppIcon(AppIcons.MoreVert)
+                            }
                         }
                         DropdownMenu(expanded = topBarMenuExpanded, onDismissRequest = { topBarMenuExpanded = false }) {
                             DropdownMenuItem(
@@ -309,7 +323,11 @@ fun ProjectDetailScreen(
                             HorizontalDivider()
                             DropdownMenuItem(
                                 text = { Text("Manage project") },
-                                leadingIcon = { AppIcon(AppIcons.ManageMembers) },
+                                leadingIcon = {
+                                    BadgedBox(badge = { if (hasPendingRequests) Badge() }) {
+                                        AppIcon(AppIcons.ManageMembers)
+                                    }
+                                },
                                 onClick = { topBarMenuExpanded = false; onManageProject() }
                             )
                             OpenInWebMenuItem { topBarMenuExpanded = false; openUrl(ctx, "$graphExplorerUrl/$projectId") }
