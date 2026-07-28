@@ -23,6 +23,7 @@ import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppTopBar
 import crucible.lens.ui.common.ExpandChevron
+import crucible.lens.ui.common.NotificationDot
 import crucible.lens.ui.common.SectionHeader
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -305,7 +306,7 @@ fun ProjectDetailScreen(
                     var topBarMenuExpanded by remember { mutableStateOf(false) }
                     Box {
                         IconButton(onClick = { topBarMenuExpanded = true }) {
-                            BadgedBox(badge = { if (hasPendingRequests) Badge() }) {
+                            NotificationDot(visible = hasPendingRequests) {
                                 AppIcon(AppIcons.MoreVert)
                             }
                         }
@@ -324,7 +325,7 @@ fun ProjectDetailScreen(
                             DropdownMenuItem(
                                 text = { Text("Manage project") },
                                 leadingIcon = {
-                                    BadgedBox(badge = { if (hasPendingRequests) Badge() }) {
+                                    NotificationDot(visible = hasPendingRequests) {
                                         AppIcon(AppIcons.ManageMembers)
                                     }
                                 },

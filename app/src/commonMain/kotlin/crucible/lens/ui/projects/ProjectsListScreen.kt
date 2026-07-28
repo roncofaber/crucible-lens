@@ -41,6 +41,7 @@ import crucible.lens.ui.common.ToggleHiddenMenuItem
 import crucible.lens.platform.showToast
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
+import crucible.lens.ui.common.NotificationDot
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.AppScaffold
@@ -483,11 +484,7 @@ private fun ProjectCard(
             }
         } else null,
         leadingContent = {
-            BadgedBox(badge = {
-                if (!isHidden && pendingRequestCount != null && pendingRequestCount!! > 0) {
-                    Badge()
-                }
-            }) {
+            NotificationDot(visible = !isHidden && (pendingRequestCount ?: 0) > 0) {
                 AppIcon(if (isHidden) AppIcons.HideContent else AppIcons.Project,
                     tint = if (isHidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
                 )

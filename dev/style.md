@@ -99,6 +99,24 @@ The outer `HorizontalPager` (Samples / Datasets tab) nests the inner one.
 
 ---
 
+## Notification dots
+
+Use `NotificationDot` (`ui/common/NotificationDot.kt`) for any "something needs your attention"
+indicator on an icon — a thin wrapper around `BadgedBox`/`Badge()` so the dot's look changes in
+one place, not at every call site. Takes `visible: Boolean` and wraps the icon content:
+
+```kotlin
+NotificationDot(visible = hasPendingRequests) {
+    AppIcon(AppIcons.ManageMembers)
+}
+```
+
+Not for numeric badges that always show content (e.g. `SearchScreen`'s active-filter count) —
+those stay a direct `BadgedBox`/`Badge { Text(...) }`, a different pattern (always-visible count,
+not a binary attention flag).
+
+---
+
 ## No comments rule
 
 Default: write no comments. Only add one when the WHY is non-obvious (hidden constraint,

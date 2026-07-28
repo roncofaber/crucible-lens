@@ -42,6 +42,7 @@ import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.data.model.Project
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.NotificationDot
 import crucible.lens.ui.common.allLoadingMessages
 import crucible.lens.ui.common.fadeEndEdge
 import kotlinx.coroutines.delay
@@ -632,11 +633,7 @@ private fun HomePinnedProjects(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        BadgedBox(badge = {
-                            if (pendingRequestCount != null && pendingRequestCount!! > 0) {
-                                Badge()
-                            }
-                        }) {
+                        NotificationDot(visible = (pendingRequestCount ?: 0) > 0) {
                             AppIcon(AppIcons.Project, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
                         }
                         Text(
