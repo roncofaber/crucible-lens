@@ -264,7 +264,7 @@ fun NavGraph(
                 apiKey = apiKey,
                 onScanClick = {
                     if (apiKey.isNullOrBlank()) {
-                        navController.navigate(Screen.Settings.route)
+                        navController.navigate(Screen.SettingsAccount.route)
                     } else {
                         viewModel.reset()
                         navController.navigate(Screen.Scanner.route) {
@@ -274,21 +274,21 @@ fun NavGraph(
                 },
                 onManualEntry = { uuid ->
                     if (apiKey.isNullOrBlank()) {
-                        navController.navigate(Screen.Settings.route)
+                        navController.navigate(Screen.SettingsAccount.route)
                     } else {
                         navController.navigate(Screen.Detail.createRoute(uuid))
                     }
                 },
                 onBrowseProjects = {
                     if (apiKey.isNullOrBlank()) {
-                        navController.navigate(Screen.Settings.route)
+                        navController.navigate(Screen.SettingsAccount.route)
                     } else {
                         navController.navigate(Screen.Projects.route)
                     }
                 },
                 onBrowseInstruments = {
                     if (apiKey.isNullOrBlank()) {
-                        navController.navigate(Screen.Settings.route)
+                        navController.navigate(Screen.SettingsAccount.route)
                     } else {
                         navController.navigate(Screen.Instruments.route)
                     }
@@ -297,11 +297,7 @@ fun NavGraph(
                     navController.navigate(Screen.Settings.route)
                 },
                 onAccountClick = {
-                    if (apiKey.isNullOrBlank()) {
-                        navController.navigate(Screen.Settings.route)
-                    } else {
-                        navController.navigate(Screen.SettingsAccount.route)
-                    }
+                    navController.navigate(Screen.SettingsAccount.route)
                 },
                 onHistory = {
                     navController.navigate(Screen.History.route)

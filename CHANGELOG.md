@@ -4,6 +4,8 @@
 
 ### Fixed
 - Approve/reject buttons for pending join requests had no accessibility label — screen readers announced them as unlabeled buttons
+- Tapping a home-screen action while signed out now goes straight to the Account screen (previously landed on the Settings list, an extra tap away)
+- Settings screen's "API" row no longer shows a stale "Not configured — tap to set up" prompt for the API key — API key/sign-in now live entirely on the Account screen, not API settings
 
 ## [0.7.0] – 2026-07-27
 

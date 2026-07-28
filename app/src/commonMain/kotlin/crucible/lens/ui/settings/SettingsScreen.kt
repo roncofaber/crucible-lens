@@ -62,11 +62,7 @@ fun SettingsScreen(
             SettingsRow(
                 icon = AppIcons.ApiEndpoint,
                 title = "API",
-                subtitle = if (!currentApiKey.isNullOrBlank()) "Configured" else "Not configured — tap to set up",
-                subtitleColor = if (!currentApiKey.isNullOrBlank())
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.error,
+                subtitle = "Server endpoints, connection test",
                 onClick = onNavigateToApi
             )
             SettingsRow(
