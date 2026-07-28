@@ -28,7 +28,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.ui.common.SearchBar
 
-import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
@@ -66,7 +65,6 @@ fun ProjectsListScreen(
     val platformContext = getPlatformContext()
     val viewModel: ProjectsListViewModel = koinViewModel()
     val repository = koinInject<CrucibleRepository>()
-    val cacheManager = koinInject<CacheManager>()
     val loadState by viewModel.loadState.collectAsState()
     val projectCounts by viewModel.projectCounts.collectAsState()
     // Persistent cache summaries - loaded immediately for instant display
@@ -296,11 +294,11 @@ fun ProjectsListScreen(
                                         project.lead?.email?.contains(searchQuery, ignoreCase = true) == true
 
                                     // Search in cached samples
-                                    val matchesSamples = cacheManager.getProjectSamples(project.projectId)
+                                    val matchesSamples = repository.getCachedProjectSamples(project.projectId)
                                         ?.any { it.matchesSearch(searchQuery) } == true
 
                                     // Search in cached datasets (including metadata)
-                                    val matchesDatasets = cacheManager.getProjectDatasets(project.projectId)
+                                    val matchesDatasets = repository.getCachedProjectDatasets(project.projectId)
                                         ?.any { it.matchesSearch(searchQuery) } == true
 
                                     matchesProject || matchesSamples || matchesDatasets

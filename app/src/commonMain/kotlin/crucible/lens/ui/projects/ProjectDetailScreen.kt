@@ -862,7 +862,7 @@ private fun SamplesList(
     sortState: SortState = SortState(),
     onSampleClick: (String) -> Unit,
     leadingContent: (LazyListScope.() -> Unit)? = null) {
-    val cacheManager = koinInject<CacheManager>()
+    val repository = koinInject<CrucibleRepository>()
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == SampleGroupBy.OWNER, projectId)
     if (samples.isEmpty()) {
         EmptyListCard(resourceName = "Samples", defaultIcon = AppIcons.Sample, isFiltered = isFiltered)
@@ -926,7 +926,7 @@ private fun SamplesList(
                     }
                 }
                 if (fromCache) {
-                    val ageMin = cacheManager.getProjectDataAgeMinutes(projectId) ?: 0
+                    val ageMin = repository.projectDataAgeMinutes(projectId) ?: 0
                     item(key = "cache_age") {
                         Text(
                             text = "Cached ${ageMin}m ago",
@@ -960,7 +960,7 @@ private fun DatasetsList(
     sortState: SortState = SortState(),
     onDatasetClick: (String) -> Unit,
     leadingContent: (LazyListScope.() -> Unit)? = null) {
-    val cacheManager = koinInject<CacheManager>()
+    val repository = koinInject<CrucibleRepository>()
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == DatasetGroupBy.OWNER, projectId)
     if (datasets.isEmpty()) {
         EmptyListCard(resourceName = "Datasets", defaultIcon = AppIcons.Dataset, isFiltered = isFiltered)
@@ -1027,7 +1027,7 @@ private fun DatasetsList(
                     }
                 }
                 if (fromCache) {
-                    val ageMin = cacheManager.getProjectDataAgeMinutes(projectId) ?: 0
+                    val ageMin = repository.projectDataAgeMinutes(projectId) ?: 0
                     item(key = "cache_age") {
                         Text(
                             text = "Cached ${ageMin}m ago",

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.DatasetUpdateRequest
 import crucible.lens.data.model.SampleCreateRequest
@@ -32,7 +33,8 @@ sealed class SaveState {
 
 class CreateSampleViewModel(
     private val apiClient: ApiClient,
-    private val cacheManager: CacheManager
+    private val cacheManager: CacheManager,
+    private val repository: CrucibleRepository
 ) : ViewModel() {
 
     private val _saveState = MutableStateFlow<SaveState>(SaveState.Idle)
@@ -47,7 +49,7 @@ class CreateSampleViewModel(
                     is ApiResult.Success -> {
                         val sample = resp.data
                         cacheManager.cacheResource(sample.uniqueId, sample)
-                        projectId?.let { cacheManager.clearProjectDetail(it) }
+                        projectId?.let { cacheManager.clearProjectDetail(it); repository.invalidateProjectData(it) }
                         if (!metadata.isNullOrEmpty()) {
                             apiClient.service.postResourceMetadata(sample.uniqueId, metadata)
                         }
@@ -70,7 +72,8 @@ class CreateSampleViewModel(
 
 class CreateDatasetViewModel(
     private val apiClient: ApiClient,
-    private val cacheManager: CacheManager
+    private val cacheManager: CacheManager,
+    private val repository: CrucibleRepository
 ) : ViewModel() {
 
     private val _saveState = MutableStateFlow<SaveState>(SaveState.Idle)
@@ -89,7 +92,7 @@ class CreateDatasetViewModel(
                 val newDataset = createResp.data
                 val newUuid = newDataset.uniqueId
                 cacheManager.cacheResource(newUuid, newDataset)
-                request.projectId?.let { cacheManager.clearProjectDetail(it) }
+                request.projectId?.let { cacheManager.clearProjectDetail(it); repository.invalidateProjectData(it) }
 
                 var uploadFailures = 0
                 var thumbnailFailures = 0

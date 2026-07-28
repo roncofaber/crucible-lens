@@ -267,12 +267,17 @@ class CrucibleRepository(
                         sOnTotal?.invoke(cachedSamples.size)
                         cachedSamples
                     } else {
-                        val result = api.getSamplesByProject(projectId, onTotalKnown = sOnTotal)
-                        (result as? ApiResult.Success)?.data
-                            ?.also {
+                        when (val result = api.getSamplesByProject(projectId, onTotalKnown = sOnTotal)) {
+                            is ApiResult.Success -> result.data.also {
                                 projectSamplesObservableCache.put(projectId, it)
                                 it.forEach { s -> cacheManager.cacheResourceType(s.uniqueId, "sample") }
-                            } ?: emptyList()
+                            }
+                            // Thrown (not swallowed to emptyList()) so a genuinely empty project
+                            // is never confused with a failed fetch — callers already catch and
+                            // handle generic exceptions (error card / retry, or best-effort
+                            // preload failure counting).
+                            is ApiResult.Error -> error("Failed to load samples: ${result.message}")
+                        }
                     }
                 }
                 val d = async {
@@ -280,12 +285,13 @@ class CrucibleRepository(
                         dOnTotal?.invoke(cachedDatasets.size)
                         cachedDatasets
                     } else {
-                        val result = api.getDatasetsByProject(projectId, onTotalKnown = dOnTotal)
-                        (result as? ApiResult.Success)?.data
-                            ?.also {
+                        when (val result = api.getDatasetsByProject(projectId, onTotalKnown = dOnTotal)) {
+                            is ApiResult.Success -> result.data.also {
                                 projectDatasetsObservableCache.put(projectId, it)
                                 it.forEach { ds -> cacheManager.cacheResourceType(ds.uniqueId, "dataset") }
-                            } ?: emptyList()
+                            }
+                            is ApiResult.Error -> error("Failed to load datasets: ${result.message}")
+                        }
                     }
                 }
                 s.await() to d.await()
@@ -298,6 +304,14 @@ class CrucibleRepository(
 
     fun observeProjectDatasets(projectId: String): Flow<List<Dataset>?> =
         projectDatasetsObservableCache.observe(projectId)
+
+    /** One-shot synchronous reads — null if absent or expired. Used for cache-first renders. */
+    fun getCachedProjectSamples(projectId: String): List<Sample>? = projectSamplesObservableCache.get(projectId)
+    fun getCachedProjectDatasets(projectId: String): List<Dataset>? = projectDatasetsObservableCache.get(projectId)
+
+    /** Age of the cached sample list for [projectId], in minutes — null if absent or expired. */
+    fun projectDataAgeMinutes(projectId: String): Long? =
+        projectSamplesObservableCache.ageMillis(projectId)?.let { it / 60000 }
 
     fun invalidateProjectData(projectId: String) {
         projectSamplesObservableCache.invalidate(projectId)
