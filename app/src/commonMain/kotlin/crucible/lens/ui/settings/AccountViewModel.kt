@@ -72,6 +72,11 @@ class AccountViewModel(
     private val _joinRequests = MutableStateFlow<List<JoinRequest>>(emptyList())
     val joinRequests: StateFlow<List<JoinRequest>> = _joinRequests.asStateFlow()
 
+    // Reviewer identities (ORCID -> User) for requests already approved/rejected, resolved so
+    // "Reviewed by" can show a name/username instead of a bare ORCID.
+    private val _reviewerInfo = MutableStateFlow<Map<String, User>>(emptyMap())
+    val reviewerInfo: StateFlow<Map<String, User>> = _reviewerInfo.asStateFlow()
+
     private var usernameCheckJob: Job? = null
 
     fun loadProfile() {
@@ -98,6 +103,7 @@ class AccountViewModel(
         if (apiKey.isNullOrBlank()) {
             _profileState.value = ProfileUiState.NotLoggedIn
             _joinRequests.value = emptyList()
+            _reviewerInfo.value = emptyMap()
             return
         }
         when (val result = apiClient.service.getProfile()) {
@@ -112,7 +118,13 @@ class AccountViewModel(
                 }
             }
         }
-        _joinRequests.value = (apiClient.service.getMyJoinRequests() as? ApiResult.Success)?.data ?: emptyList()
+        val requests = (apiClient.service.getMyJoinRequests() as? ApiResult.Success)?.data ?: emptyList()
+        _joinRequests.value = requests
+        val reviewerIds = requests.mapNotNull { it.reviewerId }.distinct()
+        _reviewerInfo.value = if (reviewerIds.isNotEmpty()) {
+            (apiClient.service.resolveUsers(orcids = reviewerIds) as? ApiResult.Success)?.data
+                ?.mapNotNull { (orcid, user) -> user?.let { orcid to it } }?.toMap() ?: emptyMap()
+        } else emptyMap()
     }
 
     fun retryLoad() {
@@ -216,6 +228,7 @@ class AccountViewModel(
             _profileState.value = ProfileUiState.NotLoggedIn
             _editState.value = EditUiState.Idle
             _joinRequests.value = emptyList()
+            _reviewerInfo.value = emptyMap()
         }
     }
 

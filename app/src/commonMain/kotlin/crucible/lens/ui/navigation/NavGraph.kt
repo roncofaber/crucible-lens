@@ -412,7 +412,10 @@ fun NavGraph(
                 viewModel = accountViewModel,
                 onBack = navigateBack,
                 onHome = navigateHome,
-                onNavigateToOrcidLogin = { navController.navigate(Screen.OrcidLogin.route) }
+                onNavigateToOrcidLogin = { navController.navigate(Screen.OrcidLogin.route) },
+                onUserClick = { identifier ->
+                    navController.navigate(Screen.UserProfile.createRoute(identifier))
+                }
             )
         }
 
@@ -707,7 +710,14 @@ fun NavGraph(
             val manageViewModel: ManageProjectViewModel = koinViewModel()
             val currentUserProfile by prefs.userProfile.collectAsStateWithLifecycle()
             LaunchedEffect(projectId) { manageViewModel.init(projectId, currentUserProfile?.uniqueId) }
-            ManageProjectScreen(viewModel = manageViewModel, onBack = navigateBack, onHome = navigateHome)
+            ManageProjectScreen(
+                viewModel = manageViewModel,
+                onBack = navigateBack,
+                onHome = navigateHome,
+                onUserClick = { identifier ->
+                    navController.navigate(Screen.UserProfile.createRoute(identifier))
+                }
+            )
         }
 
         composable(Screen.Instruments.route) {

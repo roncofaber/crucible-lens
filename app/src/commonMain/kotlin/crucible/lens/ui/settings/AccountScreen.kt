@@ -37,11 +37,13 @@ fun AccountScreen(
     viewModel: AccountViewModel,
     onBack: () -> Unit,
     onHome: () -> Unit,
-    onNavigateToOrcidLogin: () -> Unit
+    onNavigateToOrcidLogin: () -> Unit,
+    onUserClick: (String) -> Unit = {}
 ) {
     val profileState by viewModel.profileState.collectAsState()
     val editState by viewModel.editState.collectAsState()
     val joinRequests by viewModel.joinRequests.collectAsState()
+    val reviewerInfo by viewModel.reviewerInfo.collectAsState()
     var showSignOutDialog by remember { mutableStateOf(false) }
     var lastDraft by remember { mutableStateOf<EditUiState.Editing?>(null) }
     var advancedExpanded by remember { mutableStateOf(false) }
@@ -267,7 +269,9 @@ fun AccountScreen(
                                             modifier = Modifier.padding(bottom = 16.dp),
                                             verticalArrangement = Arrangement.spacedBy(12.dp)
                                         ) {
-                                            joinRequests.forEach { request -> JoinRequestRow(request) }
+                                            joinRequests.forEach { request ->
+                                                JoinRequestRow(request, reviewer = request.reviewerId?.let { reviewerInfo[it] }, onUserClick = onUserClick)
+                                            }
                                         }
                                     }
                                 }
@@ -512,7 +516,7 @@ private fun ProfileCard(
 }
 
 @Composable
-private fun JoinRequestRow(request: JoinRequest) {
+private fun JoinRequestRow(request: JoinRequest, reviewer: User?, onUserClick: (String) -> Unit = {}) {
     val (statusLabel, statusColor) = when (request.status) {
         "approved" -> "Approved" to MaterialTheme.colorScheme.primary
         "rejected" -> "Rejected" to MaterialTheme.colorScheme.error
@@ -527,6 +531,17 @@ private fun JoinRequestRow(request: JoinRequest) {
         Column(modifier = Modifier.weight(1f)) {
             Text(request.groupName, style = MaterialTheme.typography.bodyMedium)
             Text(formatDateTime(request.requestTime), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val reviewerId = request.reviewerId
+            if (reviewerId != null) {
+                val reviewerName = listOfNotNull(reviewer?.firstName, reviewer?.lastName).joinToString(" ").ifBlank { null }
+                val reviewerLabel = reviewer?.username?.let { "@$it" } ?: reviewerName ?: reviewerId
+                Text(
+                    "Reviewed by $reviewerLabel",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { onUserClick(reviewer?.username ?: reviewerId) }
+                )
+            }
         }
         Text(statusLabel, style = MaterialTheme.typography.labelMedium, color = statusColor, fontWeight = FontWeight.SemiBold)
     }

@@ -8,6 +8,9 @@
 - Non-member project view: samples/datasets tabs are replaced with a clear "You're not a member of this project" message and a "Request to join" action, instead of a misleading empty list
 - Home screen: dedicated Account icon in the top bar, separate from Settings
 - Manage Project and Manage Instrument screens: added a Home button, matching every other screen's top bar
+- Manage Project: project lead, member rows, and pending join-request requesters are now tappable, opening their profile — matching the rest of the app (sample/dataset owners, project detail header)
+- Manage Project: Members card is now collapsible, matching the pattern used elsewhere (Account screen's Advanced/Join Requests cards)
+- Account screen: a reviewed join request now shows who reviewed it ("Reviewed by ..."), tappable to open their profile
 
 ### Changed
 - Instrument icon switched to a filled/solid glyph, matching the Project icon's visual weight

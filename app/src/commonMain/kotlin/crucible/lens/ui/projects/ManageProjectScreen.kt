@@ -2,6 +2,8 @@
 package crucible.lens.ui.projects
 
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -24,17 +26,21 @@ import crucible.lens.data.model.User
 import crucible.lens.data.util.formatDateTime
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ErrorCard
+import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.LoadingContent
+import crucible.lens.ui.common.StandardSizeAnim
 import crucible.lens.ui.common.UserAvatar
 import crucible.lens.ui.common.UserResultItem
 import crucible.lens.ui.common.UserSearchField
+import crucible.lens.ui.detail.components.ClickableInfoRow
 import crucible.lens.ui.detail.components.InfoRow
 
 @Composable
 fun ManageProjectScreen(
     viewModel: ManageProjectViewModel,
     onBack: () -> Unit,
-    onHome: () -> Unit = {}
+    onHome: () -> Unit = {},
+    onUserClick: (String) -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
     val editState by viewModel.editState.collectAsState()
@@ -98,7 +104,7 @@ fun ManageProjectScreen(
                 )
                 is ManageProjectState.Loaded -> {
                     when (val es = editState) {
-                        is ProjectEditState.Idle -> ProjectInfoCard(s.project)
+                        is ProjectEditState.Idle -> ProjectInfoCard(s.project, onUserClick = onUserClick)
                         is ProjectEditState.Editing, is ProjectEditState.Saving, is ProjectEditState.SaveError -> {
                             val draft = when (es) {
                                 is ProjectEditState.Editing -> es
@@ -125,7 +131,8 @@ fun ManageProjectScreen(
                             requests = s.joinRequests,
                             requesterInfo = s.requesterInfo,
                             onApprove = { viewModel.approveJoinRequest(it) },
-                            onReject = { viewModel.rejectJoinRequest(it) }
+                            onReject = { viewModel.rejectJoinRequest(it) },
+                            onUserClick = onUserClick
                         )
                     }
                     MembersCard(
@@ -133,7 +140,8 @@ fun ManageProjectScreen(
                         isLead = s.isLead,
                         leadOrcid = s.project.projectLeadOrcid,
                         onAddMember = { viewModel.showAddMemberSheet() },
-                        onRemoveMember = { viewModel.confirmRemove(it) }
+                        onRemoveMember = { viewModel.confirmRemove(it) },
+                        onUserClick = onUserClick
                     )
                 }
             }
@@ -142,21 +150,27 @@ fun ManageProjectScreen(
 }
 
 @Composable
-private fun ProjectInfoCard(project: Project) {
+private fun ProjectInfoCard(project: Project, onUserClick: (String) -> Unit = {}) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             InfoRow(icon = AppIcons.Project, label = "Title", value = project.title ?: "—")
             InfoRow(icon = AppIcons.Business, label = "Organization", value = project.organization ?: "—")
-            val leadDisplay = project.lead?.let { lead ->
-                val name = listOfNotNull(lead.firstName?.firstOrNull()?.let { "$it." }, lead.lastName).joinToString(" ")
+            val lead = project.lead
+            val leadDisplay = lead?.let {
+                val name = listOfNotNull(it.firstName?.firstOrNull()?.let { c -> "$c." }, it.lastName).joinToString(" ")
                 when {
-                    name.isNotBlank() && lead.username != null -> "$name (@${lead.username})"
+                    name.isNotBlank() && it.username != null -> "$name (@${it.username})"
                     name.isNotBlank() -> name
-                    lead.username != null -> "@${lead.username}"
+                    it.username != null -> "@${it.username}"
                     else -> null
                 }
             } ?: "—"
-            InfoRow(icon = AppIcons.Person, label = "Project lead", value = leadDisplay)
+            val leadIdentifier = lead?.username ?: lead?.uniqueId
+            if (leadIdentifier != null) {
+                ClickableInfoRow(icon = AppIcons.Person, label = "Project lead", value = leadDisplay, onClick = { onUserClick(leadIdentifier) })
+            } else {
+                InfoRow(icon = AppIcons.Person, label = "Project lead", value = leadDisplay)
+            }
             InfoRow(icon = AppIcons.Tag, label = "Project ID", value = project.projectId)
         }
     }
@@ -233,13 +247,15 @@ private fun PendingRequestsCard(
     requests: List<JoinRequest>,
     requesterInfo: Map<String, User>,
     onApprove: (JoinRequest) -> Unit,
-    onReject: (JoinRequest) -> Unit
+    onReject: (JoinRequest) -> Unit,
+    onUserClick: (String) -> Unit = {}
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Pending Requests (${requests.size})", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             requests.forEach { request ->
                 val requester = requesterInfo[request.requesterId]
+                val requesterIdentifier = requester?.username ?: request.requesterId
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -252,7 +268,9 @@ private fun PendingRequestsCard(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     )
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier.weight(1f).clickable { onUserClick(requesterIdentifier) }
+                    ) {
                         val displayName = listOfNotNull(requester?.firstName, requester?.lastName).joinToString(" ").ifBlank { null }
                         Text(displayName ?: request.requesterId, style = MaterialTheme.typography.bodyMedium)
                         if (!requester?.username.isNullOrBlank()) {
@@ -287,17 +305,30 @@ private fun MembersCard(
     isLead: Boolean,
     leadOrcid: String?,
     onAddMember: () -> Unit,
-    onRemoveMember: (User) -> Unit
+    onRemoveMember: (User) -> Unit,
+    onUserClick: (String) -> Unit = {}
 ) {
+    var expanded by remember { mutableStateOf(true) }
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Column(
+            modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text("Members (${members.size})", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                IconButton(onClick = onAddMember, modifier = Modifier.size(32.dp)) {
-                    AppIcon(AppIcons.PersonAdd, modifier = Modifier.size(20.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onAddMember, modifier = Modifier.size(32.dp)) {
+                        AppIcon(AppIcons.PersonAdd, modifier = Modifier.size(20.dp))
+                    }
+                    ExpandChevron(expanded = expanded)
                 }
             }
-            members.forEach { member ->
+            if (expanded) members.forEach { member ->
+                val memberIdentifier = member.username ?: member.uniqueId
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -310,7 +341,10 @@ private fun MembersCard(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     )
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier.weight(1f)
+                            .let { if (memberIdentifier != null) it.clickable { onUserClick(memberIdentifier) } else it }
+                    ) {
                         val displayName = listOfNotNull(member.firstName, member.lastName).joinToString(" ").ifBlank { null }
                         if (displayName != null) Text(displayName, style = MaterialTheme.typography.bodyMedium)
                         if (!member.username.isNullOrBlank()) Text("@${member.username}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
