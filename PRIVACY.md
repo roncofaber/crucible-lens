@@ -1,6 +1,6 @@
 # Privacy Policy for Crucible Lens
 
-**Last updated:** July 2026
+**Last updated:** July 27, 2026
 
 Crucible Lens ("the app") is a mobile client for the Molecular Foundry's Crucible research data platform at Lawrence Berkeley National Laboratory. This policy explains what data the app accesses, how it is used, and how it is stored.
 
@@ -27,6 +27,9 @@ The app keeps a local list of recently viewed samples, datasets, and projects so
 
 ### ORCID sign-in
 Signing in with ORCID opens ORCID's own login page inside the app. Your ORCID credentials are entered directly on ORCID's page and are never seen or stored by Crucible Lens. After a successful login, the app reads the resulting page to retrieve the Crucible API key issued by the Crucible server, and discards the page content immediately afterward.
+
+### Project join requests
+If you request to join a project you're not a member of, your ORCID iD and any optional message you write are sent to the Crucible API server and become visible to that project's lead and to Crucible administrators, so they can review your request. This information is stored by the Crucible API server (not by the app) and is used solely to process the request.
 
 ## What we do not do
 
