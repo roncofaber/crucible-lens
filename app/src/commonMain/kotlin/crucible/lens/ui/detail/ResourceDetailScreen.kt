@@ -253,7 +253,16 @@ fun ResourceDetailScreen(
                     // list); group changes trigger a real re-fetch since they can change
                     // which resources are siblings at all — both live in one dropdown since
                     // they're the same category of decision ("how are siblings organized").
-                    val organizeResource = currentDisplayResource
+                    //
+                    // Deliberately reads from sortedSiblingList (already resolved, no network
+                    // wait) rather than currentDisplayResource (the fully link-enriched fetch,
+                    // lazily loaded for a ±10-page window and subject to LRU cache eviction) —
+                    // this button only needs the resource's type and projectId, both already
+                    // present on the un-enriched sibling entry. Gating it on the enriched
+                    // fetch made it flicker in and out while swiping/scrolling, since eviction
+                    // or the enrichment window could momentarily make currentDisplayResource
+                    // null for a page the user was already looking at.
+                    val organizeResource = sortedSiblingList.getOrNull(pagerState.currentPage)
                     val organizeProjectId = when (organizeResource) {
                         is Sample -> organizeResource.projectId
                         is Dataset -> organizeResource.projectId

@@ -6,6 +6,8 @@
 - Approve/reject buttons for pending join requests had no accessibility label — screen readers announced them as unlabeled buttons
 - Tapping a home-screen action while signed out now goes straight to the Account screen (previously landed on the Settings list, an extra tap away)
 - Settings screen's "API" row no longer shows a stale "Not configured — tap to set up" prompt for the API key — API key/sign-in now live entirely on the Account screen, not API settings
+- Project screen loaded slower/showed a blank header more often — it had switched to a per-project cache that isn't warmed by the Home/Projects list fetch, missing the data that was already fetched moments earlier and triggering an avoidable network call; now falls back to the already-warm cache first
+- Sort/Group icon in the sample/dataset detail top bar could flicker in and out while swiping between siblings — it was gated on the fully-enriched (slow-loading, evictable) resource fetch instead of the lightweight sibling-list entry it actually needed
 
 ## [0.7.0] – 2026-07-27
 

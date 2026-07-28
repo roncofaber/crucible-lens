@@ -207,11 +207,19 @@ fun ProjectDetailScreen(
     onUserClick: (String) -> Unit = {}) {
     val cacheManager = koinInject<CacheManager>()
     val repository = koinInject<CrucibleRepository>()
+    // HomeScreen/ProjectsListViewModel still fetch the projects list directly into
+    // CacheManager rather than through CrucibleRepository (a known, not-yet-migrated gap —
+    // see dev/architecture.md), so that cache is already warm by the time a project can be
+    // opened at all, while the repository's own project cache is only populated by
+    // DataSyncManager's background sync or this screen's own fetchProject() call below.
+    // Falling back to the CacheManager list here restores an instant header render for the
+    // common case instead of a blank header + an avoidable network round-trip.
+    val cachedFallback = remember(projectId) { cacheManager.getProjects()?.find { it.projectId == projectId } }
     // Observed reactively so the header updates in place once fetched — covers both member
     // projects (usually warm already from the Projects list fetch) and non-member projects
     // reached via discover-search (never in that list, so this is a cold single fetch).
     val project by repository.observeProject(projectId)
-        .collectAsStateWithLifecycle(initialValue = repository.getCachedProject(projectId))
+        .collectAsStateWithLifecycle(initialValue = repository.getCachedProject(projectId) ?: cachedFallback)
     LaunchedEffect(projectId) {
         if (repository.getCachedProject(projectId) == null) {
             repository.fetchProject(projectId)
