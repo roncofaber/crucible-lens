@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.1] – 2026-07-28
+
+### Fixed
+- Approve/reject buttons for pending join requests had no accessibility label — screen readers announced them as unlabeled buttons
+
 ## [0.7.0] – 2026-07-27
 
 ### Added
