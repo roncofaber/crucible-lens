@@ -41,6 +41,7 @@ import crucible.lens.ui.common.ToggleHiddenMenuItem
 import crucible.lens.platform.showToast
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.LoadState
@@ -456,6 +457,11 @@ private fun ProjectCard(
 ) {
     // Only show ID when it differs from the display name
     val showId = project.title != null && project.title != project.projectId
+    // Only ever non-null/non-zero for projects the caller leads — DataSyncManager's preload
+    // scopes this fetch to led projects, so a non-lead's cache entry for this id is just absent.
+    val repository = koinInject<CrucibleRepository>()
+    val pendingRequestCount by repository.observePendingJoinRequestCount(project.projectId)
+        .collectAsStateWithLifecycle(initialValue = repository.getCachedPendingJoinRequestCount(project.projectId))
     ListItem(
         headlineContent = {
             Text(
@@ -477,9 +483,15 @@ private fun ProjectCard(
             }
         } else null,
         leadingContent = {
-            AppIcon(if (isHidden) AppIcons.HideContent else AppIcons.Project,
-                tint = if (isHidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
-            )
+            BadgedBox(badge = {
+                if (!isHidden && pendingRequestCount != null && pendingRequestCount!! > 0) {
+                    Badge { Text(pendingRequestCount.toString()) }
+                }
+            }) {
+                AppIcon(if (isHidden) AppIcons.HideContent else AppIcons.Project,
+                    tint = if (isHidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
+                )
+            }
         },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {

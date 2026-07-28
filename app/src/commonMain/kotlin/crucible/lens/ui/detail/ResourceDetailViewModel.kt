@@ -87,16 +87,22 @@ class ResourceDetailViewModel(
     // Remembered so refreshResource()'s finally block can resume sync with the same
     // hidden-project filter, without needing NavGraph to call startBackgroundSync() again.
     private var lastHiddenProjectIds: Set<String> = emptySet()
+    private var lastCurrentUserOrcid: String? = null
 
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
-    /** [hiddenProjectIds] are skipped entirely — no network call until the user unhides them. */
-    fun startBackgroundSync(hiddenProjectIds: Set<String> = emptySet()) {
+    /**
+     * [hiddenProjectIds] are skipped entirely — no network call until the user unhides them.
+     * [currentUserOrcid] scopes the pending-join-request-count preload to projects the caller
+     * leads — see [DataSyncManager.syncAll].
+     */
+    fun startBackgroundSync(hiddenProjectIds: Set<String> = emptySet(), currentUserOrcid: String? = null) {
         lastHiddenProjectIds = hiddenProjectIds
+        lastCurrentUserOrcid = currentUserOrcid
         _isSyncing.value = true
         syncJob = viewModelScope.launch {
-            try { dataSyncManager.syncAll(hiddenProjectIds) }
+            try { dataSyncManager.syncAll(hiddenProjectIds, currentUserOrcid) }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) { }
             finally { _isSyncing.value = false }
@@ -145,7 +151,7 @@ class ResourceDetailViewModel(
                 // Timeout or network failure — error state (if primary) was set above
             } finally {
                 _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = false) else it }
-                if (syncWasActive) startBackgroundSync(lastHiddenProjectIds)
+                if (syncWasActive) startBackgroundSync(lastHiddenProjectIds, lastCurrentUserOrcid)
             }
         }
     }

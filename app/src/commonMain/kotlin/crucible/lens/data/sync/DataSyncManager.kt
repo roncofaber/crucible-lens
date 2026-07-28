@@ -19,8 +19,11 @@ class DataSyncManager(private val repository: CrucibleRepository) {
     /**
      * [hiddenProjectIds] are skipped entirely — no network call is made for them until the
      * user unhides them (at which point the next syncAll()/preload naturally picks them up).
+     * [currentUserOrcid] scopes the pending-join-request-count preload to projects the caller
+     * actually leads — GET /join_requests?group_name= 403s for anyone else, so this is never
+     * attempted for the rest of the list.
      */
-    suspend fun syncAll(hiddenProjectIds: Set<String> = emptySet()) {
+    suspend fun syncAll(hiddenProjectIds: Set<String> = emptySet(), currentUserOrcid: String? = null) {
         coroutineScope {
             // Always attempt a fresh network fetch; fall back to whatever is
             // already cached if the network call fails.
@@ -42,6 +45,21 @@ class DataSyncManager(private val repository: CrucibleRepository) {
                             catch (_: Exception) { }
                         }
                     }.awaitAll()
+                }
+            }
+
+            // Pending join-request counts, for the lead-facing badge — only for led projects.
+            if (currentUserOrcid != null) {
+                projects.filter { it.projectLeadOrcid == currentUserOrcid }.chunked(5).forEach { batch ->
+                    coroutineScope {
+                        batch.map { project ->
+                            async {
+                                try { repository.fetchPendingJoinRequestCount(project.projectId) }
+                                catch (e: CancellationException) { throw e }
+                                catch (_: Exception) { }
+                            }
+                        }.awaitAll()
+                    }
                 }
             }
         }

@@ -194,6 +194,29 @@ class CrucibleRepository(
 
     fun invalidateProject(projectId: String) = projectObservableCache.invalidate(projectId)
 
+    // Pending join-request count per project, for the lead-facing badge on Home/Projects list.
+    // Only ever populated for projects the current user leads (DataSyncManager filters by
+    // projectLeadOrcid before fetching) — GET /join_requests?group_name= is 403 for anyone else.
+    private val pendingJoinRequestCountObservableCache = ObservableCache<String, Int>(
+        ttlMillis = 10 * 60 * 1000L,
+        maxSize = 50
+    )
+
+    suspend fun fetchPendingJoinRequestCount(projectId: String, forceRefresh: Boolean = false): ApiResult<Int> {
+        if (!forceRefresh) {
+            pendingJoinRequestCountObservableCache.get(projectId)?.let { return ApiResult.Success(it) }
+        }
+        return when (val result = api.getJoinRequests(groupName = projectId, status = "pending")) {
+            is ApiResult.Success -> result.data.size.also { pendingJoinRequestCountObservableCache.put(projectId, it) }
+                .let { ApiResult.Success(it) }
+            is ApiResult.Error -> result
+        }
+    }
+
+    fun observePendingJoinRequestCount(projectId: String): Flow<Int?> = pendingJoinRequestCountObservableCache.observe(projectId)
+
+    fun getCachedPendingJoinRequestCount(projectId: String): Int? = pendingJoinRequestCountObservableCache.get(projectId)
+
     /** Cache-first instrument list fetch. Caches on success. */
     suspend fun fetchInstruments(forceRefresh: Boolean = false): ApiResult<List<Instrument>> {
         if (!forceRefresh) {

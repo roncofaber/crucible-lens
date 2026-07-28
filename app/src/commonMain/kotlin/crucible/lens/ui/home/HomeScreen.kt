@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.cache.PersistentProjectCache
@@ -613,7 +614,12 @@ private fun HomePinnedProjects(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
         if (hasAny) {
+            val repository = koinInject<CrucibleRepository>()
             pinnedList.forEach { project ->
+                // Only ever non-null/non-zero for projects the caller leads — DataSyncManager's
+                // preload scopes this fetch to led projects.
+                val pendingRequestCount by repository.observePendingJoinRequestCount(project.projectId)
+                    .collectAsStateWithLifecycle(initialValue = repository.getCachedPendingJoinRequestCount(project.projectId))
                 Card(
                     modifier = Modifier.fillMaxWidth().combinedClickable(
                         onClick = { onProjectClick(project.projectId) },
@@ -626,7 +632,13 @@ private fun HomePinnedProjects(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        AppIcon(AppIcons.Project, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                        BadgedBox(badge = {
+                            if (pendingRequestCount != null && pendingRequestCount!! > 0) {
+                                Badge { Text(pendingRequestCount.toString()) }
+                            }
+                        }) {
+                            AppIcon(AppIcons.Project, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
                         Text(
                             text = project.title ?: project.projectId,
                             style = MaterialTheme.typography.titleMedium,

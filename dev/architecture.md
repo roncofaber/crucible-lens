@@ -123,7 +123,9 @@ Key endpoints:
 - `PATCH /join_requests/{request_id}` — approve/reject a pending request; admin or the request's project lead only; approval adds the requester as a project member server-side
 - `GET /account/join_requests?status=` — the caller's own join-request history across all projects
 
-Join-request calls (`requestToJoinProject`, `getJoinRequests`, `reviewJoinRequest`, `getMyJoinRequests`) are one-shot mutations/lookups called directly from the owning ViewModel/screen via `apiClient.service.*` — no `CrucibleRepository` wrapper, since there's no caching need shared across them.
+Join-request calls (`requestToJoinProject`, `reviewJoinRequest`, `getMyJoinRequests`) are one-shot mutations/lookups called directly from the owning ViewModel/screen via `apiClient.service.*` — no `CrucibleRepository` wrapper, since there's no caching need shared across them. The exception is `getJoinRequests`, whose *pending count per project* is cached (see "Caching layers" above) to drive the lead-facing pending-request badge on Home/Projects list — that one goes through `CrucibleRepository.fetchPendingJoinRequestCount()`, not a direct `apiClient` call, since the same count needs to be read from two different screens.
+
+**Known API limitation** (flagged for a future backend change): `GET /join_requests` without `group_name` is admin-only — there's no "give me pending counts across every project I lead" endpoint. `DataSyncManager.syncAll()` works around this by fetching one project at a time, filtered to `projectLeadOrcid == currentUserOrcid` before ever calling it. If a bulk endpoint is added later, only `DataSyncManager` needs to change — the `CrucibleRepository` cache/observe surface and the UI badges stay the same.
 
 ---
 
@@ -140,7 +142,9 @@ CrucibleRepository
   │                                                                          projects reached via discover-search
   ├── instrumentsObservableCache ObservableCache<Unit, List<Instrument>>
   ├── projectSamplesObservableCache   ObservableCache<projectId, List<Sample>>
-  └── projectDatasetsObservableCache  ObservableCache<projectId, List<Dataset>>
+  ├── projectDatasetsObservableCache  ObservableCache<projectId, List<Dataset>>
+  └── pendingJoinRequestCountObservableCache  ObservableCache<projectId, Int> — only ever populated
+                                               for projects the caller leads (see below)
 
 PersistentProjectCache  (disk, 24h TTL)   — project summary lists only
 PersistentThumbnailCache (disk, 7 day TTL) — thumbnail base64 blobs per dataset uuid

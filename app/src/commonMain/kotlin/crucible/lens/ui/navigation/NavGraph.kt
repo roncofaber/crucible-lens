@@ -124,6 +124,8 @@ fun NavGraph(
     val hiddenInstruments by prefs.hiddenInstruments.collectAsStateWithLifecycle()
     val resourceHistory by prefs.resourceHistory.collectAsStateWithLifecycle()
     val defaultProjectTab by prefs.defaultProjectTab.collectAsStateWithLifecycle()
+    val userProfile by prefs.userProfile.collectAsStateWithLifecycle()
+    val userOrcid = userProfile?.uniqueId
 
     // ── ApiClient sync ────────────────────────────────────────────────────────
     LaunchedEffect(apiKey) { apiKey?.let { apiClient.setApiKey(it) } }
@@ -136,13 +138,13 @@ fun NavGraph(
     }
 
     LaunchedEffect(apiKey) {
-        // Reads hiddenProjects as a one-time snapshot at sync start, not as a reactive key —
-        // this is a one-shot-per-session background preload, not something that should
-        // trigger a full re-sync (including forceRefresh on the whole projects list) every
-        // time a single project is hidden/unhidden. HomeScreen/ProjectsListScreen's own
-        // preload effects already pick up newly-unhidden projects on their next composition.
+        // Reads hiddenProjects/userOrcid as a one-time snapshot at sync start, not as a
+        // reactive key — this is a one-shot-per-session background preload, not something
+        // that should trigger a full re-sync (including forceRefresh on the whole projects
+        // list) every time a single project is hidden/unhidden. HomeScreen/ProjectsListScreen's
+        // own preload effects already pick up newly-unhidden projects on their next composition.
         if (!apiKey.isNullOrBlank()) {
-            viewModel.startBackgroundSync(hiddenProjects)
+            viewModel.startBackgroundSync(hiddenProjects, userOrcid)
         }
     }
 
@@ -156,9 +158,7 @@ fun NavGraph(
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
-    val userProfile by prefs.userProfile.collectAsStateWithLifecycle()
     val userUsername = userProfile?.username
-    val userOrcid = userProfile?.uniqueId
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
