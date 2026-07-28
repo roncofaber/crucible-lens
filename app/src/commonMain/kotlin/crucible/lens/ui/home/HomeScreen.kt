@@ -633,7 +633,7 @@ private fun HomePinnedProjects(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        NotificationDot(visible = (pendingRequestCount ?: 0) > 0) {
+                        NotificationDot(count = pendingRequestCount) {
                             AppIcon(AppIcons.Project, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
                         }
                         Text(

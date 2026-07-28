@@ -484,7 +484,7 @@ private fun ProjectCard(
             }
         } else null,
         leadingContent = {
-            NotificationDot(visible = !isHidden && (pendingRequestCount ?: 0) > 0) {
+            NotificationDot(count = if (isHidden) null else pendingRequestCount) {
                 AppIcon(if (isHidden) AppIcons.HideContent else AppIcons.Project,
                     tint = if (isHidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
                 )

@@ -253,7 +253,7 @@ fun ProjectDetailScreen(
         (project?.projectLeadOrcid == currentUserOrcid || project?.lead?.uniqueId == currentUserOrcid)
     val pendingRequestCount by repository.observePendingJoinRequestCount(projectId)
         .collectAsStateWithLifecycle(initialValue = repository.getCachedPendingJoinRequestCount(projectId))
-    val hasPendingRequests = isCurrentUserLead && (pendingRequestCount ?: 0) > 0
+    val leadPendingRequestCount = if (isCurrentUserLead) pendingRequestCount else null
 
     val ctx = getPlatformContext()
     val prefs = remember(ctx) { createAppPreferences(ctx) }
@@ -306,7 +306,7 @@ fun ProjectDetailScreen(
                     var topBarMenuExpanded by remember { mutableStateOf(false) }
                     Box {
                         IconButton(onClick = { topBarMenuExpanded = true }) {
-                            NotificationDot(visible = hasPendingRequests) {
+                            NotificationDot(count = leadPendingRequestCount) {
                                 AppIcon(AppIcons.MoreVert)
                             }
                         }
@@ -325,7 +325,7 @@ fun ProjectDetailScreen(
                             DropdownMenuItem(
                                 text = { Text("Manage project") },
                                 leadingIcon = {
-                                    NotificationDot(visible = hasPendingRequests) {
+                                    NotificationDot(count = leadPendingRequestCount) {
                                         AppIcon(AppIcons.ManageMembers)
                                     }
                                 },

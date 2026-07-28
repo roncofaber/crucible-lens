@@ -102,18 +102,19 @@ The outer `HorizontalPager` (Samples / Datasets tab) nests the inner one.
 ## Notification dots
 
 Use `NotificationDot` (`ui/common/NotificationDot.kt`) for any "something needs your attention"
-indicator on an icon — a thin wrapper around `BadgedBox`/`Badge()` so the dot's look changes in
-one place, not at every call site. Takes `visible: Boolean` and wraps the icon content:
+count on an icon — a thin wrapper around `BadgedBox`/`Badge()` (12.dp, down from M3's 16.dp
+default) so the size/style changes in one place, not at every call site. Takes `count: Int?`
+and wraps the icon content; `null` or `<= 0` hides the badge entirely:
 
 ```kotlin
-NotificationDot(visible = hasPendingRequests) {
+NotificationDot(count = pendingRequestCount) {
     AppIcon(AppIcons.ManageMembers)
 }
 ```
 
-Not for numeric badges that always show content (e.g. `SearchScreen`'s active-filter count) —
-those stay a direct `BadgedBox`/`Badge { Text(...) }`, a different pattern (always-visible count,
-not a binary attention flag).
+Not for `SearchScreen`'s active-filter-count badge — that one is always shown once filters are
+active (a persistent state readout), where `NotificationDot` is for a count that's normally
+absent and only appears when something needs the user's attention.
 
 ---
 
