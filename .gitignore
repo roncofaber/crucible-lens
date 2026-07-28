@@ -1,6 +1,7 @@
 # Claude Code
 claude_resume.sh
 .claude/
+docs/superpowers/
 
 # Gradle
 .gradle/
