@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Project/Instrument detail screens: tap the name to open Manage Project/Manage Instrument
+- Manage Project: "Add member" moved to an inline row in the Members card, and to the overflow menu; Manage Instrument's overflow menu gained the same treatment
+
+### Changed
+- Project/Instrument detail headers now scroll away with the list instead of staying fixed, leaving more room for content — search/sort stays pinned at the top
+- Names shown throughout the app (owners, project leads, members, requesters) now show the full name by default instead of `@username`
+- Cache settings screen now reports instrument and associated-file counts alongside projects/samples/datasets
+
+### Fixed
+- Pulling to refresh the Instruments list or an instrument's dataset list could still show stale data
+- File share/download links are now always fetched fresh instead of reusing a possibly-stale cached URL
+
 ## [0.7.0] – 2026-07-28
 
 Project join requests, with a lead-facing pending-request badge, plus several loading/caching fixes.

@@ -32,28 +32,20 @@ JAVA_HOME=/home/roncofaber/software/android-studio/jbr ./gradlew :androidApp:ass
 
 Expected build output: `BUILD SUCCESSFUL` with no warnings.
 
+## Changelog discipline
+
+Add a `CHANGELOG.md` entry under `## [Unreleased]` **as part of the same change** that makes something user-visible — not just when preparing a release. If `## [Unreleased]` doesn't exist yet, add it at the very top of the file, above the latest version section. Entries are not backfilled from git history at release time; if it's not written when the change lands, it's easy to lose.
+
+**Changelog style**: one line per entry, what changed for the user — not why, not implementation detail. If a rationale or root cause matters, it belongs in the commit message, not here. Group under `### Added`/`### Changed`/`### Fixed` (only the sections that apply). Purely internal refactors with no user-visible effect (e.g. consolidating a caching layer) don't get an entry — but a bug fix that fell out of one does.
+
 ## Release process
 
 Follow all of these steps, in order, every time — not just when explicitly asked to build:
 
-1. Bump `gradle.properties` (`app.versionName`, `app.versionCode`) and add a `CHANGELOG.md` entry.
-   - **Changelog style**: one line per entry, what changed for the user — not why, not implementation detail. If a rationale or root cause matters, it belongs in the commit message, not here. Group under `### Added`/`### Changed`/`### Fixed` (only the sections that apply). Above the groups, add a one- or two-sentence summary paragraph of the release — longer only if genuinely necessary — since the GitHub release notes lead with it (see step 6).
-2. Verify: `:composeApp:compileAndroidMain`, `:composeApp:testAndroidHostTest`, `:composeApp:compileKotlinIosArm64`.
-3. Build both release artifacts:
-   ```bash
-   JAVA_HOME=/home/roncofaber/software/android-studio/jbr ./gradlew :androidApp:assembleDebug :androidApp:bundleRelease
-   ```
-   Output: `androidApp/build/outputs/apk/debug/androidApp-debug.apk`, `androidApp/build/outputs/bundle/release/androidApp-release.aab`.
-4. **Verify the release bundle is actually signed** before going any further: `apksigner verify --print-certs androidApp/build/outputs/apk/release/androidApp-release.apk` (or unzip the `.aab` and check for `META-INF/*.RSA`). A past release silently shipped unsigned because `signingConfig` no-ops instead of failing when the keystore path resolves to `null` — don't skip this.
-5. **Always copy both artifacts to the Drive folder** — every release, not just on request:
-   ```bash
-   cp androidApp/build/outputs/apk/debug/androidApp-debug.apk \
-     ~/WORK/Crucible/App/apk/crucible-lens-v{version}-debug.apk
-   cp androidApp/build/outputs/bundle/release/androidApp-release.aab \
-     ~/WORK/Crucible/App/apk/crucible-lens-v{version}-release.aab
-   ```
-   (`~/WORK` is a symlink to `~/Insync/GDrive_LBL/WORK`.)
-6. Commit, then push. `.github/workflows/release.yml` builds and signs a release APK/AAB in CI on a pushed `v*.*.*` tag (or manual `workflow_dispatch`), using `KEYSTORE_BASE64`/`KEYSTORE_PASSWORD`/`KEY_ALIAS`/`KEY_PASSWORD` repo secrets, and includes the same signature-verification step. The draft GitHub release's notes are generated from `CHANGELOG.md`: the version's summary paragraph, followed by a link to `CHANGELOG.md` for the full list — not a copy of every bullet. The workflow fails the release if that version has no summary paragraph, so step 1's changelog style isn't optional.
+1. Bump `gradle.properties` (`app.versionName`, `app.versionCode`). Turn `## [Unreleased]` (already populated incrementally per "Changelog discipline" above) into the new version's section: rename the heading to `## [X.Y.Z] – YYYY-MM-DD`, add a one- or two-sentence summary paragraph above the `### ` groups — since the GitHub release notes lead with it (see step 4) — then add a fresh, empty `## [Unreleased]` above that for whatever comes next.
+2. Run `./scripts/release.sh` — it runs the full local release in one step: verify (`:composeApp:compileAndroidMain`/`testAndroidHostTest`/`compileKotlinIosArm64`), build the debug APK + release AAB/APK, verify the release build is actually signed (`apksigner verify` on the APK, checks the AAB for `META-INF/*.RSA`), and copy both artifacts to the Drive folder (`~/WORK/Crucible/App/apk/crucible-lens-v{version}-{debug.apk,release.aab}` — `~/WORK` is a symlink to `~/Insync/GDrive_LBL/WORK`). Signing reads `KEYSTORE_PATH`/`KEYSTORE_PASSWORD`/`KEY_ALIAS`/`KEY_PASSWORD` from the environment, or `keystore.path`/`keystore.password`/`key.alias`/`key.password` from `local.properties` (gitignored) — this is the same `signingConfigs.release` Gradle already reads, the script doesn't sign anything itself. The script does **not** bump the version, touch `CHANGELOG.md`, commit, tag, or push — those stay deliberate manual steps. A past release silently shipped unsigned because `signingConfig` no-ops instead of failing when the keystore path resolves to `null` — the script's signature check exists specifically to catch that again.
+3. Review the script's output; if the signing check fails, fix your keystore config before going any further — do not skip it.
+4. Commit, then push, then tag and push the tag (the script prints the exact command). `.github/workflows/release.yml` builds and signs a release APK/AAB in CI on a pushed `v*.*.*` tag (or manual `workflow_dispatch`), using `KEYSTORE_BASE64`/`KEYSTORE_PASSWORD`/`KEY_ALIAS`/`KEY_PASSWORD` repo secrets, and includes the same signature-verification step. The draft GitHub release's notes are generated from `CHANGELOG.md`: the version's summary paragraph, followed by a link to `CHANGELOG.md` for the full list — not a copy of every bullet. The workflow fails the release if that version has no summary paragraph, so step 1's changelog style isn't optional.
 
 ## Project structure
 
