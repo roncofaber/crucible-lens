@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
-import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
@@ -48,7 +48,7 @@ fun LinkResourceSheet(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val apiClient = koinInject<ApiClient>()
-    val cacheManager = koinInject<CacheManager>()
+    val repository = koinInject<CrucibleRepository>()
 
     var input by remember { mutableStateOf("") }
     var resolvedType by remember { mutableStateOf<String?>(null) }
@@ -116,7 +116,7 @@ fun LinkResourceSheet(
 
     val isSameType = resolvedType == currentType
     val projectNames = remember {
-        cacheManager.getProjects()?.associate { it.projectId to (it.title ?: it.projectId) } ?: emptyMap<String, String>()
+        repository.getCachedProjects()?.associate { it.projectId to (it.title ?: it.projectId) } ?: emptyMap<String, String>()
     }
 
     ModalBottomSheet(

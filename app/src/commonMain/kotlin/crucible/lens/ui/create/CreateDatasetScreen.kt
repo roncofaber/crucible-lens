@@ -14,9 +14,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.Project
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.create.DuplicateHolder
 import crucible.lens.ui.create.FilesHolder
 import crucible.lens.ui.metadata.MetadataHolder
@@ -52,8 +52,8 @@ fun CreateDatasetScreen(
     // (remember is wiped when the screen leaves composition; FilesHolder bridges the gap).
     var pendingFiles by remember { mutableStateOf(FilesHolder.files) }
 
-    val cacheManager = koinInject<CacheManager>()
-    val projects: List<Project> = remember { cacheManager.getProjects() ?: emptyList() }
+    val repository = koinInject<CrucibleRepository>()
+    val projects: List<Project> = remember { repository.getCachedProjects() ?: emptyList() }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
 
     val createViewModel: CreateDatasetViewModel = koinViewModel()

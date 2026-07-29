@@ -54,7 +54,7 @@ import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.AppTopBar
 import crucible.lens.ui.common.ToastHost
 import crucible.lens.data.api.ApiClient
-import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
@@ -104,7 +104,7 @@ fun NavGraph(
     val scope = rememberCoroutineScope()
     val prefs = koinInject<AppPreferences>()
     val apiClient = koinInject<ApiClient>()
-    val cacheManager = koinInject<CacheManager>()
+    val repository = koinInject<CrucibleRepository>()
 
     // ── Preference state ──────────────────────────────────────────────────────
     val apiKey by prefs.apiKey.collectAsStateWithLifecycle()
@@ -357,7 +357,7 @@ fun NavGraph(
             ApiSettingsScreen(
                 currentApiBaseUrl = apiBaseUrl,
                 currentGraphExplorerUrl = graphExplorerUrl,
-                onApiBaseUrlSave = { url -> scope.launch { prefs.saveApiBaseUrl(url); apiClient.setBaseUrl(url); cacheManager.clearAll(); PersistentProjectCache.clear(platformCtx) } },
+                onApiBaseUrlSave = { url -> scope.launch { prefs.saveApiBaseUrl(url); apiClient.setBaseUrl(url); repository.invalidateAll(); PersistentProjectCache.clear(platformCtx) } },
                 onGraphExplorerUrlSave = { url -> scope.launch { prefs.saveGraphExplorerUrl(url) } },
                 onBack = navigateBack,
                 onHome = navigateHome
@@ -373,7 +373,7 @@ fun NavGraph(
                         prefs.saveApiKey(key)
                         apiClient.setApiKey(key)
                         prefs.clearUserProfile()
-                        cacheManager.clearAll()
+                        repository.invalidateAll()
                     }
                     showToast(platformCtx, "API key saved")
                     navController.popBackStack()

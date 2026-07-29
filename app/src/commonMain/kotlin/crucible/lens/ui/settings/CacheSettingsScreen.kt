@@ -14,8 +14,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.cache.CacheManager
-import crucible.lens.data.util.formatDecimal
+import crucible.lens.data.cache.PersistentProjectCache
+import crucible.lens.data.repository.CrucibleRepository
+import crucible.lens.platform.getPlatformContext
 import crucible.lens.ui.common.AppScaffold
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -27,13 +28,14 @@ fun CacheSettingsScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val cacheManager = koinInject<CacheManager>()
+    val repository = koinInject<CrucibleRepository>()
+    val platformContext = getPlatformContext()
     var cacheAge by remember { mutableStateOf<Long?>(null) }
-    var cacheStats by remember { mutableStateOf<CacheManager.CacheStats?>(null) }
+    var cacheStats by remember { mutableStateOf<CrucibleRepository.CacheStats?>(null) }
 
     LaunchedEffect(Unit) {
-        cacheAge = cacheManager.getProjectsAgeMinutes()
-        cacheStats = cacheManager.getDetailedStats()
+        cacheAge = repository.projectsAgeMinutes()
+        cacheStats = repository.getCacheStats()
     }
 
     AppScaffold(
@@ -75,21 +77,11 @@ fun CacheSettingsScreen(
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold
                         )
-                        val stats = cacheStats
-                        if (stats != null && stats.estimatedSizeKB > 0) {
-                            val sizeLabel = if (stats.estimatedSizeKB >= 1024)
-                                formatDecimal(stats.estimatedSizeKB / 1024.0, 1) + " MB"
-                            else
-                                "${stats.estimatedSizeKB} KB"
-                            Text(
-                                "~$sizeLabel",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
                     }
                     val stats = cacheStats
-                    if (stats == null || (stats.resourceCount == 0 && stats.projectCount == 0 && stats.cachedSampleCount == 0)) {
+                    if (stats == null || (stats.resourceCount == 0 && stats.projectCount == 0 &&
+                            stats.instrumentCount == 0 && stats.cachedSampleCount == 0)
+                    ) {
                         Text(
                             "No cached data",
                             style = MaterialTheme.typography.bodySmall,
@@ -99,23 +91,26 @@ fun CacheSettingsScreen(
                         val ageLabel = cacheAge?.let { "${it}m ago" } ?: "unknown"
                         if (stats.projectCount > 0)
                             CacheStatRow("Projects", "${stats.projectCount} cached ($ageLabel)")
+                        if (stats.instrumentCount > 0)
+                            CacheStatRow("Instruments", "${stats.instrumentCount} cached")
                         if (stats.cachedSampleCount > 0)
                             CacheStatRow("Samples", "${stats.cachedSampleCount} cached")
                         if (stats.cachedDatasetCount > 0)
                             CacheStatRow("Datasets", "${stats.cachedDatasetCount} cached")
                         if (stats.resourceCount > 0)
                             CacheStatRow("Full resources", "${stats.resourceCount} cached")
-                        if (stats.thumbnailCount > 0)
-                            CacheStatRow("Thumbnails", "${stats.thumbnailCount} cached")
+                        if (stats.datasetFileCount > 0)
+                            CacheStatRow("Associated files", "${stats.datasetFileCount} cached")
                     }
                 }
             }
 
             OutlinedButton(
                 onClick = {
-                    cacheManager.clearAll()
+                    repository.invalidateAll()
+                    scope.launch { PersistentProjectCache.clear(platformContext) }
                     cacheAge = null
-                    cacheStats = cacheManager.getDetailedStats()
+                    cacheStats = repository.getCacheStats()
                     scope.launch {
                         snackbarHostState.showSnackbar(
                             message = "Cache cleared",

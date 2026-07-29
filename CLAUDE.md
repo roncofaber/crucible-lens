@@ -15,7 +15,7 @@ Deep reference material (concepts, design decisions, full structure) lives in `d
 
 | File | Covers | Update it when you... |
 |---|---|---|
-| `dev/architecture.md` | Full stack table, package-by-package layout, data models, full API endpoint list, caching layers (`CrucibleRepository`/`ObservableCache` vs legacy `CacheManager`), ViewModels, pull-to-refresh pattern, navigation routes, Koin DI details, common gotchas, known gaps | Add/rename a package, add an API endpoint, change caching behavior, add a ViewModel, change DI wiring |
+| `dev/architecture.md` | Full stack table, package-by-package layout, data models, full API endpoint list, caching layers (`CrucibleRepository`/`ObservableCache`), ViewModels, pull-to-refresh pattern, navigation routes, Koin DI details, common gotchas, known gaps | Add/rename a package, add an API endpoint, change caching behavior, add a ViewModel, change DI wiring |
 | `dev/style.md` | Compose `@OptIn` conventions, spacing/layout values, card/typography styles, `AnimatedVisibility` list-item pattern, "no comments" rule | Establish or change a UI styling convention that should apply project-wide |
 | `dev/platform-parity.md` | What's shared vs. Android/iOS-only, known iOS gaps, iOS build/Xcode setup instructions | Add a platform-specific feature, close an iOS gap, change the iOS build process |
 | `dev/icons.md` | Material Symbols download manifest — exact icon names/fill variants per `AppIcons` token | Add a new icon token |
@@ -71,12 +71,12 @@ iosApp/              Xcode project (via XcodeGen) — depends on app/
 
 ## Key architecture decisions
 
-- **Koin DI** — `ApiClient`, `CacheManager`, `CrucibleRepository`, and `DataSyncManager` are registered as Koin `single`s; ViewModels are registered via `viewModelOf(::MyViewModel)`, all in `di/AppModule.kt`. Screens obtain them via `koinInject<T>()` / `koinViewModel()`. Full platform-module pattern and the leaf-composable exceptions (`InstrumentPickerField`, `FilterSheet`, `AssociatedFilesCard`) are documented in `dev/architecture.md`.
+- **Koin DI** — `ApiClient`, `CrucibleRepository`, and `DataSyncManager` are registered as Koin `single`s; ViewModels are registered via `viewModelOf(::MyViewModel)`, all in `di/AppModule.kt`. Screens obtain them via `koinInject<T>()` / `koinViewModel()`. Full platform-module pattern and the leaf-composable exceptions (`InstrumentPickerField`, `FilterSheet`, `AssociatedFilesCard`) are documented in `dev/architecture.md`.
 - **ViewModels** — all feature screens that load data have a ViewModel. Data loading lives in `viewModelScope`, not in composables. State is `StateFlow<LoadState<T>>` (see `ui/common/LoadState.kt`). Screens that currently lack a ViewModel still use `remember`-based state.
 - **`LoadState<T>`** — sealed class replacing the `isLoading/error/data/fromCache/isRefreshing` five-variable pattern. States: `Loading`, `Error(message)`, `Success(data, isRefreshing, fromCache)`.
 - **`NavGraph`** takes 6 parameters: `navController`, `prefs`, `deepLinkUuid`, `openScanner`, `onScannerOpened`, `viewModel`. All preference flows are collected internally via `collectAsStateWithLifecycle`. All save operations call `prefs.saveXxx()` directly inside NavGraph.
 - **`ResourceDetailScreen`** takes a `uuid: String`, not a resource object — it and every pager page observe `CrucibleRepository.observeResource(uuid)`/`.observeThumbnails(uuid)` directly. There is no resource-object-keyed Compose state anywhere in this screen; "enriched" is derived from `resource?.links != null`, not tracked in a separate set.
-- **`CrucibleRepository`** is the single source of truth for cached reads (resources, projects, instruments, sample/dataset lists, thumbnails) via `ObservableCache<K, V>`. Legacy `CacheManager` still backs a few not-yet-migrated call sites. Full breakdown, including which caches exist and what's left to migrate, is in `dev/architecture.md`'s "Caching layers" section.
+- **`CrucibleRepository`** is the single source of truth for all in-memory caching (resources, projects, instruments, sample/dataset lists, thumbnails, associated files/download URLs) via `ObservableCache<K, V>` — there is no separate legacy cache. Full breakdown is in `dev/architecture.md`'s "Caching layers" section.
 - **`userProfile`** stored as a JSON-serialized `User` object in DataStore under key `user_profile`. `userProfile?.uniqueId` is the source of truth for ORCID.
 - **`ApiResult<T>`** sealed class wraps all API calls via `safeCall { }`. Always `is ApiResult.Success` / `is ApiResult.Error`.
 - **Pagination**: list endpoints use `fetchAllPagesCursor` (datasets/samples use keyset cursor) or `fetchAllPages` (offset-based). Search endpoints return a flat list.

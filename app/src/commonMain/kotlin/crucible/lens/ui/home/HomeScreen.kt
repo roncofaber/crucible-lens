@@ -36,8 +36,6 @@ import androidx.compose.ui.graphics.Color
 
 
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import crucible.lens.data.api.ApiClient
-import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.data.model.Project
 import crucible.lens.data.repository.CrucibleRepository
@@ -83,8 +81,6 @@ fun HomeScreen(
     var showEasterEggDialog by remember { mutableStateOf(false) }
     var clickCount by remember { mutableIntStateOf(0) }
     val platformContext = getPlatformContext()
-    val apiClient = koinInject<ApiClient>()
-    val cacheManager = koinInject<CacheManager>()
     val repository = koinInject<CrucibleRepository>()
     var backPressedOnce by remember { mutableStateOf(false) }
 
@@ -99,7 +95,7 @@ fun HomeScreen(
         }
     }
 
-    var allProjects by remember { mutableStateOf(cacheManager.getProjects() ?: emptyList()) }
+    var allProjects by remember { mutableStateOf(repository.getCachedProjects() ?: emptyList()) }
     var fetchError by remember { mutableStateOf<String?>(null) }
     var retryTrigger by remember { mutableIntStateOf(0) }
     var isPreloading by remember { mutableStateOf(false) }
@@ -107,46 +103,35 @@ fun HomeScreen(
     LaunchedEffect(Unit) {
         val persistentData = PersistentProjectCache.load(platformContext)
         if (persistentData != null && allProjects.isEmpty()) {
+            repository.seedProjects(persistentData)
             allProjects = persistentData
         }
     }
 
     LaunchedEffect(apiKey, retryTrigger) {
         if (apiKey.isNullOrBlank()) return@LaunchedEffect
-        val cached = cacheManager.getProjects()
-        if (cached != null) {
-            allProjects = cached
-            fetchError = null
-        } else {
-            try {
-                when (val response = apiClient.service.getProjects()) {
-                    is crucible.lens.data.api.ApiResult.Success -> {
-                        val projects = response.data
-                        cacheManager.cacheProjects(projects)
-                        allProjects = projects
-                        fetchError = null
-                    }
-                    is crucible.lens.data.api.ApiResult.Error -> {
-                        fetchError = response.message
-                    }
+        try {
+            when (val response = repository.fetchProjects()) {
+                is crucible.lens.data.api.ApiResult.Success -> {
+                    allProjects = response.data
+                    fetchError = null
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                fetchError = e.message ?: "Network error"
+                is crucible.lens.data.api.ApiResult.Error -> {
+                    fetchError = response.message
+                }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            fetchError = e.message ?: "Network error"
         }
     }
 
     LaunchedEffect(apiKey) {
         if (apiKey.isNullOrBlank()) return@LaunchedEffect
-        if (cacheManager.getInstruments() != null) return@LaunchedEffect
-        try {
-            (apiClient.service.getInstruments() as? crucible.lens.data.api.ApiResult.Success)?.data
-                ?.also { cacheManager.cacheInstruments(it) }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (_: Exception) { }
+        try { repository.fetchInstruments() }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { }
     }
 
     LaunchedEffect(allProjects, pinnedProjects, hiddenProjects) {
@@ -193,7 +178,7 @@ fun HomeScreen(
         allProjects.filter { it.projectId in pinnedProjects }
     }
     val pinnedInstrumentList = remember(pinnedInstruments) {
-        cacheManager.getInstruments()?.filter { it.uniqueId in pinnedInstruments } ?: emptyList()
+        repository.getCachedInstruments()?.filter { it.uniqueId in pinnedInstruments } ?: emptyList()
     }
 
     val isBackgroundLoading = isSyncing || isPreloading

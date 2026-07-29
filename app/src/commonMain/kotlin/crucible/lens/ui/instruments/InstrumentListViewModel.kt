@@ -2,10 +2,9 @@ package crucible.lens.ui.instruments
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
-import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Instrument
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.LoadState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,8 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class InstrumentListViewModel(
-    private val apiClient: ApiClient,
-    private val cacheManager: CacheManager
+    private val repository: CrucibleRepository
 ) : ViewModel() {
 
     private val _loadState = MutableStateFlow<LoadState<List<Instrument>>>(LoadState.Loading)
@@ -32,15 +30,8 @@ class InstrumentListViewModel(
                 _loadState.value = LoadState.Loading
             }
             try {
-                if (!forceRefresh) {
-                    val cached = cacheManager.getInstruments()
-                    if (cached != null) { _loadState.value = LoadState.Success(cached); return@launch }
-                }
-                when (val resp = apiClient.service.getInstruments()) {
-                    is ApiResult.Success -> {
-                        cacheManager.cacheInstruments(resp.data)
-                        _loadState.value = LoadState.Success(resp.data)
-                    }
+                when (val resp = repository.fetchInstruments(forceRefresh)) {
+                    is ApiResult.Success -> _loadState.value = LoadState.Success(resp.data)
                     is ApiResult.Error -> _loadState.value = LoadState.Error("Failed to load instruments")
                 }
             } catch (e: CancellationException) {

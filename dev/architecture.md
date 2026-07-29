@@ -50,7 +50,7 @@ Migrated from `com.android.library` + `src/main/` to `com.android.kotlin.multipl
 crucible.lens
 ├── data
 │   ├── api/          CrucibleApiService (Ktor), ApiClient, ApiResult sealed class
-│   ├── cache/        CacheManager (in-memory 10min TTL), PersistentProjectCache
+│   ├── cache/        ObservableCache (generic in-memory TTL cache), PersistentProjectCache
 │   ├── model/        CrucibleResource.kt — all data classes
 │   ├── network/      ConnectivityObserver (expect/actual)
 │   ├── preferences/  AppPreferences interface, PreferencesFactory (expect/actual)
@@ -138,23 +138,31 @@ Join-request calls (`requestToJoinProject`, `reviewJoinRequest`, `getMyJoinReque
 ```
 CrucibleRepository
   ├── resourceObservableCache    ObservableCache<uuid, CrucibleResource>
+  ├── resourceTypeObservableCache ObservableCache<uuid, String>             — "sample"/"dataset", for
+  │                                                                          screens that only have a UUID
   ├── thumbnailObservableCache   ObservableCache<uuid, List<Thumbnail>>
   ├── projectsObservableCache    ObservableCache<Unit, List<Project>>       — member projects list
   ├── projectObservableCache     ObservableCache<projectId, Project>        — per-project, incl. non-member
   │                                                                          projects reached via discover-search
   ├── instrumentsObservableCache ObservableCache<Unit, List<Instrument>>
+  ├── instrumentDatasetsObservableCache ObservableCache<instrumentName, List<Dataset>>
   ├── projectSamplesObservableCache   ObservableCache<projectId, List<Sample>>
   ├── projectDatasetsObservableCache  ObservableCache<projectId, List<Dataset>>
-  └── pendingJoinRequestCountObservableCache  ObservableCache<projectId, Int> — only ever populated
-                                               for projects the caller leads (see below)
+  ├── pendingJoinRequestCountObservableCache  ObservableCache<projectId, Int> — only ever populated
+  │                                            for projects the caller leads (see below)
+  └── datasetFilesObservableCache ObservableCache<datasetUuid, List<AssociatedFile>>
 
-PersistentProjectCache  (disk, 24h TTL)   — project summary lists only
-PersistentThumbnailCache (disk, 7 day TTL) — thumbnail base64 blobs per dataset uuid
+PersistentProjectCache  (disk, 24h TTL)   — project summary lists only, needs a PlatformContext so it
+                                             stays outside CrucibleRepository; HomeScreen reads it on
+                                             cold start and calls repository.seedProjects() to warm the
+                                             in-memory cache from it
 ```
 
-`CacheManager` (in-memory, 10-min TTL, LRU eviction, same shape as the above minus the reactive `Flow`s) is the legacy cache — it predates `CrucibleRepository` and is only still used by a handful of not-yet-migrated call sites (e.g. `HomeScreen`'s pinned-projects preload). New code should go through `CrucibleRepository`; `CacheManager` will be deleted once the remaining consumers move over.
+`CrucibleRepository.fetchFileUrl(mfid)` — the one exception to "cache everything": signed download URLs are deliberately **not** cached and always fetched fresh. It's only ever called on-demand from a share/download tap, never from a background preload, so there's no repeated-read case a cache would help with — and reusing a stale-but-not-yet-expired signed URL has no upside over asking again.
 
-Both caches are cleared entirely on API key or base URL change.
+`CrucibleRepository.invalidateAll()` clears every `ObservableCache` field above in one call — used on logout, API key change, and the Cache settings screen's "Clear All Cache" button (which also clears `PersistentProjectCache` separately, since that's a different tier this method doesn't own). `CrucibleRepository.getCacheStats()` returns a snapshot (project/instrument/resource/sample/dataset/dataset-file counts) for that same screen.
+
+There used to be a second, independent in-memory cache (`CacheManager`) that a handful of screens read/wrote directly instead of going through `CrucibleRepository` — this was a real bug source (two caches for the same data, neither aware of the other) and has been fully merged into `CrucibleRepository`; `CacheManager` no longer exists.
 
 ---
 
@@ -251,12 +259,12 @@ a standalone `ProjectFetcher.kt`; it is now a method on `CrucibleRepository` —
 
 ## Dependency injection (Koin)
 
-The app uses [Koin](https://insert-koin.io/) for dependency injection. `ApiClient` and `CacheManager`
-were converted from Kotlin `object` singletons to plain classes and are registered as Koin `single`s
-in `di/AppModule.kt`, giving them the same effective app-lifetime-singleton behavior they had before,
-but as constructor-injectable dependencies rather than globally-reachable statics.
+The app uses [Koin](https://insert-koin.io/) for dependency injection. `ApiClient` was converted from
+a Kotlin `object` singleton to a plain class and is registered as a Koin `single` in `di/AppModule.kt`,
+giving it the same effective app-lifetime-singleton behavior it had before, but as a
+constructor-injectable dependency rather than a globally-reachable static.
 
-- **`di/AppModule.kt`** — the shared module: `ApiClient`, `CacheManager`, `CrucibleRepository`,
+- **`di/AppModule.kt`** — the shared module: `ApiClient`, `CrucibleRepository`,
   `DataSyncManager`, and every ViewModel are registered here via `single { ... }` / `viewModelOf(::X)`.
 - **`di/KoinInit.kt`** — `initKoin(platformModule)` starts Koin with `appModule` plus a
   platform-supplied module. `AppPreferences` is *not* in `appModule` because Android's implementation
@@ -267,16 +275,17 @@ but as constructor-injectable dependencies rather than globally-reachable static
 - **In Compose**: ViewModels are obtained via `koinViewModel<T>()` (replaces the old
   `viewModel()`/`viewModel<T>()`/manual-factory calls). Non-ViewModel singletons are obtained via
   `koinInject<T>()`.
-- **`CrucibleRepository`** (`data/repository/CrucibleRepository.kt`) is constructor-injected with
-  `ApiClient` + `CacheManager` and is the single point of contact for resource/project/instrument
-  fetch-with-cache logic. Every ViewModel that fetches Crucible data is expected to go through it or,
-  for one-shot mutations (create/update/delete) that don't share caching logic with anything else, to
-  take `ApiClient`/`CacheManager` directly via constructor injection — both are acceptable; reaching
-  for the global object instead of the constructor parameter is not.
+- **`CrucibleRepository`** (`data/repository/CrucibleRepository.kt`) is constructor-injected with just
+  `ApiClient` and is the single point of contact for resource/project/instrument fetch-with-cache
+  logic. Every ViewModel that fetches Crucible data is expected to go through it or, for one-shot
+  mutations (create/update/delete) that don't share caching logic with anything else, to take
+  `ApiClient` directly via constructor injection — both are acceptable; reaching for the global object
+  instead of the constructor parameter is not.
 
 **Leaf-composable exception (accepted, not a gap):** `InstrumentPickerField`, `FilterSheet`, and
-`AssociatedFilesCard` call `koinInject<ApiClient>()` (and `CacheManager` where needed) directly from
-within the composable rather than through an owning ViewModel. This is intentional: each of these
+`AssociatedFilesCard` call `koinInject<ApiClient>()` (`AssociatedFilesCard` uses `CrucibleRepository`
+instead, for its cached file-list/download-URL reads) directly from within the composable rather than
+through an owning ViewModel. This is intentional: each of these
 components is reused from multiple, unrelated parent screens with no single owning ViewModel
 (e.g. `InstrumentPickerField` appears in both `CreateDatasetScreen` and `EditResourceSheet`).
 Introducing a per-use-site ViewModel, or threading callback props through every parent, would add
@@ -316,4 +325,3 @@ Not `Api-Key` or `Token`.
 
 - `ProjectDetailScreen`'s `ResourceCard` is still a custom `Row`, not the M3 `ListItem` composable already used by `HistoryScreen` and `InstrumentDetailScreen` — migrate when next touching that file.
 - iOS: no deep-link/URL-scheme handling, no launch screen configured — see `dev/platform-parity.md`. Not blocking; iOS distribution isn't active yet.
-- `HomeScreen` and `ProjectsListViewModel`/`InstrumentListViewModel` still populate `CacheManager`'s project/instrument lists directly instead of through `CrucibleRepository` — consistent with each other (same cache, same data), but a second, independent copy of the same list `CrucibleRepository.fetchProjects()`/`fetchInstruments()` also maintain. Be careful here: this pairing (`CacheManager` reader/writer + a *separate* `CrucibleRepository` reader/writer for the same data, neither aware of the other) is exactly the shape of bug that broke `ProjectDetailViewModel`'s sample/dataset loading (below) — check both sides actually read what the other wrote before adding new call sites to either list.

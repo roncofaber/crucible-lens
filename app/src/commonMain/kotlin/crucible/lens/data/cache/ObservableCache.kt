@@ -19,6 +19,9 @@ class ObservableCache<K, V>(
 ) {
     private val state = MutableStateFlow<Map<K, CachedEntry<V>>>(emptyMap())
 
+    /** Number of entries currently held, including any that have expired but not yet been read/evicted. */
+    val size: Int get() = state.value.size
+
     private fun CachedEntry<V>.isExpired(): Boolean = now() - timestamp > ttlMillis
 
     fun get(key: K): V? {

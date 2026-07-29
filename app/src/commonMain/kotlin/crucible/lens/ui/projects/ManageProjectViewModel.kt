@@ -4,10 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
-import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.User
+import crucible.lens.data.repository.CrucibleRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,7 +42,7 @@ sealed class ProjectEditState {
 
 class ManageProjectViewModel(
     private val apiClient: ApiClient,
-    private val cacheManager: CacheManager
+    private val repository: CrucibleRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ManageProjectState>(ManageProjectState.Loading)
@@ -158,7 +158,7 @@ class ManageProjectViewModel(
             )
             when (result) {
                 is ApiResult.Success -> {
-                    cacheManager.clearProjectsCache()
+                    repository.invalidateProjects()
                     val members = loaded?.members ?: emptyList()
                     val isLead = isCurrentUserLead(result.data)
                     _state.value = ManageProjectState.Loaded(

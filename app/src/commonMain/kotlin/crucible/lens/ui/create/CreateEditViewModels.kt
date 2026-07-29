@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
-import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.DatasetUpdateRequest
@@ -33,7 +32,6 @@ sealed class SaveState {
 
 class CreateSampleViewModel(
     private val apiClient: ApiClient,
-    private val cacheManager: CacheManager,
     private val repository: CrucibleRepository
 ) : ViewModel() {
 
@@ -48,8 +46,8 @@ class CreateSampleViewModel(
                 when (val resp = apiClient.service.createSample(request)) {
                     is ApiResult.Success -> {
                         val sample = resp.data
-                        cacheManager.cacheResource(sample.uniqueId, sample)
-                        projectId?.let { cacheManager.clearProjectDetail(it); repository.invalidateProjectData(it) }
+                        repository.cacheResource(sample.uniqueId, sample)
+                        projectId?.let { repository.invalidateProjectData(it) }
                         if (!metadata.isNullOrEmpty()) {
                             apiClient.service.postResourceMetadata(sample.uniqueId, metadata)
                         }
@@ -72,7 +70,6 @@ class CreateSampleViewModel(
 
 class CreateDatasetViewModel(
     private val apiClient: ApiClient,
-    private val cacheManager: CacheManager,
     private val repository: CrucibleRepository
 ) : ViewModel() {
 
@@ -91,8 +88,8 @@ class CreateDatasetViewModel(
                 }
                 val newDataset = createResp.data
                 val newUuid = newDataset.uniqueId
-                cacheManager.cacheResource(newUuid, newDataset)
-                request.projectId?.let { cacheManager.clearProjectDetail(it); repository.invalidateProjectData(it) }
+                repository.cacheResource(newUuid, newDataset)
+                request.projectId?.let { repository.invalidateProjectData(it) }
 
                 var uploadFailures = 0
                 var thumbnailFailures = 0
@@ -167,7 +164,7 @@ class CreateDatasetViewModel(
 
 class EditResourceViewModel(
     private val apiClient: ApiClient,
-    private val cacheManager: CacheManager
+    private val repository: CrucibleRepository
 ) : ViewModel() {
 
     private val _saveState = MutableStateFlow<SaveState>(SaveState.Idle)
@@ -181,7 +178,7 @@ class EditResourceViewModel(
             _saveState.value = try {
                 when (val resp = apiClient.service.updateSample(uuid, request)) {
                     is ApiResult.Success -> {
-                        cacheManager.cacheResource(uuid, resp.data)
+                        repository.cacheResource(uuid, resp.data)
                         if (metadata != null) {
                             apiClient.service.postResourceMetadata(uuid, metadata, overwrite = true)
                         }
@@ -204,7 +201,7 @@ class EditResourceViewModel(
             _saveState.value = try {
                 when (val resp = apiClient.service.updateDataset(uuid, request)) {
                     is ApiResult.Success -> {
-                        cacheManager.cacheResource(uuid, resp.data)
+                        repository.cacheResource(uuid, resp.data)
                         if (metadata != null) {
                             apiClient.service.postResourceMetadata(uuid, metadata, overwrite = true)
                         }

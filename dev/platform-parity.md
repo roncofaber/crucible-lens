@@ -27,7 +27,7 @@ The iOS entry point is `iosMain/App.kt` (called via `MainViewController.kt` → 
 | All UI screens, including `CreateDatasetScreen` | Same composables, same layout, same Material 3 theme, on both platforms |
 | Navigation | Single `NavGraph.kt` — all 23 routes reachable on both platforms |
 | API client | Ktor-based `CrucibleApiService`, `CrucibleRepository`, all data models |
-| Caching | `CrucibleRepository`'s `ObservableCache`s, `CacheManager`, `PersistentProjectCache` |
+| Caching | `CrucibleRepository`'s `ObservableCache`s, `PersistentProjectCache` |
 | QR scanning | `easyqrscan` composable — same scanner on both platforms |
 | QR code display | `qr-kit` `rememberQrKitPainter` — same on both platforms |
 | ORCID login WebView | `compose-webview-multiplatform` — same on both platforms |

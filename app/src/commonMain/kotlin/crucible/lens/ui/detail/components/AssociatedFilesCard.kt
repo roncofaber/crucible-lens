@@ -13,9 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
-import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.StandardSizeAnim
 import crucible.lens.data.util.formatFileSize
@@ -60,27 +59,17 @@ internal fun AssociatedFilesCard(
     val errorFiles = remember { mutableStateMapOf<String, Boolean>() }
     val scope = rememberCoroutineScope()
     val platformCtx = getPlatformContext()
-    val apiClient = koinInject<ApiClient>()
-    val cacheManager = koinInject<CacheManager>()
+    val repository = koinInject<CrucibleRepository>()
 
     fun fetch() {
         scope.launch {
             state = AssociatedFilesState.Loading
             loadingFiles.clear()
-            val cached = cacheManager.getDatasetFiles(datasetUuid)
-            val newState = if (cached != null) {
-                if (cached.isEmpty()) AssociatedFilesState.Empty else AssociatedFilesState.Success(cached)
-            } else {
-                when (val result = apiClient.service.getDatasetFiles(datasetUuid)) {
-                    is ApiResult.Success -> {
-                        if (result.data.isEmpty()) AssociatedFilesState.Empty
-                        else AssociatedFilesState.Success(result.data).also {
-                            cacheManager.cacheDatasetFiles(datasetUuid, result.data)
-                        }
-                    }
-                    is ApiResult.Error -> if (result.code == 404) AssociatedFilesState.Empty
-                                         else AssociatedFilesState.Err(result.message)
-                }
+            val newState = when (val result = repository.fetchDatasetFiles(datasetUuid)) {
+                is ApiResult.Success -> if (result.data.isEmpty()) AssociatedFilesState.Empty
+                                        else AssociatedFilesState.Success(result.data)
+                is ApiResult.Error -> if (result.code == 404) AssociatedFilesState.Empty
+                                     else AssociatedFilesState.Err(result.message)
             }
             state = newState
         }
@@ -91,13 +80,7 @@ internal fun AssociatedFilesCard(
             loadingFiles[file.mfid] = true
             errorFiles.remove(file.mfid)
             try {
-                val cached = cacheManager.getFileUrl(file.mfid)
-                val url = if (cached != null) cached else {
-                    when (val r = apiClient.service.getFileDownloadLink(file.mfid)) {
-                        is ApiResult.Success -> r.data.url.also { cacheManager.cacheFileUrl(file.mfid, it) }
-                        is ApiResult.Error -> null
-                    }
-                }
+                val url = (repository.fetchFileUrl(file.mfid) as? ApiResult.Success)?.data
                 if (url != null) {
                     val name = displayName(file.filename)
                     if (share) shareText(platformCtx, url, name) else openUrl(platformCtx, url)

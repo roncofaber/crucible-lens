@@ -4,9 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
-import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Instrument
 import crucible.lens.data.model.InstrumentUpdateRequest
+import crucible.lens.data.repository.CrucibleRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,7 +35,7 @@ sealed class InstrumentEditState {
 
 class ManageInstrumentViewModel(
     private val apiClient: ApiClient,
-    private val cacheManager: CacheManager
+    private val repository: CrucibleRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<InstrumentManageState>(InstrumentManageState.Loading)
@@ -103,7 +103,7 @@ class ManageInstrumentViewModel(
             )
             when (result) {
                 is ApiResult.Success -> {
-                    cacheManager.clearInstrumentsCache()
+                    repository.invalidateInstruments()
                     _state.value = InstrumentManageState.Loaded(result.data)
                     _editState.value = InstrumentEditState.Idle
                 }

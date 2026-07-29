@@ -2,8 +2,8 @@ package crucible.lens.data.repository
 
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
-import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.cache.ObservableCache
+import crucible.lens.data.model.AssociatedFile
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Instrument
@@ -40,11 +40,10 @@ private fun httpError(code: Int): ResourceResult.Error = when (code) {
  * Single point of contact between ViewModels and the network/cache layers.
  * Every ViewModel that fetches Crucible data goes through here — see
  * dev/architecture.md's "Leaf-composable exception" for the three leaf-composable
- * exceptions that call [ApiClient]/[CacheManager] directly instead.
+ * exceptions that call [ApiClient] directly instead.
  */
 class CrucibleRepository(
-    private val apiClient: ApiClient,
-    private val cacheManager: CacheManager
+    private val apiClient: ApiClient
 ) {
     private val api get() = apiClient.service
 
@@ -96,11 +95,25 @@ class CrucibleRepository(
     /** One-shot synchronous read — null if absent or expired. */
     fun getCachedResource(uuid: String): CrucibleResource? = resourceObservableCache.get(uuid)
 
+    /** Writes a resource straight into the cache — for create/edit flows that already have the fresh object from the API response. */
+    fun cacheResource(uuid: String, resource: CrucibleResource) = resourceObservableCache.put(uuid, resource)
+
     /** Evicts a single resource, forcing the next fetch to hit the network. */
     fun invalidateResource(uuid: String) = resourceObservableCache.invalidate(uuid)
 
     /** Age of the cached entry in milliseconds, or null if absent/expired. */
     fun resourceAgeMillis(uuid: String): Long? = resourceObservableCache.ageMillis(uuid)
+
+    // uuid -> "sample"/"dataset", so screens that only have a UUID (e.g. History) can avoid a
+    // type-check API call. Populated by fetchProjectData's list fetches.
+    private val resourceTypeObservableCache = ObservableCache<String, String>(
+        ttlMillis = 10 * 60 * 1000L,
+        maxSize = 50
+    )
+
+    fun cacheResourceType(uuid: String, type: String) = resourceTypeObservableCache.put(uuid, type)
+
+    fun getCachedResourceType(uuid: String): String? = resourceTypeObservableCache.get(uuid)
 
     /** Returns true if the resource was loaded with links (i.e. from a detail fetch, not a list fetch). */
     private fun hasLinks(resource: CrucibleResource): Boolean = when (resource) {
@@ -140,9 +153,7 @@ class CrucibleRepository(
     // Per-project entries, keyed by projectId — populated both in bulk (every project from a
     // fetchProjects() list fetch is written through here too) and individually (fetchProject()
     // for a single project, e.g. one found via discover-search that isn't in the member list).
-    // This is what ProjectDetailScreen should observe for its cold-open header, instead of the
-    // older CacheManager.getProjects() lookup, which only ever holds member projects and isn't
-    // kept in sync with this cache.
+    // This is what ProjectDetailScreen should observe for its cold-open header.
     private val projectObservableCache = ObservableCache<String, Project>(
         ttlMillis = 10 * 60 * 1000L,
         maxSize = 50
@@ -158,16 +169,25 @@ class CrucibleRepository(
             projectsObservableCache.get(Unit)?.let { return ApiResult.Success(it) }
         }
         return api.getProjects().also { result ->
-            if (result is ApiResult.Success) {
-                projectsObservableCache.put(Unit, result.data)
-                result.data.forEach { projectObservableCache.put(it.projectId, it) }
-            }
+            if (result is ApiResult.Success) seedProjects(result.data)
         }
     }
 
     fun observeProjects(): Flow<List<Project>?> = projectsObservableCache.observe(Unit)
 
+    /** One-shot synchronous read — null if absent or expired. */
+    fun getCachedProjects(): List<Project>? = projectsObservableCache.get(Unit)
+
+    /** Writes a project list into the cache without pretending it came from a live fetch — for the disk-cache bootstrap (see PersistentProjectCache). */
+    fun seedProjects(projects: List<Project>) {
+        projectsObservableCache.put(Unit, projects)
+        projects.forEach { projectObservableCache.put(it.projectId, it) }
+    }
+
     fun invalidateProjects() = projectsObservableCache.invalidate(Unit)
+
+    /** Age of the cached project list, in minutes — null if absent or expired. */
+    fun projectsAgeMinutes(): Long? = projectsObservableCache.ageMillis(Unit)?.let { it / 60000 }
 
     /**
      * Fetches a single project by ID. Used both for a member project's detail screen (usually
@@ -238,6 +258,9 @@ class CrucibleRepository(
 
     fun observeInstruments(): Flow<List<Instrument>?> = instrumentsObservableCache.observe(Unit)
 
+    /** One-shot synchronous read — null if absent or expired. */
+    fun getCachedInstruments(): List<Instrument>? = instrumentsObservableCache.get(Unit)
+
     fun invalidateInstruments() = instrumentsObservableCache.invalidate(Unit)
 
     /**
@@ -302,7 +325,7 @@ class CrucibleRepository(
                         when (val result = api.getSamplesByProject(projectId, onTotalKnown = sOnTotal)) {
                             is ApiResult.Success -> result.data.also {
                                 projectSamplesObservableCache.put(projectId, it)
-                                it.forEach { s -> cacheManager.cacheResourceType(s.uniqueId, "sample") }
+                                it.forEach { s -> cacheResourceType(s.uniqueId, "sample") }
                             }
                             // Thrown (not swallowed to emptyList()) so a genuinely empty project
                             // is never confused with a failed fetch — callers already catch and
@@ -320,7 +343,7 @@ class CrucibleRepository(
                         when (val result = api.getDatasetsByProject(projectId, onTotalKnown = dOnTotal)) {
                             is ApiResult.Success -> result.data.also {
                                 projectDatasetsObservableCache.put(projectId, it)
-                                it.forEach { ds -> cacheManager.cacheResourceType(ds.uniqueId, "dataset") }
+                                it.forEach { ds -> cacheResourceType(ds.uniqueId, "dataset") }
                             }
                             is ApiResult.Error -> error("Failed to load datasets: ${result.message}")
                         }
@@ -370,6 +393,10 @@ class CrucibleRepository(
 
     fun observeInstrumentDatasets(instrumentName: String): Flow<List<Dataset>?> =
         instrumentDatasetsObservableCache.observe(instrumentName)
+
+    /** One-shot synchronous read — null if absent or expired. */
+    fun getCachedInstrumentDatasets(instrumentName: String): List<Dataset>? =
+        instrumentDatasetsObservableCache.get(instrumentName)
 
     fun invalidateInstrumentDatasets(instrumentName: String) =
         instrumentDatasetsObservableCache.invalidate(instrumentName)
@@ -426,6 +453,69 @@ class CrucibleRepository(
                 }
             }
         }
+    }
+
+    private val datasetFilesObservableCache = ObservableCache<String, List<AssociatedFile>>(
+        ttlMillis = 10 * 60 * 1000L,
+        maxSize = 50
+    )
+
+    /** Cache-first associated-files list fetch for a dataset. Caches on success. */
+    suspend fun fetchDatasetFiles(datasetUuid: String, forceRefresh: Boolean = false): ApiResult<List<AssociatedFile>> {
+        if (!forceRefresh) {
+            datasetFilesObservableCache.get(datasetUuid)?.let { return ApiResult.Success(it) }
+        }
+        return api.getDatasetFiles(datasetUuid).also { result ->
+            if (result is ApiResult.Success) datasetFilesObservableCache.put(datasetUuid, result.data)
+        }
+    }
+
+    fun getCachedDatasetFiles(datasetUuid: String): List<AssociatedFile>? = datasetFilesObservableCache.get(datasetUuid)
+
+    fun invalidateDatasetFiles(datasetUuid: String) = datasetFilesObservableCache.invalidate(datasetUuid)
+
+    /**
+     * Always fetches a fresh signed download URL — never cached. This is only ever called
+     * on-demand (user taps share/download), not from a background preload, and reusing a
+     * stale-but-not-yet-expired signed URL has no real upside over just asking again.
+     */
+    suspend fun fetchFileUrl(mfid: String): ApiResult<String> = when (val result = api.getFileDownloadLink(mfid)) {
+        is ApiResult.Success -> ApiResult.Success(result.data.url)
+        is ApiResult.Error -> result
+    }
+
+    data class CacheStats(
+        val projectCount: Int,
+        val instrumentCount: Int,
+        val resourceCount: Int,
+        val cachedSampleCount: Int,
+        val cachedDatasetCount: Int,
+        val datasetFileCount: Int
+    )
+
+    /** Snapshot of what's currently cached, for the Cache settings screen. */
+    fun getCacheStats(): CacheStats = CacheStats(
+        projectCount = getCachedProjects()?.size ?: 0,
+        instrumentCount = getCachedInstruments()?.size ?: 0,
+        resourceCount = resourceObservableCache.size,
+        cachedSampleCount = projectSamplesObservableCache.size,
+        cachedDatasetCount = projectDatasetsObservableCache.size,
+        datasetFileCount = datasetFilesObservableCache.size
+    )
+
+    /** Evicts every cache this repository owns — for logout, API key change, or a manual "clear cache" action. */
+    fun invalidateAll() {
+        resourceObservableCache.invalidateAll()
+        resourceTypeObservableCache.invalidateAll()
+        thumbnailObservableCache.invalidateAll()
+        projectsObservableCache.invalidateAll()
+        projectObservableCache.invalidateAll()
+        instrumentsObservableCache.invalidateAll()
+        instrumentDatasetsObservableCache.invalidateAll()
+        projectSamplesObservableCache.invalidateAll()
+        projectDatasetsObservableCache.invalidateAll()
+        pendingJoinRequestCountObservableCache.invalidateAll()
+        datasetFilesObservableCache.invalidateAll()
     }
 }
 

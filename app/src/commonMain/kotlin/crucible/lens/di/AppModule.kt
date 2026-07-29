@@ -1,7 +1,6 @@
 package crucible.lens.di
 
 import crucible.lens.data.api.ApiClient
-import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.sync.DataSyncManager
 import crucible.lens.ui.create.CreateDatasetViewModel
@@ -26,8 +25,7 @@ import org.koin.dsl.module
  */
 val appModule = module {
     single { ApiClient() }
-    single { CacheManager() }
-    single { CrucibleRepository(get(), get()) }
+    single { CrucibleRepository(get()) }
     single { DataSyncManager(get()) }
 
     viewModelOf(::ResourceDetailViewModel)

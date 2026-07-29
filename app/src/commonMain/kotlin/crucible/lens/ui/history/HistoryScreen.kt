@@ -18,7 +18,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.data.preferences.HistoryItem
@@ -157,12 +157,12 @@ private fun HistoryCard(
     onClick: () -> Unit
 ) {
     val platformContext = getPlatformContext()
-    val cacheManager = koinInject<CacheManager>()
+    val repository = koinInject<CrucibleRepository>()
     var menuExpanded by remember { mutableStateOf(false) }
 
     // Best-effort cache lookups for display enrichment
-    val cached = remember(item.uuid) { cacheManager.getResource(item.uuid) }
-    val resourceType = remember(item.uuid) { cacheManager.getResourceType(item.uuid) }
+    val cached = remember(item.uuid) { repository.getCachedResource(item.uuid) }
+    val resourceType = remember(item.uuid) { repository.getCachedResourceType(item.uuid) }
     val projectId = remember(cached) {
         when (cached) {
             is Sample -> cached.projectId
@@ -172,7 +172,7 @@ private fun HistoryCard(
     }
     val projectName = remember(projectId) {
         projectId?.let { pid ->
-            cacheManager.getProjects()?.find { it.projectId == pid }?.title ?: pid
+            repository.getCachedProjects()?.find { it.projectId == pid }?.title ?: pid
         }
     }
     val icon = when (item.resourceType ?: resourceType) {

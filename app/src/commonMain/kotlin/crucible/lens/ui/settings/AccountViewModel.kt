@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
-import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.model.User
 import crucible.lens.data.preferences.AppPreferences
@@ -57,7 +57,7 @@ sealed class EditUiState {
 class AccountViewModel(
     private val prefs: AppPreferences,
     private val apiClient: ApiClient,
-    private val cacheManager: CacheManager
+    private val repository: CrucibleRepository
 ) : ViewModel() {
 
     private val _profileState = MutableStateFlow<ProfileUiState>(ProfileUiState.Idle)
@@ -207,7 +207,7 @@ class AccountViewModel(
             prefs.saveApiKey(key)
             apiClient.setApiKey(key)
             prefs.clearUserProfile()
-            cacheManager.clearAll()
+            repository.invalidateAll()
             _editState.value = EditUiState.Idle
             if (key.isBlank()) {
                 _profileState.value = ProfileUiState.NotLoggedIn
@@ -224,7 +224,7 @@ class AccountViewModel(
             prefs.clearApiKey()
             prefs.clearUserProfile()
             apiClient.setApiKey("")
-            cacheManager.clearAll()
+            repository.invalidateAll()
             _profileState.value = ProfileUiState.NotLoggedIn
             _editState.value = EditUiState.Idle
             _joinRequests.value = emptyList()

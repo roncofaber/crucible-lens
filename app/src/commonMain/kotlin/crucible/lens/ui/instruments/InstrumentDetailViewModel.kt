@@ -4,9 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
-import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Instrument
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.LoadState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 
 class InstrumentDetailViewModel(
     private val apiClient: ApiClient,
-    private val cacheManager: CacheManager
+    private val repository: CrucibleRepository
 ) : ViewModel() {
 
     private val _instrument = MutableStateFlow<Instrument?>(null)
@@ -40,7 +40,7 @@ class InstrumentDetailViewModel(
             }
             try {
                 val resolvedInstrument = if (!forceRefresh) {
-                    cacheManager.getInstruments()?.find { it.uniqueId == instrumentId }
+                    repository.getCachedInstruments()?.find { it.uniqueId == instrumentId }
                         ?: (apiClient.service.getInstrument(instrumentId) as? ApiResult.Success)?.data
                 } else {
                     (apiClient.service.getInstrument(instrumentId) as? ApiResult.Success)?.data
@@ -52,17 +52,14 @@ class InstrumentDetailViewModel(
                 _instrument.value = resolvedInstrument
                 val instrName = resolvedInstrument.instrumentName ?: resolvedInstrument.uniqueId
                 if (!forceRefresh) {
-                    val cached = cacheManager.getInstrumentDatasets(instrName)
+                    val cached = repository.getCachedInstrumentDatasets(instrName)
                     if (cached != null) {
                         _datasetsState.value = LoadState.Success(cached, fromCache = true)
                         return@launch
                     }
                 }
-                when (val resp = apiClient.service.getDatasetsByInstrument(instrName)) {
-                    is ApiResult.Success -> {
-                        cacheManager.cacheInstrumentDatasets(instrName, resp.data)
-                        _datasetsState.value = LoadState.Success(resp.data)
-                    }
+                when (val resp = repository.fetchInstrumentDatasets(instrName, forceRefresh)) {
+                    is ApiResult.Success -> _datasetsState.value = LoadState.Success(resp.data)
                     is ApiResult.Error -> _datasetsState.value = LoadState.Error("Failed to load datasets")
                 }
             } catch (e: CancellationException) {

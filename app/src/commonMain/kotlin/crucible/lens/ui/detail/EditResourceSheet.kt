@@ -13,7 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.repository.CrucibleRepository
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
@@ -225,8 +225,8 @@ private fun SampleEditFields(
     onOpenMetadataEditor: ((String) -> Unit)? = null,
     overrideMetadata: JsonObject? = null
 ) {
-    val cacheManager = koinInject<CacheManager>()
-    val projects = remember { cacheManager.getProjects() ?: emptyList() }
+    val repository = koinInject<CrucibleRepository>()
+    val projects = remember { repository.getCachedProjects() ?: emptyList() }
     var name by remember { mutableStateOf(resource.name) }
     var type by remember { mutableStateOf(resource.sampleType ?: "") }
     var description by remember { mutableStateOf(resource.description ?: "") }
@@ -283,8 +283,8 @@ private fun DatasetEditFields(
     onOpenMetadataEditor: ((String) -> Unit)? = null,
     overrideMetadata: JsonObject? = null
 ) {
-    val cacheManager = koinInject<CacheManager>()
-    val projects = remember { cacheManager.getProjects() ?: emptyList() }
+    val repository = koinInject<CrucibleRepository>()
+    val projects = remember { repository.getCachedProjects() ?: emptyList() }
     var name by remember { mutableStateOf(resource.name) }
     var measurement by remember { mutableStateOf(resource.measurement ?: "") }
     var instrumentName by remember { mutableStateOf(resource.instrumentName ?: "") }

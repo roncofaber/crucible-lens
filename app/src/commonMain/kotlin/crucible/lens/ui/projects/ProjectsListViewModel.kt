@@ -2,10 +2,9 @@ package crucible.lens.ui.projects
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
-import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Project
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.LoadState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,8 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class ProjectsListViewModel(
-    private val apiClient: ApiClient,
-    private val cacheManager: CacheManager
+    private val repository: CrucibleRepository
 ) : ViewModel() {
 
     private val _loadState = MutableStateFlow<LoadState<List<Project>>>(LoadState.Loading)
@@ -33,7 +31,7 @@ class ProjectsListViewModel(
         viewModelScope.launch(Dispatchers.Default) {
             try {
                 if (!forceRefresh) {
-                    val cached = cacheManager.getProjects()
+                    val cached = repository.getCachedProjects()
                     if (cached != null) {
                         withContext(Dispatchers.Main) {
                             _loadState.value = LoadState.Success(cached)
@@ -45,7 +43,6 @@ class ProjectsListViewModel(
                         return@launch
                     }
                 } else {
-                    cacheManager.clearAll()
                     withContext(Dispatchers.Main) {
                         _projectCounts.value = emptyMap()
                     }
@@ -57,9 +54,8 @@ class ProjectsListViewModel(
                                        else LoadState.Loading
                 }
 
-                when (val resp = apiClient.service.getProjects()) {
+                when (val resp = repository.fetchProjects(forceRefresh)) {
                     is ApiResult.Success -> {
-                        cacheManager.cacheProjects(resp.data)
                         withContext(Dispatchers.Main) {
                             _loadState.value = LoadState.Success(resp.data)
                             _projectCounts.update { counts ->

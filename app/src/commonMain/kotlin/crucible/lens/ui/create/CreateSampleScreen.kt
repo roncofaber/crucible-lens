@@ -14,9 +14,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.SampleCreateRequest
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.create.DuplicateHolder
 import crucible.lens.ui.metadata.MetadataHolder
 import crucible.lens.platform.currentIsoDateTime
@@ -44,8 +44,8 @@ fun CreateSampleScreen(
     var metadata by remember { mutableStateOf<JsonObject?>(null) }
     var isPublic by rememberSaveable { mutableStateOf(false) }
 
-    val cacheManager = koinInject<CacheManager>()
-    val projects: List<Project> = remember { cacheManager.getProjects() ?: emptyList() }
+    val repository = koinInject<CrucibleRepository>()
+    val projects: List<Project> = remember { repository.getCachedProjects() ?: emptyList() }
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
 
     val createViewModel: CreateSampleViewModel = koinViewModel()
