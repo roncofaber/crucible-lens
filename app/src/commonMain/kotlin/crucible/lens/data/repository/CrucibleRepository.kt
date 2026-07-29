@@ -196,19 +196,28 @@ class CrucibleRepository(
 
     // Pending join-request count per project, for the lead-facing badge on Home/Projects list.
     // Only ever populated for projects the current user leads (DataSyncManager filters by
-    // projectLeadOrcid before fetching) — GET /join_requests?group_name= is 403 for anyone else.
+    // projectLeadOrcid before fetching). GET /join_requests with no group_name now auto-scopes
+    // to the caller's own led projects server-side (non-admins get 403 there before this — see
+    // dev/architecture.md), so one call covers every led project instead of one call each.
     private val pendingJoinRequestCountObservableCache = ObservableCache<String, Int>(
         ttlMillis = 10 * 60 * 1000L,
         maxSize = 50
     )
 
-    suspend fun fetchPendingJoinRequestCount(projectId: String, forceRefresh: Boolean = false): ApiResult<Int> {
-        if (!forceRefresh) {
-            pendingJoinRequestCountObservableCache.get(projectId)?.let { return ApiResult.Success(it) }
-        }
-        return when (val result = api.getJoinRequests(groupName = projectId, status = "pending")) {
-            is ApiResult.Success -> result.data.size.also { pendingJoinRequestCountObservableCache.put(projectId, it) }
-                .let { ApiResult.Success(it) }
+    /**
+     * Fetches pending join-request counts for every project in [ledProjectIds] in a single
+     * request. Projects with zero pending requests are written as 0 (not left absent), so a
+     * resolved request clears its badge on the next sync instead of staying stuck.
+     */
+    suspend fun fetchPendingJoinRequestCounts(ledProjectIds: Collection<String>): ApiResult<Map<String, Int>> {
+        return when (val result = api.getJoinRequests(status = "pending")) {
+            is ApiResult.Success -> {
+                val counts = result.data.groupingBy { it.groupName }.eachCount()
+                ledProjectIds.forEach { projectId ->
+                    pendingJoinRequestCountObservableCache.put(projectId, counts[projectId] ?: 0)
+                }
+                ApiResult.Success(counts)
+            }
             is ApiResult.Error -> result
         }
     }

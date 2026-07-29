@@ -19,9 +19,9 @@ class DataSyncManager(private val repository: CrucibleRepository) {
     /**
      * [hiddenProjectIds] are skipped entirely — no network call is made for them until the
      * user unhides them (at which point the next syncAll()/preload naturally picks them up).
-     * [currentUserOrcid] scopes the pending-join-request-count preload to projects the caller
-     * actually leads — GET /join_requests?group_name= 403s for anyone else, so this is never
-     * attempted for the rest of the list.
+     * [currentUserOrcid] determines which projects' pending-join-request counts to cache —
+     * GET /join_requests with no group_name returns exactly the caller's own led projects'
+     * requests, so a non-lead (currentUserOrcid == null or leads nothing) skips the call.
      */
     suspend fun syncAll(hiddenProjectIds: Set<String> = emptySet(), currentUserOrcid: String? = null) {
         coroutineScope {
@@ -48,19 +48,15 @@ class DataSyncManager(private val repository: CrucibleRepository) {
                 }
             }
 
-            // Pending join-request counts, for the lead-facing badge — only for led projects.
-            if (currentUserOrcid != null) {
-                projects.filter { it.projectLeadOrcid == currentUserOrcid }.chunked(5).forEach { batch ->
-                    coroutineScope {
-                        batch.map { project ->
-                            async {
-                                try { repository.fetchPendingJoinRequestCount(project.projectId) }
-                                catch (e: CancellationException) { throw e }
-                                catch (_: Exception) { }
-                            }
-                        }.awaitAll()
-                    }
-                }
+            // Pending join-request counts, for the lead-facing badge — one call covers every
+            // project this user leads (see fetchPendingJoinRequestCounts kdoc).
+            val ledProjectIds = if (currentUserOrcid != null) {
+                projects.filter { it.projectLeadOrcid == currentUserOrcid }.map { it.projectId }
+            } else emptyList()
+            if (ledProjectIds.isNotEmpty()) {
+                try { repository.fetchPendingJoinRequestCounts(ledProjectIds) }
+                catch (e: CancellationException) { throw e }
+                catch (_: Exception) { }
             }
         }
     }
