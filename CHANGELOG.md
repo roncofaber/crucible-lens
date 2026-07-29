@@ -3,27 +3,25 @@
 ## [0.7.0] – 2026-07-28
 
 ### Added
-- **Project join requests**: request to join a project you're not a member of, project leads (or admins) review pending requests, and your own request history is visible from the Account screen
-- **Discover projects**: search can now find projects you're not a member of ("Discover" filter chip in Search), shown with a muted, non-clickable-to-open treatment
-- Non-member project view: samples/datasets tabs are replaced with a clear "You're not a member of this project" message and a "Request to join" action, instead of a misleading empty list
-- Home screen: dedicated Account icon in the top bar, separate from Settings
-- Manage Project and Manage Instrument screens: added a Home button, matching every other screen's top bar
-- Manage Project: project lead, member rows, and pending join-request requesters are now tappable, opening their profile — matching the rest of the app (sample/dataset owners, project detail header)
-- Manage Project: Members card is now collapsible, matching the pattern used elsewhere (Account screen's Advanced/Join Requests cards)
-- Account screen: a reviewed join request now shows who reviewed it ("Reviewed by ..."), tappable to open their profile
-- Project leads now see a small badge with the pending count (Home's pinned cards, Projects list, and the Project screen's overflow/Manage-project icons) when a project has a pending join request — previously the only way to notice one was opening that project's Manage screen
+- **Project join requests**: request to join a project, leads/admins review pending requests, your request history is visible from the Account screen
+- **Discover projects**: search can now find projects you're not a member of
+- Non-member project view now shows a "Request to join" action instead of an empty list
+- Home screen: dedicated Account icon in the top bar
+- Manage Project and Manage Instrument screens: added a Home button
+- Manage Project: lead/member rows and join-request requesters are tappable, opening their profile; Members card is collapsible
+- Account screen: reviewed join requests show who reviewed them
+- Project leads see a small badge with the pending count (Home, Projects list, Project screen) when a project has a pending join request
 
 ### Changed
-- Instrument icon switched to a filled/solid glyph, matching the Project icon's visual weight
-- Loading and empty-state content on Project Detail biased toward the upper half of the screen instead of centering within the area below the header, which read as too low
-- Tapping a home-screen action while signed out now goes straight to the Account screen (previously landed on the Settings list, an extra tap away)
-- Settings screen's "API" row no longer shows a stale "Not configured — tap to set up" prompt for the API key — API key/sign-in now live entirely on the Account screen, not API settings
+- Instrument icon switched to a filled glyph, matching the Project icon
+- Signed-out home actions now go straight to the Account screen
+- API key/sign-in now live entirely on the Account screen, not API settings
 
 ### Fixed
-- Approve/reject buttons for pending join requests had no accessibility label — screen readers announced them as unlabeled buttons
-- Project screen loaded slower/showed a blank header more often — it had switched to a per-project cache that isn't warmed by the Home/Projects list fetch, missing the data that was already fetched moments earlier and triggering an avoidable network call; now falls back to the already-warm cache first
-- Opening a project always re-fetched its full sample/dataset list from the network, even right after Home's background preload had just fetched the same data — the preload and the project screen were reading from two different, disconnected caches. Project screen now reads from the same cache the preload actually writes to
-- Sort/Group icon in the sample/dataset detail top bar could flicker in and out while swiping between siblings — it was gated on the fully-enriched (slow-loading, evictable) resource fetch instead of the lightweight sibling-list entry it actually needed
+- Pending join-request badge now also refreshes on pull-to-refresh/Refresh (previously only updated at app start)
+- Approve/reject buttons for join requests were missing accessibility labels
+- Project screen loaded slower and re-fetched data unnecessarily due to disconnected caches
+- Sort/Group icon in resource detail could flicker while swiping between siblings
 
 ## [0.6.0] – 2026-07-23
 
