@@ -63,11 +63,29 @@ fun ProjectsListScreen(
     onTogglePin: (String) -> Unit = {},
     hiddenProjects: Set<String> = emptySet(),
     onToggleHide: (String) -> Unit = {},
+    currentUserOrcid: String? = null,
 ) {
     val platformContext = getPlatformContext()
     val viewModel: ProjectsListViewModel = koinViewModel()
     val repository = koinInject<CrucibleRepository>()
     val loadState by viewModel.loadState.collectAsState()
+    val refreshScope = rememberCoroutineScope()
+    // Pending-request counts are cheap enough to refresh alongside the project list itself
+    // (see fetchPendingJoinRequestCounts) — one extra call per refresh, not per project.
+    fun refreshProjects() {
+        viewModel.load(forceRefresh = true)
+        val ledProjectIds = (loadState as? LoadState.Success)?.data
+            ?.filter { it.projectLeadOrcid == currentUserOrcid }
+            ?.map { it.projectId }
+            ?: emptyList()
+        if (currentUserOrcid != null && ledProjectIds.isNotEmpty()) {
+            refreshScope.launch {
+                try { repository.fetchPendingJoinRequestCounts(ledProjectIds) }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { }
+            }
+        }
+    }
     val projectCounts by viewModel.projectCounts.collectAsState()
     // Persistent cache summaries - loaded immediately for instant display
     var hiddenExpanded by remember { mutableStateOf(false) }
@@ -163,7 +181,7 @@ fun ProjectsListScreen(
                         }
                         DropdownMenu(expanded = listMenuExpanded, onDismissRequest = { listMenuExpanded = false }) {
                             ToggleHiddenMenuItem(hiddenExpanded) { hiddenExpanded = !hiddenExpanded; listMenuExpanded = false }
-                            RefreshMenuItem { listMenuExpanded = false; viewModel.load(forceRefresh = true) }
+                            RefreshMenuItem { listMenuExpanded = false; refreshProjects() }
                         }
                     }
                 }
@@ -172,7 +190,7 @@ fun ProjectsListScreen(
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = loadState.isRefreshingNow,
-            onRefresh = { viewModel.load(forceRefresh = true) },
+            onRefresh = { refreshProjects() },
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -247,7 +265,7 @@ fun ProjectsListScreen(
                                     title = "Error Loading Projects",
                                     message = (loadState as LoadState.Error).message,
                                     modifier = Modifier.padding(horizontal = 16.dp),
-                                    onRetry = { viewModel.load(forceRefresh = true) }
+                                    onRetry = { refreshProjects() }
                                 )
                             }
                         }

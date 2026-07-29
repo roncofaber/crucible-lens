@@ -267,6 +267,20 @@ fun ProjectDetailScreen(
     var sortState by remember { mutableStateOf(SortState()) }
     val scope = rememberCoroutineScope()
 
+    // The underlying API call has no group_name filter — it always returns every project this
+    // user leads, not just this one — so this is as cheap as ProjectsListScreen's refresh, just
+    // scoped here to write/zero this project's cache entry.
+    fun refreshProjectDetail() {
+        viewModel.load(projectId, isHidden = isHidden, forceRefresh = true)
+        if (isCurrentUserLead) {
+            scope.launch {
+                try { repository.fetchPendingJoinRequestCounts(listOf(projectId)) }
+                catch (e: CancellationException) { throw e }
+                catch (_: Exception) { }
+            }
+        }
+    }
+
     // Load persisted group-by choices and default tab on first composition
     LaunchedEffect(Unit) {
         sampleGroupBy = SampleGroupBy.valueOf(prefs.sampleGroupBy.first())
@@ -334,7 +348,7 @@ fun ProjectDetailScreen(
                             OpenInWebMenuItem { topBarMenuExpanded = false; openUrl(ctx, "$graphExplorerUrl/$projectId") }
                             ShareMenuItem { topBarMenuExpanded = false; shareText(ctx, "$graphExplorerUrl/$projectId", project?.title ?: projectId) }
                             HorizontalDivider()
-                            RefreshMenuItem { topBarMenuExpanded = false; viewModel.load(projectId, isHidden = isHidden, forceRefresh = true) }
+                            RefreshMenuItem { topBarMenuExpanded = false; refreshProjectDetail() }
                         }
                     }
                 }
@@ -343,7 +357,7 @@ fun ProjectDetailScreen(
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = loadState.isRefreshingNow,
-            onRefresh = { viewModel.load(projectId, isHidden = isHidden, forceRefresh = true) },
+            onRefresh = { refreshProjectDetail() },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -453,7 +467,7 @@ fun ProjectDetailScreen(
                                 title = "Error Loading Data",
                                 message = (loadState as LoadState.Error).message,
                                 modifier = Modifier.padding(16.dp),
-                                onRetry = { viewModel.load(projectId, isHidden = isHidden, forceRefresh = true) }
+                                onRetry = { refreshProjectDetail() }
                             )
                         }
                         else -> HorizontalPager(

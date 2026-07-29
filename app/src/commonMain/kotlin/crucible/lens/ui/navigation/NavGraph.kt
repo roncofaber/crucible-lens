@@ -665,7 +665,8 @@ fun NavGraph(
                 pinnedProjects = pinnedProjects,
                 onTogglePin = { id -> scope.launch { prefs.togglePinnedProject(id) } },
                 hiddenProjects = hiddenProjects,
-                onToggleHide = { id -> scope.launch { prefs.toggleHiddenProject(id) } }
+                onToggleHide = { id -> scope.launch { prefs.toggleHiddenProject(id) } },
+                currentUserOrcid = userOrcid
             )
         }
 

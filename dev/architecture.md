@@ -127,6 +127,8 @@ Join-request calls (`requestToJoinProject`, `reviewJoinRequest`, `getMyJoinReque
 
 `DataSyncManager.syncAll()` fetches all pending counts in a single `getJoinRequests(status = "pending")` call (no `group_name`), then buckets the results client-side by `groupName` against the caller's own led-project list (`projectLeadOrcid == currentUserOrcid`) — one request regardless of how many projects the user leads. Projects with zero pending requests are written as `0` (not left absent) so a resolved request clears its badge on the next sync.
 
+`syncAll()` only runs once per session (app start) plus a resume after an interrupted resource refresh — it is deliberately too heavyweight (forces the whole projects/instruments/sample/dataset preload) to call from a single pull-to-refresh. `ProjectsListScreen` and `ProjectDetailScreen` instead call `CrucibleRepository.fetchPendingJoinRequestCounts()` directly from their own pull-to-refresh/menu-refresh/retry actions (scoped to the refreshed project list's led projects, or just `projectId` on the detail screen) so the badge doesn't go stale for a whole session if a request arrives mid-session — the underlying API call has no `group_name` filter, so it always returns every led project's pending requests regardless of what's passed in, making this refresh as cheap either way.
+
 ---
 
 ## Caching layers
