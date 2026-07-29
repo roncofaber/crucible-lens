@@ -2,6 +2,8 @@
 
 ## [0.7.0] – 2026-07-28
 
+Project join requests, with a lead-facing pending-request badge, plus several loading/caching fixes.
+
 ### Added
 - **Project join requests**: request to join a project, leads/admins review pending requests, your request history is visible from the Account screen
 - **Discover projects**: search can now find projects you're not a member of

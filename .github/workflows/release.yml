@@ -82,6 +82,29 @@ jobs:
           cp androidApp/build/outputs/apk/release/androidApp-release.apk \
             "release-artifacts/crucible-lens-v${{ steps.version.outputs.name }}-release.apk"
 
+      - name: Extract release summary from CHANGELOG.md
+        id: notes
+        run: |
+          VERSION="${{ steps.version.outputs.name }}"
+          # Pull the summary paragraph between the version's "## [X.Y.Z]" header and its
+          # first "### " subsection — see CHANGELOG.md style rule in CLAUDE.md. Matched by
+          # literal prefix (index()), not regex, since "[X.Y.Z]" contains regex metacharacters.
+          SUMMARY=$(awk -v hdr="## [$VERSION]" '
+            index($0, hdr) == 1 { found=1; next }
+            found && /^## / { exit }
+            found && /^### / { exit }
+            found && NF { print; exit }
+          ' CHANGELOG.md)
+          if [ -z "$SUMMARY" ]; then
+            echo "::error::No summary paragraph found under '## [$VERSION]' in CHANGELOG.md — add one (see CLAUDE.md's changelog style rule)."
+            exit 1
+          fi
+          {
+            echo "summary<<EOF"
+            echo "$SUMMARY"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create draft GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -90,10 +113,10 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="v${{ steps.version.outputs.name }}"
           fi
-          cat > release-notes.md <<'EOF'
-          ## Changes
+          cat > release-notes.md <<EOF
+          ${{ steps.notes.outputs.summary }}
 
-          - _fill in release notes before publishing_
+          See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for the full list of changes.
           EOF
           gh release create "$TAG" \
             --draft \

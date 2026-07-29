@@ -37,6 +37,7 @@ Expected build output: `BUILD SUCCESSFUL` with no warnings.
 Follow all of these steps, in order, every time — not just when explicitly asked to build:
 
 1. Bump `gradle.properties` (`app.versionName`, `app.versionCode`) and add a `CHANGELOG.md` entry.
+   - **Changelog style**: one line per entry, what changed for the user — not why, not implementation detail. If a rationale or root cause matters, it belongs in the commit message, not here. Group under `### Added`/`### Changed`/`### Fixed` (only the sections that apply). Above the groups, add a one- or two-sentence summary paragraph of the release — longer only if genuinely necessary — since the GitHub release notes lead with it (see step 6).
 2. Verify: `:composeApp:compileAndroidMain`, `:composeApp:testAndroidHostTest`, `:composeApp:compileKotlinIosArm64`.
 3. Build both release artifacts:
    ```bash
@@ -52,7 +53,7 @@ Follow all of these steps, in order, every time — not just when explicitly ask
      ~/WORK/Crucible/App/apk/crucible-lens-v{version}-release.aab
    ```
    (`~/WORK` is a symlink to `~/Insync/GDrive_LBL/WORK`.)
-6. Commit, then push. `.github/workflows/release.yml` builds and signs a release APK/AAB in CI on a pushed `v*.*.*` tag (or manual `workflow_dispatch`), using `KEYSTORE_BASE64`/`KEYSTORE_PASSWORD`/`KEY_ALIAS`/`KEY_PASSWORD` repo secrets, and includes the same signature-verification step.
+6. Commit, then push. `.github/workflows/release.yml` builds and signs a release APK/AAB in CI on a pushed `v*.*.*` tag (or manual `workflow_dispatch`), using `KEYSTORE_BASE64`/`KEYSTORE_PASSWORD`/`KEY_ALIAS`/`KEY_PASSWORD` repo secrets, and includes the same signature-verification step. The draft GitHub release's notes are generated from `CHANGELOG.md`: the version's summary paragraph, followed by a link to `CHANGELOG.md` for the full list — not a copy of every bullet. The workflow fails the release if that version has no summary paragraph, so step 1's changelog style isn't optional.
 
 ## Project structure
 
