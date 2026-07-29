@@ -17,19 +17,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
-import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.util.formatDateTime
 import crucible.lens.data.util.formatFileSize
+import crucible.lens.data.util.userDisplayName
 import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
 import crucible.lens.ui.common.StandardSizeAnim
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
 import org.koin.compose.koinInject
 
@@ -44,8 +42,7 @@ internal fun DatasetDetailsCard(
     onAdvancedChange: (Boolean) -> Unit = {}
 ) {
     val platformCtx = getPlatformContext()
-    val apiClient = koinInject<ApiClient>()
-    val cacheManager = koinInject<CacheManager>()
+    val repository = koinInject<CrucibleRepository>()
     var advanced by remember { mutableStateOf(initialAdvanced) }
     Card {
         Column(modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim)) {
@@ -130,13 +127,7 @@ internal fun DatasetDetailsCard(
                         value = dataset.instrumentName,
                         onClick = {
                             instrumentScope.launch {
-                                val instruments = cacheManager.getInstruments()
-                                    ?: withContext(Dispatchers.Default) {
-                                        when (val resp = apiClient.service.getInstruments()) {
-                                            is ApiResult.Success -> resp.data.also { cacheManager.cacheInstruments(it) }
-                                            is ApiResult.Error -> null
-                                        }
-                                    }
+                                val instruments = (repository.fetchInstruments() as? ApiResult.Success)?.data
                                 val instrument = instruments?.find { it.instrumentName == dataset.instrumentName }
                                 if (instrument != null) onInstrumentClick(instrument.uniqueId)
                             }
@@ -170,13 +161,8 @@ internal fun DatasetDetailsCard(
                     )
                     when {
                         dataset.owner?.username != null -> {
-                            val ownerLabel = buildString {
-                                val name = listOfNotNull(dataset.owner.firstName?.firstOrNull()?.let { "$it." }, dataset.owner.lastName).joinToString(" ")
-                                if (name.isNotBlank()) append(name)
-                                else append("@${dataset.owner.username}")
-                            }
                             ClickableInfoRow(
-                                icon = AppIcons.User, label = "Owner", value = ownerLabel,
+                                icon = AppIcons.User, label = "Owner", value = userDisplayName(dataset.owner),
                                 onClick = { onUserClick(dataset.owner.username) }
                             )
                         }

@@ -36,13 +36,23 @@ fun ManageInstrumentScreen(
                 title = "Manage Instrument",
                 onBack = onBack,
                 actions = {
-                    if (state is InstrumentManageState.Loaded && editState is InstrumentEditState.Idle) {
-                        IconButton(onClick = { viewModel.startEdit() }) {
-                            AppIcon(AppIcons.Edit)
-                        }
-                    }
                     IconButton(onClick = onHome) {
                         AppIcon(AppIcons.Home)
+                    }
+                    if (state is InstrumentManageState.Loaded && editState is InstrumentEditState.Idle) {
+                        var menuExpanded by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { menuExpanded = true }) {
+                                AppIcon(AppIcons.MoreVert)
+                            }
+                            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Edit instrument") },
+                                    leadingIcon = { AppIcon(AppIcons.Edit) },
+                                    onClick = { menuExpanded = false; viewModel.startEdit() }
+                                )
+                            }
+                        }
                     }
                 }
             )

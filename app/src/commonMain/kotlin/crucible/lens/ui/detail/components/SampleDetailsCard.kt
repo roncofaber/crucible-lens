@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.Sample
 import crucible.lens.data.util.formatDateTime
 import crucible.lens.data.util.formatFileSize
+import crucible.lens.data.util.userDisplayName
 import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
@@ -137,13 +138,8 @@ internal fun SampleDetailsCard(
                     )
                     when {
                         sample.owner?.username != null -> {
-                            val ownerLabel = buildString {
-                                val name = listOfNotNull(sample.owner.firstName?.firstOrNull()?.let { "$it." }, sample.owner.lastName).joinToString(" ")
-                                if (name.isNotBlank()) append(name)
-                                else append("@${sample.owner.username}")
-                            }
                             ClickableInfoRow(
-                                icon = AppIcons.User, label = "Owner", value = ownerLabel,
+                                icon = AppIcons.User, label = "Owner", value = userDisplayName(sample.owner),
                                 onClick = { onUserClick(sample.owner.username) }
                             )
                         }

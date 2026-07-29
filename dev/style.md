@@ -99,6 +99,38 @@ The outer `HorizontalPager` (Samples / Datasets tab) nests the inner one.
 
 ---
 
+## Collapsing identity header (ProjectDetailScreen / InstrumentDetailScreen pattern)
+
+The name/lead/org/type/location block ("identity") scrolls away with the list — WhatsApp
+group-page style — while search/group-by/sort ("controls") stay pinned above it. No custom
+scroll math, `NestedScrollConnection`, or interpolated header height is involved:
+
+- **Identity** is passed as real list content via `SamplesList`/`DatasetsList`'s
+  `leadingContent: (LazyListScope.() -> Unit)?` parameter (an `item { }` at the top of each
+  `LazyColumn`), or as a plain `item { }` for `InstrumentDetailScreen`'s single list. It scrolls
+  normally — it's just item 0.
+- **Controls** are a separate composable rendered outside the pager for
+  `ProjectDetailScreen` (search applies to both Samples/Datasets tabs from one shared
+  `searchQuery`, so it can't live inside just one tab's list) or a `stickyHeader { }` inside the
+  `LazyColumn` for `InstrumentDetailScreen`, matching `ProjectsListScreen`'s own
+  `stickyHeader(key = "search_bar")` convention.
+- Any state that replaces the list with something else (an `EmptyListCard`, an owner-name
+  loading spinner) must still be its own `LazyColumn` with `leadingContent` invoked first — do
+  not fall back to a bare `Box`, or identity disappears whenever that tab has zero results.
+  `ProjectDetailScreen`'s `Loading`/`Error`/non-member states are the one accepted exception:
+  there's no list to attach identity to yet, so it's simply absent until data loads.
+- The icon+name `Row` is `.clickable { onManageProject() }` / `onManageInstrument()` — ripple
+  only, no chevron, no color change. It's a sibling of the pin `IconButton`, not a shared
+  clickable ancestor wrapping it, so the two tap targets never nest (see "Notification dots"-style
+  layering — never put an unrelated actionable button inside another element's own tap target).
+- The project lead's name uses `userDisplayName()` (`CLAUDE.md`'s "User identity conventions")
+  like everywhere else a person is shown in context — full name, no username by default, one
+  tap away via the profile the name already opens.
+- Small inline icons in these headers (lead/org/date/type/location) are `14.dp`, matching this
+  file's documented 14–18dp floor — not the `11.dp` these headers used before this pattern.
+
+---
+
 ## Notification dots
 
 Use `NotificationDot` (`ui/common/NotificationDot.kt`) for any "something needs your attention"

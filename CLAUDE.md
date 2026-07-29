@@ -92,10 +92,10 @@ Full endpoint list is in `dev/architecture.md`. The rules that matter while codi
 
 ## User identity conventions
 
-- Display format for owners: `F. LastName (@username)` — abbreviated first name, full last name, @username in parens
-- Username is the preferred identifier throughout; ORCID is shown as a secondary/tappable link
+- Display format for someone already "in context" (owner rows, project leads, member/requester lists): full name via `userDisplayName()` (`data/util/FormatUtils.kt`) — no username shown by default. Falls back to `@username`, then the raw ORCID, if no name is set. Every one of these rows is a tap away from the full profile (`UserProfileScreen`, which does show `@username`), so there's no need to spend space on it up front.
+- Exception — identity-*lookup* contexts stay username-primary, since disambiguating a search result before you've committed to a person is the whole point there: `UserResultItem`, `FilterSheet`'s search results, and `UserProfileScreen`'s own header.
 - `User` model has: `firstName`, `lastName`, `email`, `uniqueId` (ORCID), `username`, `isServiceAccount`
-- Shared user UI components: `UserAvatar`, `UserSearchField`, `UserResultItem` in `ui/common/UserComponents.kt`
+- Shared user UI components: `UserAvatar`, `UserIdentityRow`, `UserSearchField`, `UserResultItem` in `ui/common/UserComponents.kt`. `UserIdentityRow` is the default choice for a "name + avatar, tap for profile" row (project members, join requesters) — use `userDisplayName()` directly when a custom layout (e.g. a subtitle line) rules out `UserIdentityRow`.
 - Owner rows in detail cards navigate to `UserProfileScreen` — tapping opens the profile, not orcid.org directly
 
 ## Icon conventions

@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.model.User
 import crucible.lens.data.util.formatDateTime
+import crucible.lens.data.util.userDisplayName
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
 import crucible.lens.ui.common.AppScaffold
@@ -533,8 +534,7 @@ private fun JoinRequestRow(request: JoinRequest, reviewer: User?, onUserClick: (
             Text(formatDateTime(request.requestTime), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             val reviewerId = request.reviewerId
             if (reviewerId != null) {
-                val reviewerName = listOfNotNull(reviewer?.firstName, reviewer?.lastName).joinToString(" ").ifBlank { null }
-                val reviewerLabel = reviewer?.username?.let { "@$it" } ?: reviewerName ?: reviewerId
+                val reviewerLabel = userDisplayName(reviewer?.firstName, reviewer?.lastName, reviewer?.username, reviewerId)
                 Text(
                     "Reviewed by $reviewerLabel",
                     style = MaterialTheme.typography.labelSmall,

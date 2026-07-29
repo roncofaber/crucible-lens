@@ -1,5 +1,6 @@
 package crucible.lens.data.util
 
+import crucible.lens.data.model.User
 import kotlin.math.pow
 import kotlin.math.round
 import kotlin.time.Instant
@@ -60,3 +61,19 @@ fun formatFileSize(bytes: Long): String = when {
     bytes >= 1_024         -> "${formatDecimal(bytes / 1_024.0, 1)} KB"
     else                   -> "$bytes B"
 }
+
+/**
+ * Full name if either first/last name is set, else "@username", else the raw ORCID/ID.
+ * This is the app-wide default for showing a person "in context" (owner rows, member lists,
+ * project leads) — see CLAUDE.md's "User identity conventions". The deliberate exceptions are
+ * identity-lookup UI (UserResultItem, FilterSheet's search results, UserProfileScreen's own
+ * header), which stay username-primary since disambiguating a search result is the whole point
+ * there, unlike showing someone already in context.
+ */
+fun userDisplayName(firstName: String?, lastName: String?, username: String?, uniqueId: String? = null): String {
+    val name = listOfNotNull(firstName, lastName).joinToString(" ").ifBlank { null }
+    return name ?: username?.let { "@$it" } ?: uniqueId ?: "Unknown"
+}
+
+fun userDisplayName(user: User?): String =
+    userDisplayName(user?.firstName, user?.lastName, user?.username, user?.uniqueId)

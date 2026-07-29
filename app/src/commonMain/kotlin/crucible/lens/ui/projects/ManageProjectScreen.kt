@@ -24,12 +24,14 @@ import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.User
 import crucible.lens.data.util.formatDateTime
+import crucible.lens.data.util.userDisplayName
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.StandardSizeAnim
 import crucible.lens.ui.common.UserAvatar
+import crucible.lens.ui.common.UserIdentityRow
 import crucible.lens.ui.common.UserResultItem
 import crucible.lens.ui.common.UserSearchField
 import crucible.lens.ui.detail.components.ClickableInfoRow
@@ -74,14 +76,29 @@ fun ManageProjectScreen(
                 title = "Manage Project",
                 onBack = onBack,
                 actions = {
-                    val loaded = state as? ManageProjectState.Loaded
-                    if (loaded?.isLead == true && editState is ProjectEditState.Idle) {
-                        IconButton(onClick = { viewModel.startEdit() }) {
-                            AppIcon(AppIcons.Edit)
-                        }
-                    }
                     IconButton(onClick = onHome) {
                         AppIcon(AppIcons.Home)
+                    }
+                    val loaded = state as? ManageProjectState.Loaded
+                    if (loaded?.isLead == true && editState is ProjectEditState.Idle) {
+                        var menuExpanded by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { menuExpanded = true }) {
+                                AppIcon(AppIcons.MoreVert)
+                            }
+                            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Add member") },
+                                    leadingIcon = { AppIcon(AppIcons.PersonAdd) },
+                                    onClick = { menuExpanded = false; viewModel.showAddMemberSheet() }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Edit project") },
+                                    leadingIcon = { AppIcon(AppIcons.Edit) },
+                                    onClick = { menuExpanded = false; viewModel.startEdit() }
+                                )
+                            }
+                        }
                     }
                 }
             )
@@ -156,15 +173,7 @@ private fun ProjectInfoCard(project: Project, onUserClick: (String) -> Unit = {}
             InfoRow(icon = AppIcons.Project, label = "Title", value = project.title ?: "—")
             InfoRow(icon = AppIcons.Business, label = "Organization", value = project.organization ?: "—")
             val lead = project.lead
-            val leadDisplay = lead?.let {
-                val name = listOfNotNull(it.firstName?.firstOrNull()?.let { c -> "$c." }, it.lastName).joinToString(" ")
-                when {
-                    name.isNotBlank() && it.username != null -> "$name (@${it.username})"
-                    name.isNotBlank() -> name
-                    it.username != null -> "@${it.username}"
-                    else -> null
-                }
-            } ?: "—"
+            val leadDisplay = lead?.let { userDisplayName(it) } ?: "—"
             val leadIdentifier = lead?.username ?: lead?.uniqueId
             if (leadIdentifier != null) {
                 ClickableInfoRow(icon = AppIcons.Person, label = "Project lead", value = leadDisplay, onClick = { onUserClick(leadIdentifier) })
@@ -271,11 +280,7 @@ private fun PendingRequestsCard(
                     Column(
                         modifier = Modifier.weight(1f).clickable { onUserClick(requesterIdentifier) }
                     ) {
-                        val displayName = listOfNotNull(requester?.firstName, requester?.lastName).joinToString(" ").ifBlank { null }
-                        Text(displayName ?: request.requesterId, style = MaterialTheme.typography.bodyMedium)
-                        if (!requester?.username.isNullOrBlank()) {
-                            Text("@${requester.username}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                        }
+                        Text(userDisplayName(requester?.firstName, requester?.lastName, requester?.username, request.requesterId), style = MaterialTheme.typography.bodyMedium)
                         if (!request.reason.isNullOrBlank()) {
                             Text(request.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -320,35 +325,16 @@ private fun MembersCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Members (${members.size})", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onAddMember, modifier = Modifier.size(32.dp)) {
-                        AppIcon(AppIcons.PersonAdd, modifier = Modifier.size(20.dp))
-                    }
-                    ExpandChevron(expanded = expanded)
-                }
+                ExpandChevron(expanded = expanded)
             }
             if (expanded) members.forEach { member ->
                 val memberIdentifier = member.username ?: member.uniqueId
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                UserIdentityRow(
+                    user = member,
+                    avatarContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    avatarContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    onClick = if (memberIdentifier != null) ({ onUserClick(memberIdentifier) }) else null
                 ) {
-                    UserAvatar(
-                        firstName = member.firstName,
-                        lastName = member.lastName,
-                        size = 36.dp,
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                    Column(
-                        modifier = Modifier.weight(1f)
-                            .let { if (memberIdentifier != null) it.clickable { onUserClick(memberIdentifier) } else it }
-                    ) {
-                        val displayName = listOfNotNull(member.firstName, member.lastName).joinToString(" ").ifBlank { null }
-                        if (displayName != null) Text(displayName, style = MaterialTheme.typography.bodyMedium)
-                        if (!member.username.isNullOrBlank()) Text("@${member.username}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                    }
                     // The lead can't remove themselves from their own project via this list.
                     if (isLead && member.uniqueId != null && member.uniqueId != leadOrcid) {
                         IconButton(onClick = { onRemoveMember(member) }, modifier = Modifier.size(32.dp)) {
@@ -359,6 +345,13 @@ private fun MembersCard(
             }
             if (members.isEmpty()) {
                 Text("No members yet", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (expanded && isLead) {
+                TextButton(onClick = onAddMember, modifier = Modifier.fillMaxWidth()) {
+                    AppIcon(AppIcons.PersonAdd, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Add member")
+                }
             }
         }
     }

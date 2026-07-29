@@ -11,6 +11,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.User
+import crucible.lens.data.util.userDisplayName
 
 /**
  * Avatar circle showing the user's initials. Falls back to "?" if neither name is set.
@@ -38,6 +39,41 @@ fun UserAvatar(
                 color = contentColor
             )
         }
+    }
+}
+
+/**
+ * Standard "name, tap for profile" row: avatar + name ([userDisplayName] — full name, no
+ * username by default) + optional trailing content (e.g. an action `IconButton`). This is the
+ * app-wide default for showing a person already in context (project members, join requesters) —
+ * not for identity-lookup contexts like [UserResultItem], which stay username-primary.
+ */
+@Composable
+fun UserIdentityRow(
+    user: User?,
+    fallbackId: String? = null,
+    modifier: Modifier = Modifier,
+    avatarSize: Dp = 36.dp,
+    avatarContainerColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primaryContainer,
+    avatarContentColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onPrimaryContainer,
+    onClick: (() -> Unit)? = null,
+    trailingContent: (@Composable () -> Unit)? = null
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        UserAvatar(
+            firstName = user?.firstName, lastName = user?.lastName, size = avatarSize,
+            containerColor = avatarContainerColor, contentColor = avatarContentColor
+        )
+        Text(
+            userDisplayName(user?.firstName, user?.lastName, user?.username, user?.uniqueId ?: fallbackId),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f)
+        )
+        trailingContent?.invoke()
     }
 }
 

@@ -32,7 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
-import crucible.lens.data.cache.CacheManager
+import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Instrument
 import crucible.lens.data.util.dateGroupKey
@@ -75,7 +75,7 @@ fun InstrumentDetailScreen(
     onManageInstrument: () -> Unit = {}
 ) {
     val viewModel: InstrumentDetailViewModel = koinViewModel()
-    val cacheManager = koinInject<CacheManager>()
+    val repository = koinInject<CrucibleRepository>()
     val instrument by viewModel.instrument.collectAsState()
     val datasetsState by viewModel.datasetsState.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
@@ -103,7 +103,7 @@ fun InstrumentDetailScreen(
                 InstrumentDatasetGroupBy.NONE        -> ""
                 InstrumentDatasetGroupBy.MEASUREMENT -> d.measurement ?: "No measurement"
                 InstrumentDatasetGroupBy.PROJECT     -> d.projectId?.let { pid ->
-                    cacheManager.getProjects()?.find { it.projectId == pid }?.title ?: pid
+                    repository.getCachedProjects()?.find { it.projectId == pid }?.title ?: pid
                 } ?: "No project"
                 InstrumentDatasetGroupBy.DATE        -> dateGroupKey(d.timestamp)
                 InstrumentDatasetGroupBy.SESSION     -> d.sessionName ?: "No session"
@@ -144,7 +144,7 @@ fun InstrumentDetailScreen(
                                     onClick = { overflowMenuExpanded = false; onManageInstrument() }
                                 )
                                 HorizontalDivider()
-                                RefreshMenuItem { overflowMenuExpanded = false; cacheManager.clearInstrumentsCache(); viewModel.load(instrumentId, forceRefresh = true) }
+                                RefreshMenuItem { overflowMenuExpanded = false; repository.invalidateInstruments(); viewModel.load(instrumentId, forceRefresh = true) }
                             }
                         }
                     }
@@ -162,20 +162,25 @@ fun InstrumentDetailScreen(
                     state = listState,
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    stickyHeader(key = "instrument_header") {
+                    item(key = "instrument_identity") {
                         instrument?.let { instr ->
-                            InstrumentHeader(
+                            InstrumentIdentityHeader(
                                 instrument = instr,
                                 isPinned = isPinned,
                                 onTogglePin = onTogglePin,
-                                searchQuery = searchQuery,
-                                onSearchChange = { searchQuery = it },
-                                sortState = sortState,
-                                onSortStateChange = { sortState = it; showToast(platformCtx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
-                                groupBy = groupBy,
-                                onGroupByChange = { groupBy = it; showToast(platformCtx, "Grouped by ${it.label}") }
+                                onManageInstrument = onManageInstrument
                             )
                         }
+                    }
+                    stickyHeader(key = "instrument_controls") {
+                        InstrumentControlsBar(
+                            searchQuery = searchQuery,
+                            onSearchChange = { searchQuery = it },
+                            sortState = sortState,
+                            onSortStateChange = { sortState = it; showToast(platformCtx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
+                            groupBy = groupBy,
+                            onGroupByChange = { groupBy = it; showToast(platformCtx, "Grouped by ${it.label}") }
+                        )
                     }
 
                 // ── States ────────────────────────────────────────────────────
@@ -272,31 +277,25 @@ private fun GroupStickyHeader(title: String, count: Int, expanded: Boolean, onTo
 }
 
 @Composable
-private fun InstrumentHeader(
+private fun InstrumentIdentityHeader(
     instrument: Instrument,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
-    searchQuery: String = "",
-    onSearchChange: (String) -> Unit = {},
-    sortState: SortState = SortState(),
-    onSortStateChange: (SortState) -> Unit = {},
-    groupBy: InstrumentDatasetGroupBy = InstrumentDatasetGroupBy.MEASUREMENT,
-    onGroupByChange: (InstrumentDatasetGroupBy) -> Unit = {}
+    onManageInstrument: () -> Unit = {}
 ) {
-    var groupMenuExpanded by remember { mutableStateOf(false) }
-    var sortMenuExpanded by remember { mutableStateOf(false) }
-
     Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Name + pin
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            // Name (tap -> Manage Instrument) + pin
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.weight(1f).clickable { onManageInstrument() }
+                ) {
                     AppIcon(AppIcons.Instrument, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        val nameScrollState = rememberScrollState()
-                        Box(modifier = Modifier.fillMaxWidth().fadeEndEdge(nameScrollState.canScrollForward)) {
-                            Text(text = instrument.instrumentName ?: instrument.uniqueId, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.horizontalScroll(nameScrollState))
-                        }
+                    val nameScrollState = rememberScrollState()
+                    Box(modifier = Modifier.weight(1f).fadeEndEdge(nameScrollState.canScrollForward)) {
+                        Text(text = instrument.instrumentName ?: instrument.uniqueId, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.horizontalScroll(nameScrollState))
                     }
                 }
                 IconButton(onClick = onTogglePin, modifier = Modifier.size(32.dp)) {
@@ -309,73 +308,87 @@ private fun InstrumentHeader(
             val location = instrument.location?.takeIf { it.isNotBlank() }
             if (type != null || location != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (type != null) Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        AppIcon(AppIcons.Instrument, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (type != null) Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        AppIcon(AppIcons.Instrument, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(type, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    if (location != null) Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        AppIcon(AppIcons.LocationAlt, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (location != null) Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        AppIcon(AppIcons.LocationAlt, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(location, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
+        }
+    }
+}
 
-            // Filter bar + group-by + sort
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), shape = MaterialTheme.shapes.medium, modifier = Modifier.weight(1f)) {
-                    Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AppIcon(AppIcons.Search, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                        Box(modifier = Modifier.weight(1f)) {
-                            if (searchQuery.isEmpty()) Text("Search datasets…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                            BasicTextField(value = searchQuery, onValueChange = onSearchChange, modifier = Modifier.fillMaxWidth(), textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface), cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), singleLine = true)
-                        }
-                        if (searchQuery.isNotEmpty()) AppIcon(AppIcons.ClearInput, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp).clickable { onSearchChange("") })
+@Composable
+private fun InstrumentControlsBar(
+    searchQuery: String = "",
+    onSearchChange: (String) -> Unit = {},
+    sortState: SortState = SortState(),
+    onSortStateChange: (SortState) -> Unit = {},
+    groupBy: InstrumentDatasetGroupBy = InstrumentDatasetGroupBy.MEASUREMENT,
+    onGroupByChange: (InstrumentDatasetGroupBy) -> Unit = {}
+) {
+    var groupMenuExpanded by remember { mutableStateOf(false) }
+    var sortMenuExpanded by remember { mutableStateOf(false) }
+
+    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), shape = MaterialTheme.shapes.medium, modifier = Modifier.weight(1f)) {
+                Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppIcon(AppIcons.Search, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (searchQuery.isEmpty()) Text("Search datasets…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                        BasicTextField(value = searchQuery, onValueChange = onSearchChange, modifier = Modifier.fillMaxWidth(), textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface), cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), singleLine = true)
+                    }
+                    if (searchQuery.isNotEmpty()) AppIcon(AppIcons.ClearInput, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp).clickable { onSearchChange("") })
+                }
+            }
+            // Group-by button
+            Box {
+                IconButton(onClick = { groupMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
+                    AppIcon(AppIcons.GroupBy, modifier = Modifier.size(20.dp))
+                }
+                DropdownMenu(expanded = groupMenuExpanded, onDismissRequest = { groupMenuExpanded = false }) {
+                    DropdownMenuItem(text = { Text("Group by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) }, onClick = {}, enabled = false, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp))
+                    InstrumentDatasetGroupBy.entries.forEach { opt ->
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    if (opt == groupBy) AppIcon(AppIcons.SelectionDot, modifier = Modifier.size(6.dp))
+                                    else Spacer(modifier = Modifier.size(6.dp))
+                                    Text(opt.label)
+                                }
+                            },
+                            onClick = { onGroupByChange(opt); groupMenuExpanded = false },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        )
                     }
                 }
-                // Group-by button
-                Box {
-                    IconButton(onClick = { groupMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
-                        AppIcon(AppIcons.GroupBy, modifier = Modifier.size(20.dp))
-                    }
-                    DropdownMenu(expanded = groupMenuExpanded, onDismissRequest = { groupMenuExpanded = false }) {
-                        DropdownMenuItem(text = { Text("Group by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) }, onClick = {}, enabled = false, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp))
-                        InstrumentDatasetGroupBy.entries.forEach { opt ->
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (opt == groupBy) AppIcon(AppIcons.SelectionDot, modifier = Modifier.size(6.dp))
-                                        else Spacer(modifier = Modifier.size(6.dp))
-                                        Text(opt.label)
-                                    }
-                                },
-                                onClick = { onGroupByChange(opt); groupMenuExpanded = false },
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
+            }
+            // Sort button
+            Box {
+                IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
+                    AppIcon(AppIcons.Sort, modifier = Modifier.size(20.dp))
                 }
-                // Sort button
-                Box {
-                    IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
-                        AppIcon(AppIcons.Sort, modifier = Modifier.size(20.dp))
-                    }
-                    DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
-                        DropdownMenuItem(text = { Text("Sort by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) }, onClick = {}, enabled = false, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp))
-                        SortField.entries.forEach { field ->
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (sortState.field == field) AppIcon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource, modifier = Modifier.size(14.dp))
-                                        else Spacer(modifier = Modifier.size(14.dp))
-                                        Text(field.label)
-                                    }
-                                },
-                                onClick = {
-                                    onSortStateChange(if (sortState.field == field) sortState.copy(ascending = !sortState.ascending) else SortState(field, true))
-                                },
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                            )
-                        }
+                DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
+                    DropdownMenuItem(text = { Text("Sort by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) }, onClick = {}, enabled = false, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp))
+                    SortField.entries.forEach { field ->
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    if (sortState.field == field) AppIcon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource, modifier = Modifier.size(14.dp))
+                                    else Spacer(modifier = Modifier.size(14.dp))
+                                    Text(field.label)
+                                }
+                            },
+                            onClick = {
+                                onSortStateChange(if (sortState.field == field) sortState.copy(ascending = !sortState.ascending) else SortState(field, true))
+                            },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        )
                     }
                 }
             }

@@ -14,9 +14,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.rememberScrollableState
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.horizontalScroll
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIconToken
@@ -51,7 +48,6 @@ import androidx.compose.ui.unit.dp
 
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
-import crucible.lens.data.cache.CacheManager
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
@@ -62,6 +58,7 @@ import crucible.lens.data.util.SortField
 import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
+import crucible.lens.data.util.userDisplayName
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -99,9 +96,6 @@ private enum class DatasetGroupBy(val label: String) {
     DATE("Date"), FORMAT("Format"), SESSION("Session"), OWNER("Owner")
 }
 
-private fun ownerDisplayName(firstName: String?, lastName: String?) =
-    "${firstName?.firstOrNull()?.uppercaseChar() ?: '?'}. ${lastName ?: "Unknown"}"
-
 @Composable
 private fun rememberOwnerNames(
     isOwnerGroupBy: Boolean,
@@ -117,7 +111,7 @@ private fun rememberOwnerNames(
         try {
             when (val resp = apiClient.service.getProjectUsers(projectId)) {
                 is ApiResult.Success -> {
-                    resp.data.forEach { u -> u.uniqueId?.let { id -> ownerNames[id] = ownerDisplayName(u.firstName, u.lastName) } }
+                    resp.data.forEach { u -> u.uniqueId?.let { id -> ownerNames[id] = userDisplayName(u) } }
                 }
                 is ApiResult.Error -> {
                     // Fail silently
@@ -135,9 +129,10 @@ private fun rememberOwnerNames(
 private fun EmptyListCard(
     resourceName: String,
     defaultIcon: AppIconToken,
-    isFiltered: Boolean
+    isFiltered: Boolean,
+    modifier: Modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
 ) {
-    Box(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    Box(modifier = modifier) {
         Card(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -207,16 +202,14 @@ fun ProjectDetailScreen(
     onManageProject: () -> Unit = {},
     onUserClick: (String) -> Unit = {},
     currentUserOrcid: String? = null) {
-    val cacheManager = koinInject<CacheManager>()
     val repository = koinInject<CrucibleRepository>()
-    // HomeScreen/ProjectsListViewModel still fetch the projects list directly into
-    // CacheManager rather than through CrucibleRepository (a known, not-yet-migrated gap —
-    // see dev/architecture.md), so that cache is already warm by the time a project can be
-    // opened at all, while the repository's own project cache is only populated by
-    // DataSyncManager's background sync or this screen's own fetchProject() call below.
-    // Falling back to the CacheManager list here restores an instant header render for the
-    // common case instead of a blank header + an avoidable network round-trip.
-    val cachedFallback = remember(projectId) { cacheManager.getProjects()?.find { it.projectId == projectId } }
+    // The projects-list cache (warm by the time a project can be opened at all, from Home/Projects
+    // list) and the per-project cache (populated by DataSyncManager's background sync or this
+    // screen's own fetchProject() call below) are the same CrucibleRepository cache, but a project
+    // reached here right after the list fetch — before fetchProject() below has run — may only be
+    // in the list cache yet. Falling back to it restores an instant header render for that case
+    // instead of a blank header + an avoidable network round-trip.
+    val cachedFallback = remember(projectId) { repository.getCachedProjects()?.find { it.projectId == projectId } }
     // Observed reactively so the header updates in place once fetched — covers both member
     // projects (usually warm already from the Projects list fetch) and non-member projects
     // reached via discover-search (never in that list, so this is a cold single fetch).
@@ -364,31 +357,20 @@ fun ProjectDetailScreen(
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
 
-                // ProjectHeader — fixed, not part of the pager.
-                // Modifier.scrollable with a no-op state forwards vertical drags
-                // upward through the nested scroll chain so PTR activates here too.
-                Box(
-                    modifier = Modifier.scrollable(
-                        state = rememberScrollableState { 0f },
-                        orientation = Orientation.Vertical
-                    )
-                ) {
-                    ProjectHeader(
-                        project = project,
-                        projectId = projectId,
-                        searchQuery = searchQuery,
-                        onSearchChange = { searchQuery = it },
-                        isPinned = isPinned,
-                        onTogglePin = onTogglePin,
-                        currentPage = pagerState.currentPage,
-                        sampleGroupBy = sampleGroupBy,
-                        datasetGroupBy = datasetGroupBy,
-                        onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) }; showToast(ctx, "Grouped by ${it.label}") },
-                        onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) }; showToast(ctx, "Grouped by ${it.label}") },
-                        sortState = sortState,
-                        onSortStateChange = { sortState = it; showToast(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
-                        onUserClick = onUserClick)
-                }
+                // Identity (name/lead/org) now scrolls away as list content — see
+                // SamplesList/DatasetsList's leadingContent below. Only the controls bar
+                // (search/group/sort) stays fixed here, above the tab row.
+                ProjectControlsBar(
+                    searchQuery = searchQuery,
+                    onSearchChange = { searchQuery = it },
+                    currentPage = pagerState.currentPage,
+                    sampleGroupBy = sampleGroupBy,
+                    datasetGroupBy = datasetGroupBy,
+                    onSampleGroupByChange = { sampleGroupBy = it; scope.launch { prefs.saveSampleGroupBy(it.name) }; showToast(ctx, "Grouped by ${it.label}") },
+                    onDatasetGroupByChange = { datasetGroupBy = it; scope.launch { prefs.saveDatasetGroupBy(it.name) }; showToast(ctx, "Grouped by ${it.label}") },
+                    sortState = sortState,
+                    onSortStateChange = { sortState = it; showToast(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") }
+                )
 
                 if (isConfidentlyNonMember) {
                     // Non-members never see actual samples/datasets (the list endpoints
@@ -474,6 +456,18 @@ fun ProjectDetailScreen(
                             state = pagerState,
                             modifier = Modifier.fillMaxWidth().weight(1f)
                         ) { page ->
+                            val identityHeader: LazyListScope.() -> Unit = {
+                                item(key = "identity") {
+                                    ProjectIdentityHeader(
+                                        project = project,
+                                        projectId = projectId,
+                                        isPinned = isPinned,
+                                        onTogglePin = onTogglePin,
+                                        onUserClick = onUserClick,
+                                        onManageProject = onManageProject
+                                    )
+                                }
+                            }
                             when (page) {
                                 0 -> SamplesList(
                                     samples = filteredSamples,
@@ -483,7 +477,8 @@ fun ProjectDetailScreen(
                                     graphExplorerUrl = graphExplorerUrl,
                                     groupBy = sampleGroupBy,
                                     sortState = sortState,
-                                    onSampleClick = { uuid -> onResourceClick(uuid, sampleGroupBy.name) }
+                                    onSampleClick = { uuid -> onResourceClick(uuid, sampleGroupBy.name) },
+                                    leadingContent = identityHeader
                                 )
                                 1 -> DatasetsList(
                                     datasets = filteredDatasets,
@@ -493,7 +488,8 @@ fun ProjectDetailScreen(
                                     graphExplorerUrl = graphExplorerUrl,
                                     groupBy = datasetGroupBy,
                                     sortState = sortState,
-                                    onDatasetClick = { uuid -> onResourceClick(uuid, datasetGroupBy.name) }
+                                    onDatasetClick = { uuid -> onResourceClick(uuid, datasetGroupBy.name) },
+                                    leadingContent = identityHeader
                                 )
                             }
                         }
@@ -642,243 +638,237 @@ private fun JoinRequestDialog(
 }
 
 @Composable
-private fun ProjectHeader(
+private fun ProjectIdentityHeader(
     project: Project?,
     projectId: String,
-    searchQuery: String,
-    onSearchChange: (String) -> Unit,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
-    currentPage: Int = 0,
-    sampleGroupBy: SampleGroupBy = SampleGroupBy.TYPE,
-    datasetGroupBy: DatasetGroupBy = DatasetGroupBy.MEASUREMENT,
-    onSampleGroupByChange: (SampleGroupBy) -> Unit = {},
-    onDatasetGroupByChange: (DatasetGroupBy) -> Unit = {},
-    sortState: SortState = SortState(),
-    onSortStateChange: (SortState) -> Unit = {},
-    onUserClick: (String) -> Unit = {}) {
-    var groupMenuExpanded by remember { mutableStateOf(false) }
-    var sortMenuExpanded by remember { mutableStateOf(false) }
-
+    onUserClick: (String) -> Unit = {},
+    onManageProject: () -> Unit = {}
+) {
     Surface(
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Name row: folder + [name + pin] (weight 1f) | [copy, open, share, QR]
-            Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        AppIcon(AppIcons.Project,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                val nameScrollState = rememberScrollState()
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fadeEndEdge(nameScrollState.canScrollForward)
-                                ) {
-                                    Text(
-                                        text = project?.title ?: projectId,
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Clip,
-                                        modifier = Modifier.horizontalScroll(nameScrollState)
-                                    )
-                                }
-                            }
-                            val lead = project?.lead
-                            val org = project?.organization?.takeIf { it.isNotBlank() }
-                            if (lead != null || org != null) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (lead != null) {
-                                        val leadIdentifier = lead.username ?: lead.uniqueId
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = if (leadIdentifier != null) Modifier.clickable { onUserClick(leadIdentifier) } else Modifier
-                                        ) {
-                                            AppIcon(AppIcons.Person, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.primary)
-                                            Text(ownerDisplayName(lead.firstName, lead.lastName), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                        }
-                                    }
-                                    if (org != null) {
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            AppIcon(AppIcons.Business, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            Text(org, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // Creation / modification timestamps
-                    val created = project?.createdAt?.let { dateGroupKey(it) }
-                    val modified = project?.modifiedAt?.let { dateGroupKey(it) }
-                    if (created != null || modified != null) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (created != null) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    AppIcon(AppIcons.CreationDate, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("Created $created", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                            if (modified != null && modified != created) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    AppIcon(AppIcons.ModificationDate, modifier = Modifier.size(11.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("Updated $modified", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        }
-                    }
-                    IconButton(onClick = onTogglePin, modifier = Modifier.size(32.dp)) {
-                        AppIcon(AppIcons.Pinned, filled = isPinned,
-                            tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-
-            // Search field + group-by + sort
+            // Name row: folder + name (tap -> Manage Project) | pin
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                    shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier.weight(1f)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.weight(1f).clickable { onManageProject() }
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    AppIcon(AppIcons.Project,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    val nameScrollState = rememberScrollState()
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fadeEndEdge(nameScrollState.canScrollForward)
                     ) {
-                        AppIcon(AppIcons.Search, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                        Box(modifier = Modifier.weight(1f)) {
-                            if (searchQuery.isEmpty()) {
-                                Text(
-                                    text = "Search samples and datasets…",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                )
-                            }
-                            BasicTextField(
-                                value = searchQuery,
-                                onValueChange = onSearchChange,
-                                modifier = Modifier.fillMaxWidth(),
-                                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                singleLine = true
-                            )
-                        }
-                        if (searchQuery.isNotEmpty()) {
-                            AppIcon(AppIcons.ClearInput, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp).clickable { onSearchChange("") })
-                        }
+                        Text(
+                            text = project?.title ?: projectId,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip,
+                            modifier = Modifier.horizontalScroll(nameScrollState)
+                        )
                     }
                 }
-                Box {
-                    IconButton(onClick = { groupMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
-                        AppIcon(AppIcons.GroupBy, modifier = Modifier.size(20.dp))
-                    }
-                    DropdownMenu(expanded = groupMenuExpanded, onDismissRequest = { groupMenuExpanded = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Group by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                            onClick = {}, enabled = false
-                        )
-                        if (currentPage == 0) {
-                            SampleGroupBy.entries.forEach { opt ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            if (opt == sampleGroupBy) AppIcon(AppIcons.SelectionDot, modifier = Modifier.size(6.dp))
-                                            else Spacer(modifier = Modifier.size(6.dp))
-                                            Text(opt.label)
-                                        }
-                                    },
-                                    onClick = { onSampleGroupByChange(opt); groupMenuExpanded = false }
-                                )
-                            }
-                        } else {
-                            DatasetGroupBy.entries.forEach { opt ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            if (opt == datasetGroupBy) AppIcon(AppIcons.SelectionDot, modifier = Modifier.size(6.dp))
-                                            else Spacer(modifier = Modifier.size(6.dp))
-                                            Text(opt.label)
-                                        }
-                                    },
-                                    onClick = { onDatasetGroupByChange(opt); groupMenuExpanded = false }
-                                )
-                            }
+                IconButton(onClick = onTogglePin, modifier = Modifier.size(32.dp)) {
+                    AppIcon(AppIcons.Pinned, filled = isPinned,
+                        tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            // Lead — its own row, bumped up from labelSmall so it doesn't read as
+            // equal-weight with the org/date metadata below it.
+            val lead = project?.lead
+            if (lead != null) {
+                val leadIdentifier = lead.username ?: lead.uniqueId
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = if (leadIdentifier != null) Modifier.clickable { onUserClick(leadIdentifier) } else Modifier
+                ) {
+                    AppIcon(AppIcons.Person, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text(userDisplayName(lead), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            // Organization + creation/modification dates — tertiary metadata, one row.
+            val org = project?.organization?.takeIf { it.isNotBlank() }
+            val created = project?.createdAt?.let { dateGroupKey(it) }
+            val modified = project?.modifiedAt?.let { dateGroupKey(it) }
+            if (org != null || created != null || modified != null) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (org != null) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AppIcon(AppIcons.Business, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(org, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                }
-                Box {
-                    IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
-                        AppIcon(AppIcons.Sort, modifier = Modifier.size(20.dp))
+                    if (created != null) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AppIcon(AppIcons.CreationDate, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Created $created", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
-                    DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Sort by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                            onClick = {}, enabled = false
-                        )
-                        SortField.entries.forEach { field ->
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (sortState.field == field) AppIcon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource, modifier = Modifier.size(14.dp))
-                                        else Spacer(modifier = Modifier.size(14.dp))
-                                        Text(field.label)
-                                    }
-                                },
-                                onClick = {
-                                    onSortStateChange(
-                                        if (sortState.field == field) sortState.copy(ascending = !sortState.ascending)
-                                        else SortState(field, true)
-                                    )
-                                }
-                            )
+                    if (modified != null && modified != created) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AppIcon(AppIcons.ModificationDate, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Updated $modified", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
             }
+        }
+    }
+}
 
+@Composable
+private fun ProjectControlsBar(
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+    currentPage: Int = 0,
+    sampleGroupBy: SampleGroupBy = SampleGroupBy.TYPE,
+    datasetGroupBy: DatasetGroupBy = DatasetGroupBy.MEASUREMENT,
+    onSampleGroupByChange: (SampleGroupBy) -> Unit = {},
+    onDatasetGroupByChange: (DatasetGroupBy) -> Unit = {},
+    sortState: SortState = SortState(),
+    onSortStateChange: (SortState) -> Unit = {}
+) {
+    var groupMenuExpanded by remember { mutableStateOf(false) }
+    var sortMenuExpanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.weight(1f)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AppIcon(AppIcons.Search, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                Box(modifier = Modifier.weight(1f)) {
+                    if (searchQuery.isEmpty()) {
+                        Text(
+                            text = "Search samples and datasets…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    }
+                    BasicTextField(
+                        value = searchQuery,
+                        onValueChange = onSearchChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        singleLine = true
+                    )
+                }
+                if (searchQuery.isNotEmpty()) {
+                    AppIcon(AppIcons.ClearInput, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp).clickable { onSearchChange("") })
+                }
+            }
+        }
+        Box {
+            IconButton(onClick = { groupMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
+                AppIcon(AppIcons.GroupBy, modifier = Modifier.size(20.dp))
+            }
+            DropdownMenu(expanded = groupMenuExpanded, onDismissRequest = { groupMenuExpanded = false }) {
+                DropdownMenuItem(
+                    text = { Text("Group by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    onClick = {}, enabled = false
+                )
+                if (currentPage == 0) {
+                    SampleGroupBy.entries.forEach { opt ->
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    if (opt == sampleGroupBy) AppIcon(AppIcons.SelectionDot, modifier = Modifier.size(6.dp))
+                                    else Spacer(modifier = Modifier.size(6.dp))
+                                    Text(opt.label)
+                                }
+                            },
+                            onClick = { onSampleGroupByChange(opt); groupMenuExpanded = false }
+                        )
+                    }
+                } else {
+                    DatasetGroupBy.entries.forEach { opt ->
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    if (opt == datasetGroupBy) AppIcon(AppIcons.SelectionDot, modifier = Modifier.size(6.dp))
+                                    else Spacer(modifier = Modifier.size(6.dp))
+                                    Text(opt.label)
+                                }
+                            },
+                            onClick = { onDatasetGroupByChange(opt); groupMenuExpanded = false }
+                        )
+                    }
+                }
+            }
+        }
+        Box {
+            IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
+                AppIcon(AppIcons.Sort, modifier = Modifier.size(20.dp))
+            }
+            DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
+                DropdownMenuItem(
+                    text = { Text("Sort by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    onClick = {}, enabled = false
+                )
+                SortField.entries.forEach { field ->
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (sortState.field == field) AppIcon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource, modifier = Modifier.size(14.dp))
+                                else Spacer(modifier = Modifier.size(14.dp))
+                                Text(field.label)
+                            }
+                        },
+                        onClick = {
+                            onSortStateChange(
+                                if (sortState.field == field) sortState.copy(ascending = !sortState.ascending)
+                                else SortState(field, true)
+                            )
+                        }
+                    )
+                }
+            }
         }
     }
 }
@@ -898,7 +888,17 @@ private fun SamplesList(
     val repository = koinInject<CrucibleRepository>()
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == SampleGroupBy.OWNER, projectId)
     if (samples.isEmpty()) {
-        EmptyListCard(resourceName = "Samples", defaultIcon = AppIcons.Sample, isFiltered = isFiltered)
+        // Still a LazyColumn (not a bare Box) so leadingContent — the identity header —
+        // keeps rendering and scrolling normally even when this tab has no results.
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            leadingContent?.invoke(this)
+            item(key = "empty") {
+                EmptyListCard(
+                    resourceName = "Samples", defaultIcon = AppIcons.Sample, isFiltered = isFiltered,
+                    modifier = Modifier.fillParentMaxWidth().fillParentMaxHeight(0.7f)
+                )
+            }
+        }
     } else if (!ownerNamesReady) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(32.dp))
@@ -996,7 +996,17 @@ private fun DatasetsList(
     val repository = koinInject<CrucibleRepository>()
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == DatasetGroupBy.OWNER, projectId)
     if (datasets.isEmpty()) {
-        EmptyListCard(resourceName = "Datasets", defaultIcon = AppIcons.Dataset, isFiltered = isFiltered)
+        // Still a LazyColumn (not a bare Box) so leadingContent — the identity header —
+        // keeps rendering and scrolling normally even when this tab has no results.
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            leadingContent?.invoke(this)
+            item(key = "empty") {
+                EmptyListCard(
+                    resourceName = "Datasets", defaultIcon = AppIcons.Dataset, isFiltered = isFiltered,
+                    modifier = Modifier.fillParentMaxWidth().fillParentMaxHeight(0.7f)
+                )
+            }
+        }
     } else if (!ownerNamesReady) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(32.dp))
