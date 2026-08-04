@@ -49,6 +49,7 @@ import crucible.lens.ui.projects.ProjectsListScreen
 import crucible.lens.ui.projects.ProjectDetailScreen
 import crucible.lens.ui.projects.ManageProjectScreen
 import crucible.lens.ui.projects.ManageProjectViewModel
+import crucible.lens.ui.projects.SyncPickerScreen
 import crucible.lens.ui.instruments.InstrumentListScreen
 import crucible.lens.ui.instruments.InstrumentDetailScreen
 import crucible.lens.ui.instruments.ManageInstrumentScreen
@@ -347,10 +348,13 @@ fun NavGraph(
             SettingsScreen(
                 currentApiKey = apiKey,
                 userUsername = userUsername,
+                syncedCount = syncedProjects.size,
+                totalProjectCount = repository.getCachedProjects()?.size ?: 0,
                 onNavigateToAccount = { navController.navigate(Screen.SettingsAccount.route) },
                 onNavigateToApi = { navController.navigate(Screen.SettingsApi.route) },
                 onNavigateToAppearance = { navController.navigate(Screen.SettingsAppearance.route) },
                 onNavigateToCache = { navController.navigate(Screen.SettingsCache.route) },
+                onNavigateToSyncedProjects = { navController.navigate(Screen.SyncedProjects.createRoute(firstRun = false)) },
                 onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },
                 onNavigateToTypography = { navController.navigate(Screen.SettingsTypography.route) },
                 onBack = navigateBack,
@@ -435,6 +439,20 @@ fun NavGraph(
             CacheSettingsScreen(
                 onBack = navigateBack,
                 onHome = navigateHome
+            )
+        }
+
+        composable(
+            route = Screen.SyncedProjects.route,
+            arguments = listOf(
+                navArgument("firstRun") { type = NavType.StringType; defaultValue = "false" }
+            )
+        ) { backStackEntry ->
+            val firstRun = backStackEntry.savedStateHandle.get<String>("firstRun")?.toBoolean() ?: false
+            SyncPickerScreen(
+                isFirstRun = firstRun,
+                onDone = navigateBack,
+                onBack = navigateBack
             )
         }
 

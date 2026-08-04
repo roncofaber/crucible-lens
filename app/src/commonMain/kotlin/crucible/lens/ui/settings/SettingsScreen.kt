@@ -23,10 +23,13 @@ import crucible.lens.ui.common.AppScaffold
 fun SettingsScreen(
     currentApiKey: String?,
     userUsername: String?,
+    syncedCount: Int = 0,
+    totalProjectCount: Int = 0,
     onNavigateToAccount: () -> Unit,
     onNavigateToApi: () -> Unit,
     onNavigateToAppearance: () -> Unit,
     onNavigateToCache: () -> Unit,
+    onNavigateToSyncedProjects: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onNavigateToTypography: () -> Unit,
     onBack: () -> Unit,
@@ -78,6 +81,12 @@ fun SettingsScreen(
                 title = "Cache",
                 subtitle = "Pre-loaded data for faster browsing",
                 onClick = onNavigateToCache
+            )
+            SettingsRow(
+                icon = AppIcons.Syncing,
+                title = "Synced projects",
+                subtitle = "$syncedCount of $totalProjectCount syncing",
+                onClick = onNavigateToSyncedProjects
             )
             SettingsRow(
                 icon = AppIcons.Info,

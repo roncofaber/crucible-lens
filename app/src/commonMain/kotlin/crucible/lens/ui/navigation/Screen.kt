@@ -13,6 +13,9 @@ sealed class Screen(val route: String) {
     object SettingsAbout : Screen("settings/about")
     object SettingsAccount : Screen("settings/account")
     object SettingsTypography : Screen("settings/typography")
+    object SyncedProjects : Screen("settings/synced-projects?firstRun={firstRun}") {
+        fun createRoute(firstRun: Boolean = false) = "settings/synced-projects?firstRun=${firstRun.toString()}"
+    }
     object Projects : Screen("projects")
     object ProjectDetail : Screen("project/{projectId}") {
         fun createRoute(projectId: String) = "project/$projectId"

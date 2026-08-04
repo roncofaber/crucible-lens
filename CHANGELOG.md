@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Synced projects picker screen (Settings)
 - Manage Project: leave a project from the overflow menu
 
 ### Changed
