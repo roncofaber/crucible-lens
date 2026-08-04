@@ -10,7 +10,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiResult
@@ -23,6 +22,7 @@ import crucible.lens.platform.openUrl
 import crucible.lens.platform.shareText
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 internal sealed class AssociatedFilesState {
     object Idle    : AssociatedFilesState()
@@ -111,8 +111,7 @@ internal fun AssociatedFilesCard(
                     Spacer(Modifier.width(8.dp))
                     Text(
                         "Files (${filesState.files.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.emphasizedTitleMedium,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -134,7 +133,7 @@ internal fun AssociatedFilesCard(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(name, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     if (file.size != null) {
-                                        Text(formatFileSize(file.size), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(formatFileSize(file.size), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
                                 if (isLoadingFile) {
@@ -142,16 +141,16 @@ internal fun AssociatedFilesCard(
                                     Spacer(Modifier.width(32.dp))
                                 } else if (hasError) {
                                     AppIcon(AppIcons.Unreachable, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.error)
-                                    Text("Unavailable", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(end = 4.dp))
+                                    Text("Unavailable", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(end = 4.dp))
                                 } else if (ingested) {
-                                    IconButton(onClick = { openFile(file, false) }, modifier = Modifier.size(32.dp)) {
+                                    IconButton(onClick = { openFile(file, false) }) {
                                         AppIcon(AppIcons.Download, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                                     }
-                                    IconButton(onClick = { openFile(file, true) }, modifier = Modifier.size(32.dp)) {
+                                    IconButton(onClick = { openFile(file, true) }) {
                                         AppIcon(AppIcons.Share, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                                     }
                                 } else {
-                                    Text("Pending", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 4.dp))
+                                    Text("Pending", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 4.dp))
                                     AppIcon(AppIcons.Pending, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }

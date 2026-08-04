@@ -52,8 +52,11 @@ internal fun ThumbnailsSection(
 
             var base64Data by remember(uuid, index) { mutableStateOf<ByteArray?>(null) }
             LaunchedEffect(uuid, index) {
-                base64Data = withContext(Dispatchers.Default) {
-                    try { PlatformBase64.decode(thumbnail.thumbnailB64) } catch (_: Exception) { null }
+                base64Data = try {
+                    withContext(Dispatchers.Default) { PlatformBase64.decode(thumbnail.thumbnailB64) }
+                } catch (e: Exception) {
+                    imageState = "error: ${e.message ?: "Failed to decode image"}"
+                    null
                 }
             }
 
@@ -81,8 +84,6 @@ internal fun ThumbnailsSection(
                         onSuccess = { imageState = null },
                         onError = { imageState = "error: ${it.result.throwable.message}" }
                     )
-                } else {
-                    imageState = "error: Failed to decode base64"
                 }
 
                 when {
@@ -92,14 +93,18 @@ internal fun ThumbnailsSection(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         AppIcon(AppIcons.ErrorOutline, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.error)
-                        Text("Failed to load image", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        Text(
+                            imageState?.removePrefix("error: ")?.ifBlank { "Failed to load image" } ?: "Failed to load image",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
 
                 if (thumbnail.id >= 0) {
                     Text(
                         "Hold to delete",
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                         modifier = Modifier
                             .align(Alignment.BottomEnd)

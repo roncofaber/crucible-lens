@@ -1,6 +1,7 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.history
 import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.ListRowDividerInset
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppTopBar
@@ -15,7 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.repository.CrucibleRepository
@@ -33,6 +33,7 @@ import crucible.lens.platform.shareText
 import crucible.lens.ui.common.AppScaffold
 import kotlin.math.abs
 import kotlin.time.Clock
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 private enum class HistorySortOrder { NEWEST, OLDEST }
 
@@ -126,7 +127,7 @@ fun HistoryScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         AppIcon(AppIcons.HistoryEmpty, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("No history yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("No history yet", style = MaterialTheme.typography.emphasizedTitleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("Resources you view will appear here", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -141,7 +142,7 @@ fun HistoryScreen(
                             graphExplorerUrl = graphExplorerUrl,
                             onClick = { onItemClick(item.uuid) }
                         )
-                        HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
+                        HorizontalDivider(modifier = Modifier.padding(start = ListRowDividerInset))
                     }
                 }
             }
@@ -188,19 +189,24 @@ private fun HistoryCard(
     Box {
         ListItem(
             headlineContent = {
-                Text(item.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    item.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             },
             supportingContent = {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (projectName != null) {
-                        Text(projectName, style = MaterialTheme.typography.labelSmall,
+                        Text(projectName, style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(formatRelativeTime(item.timestamp), style = MaterialTheme.typography.labelSmall,
+                        Text(formatRelativeTime(item.timestamp), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(item.uuid, style = MaterialTheme.typography.labelSmall,
+                        Text(item.uuid, style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1, overflow = TextOverflow.Ellipsis,

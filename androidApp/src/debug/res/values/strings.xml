@@ -1,0 +1,7 @@
+<resources>
+    <!-- Overrides app/src/androidMain/res/values/strings.xml's app_name for debug builds only —
+         Android's resource merge precedence favors the *application* module's debug source set
+         over the library module's main resources, so this and colors.xml below apply without
+         touching the shared app_name/ic_launcher_background used by release. -->
+    <string name="app_name">Crucible Lens (Dev)</string>
+</resources>

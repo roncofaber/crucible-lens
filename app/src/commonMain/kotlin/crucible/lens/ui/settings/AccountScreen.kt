@@ -14,7 +14,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -32,6 +31,8 @@ import crucible.lens.ui.common.StandardSizeAnim
 import crucible.lens.ui.common.UserAvatar
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
+import crucible.lens.ui.theme.emphasizedTitleMedium
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun AccountScreen(
@@ -205,8 +206,7 @@ fun AccountScreen(
                                 ) {
                                     Text(
                                         "Advanced",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold
+                                        style = MaterialTheme.typography.emphasizedTitleMedium
                                     )
                                     ExpandChevron(expanded = advancedExpanded)
                                 }
@@ -260,8 +260,7 @@ fun AccountScreen(
                                     ) {
                                         Text(
                                             "My Join Requests (${joinRequests.size})",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold
+                                            style = MaterialTheme.typography.emphasizedTitleMedium
                                         )
                                         ExpandChevron(expanded = joinRequestsExpanded)
                                     }
@@ -318,6 +317,7 @@ private fun ProfileCard(
                     firstName = if (isEditing) draft?.firstName else user.firstName,
                     lastName = if (isEditing) draft?.lastName else user.lastName,
                     size = 48.dp,
+                    orcid = user.uniqueId,
                     modifier = if (isEditing) Modifier.padding(top = 8.dp) else Modifier
                 )
                 if (isEditing && draft != null) {
@@ -348,8 +348,7 @@ private fun ProfileCard(
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             displayName ?: "No name set",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.emphasizedTitleMedium,
                             color = if (displayName != null) MaterialTheme.colorScheme.onSurface
                             else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -415,7 +414,7 @@ private fun ProfileCard(
                         leadingIcon = {
                             Text(
                                 "@",
-                                style = MaterialTheme.typography.bodyLarge,
+                                style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(start = 12.dp)
                             )
                         },
@@ -496,7 +495,7 @@ private fun ProfileCard(
                     ) {
                         Text(
                             "ORCID",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
@@ -531,19 +530,19 @@ private fun JoinRequestRow(request: JoinRequest, reviewer: User?, onUserClick: (
         AppIcon(AppIcons.Project, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Column(modifier = Modifier.weight(1f)) {
             Text(request.groupName, style = MaterialTheme.typography.bodyMedium)
-            Text(formatDateTime(request.requestTime), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(formatDateTime(request.requestTime), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             val reviewerId = request.reviewerId
             if (reviewerId != null) {
                 val reviewerLabel = userDisplayName(reviewer?.firstName, reviewer?.lastName, reviewer?.username, reviewerId)
                 Text(
                     "Reviewed by $reviewerLabel",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.clickable { onUserClick(reviewer?.username ?: reviewerId) }
                 )
             }
         }
-        Text(statusLabel, style = MaterialTheme.typography.labelMedium, color = statusColor, fontWeight = FontWeight.SemiBold)
+        Text(statusLabel, style = MaterialTheme.typography.labelMedium, color = statusColor)
     }
 }
 
@@ -568,7 +567,7 @@ private fun NotLoggedInCard(
                 Text("Sign in with ORCID")
             }
             HorizontalDivider()
-            Text("Or enter your API key directly", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Or enter your API key directly", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(
                 value = apiKeyInput,
                 onValueChange = onApiKeyChanged,

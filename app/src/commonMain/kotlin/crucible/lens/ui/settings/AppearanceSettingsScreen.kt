@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.platform.supportsDynamicColor
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.theme.readableOn
 
 @Composable
 fun AppearanceSettingsScreen(
@@ -273,25 +274,28 @@ private fun settingsChipBorder(selected: Boolean) = FilterChipDefaults.filterChi
     selected = selected
 )
 
+/** Single source of truth for the named accent colors - see also [accentColorToColor]. */
+private val accentColorPalette: List<Pair<String, Color>> = listOf(
+    "blue"   to Color(0xFF1976D2), "indigo" to Color(0xFF3F51B5),
+    "purple" to Color(0xFF9C27B0), "pink"   to Color(0xFFE91E63),
+    "red"    to Color(0xFFD32F2F), "orange" to Color(0xFFF57C00),
+    "amber"  to Color(0xFFFFA000), "green"  to Color(0xFF388E3C),
+    "teal"   to Color(0xFF00796B), "brown"  to Color(0xFF5D4037),
+)
+
 @Composable
 private fun ColorPickerDialog(
     currentColor: String,
     onColorSelected: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val colors = listOf(
-        "blue"   to Color(0xFF1976D2), "indigo" to Color(0xFF3F51B5),
-        "purple" to Color(0xFF9C27B0), "pink"   to Color(0xFFE91E63),
-        "red"    to Color(0xFFD32F2F), "orange" to Color(0xFFF57C00),
-        "amber"  to Color(0xFFFFA000), "green"  to Color(0xFF388E3C),
-        "teal"   to Color(0xFF00796B), "brown"  to Color(0xFF5D4037)
-    )
+    val colors = accentColorPalette
     var showCustomInput by remember { mutableStateOf(false) }
     var customHex by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Choose Accent Color", style = MaterialTheme.typography.titleLarge) },
+        title = { Text("Choose Accent Color") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 colors.chunked(5).forEach { rowColors ->
@@ -310,7 +314,7 @@ private fun ColorPickerDialog(
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (currentColor == name) {
-                                    AppIcon(AppIcons.Selected, tint = Color.White, modifier = Modifier.size(24.dp))
+                                    AppIcon(AppIcons.Selected, tint = readableOn(color), modifier = Modifier.size(24.dp))
                                 }
                             }
                         }
@@ -370,17 +374,6 @@ internal fun accentColorToColor(colorName: String): Color {
             Color((0xFF000000L or hex).toInt())
         } catch (_: Exception) { Color(0xFF1976D2) }
     }
-    return when (colorName.lowercase()) {
-        "blue"   -> Color(0xFF1976D2)
-        "indigo" -> Color(0xFF3F51B5)
-        "purple" -> Color(0xFF9C27B0)
-        "pink"   -> Color(0xFFE91E63)
-        "red"    -> Color(0xFFD32F2F)
-        "orange" -> Color(0xFFF57C00)
-        "amber"  -> Color(0xFFFFA000)
-        "green"  -> Color(0xFF388E3C)
-        "teal"   -> Color(0xFF00796B)
-        "brown"  -> Color(0xFF5D4037)
-        else     -> Color(0xFF1976D2)
-    }
+    return accentColorPalette.firstOrNull { it.first == colorName.lowercase() }?.second
+        ?: Color(0xFF1976D2)
 }

@@ -12,6 +12,7 @@ sealed class Screen(val route: String) {
     object SettingsCache : Screen("settings/cache")
     object SettingsAbout : Screen("settings/about")
     object SettingsAccount : Screen("settings/account")
+    object SettingsTypography : Screen("settings/typography")
     object Projects : Screen("projects")
     object ProjectDetail : Screen("project/{projectId}") {
         fun createRoute(projectId: String) = "project/$projectId"
@@ -25,6 +26,9 @@ sealed class Screen(val route: String) {
     object Detail : Screen("detail/{mfid}?groupBy={groupBy}") {
         fun createRoute(mfid: String, groupBy: String? = null) =
             "detail/${encodeRouteSegment(mfid)}?groupBy=${groupBy ?: ""}"
+    }
+    object EditResource : Screen("edit-resource/{mfid}") {
+        fun createRoute(mfid: String) = "edit-resource/${encodeRouteSegment(mfid)}"
     }
     object History : Screen("history")
     object Search : Screen("search")

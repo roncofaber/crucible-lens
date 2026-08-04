@@ -19,7 +19,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -50,9 +49,7 @@ import crucible.lens.data.model.creationTimeOrEmpty
 import crucible.lens.data.util.SortField
 import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
-import crucible.lens.ui.metadata.MetadataHolder
 import crucible.lens.ui.common.AppScaffold
-import crucible.lens.ui.common.parseAsJsonObject
 import crucible.lens.ui.common.OpenInWebMenuItem
 import crucible.lens.ui.common.ShareMenuItem
 import crucible.lens.ui.common.ErrorCard
@@ -86,8 +83,9 @@ fun ResourceDetailScreen(
     getCardState: (key: String) -> Boolean = { false },
     onCardStateChange: (key: String, value: Boolean) -> Unit = { _, _ -> },
     onNavigateToAddFiles: (datasetUuid: String) -> Unit = {},
-    onNavigateToMetadataEditor: () -> Unit = {},
+    onNavigateToEdit: (uuid: String) -> Unit = {},
     onNavigateToUser: (String) -> Unit = {},
+    onRequestDeletion: suspend (resourceId: String, reason: String?) -> ApiResult<Unit>,
 ) {
     val apiClient = koinInject<ApiClient>()
     val repository = koinInject<CrucibleRepository>()
@@ -173,10 +171,8 @@ fun ResourceDetailScreen(
     val currentDisplayResource: CrucibleResource? by repository.observeResource(currentPageUuid)
         .collectAsStateWithLifecycle(initialValue = repository.getCachedResource(currentPageUuid))
 
-    // Screen-level sheet/dialog state — operate on currentDisplayResource
-    var showEditSheet by remember { mutableStateOf(false) }
-    var editSheetPendingMetadata by remember { mutableStateOf<kotlinx.serialization.json.JsonObject?>(null) }
-    var editSheetWaitingForMetadata by remember { mutableStateOf(false) }
+    // Screen-level sheet/dialog state — operate on currentDisplayResource. Editing itself is a
+    // full nav destination (Screen.EditResource), not a sheet here — see EditResourceScreen.kt.
     var showLinkSheet by remember { mutableStateOf(false) }
     var showDeletionDialog by remember { mutableStateOf(false) }
     var pendingUnlink by remember { mutableStateOf<UnlinkRequest?>(null) }
@@ -192,15 +188,6 @@ fun ResourceDetailScreen(
         }
     }
 
-    // Re-open edit sheet with updated metadata after returning from MetadataEditorScreen.
-    LaunchedEffect(MetadataHolder.isDirty) {
-        if (MetadataHolder.isDirty && editSheetWaitingForMetadata) {
-            editSheetPendingMetadata = MetadataHolder.take()
-            editSheetWaitingForMetadata = false
-            showEditSheet = true
-        }
-    }
-
     val scope = rememberCoroutineScope()
     val platformContext = getPlatformContext()
     val isDarkTheme = isSystemInDarkTheme()
@@ -208,6 +195,9 @@ fun ResourceDetailScreen(
 
     // True only when a sibling (not the primary resource) was pull-to-refreshed.
     var localRefreshState by remember { mutableStateOf(false) }
+    // Set only by a failed sibling pull-to-refresh (see triggerRefresh below) - the primary
+    // resource's refresh errors are surfaced by its own ViewModel-driven state, not here.
+    var refreshError by remember { mutableStateOf<String?>(null) }
 
     fun triggerRefresh() {
         val currentUuid = sortedSiblingList.getOrNull(pagerState.currentPage)?.uniqueId ?: uuid
@@ -221,12 +211,16 @@ fun ResourceDetailScreen(
                     // forceRefresh (not invalidate-then-fetch) keeps serving the existing
                     // cached resource to every observer until the fresh result lands, so
                     // links/metadata-gated cards never collapse and pop back in mid-refresh.
-                    repository.fetchResourceByUuid(currentUuid, forceRefresh = true)
+                    when (val result = repository.fetchResourceByUuid(currentUuid, forceRefresh = true)) {
+                        is ResourceResult.Error -> refreshError = result.message
+                        else -> refreshError = null
+                    }
                 } finally {
                     localRefreshState = false
                 }
             }
         } else {
+            refreshError = null
             onRefresh(currentUuid)
         }
     }
@@ -278,7 +272,7 @@ fun ResourceDetailScreen(
                                 onDismissRequest = { siblingOrganizeMenuExpanded = false }
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Order by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                                    text = { Text("Order by", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                                     onClick = {}, enabled = false
                                 )
                                 SortField.entries.forEach { field ->
@@ -293,7 +287,7 @@ fun ResourceDetailScreen(
                                 }
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                                 DropdownMenuItem(
-                                    text = { Text("Group by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                                    text = { Text("Group by", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                                     onClick = {}, enabled = false
                                 )
                                 val groupOptions: List<Pair<String, String>> = when (organizeResource) {
@@ -335,7 +329,7 @@ fun ResourceDetailScreen(
                             DropdownMenuItem(
                                 text = { Text("Edit") },
                                 leadingIcon = { AppIcon(AppIcons.Edit) },
-                                onClick = { overflowMenuExpanded = false; showEditSheet = true },
+                                onClick = { overflowMenuExpanded = false; displayForMenu?.let { onNavigateToEdit(it.uniqueId) } },
                                 enabled = displayForMenu != null
                             )
                             DropdownMenuItem(
@@ -408,6 +402,7 @@ fun ResourceDetailScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+          Box(modifier = Modifier.fillMaxSize()) {
             if (sortedSiblingList.isNotEmpty() && siblingIndex >= 0) {
                 HorizontalPager(
                     state = pagerState,
@@ -524,7 +519,7 @@ fun ResourceDetailScreen(
                                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                                 Text(
                                                     "Deletion ${delStatus.replaceFirstChar { it.uppercase() }}",
-                                                    style = MaterialTheme.typography.titleSmall,
+                                                    style = MaterialTheme.typography.labelMedium,
                                                     color = MaterialTheme.colorScheme.onErrorContainer
                                                 )
                                                 if (delReason != null) {
@@ -734,29 +729,24 @@ fun ResourceDetailScreen(
                     LoadingContent(title = "Loading Resource")
                 }
             }
+
+            AnimatedVisibility(
+                visible = refreshError != null,
+                modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(16.dp),
+                enter = fadeIn(animationSpec = EffectsFastSpring) + expandVertically(animationSpec = SpatialDefaultSizeSpring),
+                exit = fadeOut(animationSpec = EffectsFastSpring) + shrinkVertically(animationSpec = SpatialFastSizeSpring)
+            ) {
+                ErrorCard(
+                    title = "Failed to refresh",
+                    message = refreshError ?: "",
+                    onRetry = { refreshError = null; triggerRefresh() }
+                )
+            }
+          } // end content Box
         } // end PullToRefreshBox
     } // end AppScaffold
 
     // Screen-level sheets and dialogs — operate on currentDisplayResource
-    val editSheetResource = currentDisplayResource
-    if (showEditSheet && editSheetResource != null) {
-        EditResourceSheet(
-            resource = editSheetResource,
-            onDismiss = { showEditSheet = false; editSheetPendingMetadata = null },
-            onSaved = { showEditSheet = false; editSheetPendingMetadata = null; onRefresh(editSheetResource.uniqueId) },
-            overrideMetadata = editSheetPendingMetadata,
-            onOpenMetadataEditor = { currentJson ->
-                val current = runCatching {
-                    currentJson.trim().ifBlank { null }
-                        ?.parseAsJsonObject()
-                }.getOrNull() ?: kotlinx.serialization.json.JsonObject(emptyMap())
-                MetadataHolder.put(current)
-                showEditSheet = false
-                editSheetWaitingForMetadata = true
-                onNavigateToMetadataEditor()
-            }
-        )
-    }
     val linkSheetResource = currentDisplayResource
     if (showLinkSheet && linkSheetResource != null) {
         LinkResourceSheet(
@@ -771,6 +761,7 @@ fun ResourceDetailScreen(
         DeletionRequestDialog(
             resource = deletionResource,
             onDismiss = { showDeletionDialog = false },
+            onSubmit = { reason -> onRequestDeletion(deletionResource.uniqueId, reason) },
             onSubmitted = { showDeletionDialog = false; onRefresh(deletionResource.uniqueId) }
         )
     }

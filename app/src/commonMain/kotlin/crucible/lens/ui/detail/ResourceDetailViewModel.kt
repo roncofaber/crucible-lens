@@ -4,6 +4,8 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.repository.ResourceResult
@@ -27,7 +29,8 @@ private const val MAX_CARD_STATE_ENTRIES = 50
 
 class ResourceDetailViewModel(
     private val repository: CrucibleRepository,
-    private val dataSyncManager: DataSyncManager
+    private val dataSyncManager: DataSyncManager,
+    private val apiClient: ApiClient
 ) : ViewModel() {
 
     // Tracks the active fetch/refresh so navigating to a new resource
@@ -112,6 +115,11 @@ class ResourceDetailViewModel(
     fun reset() {
         _uiState.value = UiState.Idle
     }
+
+    // No repository wrapper - a deletion request is a one-off write with nothing to cache,
+    // same precedent as the join-request calls (called directly via apiClient.service.*).
+    suspend fun requestDeletion(resourceId: String, reason: String?): ApiResult<Unit> =
+        apiClient.service.requestDeletion(resourceId = resourceId, reason = reason?.trim()?.ifBlank { null })
 
     fun refreshResource(uuid: String) {
         activeFetchJob?.cancel()

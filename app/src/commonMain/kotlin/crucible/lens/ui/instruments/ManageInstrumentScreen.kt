@@ -12,7 +12,6 @@ import crucible.lens.ui.common.AppTopBar
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.Instrument
@@ -20,6 +19,7 @@ import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.detail.components.InfoRow
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun ManageInstrumentScreen(
@@ -142,7 +142,7 @@ private fun InstrumentEditCard(
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Edit Instrument", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text("Edit Instrument", style = MaterialTheme.typography.emphasizedTitleMedium)
 
             if (saveError != null) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {

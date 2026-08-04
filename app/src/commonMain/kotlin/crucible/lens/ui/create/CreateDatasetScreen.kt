@@ -127,7 +127,7 @@ fun CreateDatasetScreen(
             }
 
             // Section: Basic Info
-            Text("Basic Info", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            Text("Basic Info", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
 
             OutlinedTextField(
                 value = name,
@@ -189,7 +189,7 @@ fun CreateDatasetScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("Public", style = MaterialTheme.typography.bodyLarge)
+                    Text("Public", style = MaterialTheme.typography.bodyMedium)
                     Text("Visible to all users", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(checked = isPublic, onCheckedChange = { isPublic = it })
@@ -197,7 +197,7 @@ fun CreateDatasetScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-            Text("Scientific Details", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            Text("Scientific Details", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
 
             OutlinedTextField(
                 value = sessionName,
@@ -220,7 +220,7 @@ fun CreateDatasetScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-            Text("Metadata", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            Text("Metadata", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
 
             OutlinedCard(
                 onClick = {

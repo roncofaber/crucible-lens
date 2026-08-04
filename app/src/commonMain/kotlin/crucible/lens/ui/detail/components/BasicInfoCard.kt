@@ -19,12 +19,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.ui.common.fadeEndEdge
+import crucible.lens.ui.theme.emphasizedTitleLarge
 
 @Composable
 internal fun BasicInfoCard(
@@ -59,8 +59,7 @@ internal fun BasicInfoCard(
                 ) {
                     Text(
                         text = name,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.emphasizedTitleLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Clip,
                         textAlign = if (nameOverflows) TextAlign.Start else TextAlign.Center,

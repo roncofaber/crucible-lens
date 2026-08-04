@@ -28,6 +28,7 @@ interface AppPreferences {
     val resourceHistory: StateFlow<List<HistoryItem>>
     val sampleGroupBy: StateFlow<String>
     val datasetGroupBy: StateFlow<String>
+    val instrumentGroupBy: StateFlow<String>
     val defaultProjectTab: StateFlow<String>
 
     // Saves
@@ -51,6 +52,7 @@ interface AppPreferences {
     suspend fun clearHistory()
     suspend fun saveSampleGroupBy(value: String)
     suspend fun saveDatasetGroupBy(value: String)
+    suspend fun saveInstrumentGroupBy(value: String)
     suspend fun saveDefaultProjectTab(tab: String)
 
     companion object {

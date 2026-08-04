@@ -15,7 +15,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import crucible.lens.platform.appVersionName
+import crucible.lens.platform.displayVersionName
+import crucible.lens.platform.isDebugBuild
 import crucible.lens.ui.common.AppScaffold
 
 @Composable
@@ -27,6 +28,7 @@ fun SettingsScreen(
     onNavigateToAppearance: () -> Unit,
     onNavigateToCache: () -> Unit,
     onNavigateToAbout: () -> Unit,
+    onNavigateToTypography: () -> Unit,
     onBack: () -> Unit,
     onHome: () -> Unit
 ) {
@@ -80,9 +82,17 @@ fun SettingsScreen(
             SettingsRow(
                 icon = AppIcons.Info,
                 title = "About",
-                subtitle = "Crucible Lens v${appVersionName()}",
+                subtitle = "Crucible Lens ${displayVersionName()}",
                 onClick = onNavigateToAbout
             )
+            if (isDebugBuild) {
+                SettingsRow(
+                    icon = AppIcons.Description,
+                    title = "Typography",
+                    subtitle = "Debug - type scale reference",
+                    onClick = onNavigateToTypography
+                )
+            }
         }
     }
 }
@@ -107,7 +117,7 @@ private fun SettingsRow(
             ) {
                 AppIcon(icon, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                 Column {
-                    Text(title, style = MaterialTheme.typography.titleMedium)
+                    Text(title, style = MaterialTheme.typography.bodyMedium)
                     Text(subtitle, style = MaterialTheme.typography.bodySmall, color = subtitleColor)
                 }
             }

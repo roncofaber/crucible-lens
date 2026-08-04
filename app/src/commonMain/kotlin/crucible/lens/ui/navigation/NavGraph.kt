@@ -2,6 +2,7 @@
 package crucible.lens.ui.navigation
 import androidx.compose.material3.ExperimentalMaterial3Api
 import crucible.lens.platform.*
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -36,12 +37,14 @@ import crucible.lens.ui.settings.OrcidLoginScreen
 import crucible.lens.ui.settings.AppearanceSettingsScreen
 import crucible.lens.ui.settings.CacheSettingsScreen
 import crucible.lens.ui.settings.AboutSettingsScreen
+import crucible.lens.ui.settings.TypographySettingsScreen
 import crucible.lens.ui.settings.AccountScreen
 import crucible.lens.ui.settings.AccountViewModel
 import crucible.lens.ui.settings.UserProfileScreen
 import crucible.lens.ui.detail.ResourceDetailViewModel
 import crucible.lens.ui.detail.UiState
 import crucible.lens.ui.detail.ResourceDetailScreen
+import crucible.lens.ui.detail.EditResourceScreen
 import crucible.lens.ui.projects.ProjectsListScreen
 import crucible.lens.ui.projects.ProjectDetailScreen
 import crucible.lens.ui.projects.ManageProjectScreen
@@ -348,6 +351,7 @@ fun NavGraph(
                 onNavigateToAppearance = { navController.navigate(Screen.SettingsAppearance.route) },
                 onNavigateToCache = { navController.navigate(Screen.SettingsCache.route) },
                 onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },
+                onNavigateToTypography = { navController.navigate(Screen.SettingsTypography.route) },
                 onBack = navigateBack,
                 onHome = navigateHome
             )
@@ -401,6 +405,13 @@ fun NavGraph(
         composable(Screen.SettingsAbout.route) {
             AboutSettingsScreen(
                 isDarkTheme = darkTheme,
+                onBack = navigateBack,
+                onHome = navigateHome
+            )
+        }
+
+        composable(Screen.SettingsTypography.route) {
+            TypographySettingsScreen(
                 onBack = navigateBack,
                 onHome = navigateHome
             )
@@ -530,11 +541,12 @@ fun NavGraph(
                         },
                         getCardState = { key -> viewModel.getCardState(mfid, key) },
                         onCardStateChange = { key, value -> viewModel.setCardState(mfid, key, value) },
+                        onRequestDeletion = { resourceId, reason -> viewModel.requestDeletion(resourceId, reason) },
                         onNavigateToAddFiles = { datasetUuid ->
                             navController.navigate(Screen.AddFiles.createRoute(datasetUuid))
                         },
-                        onNavigateToMetadataEditor = {
-                            navController.navigate(Screen.MetadataEditor.route)
+                        onNavigateToEdit = { uuid ->
+                            navController.navigate(Screen.EditResource.createRoute(uuid))
                         },
                         onNavigateToUser = { identifier ->
                             navController.navigate(Screen.UserProfile.createRoute(identifier))
@@ -594,7 +606,7 @@ fun NavGraph(
                                 )
                                 Text(
                                     text = "Unable to Load Resource",
-                                    style = MaterialTheme.typography.titleLarge,
+                                    style = MaterialTheme.typography.emphasizedTitleMedium,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     textAlign = TextAlign.Center
                                 )
@@ -654,6 +666,19 @@ fun NavGraph(
             } // end Box wrapper
         }
 
+        composable(
+            route = Screen.EditResource.route,
+            arguments = listOf(navArgument("mfid") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val mfid = backStackEntry.savedStateHandle.get<String>("mfid") ?: ""
+            EditResourceScreen(
+                uuid = mfid,
+                onBack = navigateBack,
+                onSaved = { navController.popBackStack() },
+                onOpenMetadataEditor = { navController.navigate(Screen.MetadataEditor.route) }
+            )
+        }
+
         composable(Screen.Projects.route) {
             ProjectsListScreen(
                 onBack = navigateBack,
@@ -681,7 +706,6 @@ fun NavGraph(
                 graphExplorerUrl = graphExplorerUrl,
                 onBack = navigateBack,
                 onHome = navigateHome,
-                onSearch = navigateSearch,
                 onResourceClick = { mfid, groupBy ->
                     navController.navigate(Screen.Detail.createRoute(mfid, groupBy))
                 },
@@ -748,13 +772,13 @@ fun NavGraph(
                 onTogglePin = { scope.launch { prefs.togglePinnedInstrument(instrumentId) } },
                 onBack = navigateBack,
                 onHome = navigateHome,
-                onSearch = navigateSearch,
                 onDatasetClick = { mfid ->
                     navController.navigate(Screen.Detail.createRoute(mfid))
                 },
                 onManageInstrument = {
                     navController.navigate(Screen.ManageInstrument.createRoute(instrumentId))
-                }
+                },
+                graphExplorerUrl = graphExplorerUrl
             )
         }
 
@@ -866,6 +890,7 @@ fun NavGraph(
             SearchScreen(
                 apiKey = apiKey,
                 userOrcid = userOrcid,
+                graphExplorerUrl = graphExplorerUrl,
                 onBack = navigateBack,
                 onHome = navigateHome,
                 onResourceClick = { uuid ->

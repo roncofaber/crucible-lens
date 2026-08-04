@@ -6,6 +6,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import crucible.lens.ui.common.AppIcon
@@ -17,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.JoinRequest
@@ -25,17 +25,22 @@ import crucible.lens.data.model.Project
 import crucible.lens.data.model.User
 import crucible.lens.data.util.formatDateTime
 import crucible.lens.data.util.userDisplayName
+import crucible.lens.data.util.userSortKey
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.StandardSizeAnim
+import crucible.lens.ui.common.SearchPickerField
+import crucible.lens.ui.common.SearchPickerSheet
 import crucible.lens.ui.common.UserAvatar
 import crucible.lens.ui.common.UserIdentityRow
+import crucible.lens.ui.common.UserPickerItemContent
 import crucible.lens.ui.common.UserResultItem
-import crucible.lens.ui.common.UserSearchField
+import crucible.lens.ui.common.rememberDebouncedSearchResults
 import crucible.lens.ui.detail.components.ClickableInfoRow
 import crucible.lens.ui.detail.components.InfoRow
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun ManageProjectScreen(
@@ -48,10 +53,13 @@ fun ManageProjectScreen(
     val editState by viewModel.editState.collectAsState()
     val pendingRemove by viewModel.pendingRemove.collectAsState()
     val isAddMemberSheetVisible by viewModel.isAddMemberSheetVisible.collectAsState()
+    val leaveError by viewModel.leaveError.collectAsState()
+    var showLeaveDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     if (pendingRemove != null) {
         val user = pendingRemove!!
-        val displayName = user.username?.let { "@$it" } ?: listOfNotNull(user.firstName, user.lastName).joinToString(" ").ifBlank { "this member" }
+        val displayName = userDisplayName(user)
         AlertDialog(
             onDismissRequest = { viewModel.cancelRemove() },
             icon = { AppIcon(AppIcons.PersonRemove) },
@@ -66,11 +74,37 @@ fun ManageProjectScreen(
         )
     }
 
+    if (showLeaveDialog) {
+        AlertDialog(
+            onDismissRequest = { showLeaveDialog = false },
+            icon = { AppIcon(AppIcons.SignOut) },
+            title = { Text("Leave project?") },
+            text = { Text("You'll lose access to this project's samples and datasets.") },
+            confirmButton = {
+                TextButton(onClick = { showLeaveDialog = false; viewModel.leaveProject(onLeft = onHome) }) {
+                    Text("Leave", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { showLeaveDialog = false }) { Text("Cancel") } }
+        )
+    }
+
     if (isAddMemberSheetVisible) {
-        AddMemberSheet(viewModel = viewModel, onDismiss = { viewModel.hideAddMemberSheet() })
+        // Live snapshot, not a static one from when the sheet opened — a user's row flips to
+        // "Added" as soon as viewModel.addMember() actually succeeds, no optimistic guessing.
+        val memberIds = (state as? ManageProjectState.Loaded)?.members?.mapNotNull { it.uniqueId }?.toSet() ?: emptySet()
+        AddMemberSheet(viewModel = viewModel, memberIds = memberIds, onDismiss = { viewModel.hideAddMemberSheet() })
+    }
+
+    LaunchedEffect(leaveError) {
+        leaveError?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.dismissLeaveError()
+        }
     }
 
     AppScaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             AppTopBar(
                 title = "Manage Project",
@@ -80,22 +114,34 @@ fun ManageProjectScreen(
                         AppIcon(AppIcons.Home)
                     }
                     val loaded = state as? ManageProjectState.Loaded
-                    if (loaded?.isLead == true && editState is ProjectEditState.Idle) {
+                    if (loaded != null && editState is ProjectEditState.Idle) {
                         var menuExpanded by remember { mutableStateOf(false) }
                         Box {
                             IconButton(onClick = { menuExpanded = true }) {
                                 AppIcon(AppIcons.MoreVert)
                             }
                             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                                // Any member can add another (the API authorizes admins or
+                                // project members, not just the lead); editing project info and
+                                // leaving stay lead-only/non-lead-only respectively.
                                 DropdownMenuItem(
                                     text = { Text("Add member") },
                                     leadingIcon = { AppIcon(AppIcons.PersonAdd) },
                                     onClick = { menuExpanded = false; viewModel.showAddMemberSheet() }
                                 )
+                                if (loaded.isLead) {
+                                    DropdownMenuItem(
+                                        text = { Text("Edit project") },
+                                        leadingIcon = { AppIcon(AppIcons.Edit) },
+                                        onClick = { menuExpanded = false; viewModel.startEdit() }
+                                    )
+                                }
+                                HorizontalDivider()
                                 DropdownMenuItem(
-                                    text = { Text("Edit project") },
-                                    leadingIcon = { AppIcon(AppIcons.Edit) },
-                                    onClick = { menuExpanded = false; viewModel.startEdit() }
+                                    text = { Text("Leave project") },
+                                    leadingIcon = { AppIcon(AppIcons.SignOut) },
+                                    enabled = !loaded.isLead,
+                                    onClick = { menuExpanded = false; showLeaveDialog = true }
                                 )
                             }
                         }
@@ -199,7 +245,7 @@ private fun ProjectEditCard(
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Edit Project", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text("Edit Project", style = MaterialTheme.typography.emphasizedTitleMedium)
 
             if (saveError != null) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
@@ -225,20 +271,16 @@ private fun ProjectEditCard(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
             )
-            UserSearchField(
+            SearchPickerField(
                 query = draft.leadUsername,
                 onQueryChange = onLeadUsernameChanged,
                 isSearching = draft.isLeadSearching,
+                results = draft.leadSearch,
+                onSelect = onSelectLead,
                 label = "Project lead username",
-                enabled = !isSaving
+                enabled = !isSaving,
+                itemContent = { user -> UserPickerItemContent(user) }
             )
-            if (draft.leadSearch.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    draft.leadSearch.take(5).forEach { user ->
-                        UserResultItem(user = user, onClick = { onSelectLead(user) })
-                    }
-                }
-            }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f), enabled = !isSaving) { Text("Cancel") }
@@ -261,7 +303,7 @@ private fun PendingRequestsCard(
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Pending Requests (${requests.size})", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text("Pending Requests (${requests.size})", style = MaterialTheme.typography.emphasizedTitleMedium)
             requests.forEach { request ->
                 val requester = requesterInfo[request.requesterId]
                 val requesterIdentifier = requester?.username ?: request.requesterId
@@ -274,6 +316,7 @@ private fun PendingRequestsCard(
                         firstName = requester?.firstName,
                         lastName = requester?.lastName,
                         size = 36.dp,
+                        orcid = requester?.uniqueId ?: request.requesterId,
                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     )
@@ -284,7 +327,7 @@ private fun PendingRequestsCard(
                         if (!request.reason.isNullOrBlank()) {
                             Text(request.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Text(formatDateTime(request.requestTime), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(formatDateTime(request.requestTime), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     IconButton(
                         onClick = { onApprove(request) },
@@ -324,33 +367,46 @@ private fun MembersCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Members (${members.size})", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text("Members (${members.size})", style = MaterialTheme.typography.emphasizedTitleMedium)
                 ExpandChevron(expanded = expanded)
             }
-            if (expanded) members.forEach { member ->
-                val memberIdentifier = member.username ?: member.uniqueId
-                UserIdentityRow(
-                    user = member,
-                    avatarContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    avatarContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    onClick = if (memberIdentifier != null) ({ onUserClick(memberIdentifier) }) else null
+            if (expanded) {
+                // Add member sits above the member list as a row matching the member rows below
+                // it (circular icon in the avatar slot, left-aligned label) — WhatsApp-style "add
+                // participant" as the list's first row, not a separate button glued above it. Any
+                // member can add another (the API authorizes admins or project members, not just
+                // the lead — see POST /projects/{id}/users/{orcid}).
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable(onClick = onAddMember),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // The lead can't remove themselves from their own project via this list.
-                    if (isLead && member.uniqueId != null && member.uniqueId != leadOrcid) {
-                        IconButton(onClick = { onRemoveMember(member) }, modifier = Modifier.size(32.dp)) {
-                            AppIcon(AppIcons.PersonRemove, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(36.dp)) {
+                        Box(contentAlignment = Alignment.Center) {
+                            AppIcon(AppIcons.PersonAdd, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                    Text("Add member", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                }
+                val sortedMembers = remember(members) { members.sortedBy { userSortKey(it) } }
+                sortedMembers.forEach { member ->
+                    val memberIdentifier = member.username ?: member.uniqueId
+                    UserIdentityRow(
+                        user = member,
+                        avatarContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        avatarContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        onClick = if (memberIdentifier != null) ({ onUserClick(memberIdentifier) }) else null
+                    ) {
+                        // The lead can't remove themselves from their own project via this list.
+                        if (isLead && member.uniqueId != null && member.uniqueId != leadOrcid) {
+                            IconButton(onClick = { onRemoveMember(member) }) {
+                                AppIcon(AppIcons.PersonRemove, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                            }
                         }
                     }
                 }
-            }
-            if (members.isEmpty()) {
-                Text("No members yet", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (expanded && isLead) {
-                TextButton(onClick = onAddMember, modifier = Modifier.fillMaxWidth()) {
-                    AppIcon(AppIcons.PersonAdd, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Add member")
+                if (members.isEmpty()) {
+                    Text("No members yet", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -358,35 +414,46 @@ private fun MembersCard(
 }
 
 @Composable
-private fun AddMemberSheet(viewModel: ManageProjectViewModel, onDismiss: () -> Unit) {
+private fun AddMemberSheet(
+    viewModel: ManageProjectViewModel,
+    memberIds: Set<String>,
+    onDismiss: () -> Unit
+) {
     var query by remember { mutableStateOf("") }
     val searchResults by viewModel.memberSearchResults.collectAsState()
     val isSearching by viewModel.isMemberSearching.collectAsState()
     val isAdding by viewModel.isAddingMember.collectAsState()
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Add Member", style = MaterialTheme.typography.titleLarge)
-            UserSearchField(
-                query = query,
-                onQueryChange = { query = it; viewModel.searchMembers(it) },
-                isSearching = isSearching
-            )
-            searchResults.forEach { user ->
-                UserResultItem(
-                    user = user,
-                    trailingContent = {
+    SearchPickerSheet(
+        title = "Add Member",
+        query = query,
+        onQueryChange = { query = it; viewModel.searchMembers(it) },
+        isSearching = isSearching,
+        results = searchResults,
+        onDismiss = onDismiss,
+        label = "Search user",
+        key = { it.uniqueId ?: it.username ?: it.hashCode().toString() },
+        emptyContent = {
+            if (query.length >= 3 && !isSearching) {
+                Text("No users found for \"$query\"", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        itemContent = { user ->
+            val alreadyMember = user.uniqueId != null && user.uniqueId in memberIds
+            UserResultItem(
+                user = user,
+                trailingContent = {
+                    if (alreadyMember) {
+                        Text("Added", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
                         Button(
                             onClick = { viewModel.addMember(user) },
                             enabled = !isAdding,
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                         ) { Text("Add") }
                     }
-                )
-            }
-            if (query.length >= 3 && !isSearching && searchResults.isEmpty()) {
-                Text("No users found for \"$query\"", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+                }
+            )
         }
-    }
+    )
 }

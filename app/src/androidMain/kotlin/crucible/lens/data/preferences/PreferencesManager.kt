@@ -41,6 +41,7 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         private val HIDDEN_INSTRUMENTS = stringPreferencesKey("hidden_instruments")
         private val RESOURCE_HISTORY = stringPreferencesKey("resource_history")
         private val SAMPLE_GROUP_BY = stringPreferencesKey("sample_group_by")
+        private val INSTRUMENT_GROUP_BY = stringPreferencesKey("instrument_group_by")
         private val DATASET_GROUP_BY = stringPreferencesKey("dataset_group_by")
         private val DEFAULT_PROJECT_TAB = stringPreferencesKey("default_project_tab")
         private val USER_ORCID = stringPreferencesKey("user_orcid")
@@ -123,6 +124,11 @@ class PreferencesManager(private val context: Context) : AppPreferences {
 
     override val datasetGroupBy: StateFlow<String> = context.dataStore.data.map { prefs ->
         prefs[DATASET_GROUP_BY] ?: "MEASUREMENT"
+    }
+        .stateIn(scope, SharingStarted.Eagerly, "MEASUREMENT")
+
+    override val instrumentGroupBy: StateFlow<String> = context.dataStore.data.map { prefs ->
+        prefs[INSTRUMENT_GROUP_BY] ?: "MEASUREMENT"
     }
         .stateIn(scope, SharingStarted.Eagerly, "MEASUREMENT")
 
@@ -242,6 +248,10 @@ class PreferencesManager(private val context: Context) : AppPreferences {
 
     override suspend fun saveDatasetGroupBy(value: String) {
         context.dataStore.edit { prefs -> prefs[DATASET_GROUP_BY] = value }
+    }
+
+    override suspend fun saveInstrumentGroupBy(value: String) {
+        context.dataStore.edit { prefs -> prefs[INSTRUMENT_GROUP_BY] = value }
     }
 
     override suspend fun saveDefaultProjectTab(tab: String) {

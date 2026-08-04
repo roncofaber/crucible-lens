@@ -13,12 +13,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import crucible.lens.composeapp.generated.resources.Res
-import crucible.lens.platform.appVersionName
+import crucible.lens.platform.displayVersionName
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
 import crucible.lens.ui.common.AppScaffold
@@ -65,7 +64,7 @@ fun AboutSettingsScreen(
                         )
                     }
                     Text(
-                        "Version ${appVersionName()}",
+                        "Version ${displayVersionName()}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -211,18 +210,18 @@ fun AboutSettingsScreen(
             ) {
                 Text(
                     "Developed by ",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     "@roncofaber",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.clickable { openUrl(context, "https://github.com/roncofaber") }
                 )
                 Text(
                     " with the help of Claude Code",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -275,7 +274,7 @@ private fun ResourceLink(
             ) {
                 leadingContent()
                 Column {
-                    Text(title, style = MaterialTheme.typography.bodyLarge)
+                    Text(title, style = MaterialTheme.typography.bodyMedium)
                     Text(
                         subtitle,
                         style = MaterialTheme.typography.bodySmall,
@@ -295,7 +294,7 @@ private fun ResourceLink(
 @Composable
 private fun TeamMember(name: String, role: String) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        Text(name, style = MaterialTheme.typography.bodyMedium)
         Text(role, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

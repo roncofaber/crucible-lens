@@ -73,6 +73,9 @@ class IosAppPreferences : AppPreferences {
     private val _datasetGroupBy = MutableStateFlow(settings.getString("dataset_group_by", "MEASUREMENT"))
     override val datasetGroupBy: StateFlow<String> = _datasetGroupBy.asStateFlow()
 
+    private val _instrumentGroupBy = MutableStateFlow(settings.getString("instrument_group_by", "MEASUREMENT"))
+    override val instrumentGroupBy: StateFlow<String> = _instrumentGroupBy.asStateFlow()
+
     private val _defaultProjectTab = MutableStateFlow(settings.getString("default_project_tab", AppPreferences.PROJECT_TAB_SAMPLES))
     override val defaultProjectTab: StateFlow<String> = _defaultProjectTab.asStateFlow()
 
@@ -167,6 +170,10 @@ class IosAppPreferences : AppPreferences {
 
     override suspend fun saveDatasetGroupBy(value: String) {
         settings.putString("dataset_group_by", value); _datasetGroupBy.value = value
+    }
+
+    override suspend fun saveInstrumentGroupBy(value: String) {
+        settings.putString("instrument_group_by", value); _instrumentGroupBy.value = value
     }
 
     override suspend fun saveDefaultProjectTab(tab: String) {

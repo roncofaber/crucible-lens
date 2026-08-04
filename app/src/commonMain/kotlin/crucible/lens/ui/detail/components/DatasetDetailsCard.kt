@@ -15,7 +15,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.repository.CrucibleRepository
@@ -30,6 +29,7 @@ import crucible.lens.ui.common.StandardSizeAnim
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
 import org.koin.compose.koinInject
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 internal fun DatasetDetailsCard(
@@ -56,8 +56,7 @@ internal fun DatasetDetailsCard(
             ) {
                 Text(
                     text = "Dataset Information",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.emphasizedTitleMedium
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(

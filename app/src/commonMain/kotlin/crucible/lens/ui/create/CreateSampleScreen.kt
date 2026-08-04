@@ -55,7 +55,11 @@ fun CreateSampleScreen(
 
     LaunchedEffect(saveState) {
         when (val s = saveState) {
-            is SaveState.Success -> { createViewModel.resetState(); onCreated(s.uuid) }
+            is SaveState.Success -> {
+                createViewModel.resetState()
+                if (s.uploadWarning != null) snackbarHostState.showSnackbar(s.uploadWarning)
+                onCreated(s.uuid)
+            }
             is SaveState.Error   -> { snackbarHostState.showSnackbar(s.message); createViewModel.resetState() }
             else -> {}
         }
@@ -87,7 +91,7 @@ fun CreateSampleScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Section: Basic Info
-            Text("Basic Info", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            Text("Basic Info", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
 
             OutlinedTextField(
                 value = name,
@@ -158,7 +162,7 @@ fun CreateSampleScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("Public", style = MaterialTheme.typography.bodyLarge)
+                    Text("Public", style = MaterialTheme.typography.bodyMedium)
                     Text("Visible to all users", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(checked = isPublic, onCheckedChange = { isPublic = it })
@@ -167,7 +171,7 @@ fun CreateSampleScreen(
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
             // Section: Description
-            Text("Description", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            Text("Description", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
 
             OutlinedTextField(
                 value = description,
@@ -182,7 +186,7 @@ fun CreateSampleScreen(
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
             // Section: Metadata
-            Text("Metadata", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            Text("Metadata", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
 
             OutlinedCard(
                 onClick = {

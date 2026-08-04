@@ -1,11 +1,14 @@
 package crucible.lens.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import crucible.lens.platform.resolveDynamicColorScheme
 
 private val onPrimaryDark  = Color(0xFF1C1B1F)
@@ -131,6 +134,37 @@ private val BrownLightColorScheme = lightColorScheme(
     secondary = Color(0xFF0097A7), tertiary = Color(0xFF388E3C)
 )
 
+/**
+ * Rebuilds the five `surfaceContainer*` roles so they carry the accent.
+ *
+ * M3 expresses elevation as tonal colour, not shadow: pinned chrome is supposed to sit on a
+ * container role that is the surface with a little of the primary blended in. The schemes above
+ * only ever set primary/secondary/tertiary, so every surface role fell through to M3's baseline —
+ * which is generated from a *purple* seed. A blue-accented app therefore rendered purple-grey
+ * containers that belonged to no palette in the app.
+ *
+ * Blending a little primary into surface restores that relationship for all ten named palettes and
+ * the custom-hex path in one place, so `surfaceContainer` becomes the correct thing to reach for
+ * rather than something to work around. Dynamic colour is excluded at the call site: it already
+ * derives a full tonal palette from the wallpaper.
+ *
+ * The ratios are deliberately small. M3's own container steps move *lightness* within a
+ * near-neutral palette (roughly 4–6 chroma); a straight blend toward a full-chroma primary is a
+ * much stronger effect at the same nominal percentage. The first version of this used 2–12% and
+ * visibly washed the whole expanded `SearchBar` — which takes `surfaceContainerHigh` — in the
+ * accent. These values give the hue a hint of the accent without turning large surfaces into
+ * coloured panels.
+ */
+private fun withAccentSurfaces(scheme: ColorScheme): ColorScheme = with(scheme) {
+    copy(
+        surfaceContainerLowest = lerp(surface, primary, 0.010f),
+        surfaceContainerLow = lerp(surface, primary, 0.020f),
+        surfaceContainer = lerp(surface, primary, 0.035f),
+        surfaceContainerHigh = lerp(surface, primary, 0.050f),
+        surfaceContainerHighest = lerp(surface, primary, 0.065f)
+    )
+}
+
 @Composable
 fun CrucibleScannerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -138,7 +172,9 @@ fun CrucibleScannerTheme(
     accentColor: String = "blue",
     content: @Composable () -> Unit
 ) {
-    val colorScheme = resolveDynamicColorScheme(darkTheme).takeIf { dynamicColor } ?: when {
+    // Dynamic colour already derives a full tonal palette from the wallpaper, so it is used as-is.
+    // Everything else goes through withAccentSurfaces() — see its KDoc.
+    val colorScheme = resolveDynamicColorScheme(darkTheme).takeIf { dynamicColor } ?: withAccentSurfaces(when {
         accentColor.startsWith("#") -> {
             val c = try {
                 Color(parseHexColor(accentColor))
@@ -173,7 +209,7 @@ fun CrucibleScannerTheme(
             "brown"  -> if (darkTheme) BrownDarkColorScheme  else BrownLightColorScheme
             else     -> if (darkTheme) BlueDarkColorScheme   else BlueLightColorScheme
         }
-    }
+    })
 
     MaterialTheme(
         colorScheme = colorScheme,
@@ -187,3 +223,18 @@ private fun parseHexColor(hex: String): Long {
     val cleanHex = hex.removePrefix("#")
     return cleanHex.toLong(16)
 }
+
+/**
+ * Readable foreground for a colour that isn't a scheme role.
+ *
+ * Everything themed should pair a scheme role with its `onX` counterpart — that is what guarantees
+ * contrast. A handful of surfaces can't: the avatar circle takes a hue generated from an ORCID, and
+ * the accent picker paints raw seed swatches. There is no `onX` for those, and hardcoding white
+ * fails on the light end of the range — white on the amber seed is roughly 2:1, well under the 4.5:1
+ * M3 asks for on small text.
+ *
+ * Choosing by relative luminance keeps both readable across the whole palette. Use this *only* for
+ * genuinely non-scheme backgrounds; for anything themed, use the matching `on` role instead.
+ */
+fun readableOn(background: Color): Color =
+    if (background.luminance() > 0.5f) Color.Black else Color.White

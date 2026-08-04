@@ -1,7 +1,6 @@
 package crucible.lens.ui.common
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -9,24 +8,19 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 /**
- * True center feels low when this content only fills the leftover area below a tall fixed
- * header (e.g. ProjectHeader + TabRow) — the leftover box's center sits well below the
- * screen's visual center. Biasing upward within that leftover area compensates.
- */
-val UpperCenterAlignment: Alignment = BiasAlignment(horizontalBias = 0f, verticalBias = -0.4f)
-
-/**
  * Consistent loading indicator used across all screens.
  * Shows a spinner, a title, and a rotating loading message.
  * The [modifier] controls how the outer Box is sized/positioned.
- * [contentAlignment] defaults to true center; pass [UpperCenterAlignment] when this content
- * fills the area left over below a tall fixed header, so it doesn't read as anchored low.
+ *
+ * [contentAlignment] defaults to true center, which is right whenever this fills the whole
+ * content area. Inside a `LazyColumn` an item can't see the viewport, so centre it against the
+ * viewport explicitly with `Modifier.fillParentMaxHeight(...)` from `LazyItemScope` rather than
+ * biasing the alignment — see ProjectsListScreen/InstrumentListScreen.
  */
 @Composable
 fun LoadingContent(
@@ -56,8 +50,8 @@ fun LoadingContent(
             AnimatedContent(
                 targetState = loadingMessage,
                 transitionSpec = {
-                    fadeIn(animationSpec = tween(500)) togetherWith
-                        fadeOut(animationSpec = tween(500))
+                    fadeIn(animationSpec = ContentCrossfadeSpec) togetherWith
+                        fadeOut(animationSpec = ContentCrossfadeSpec)
                 },
                 label = "loading message"
             ) { message ->

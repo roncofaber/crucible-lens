@@ -14,12 +14,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.util.formatDecimal
 import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.FastSizeAnim
 import crucible.lens.ui.common.StandardSizeAnim
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 internal fun ScientificMetadataCard(
@@ -56,8 +56,7 @@ internal fun ScientificMetadataCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Scientific Metadata",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.emphasizedTitleMedium
                     )
                 }
             }
@@ -73,7 +72,7 @@ internal fun ScientificMetadataCard(
                     ) {
                         Text(
                             if (expandAll) "Collapse All" else "Expand All",
-                            style = MaterialTheme.typography.labelSmall
+                            style = MaterialTheme.typography.bodySmall
                         )
                     }
                 }
@@ -105,8 +104,7 @@ internal fun MetadataTree(data: Map<String, Any?>, indentLevel: Int, expandAll: 
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = formatKey(entryKey),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -128,8 +126,7 @@ internal fun MetadataTree(data: Map<String, Any?>, indentLevel: Int, expandAll: 
                     ) {
                         Text(
                             text = formatKey(entryKey),
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.weight(0.35f)
                         )

@@ -6,7 +6,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIconToken
@@ -29,14 +28,14 @@ internal fun InfoRow(
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = "$label:",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(0.3f)
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(0.7f)
         )
     }
@@ -61,8 +60,8 @@ internal fun ClickableInfoRow(
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = "$label:",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(0.3f)
         )
         Row(
@@ -73,8 +72,7 @@ internal fun ClickableInfoRow(
             Text(
                 text = value,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Medium
+                color = MaterialTheme.colorScheme.primary
             )
             if (showTrailingIcon) {
                 AppIcon(AppIcons.OpenExternal, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
@@ -87,7 +85,7 @@ internal fun ClickableInfoRow(
 internal fun AdvancedGroupLabel(text: String) {
     Text(
         text = text,
-        style = MaterialTheme.typography.labelSmall,
+        style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 10.dp, bottom = 2.dp)
     )

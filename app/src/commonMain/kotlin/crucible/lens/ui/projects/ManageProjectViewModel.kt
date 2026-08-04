@@ -8,6 +8,8 @@ import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.User
 import crucible.lens.data.repository.CrucibleRepository
+import crucible.lens.data.util.SEARCH_DEBOUNCE_MS
+import crucible.lens.data.util.SEARCH_MIN_QUERY_LENGTH
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,6 +55,9 @@ class ManageProjectViewModel(
 
     private val _pendingRemove = MutableStateFlow<User?>(null)
     val pendingRemove: StateFlow<User?> = _pendingRemove.asStateFlow()
+
+    private val _leaveError = MutableStateFlow<String?>(null)
+    val leaveError: StateFlow<String?> = _leaveError.asStateFlow()
 
     private val _isAddMemberSheetVisible = MutableStateFlow(false)
     val isAddMemberSheetVisible: StateFlow<Boolean> = _isAddMemberSheetVisible.asStateFlow()
@@ -130,10 +135,10 @@ class ManageProjectViewModel(
     fun onLeadUsernameChanged(value: String) {
         leadSearchJob?.cancel()
         updateEditDraft { it.copy(leadUsername = value, leadSearch = emptyList(), isLeadSearching = false) }
-        if (value.length < 3) return
+        if (value.length < SEARCH_MIN_QUERY_LENGTH) return
         updateEditDraft { it.copy(isLeadSearching = true) }
         leadSearchJob = viewModelScope.launch {
-            delay(400)
+            delay(SEARCH_DEBOUNCE_MS)
             val results = (apiClient.service.searchUsers(value) as? ApiResult.Success)?.data ?: emptyList()
             updateEditDraft { it.copy(leadSearch = results, isLeadSearching = false) }
         }
@@ -158,7 +163,12 @@ class ManageProjectViewModel(
             )
             when (result) {
                 is ApiResult.Success -> {
+                    // Both caches: invalidateProjects() only clears the projects *list* (keyed on
+                    // Unit). ProjectDetailScreen's header reads observeProject(projectId) from the
+                    // separate per-project cache, so an edited title/organization/lead would stay
+                    // stale there for the rest of the TTL without this.
                     repository.invalidateProjects()
+                    repository.invalidateProject(projectId)
                     val members = loaded?.members ?: emptyList()
                     val isLead = isCurrentUserLead(result.data)
                     _state.value = ManageProjectState.Loaded(
@@ -180,26 +190,28 @@ class ManageProjectViewModel(
 
     fun searchMembers(query: String) {
         memberSearchJob?.cancel()
-        if (query.length < 3) { _memberSearchResults.value = emptyList(); return }
+        if (query.length < SEARCH_MIN_QUERY_LENGTH) { _memberSearchResults.value = emptyList(); return }
         memberSearchJob = viewModelScope.launch {
-            delay(350)
+            delay(SEARCH_DEBOUNCE_MS)
             _isMemberSearching.value = true
             _memberSearchResults.value = (apiClient.service.searchUsers(query) as? ApiResult.Success)?.data ?: emptyList()
             _isMemberSearching.value = false
         }
     }
 
+    // Sheet stays open on success so multiple members can be added in one visit — see
+    // MembersCard/AddMemberSheet's WhatsApp-style "add participants" flow in ManageProjectScreen.kt.
     fun addMember(user: User) {
         val username = user.username ?: return
         viewModelScope.launch {
             _isAddingMember.value = true
             val result = apiClient.service.addProjectMember(projectId, username)
             if (result is ApiResult.Success && result.data) {
+                repository.invalidateProjectMembers(projectId)
                 val loaded = _state.value as? ManageProjectState.Loaded
                 if (loaded != null && loaded.members.none { it.uniqueId == user.uniqueId }) {
                     _state.value = loaded.copy(members = loaded.members + user)
                 }
-                hideAddMemberSheet()
             }
             _isAddingMember.value = false
         }
@@ -223,6 +235,7 @@ class ManageProjectViewModel(
                     // Refresh members from the server rather than constructing a User locally —
                     // resolveUsers only carries partial fields, and the member list must reflect
                     // the server's actual post-approval membership state.
+                    repository.invalidateProjectMembers(projectId)
                     val members = (apiClient.service.getProjectUsers(projectId) as? ApiResult.Success)?.data
                         ?: loaded.members
                     _state.value = loaded.copy(joinRequests = updatedRequests, members = members)
@@ -240,6 +253,7 @@ class ManageProjectViewModel(
         viewModelScope.launch {
             val result = apiClient.service.removeProjectMember(projectId, orcid)
             if (result is ApiResult.Success && result.data) {
+                repository.invalidateProjectMembers(projectId)
                 val loaded = _state.value as? ManageProjectState.Loaded
                 if (loaded != null) {
                     _state.value = loaded.copy(members = loaded.members.filter { it.uniqueId != orcid })
@@ -247,6 +261,33 @@ class ManageProjectViewModel(
             }
         }
     }
+
+    // ── Leave project (any member, except the lead — must transfer leadership first) ────────
+
+    /**
+     * The project lead can't leave server-side (409) — the overflow menu item is disabled for
+     * the lead so this shouldn't normally be reachable, but the [isLead] check here is defense
+     * in depth against a stale UI state.
+     */
+    fun leaveProject(onLeft: () -> Unit) {
+        val orcid = currentUserOrcid ?: return
+        val loaded = _state.value as? ManageProjectState.Loaded ?: return
+        if (loaded.isLead) return
+        viewModelScope.launch {
+            when (val result = apiClient.service.removeProjectMember(projectId, orcid)) {
+                is ApiResult.Success -> if (result.data) {
+                    repository.invalidateProjects()
+                    repository.invalidateProjectMembers(projectId)
+                    onLeft()
+                } else {
+                    _leaveError.value = "Failed to leave project"
+                }
+                is ApiResult.Error -> _leaveError.value = "Failed to leave project (${result.code})"
+            }
+        }
+    }
+
+    fun dismissLeaveError() { _leaveError.value = null }
 
     private fun currentEditDraft(): ProjectEditState.Editing? = when (val s = _editState.value) {
         is ProjectEditState.Editing -> s

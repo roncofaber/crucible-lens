@@ -118,7 +118,7 @@ fun AddFilesScreen(
                         if (isUploading) {
                             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                         } else {
-                            Text("Done", style = MaterialTheme.typography.labelLarge)
+                            Text("Done")
                         }
                     }
                 }

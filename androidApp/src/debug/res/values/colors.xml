@@ -1,0 +1,7 @@
+<resources>
+    <!-- Debug-only override of app/src/androidMain/res/values/colors.xml's ic_launcher_background
+         (#A8C4CD) — a visibly different launcher icon color makes a debug install
+         distinguishable from a release install at a glance, on top of the "(Dev)" name suffix
+         in strings.xml. -->
+    <color name="ic_launcher_background">#FF6D00</color>
+</resources>

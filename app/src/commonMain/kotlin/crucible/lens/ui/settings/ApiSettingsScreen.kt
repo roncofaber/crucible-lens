@@ -101,7 +101,7 @@ fun ApiSettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Endpoints", style = MaterialTheme.typography.titleLarge)
+            Text("Endpoints", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             Text(
                 "Leave as default unless you're using a custom deployment.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -134,7 +134,7 @@ fun ApiSettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Connection", style = MaterialTheme.typography.titleSmall)
+                        Text("Connection", style = MaterialTheme.typography.labelMedium)
                         OutlinedButton(
                             onClick = { healthManualTrigger++ },
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
@@ -171,7 +171,7 @@ fun ApiSettingsScreen(
                                         s.dbMs?.let { "${it.toInt()} ms" },
                                         s.version?.let { "v$it" }
                                     ).joinToString(" · ")
-                                    if (details.isNotBlank()) Text(details, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (details.isNotBlank()) Text(details, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }

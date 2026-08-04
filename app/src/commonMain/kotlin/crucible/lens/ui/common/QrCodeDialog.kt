@@ -78,7 +78,7 @@ fun QrCodeDialog(mfid: String, name: String, onDismiss: () -> Unit) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     mfid,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -189,7 +189,7 @@ fun QrCodeDialogWithNavigation(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             resource.uniqueId,
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

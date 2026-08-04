@@ -16,7 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.Instrument
@@ -42,6 +41,7 @@ import crucible.lens.ui.common.hideWithUndo
 import crucible.lens.platform.showToast
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun InstrumentListScreen(
@@ -160,7 +160,7 @@ fun InstrumentListScreen(
                                     accentStyle = true
                                 )
                                 Box {
-                                    IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
+                                    IconButton(onClick = { sortMenuExpanded = true }) {
                                         AppIcon(AppIcons.Sort,
                                             modifier = Modifier.size(20.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -227,8 +227,7 @@ fun InstrumentListScreen(
                                             )
                                             Text(
                                                 if (searchQuery.isNotBlank()) "No matching instruments" else "No instruments",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold
+                                                style = MaterialTheme.typography.emphasizedTitleMedium
                                             )
                                         }
                                         Text(
@@ -353,7 +352,7 @@ private fun InstrumentCard(
         },
         supportingContent = if (!instrument.location.isNullOrBlank()) {
             {
-                Text(instrument.location, style = MaterialTheme.typography.labelSmall,
+                Text(instrument.location, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         } else null,

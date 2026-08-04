@@ -1,8 +1,6 @@
 package crucible.lens.ui.common
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,7 +72,7 @@ fun LazyItemScope.SwipeToHideItem(
     val dismissState = rememberSwipeToDismissBoxState()
     val iconScale by animateFloatAsState(
         targetValue = 0.75f + 0.5f * dismissState.progress,
-        animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMedium),
+        animationSpec = SpatialDefaultSpring,
         label = "swipeIconScale"
     )
     val alignment = if (direction == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd
@@ -86,9 +84,7 @@ fun LazyItemScope.SwipeToHideItem(
         enableDismissFromStartToEnd = direction == SwipeToDismissBoxValue.StartToEnd,
         enableDismissFromEndToStart = direction == SwipeToDismissBoxValue.EndToStart,
         onDismiss = { settledDirection -> if (settledDirection == direction) onDismiss() },
-        modifier = modifier.animateItem(
-            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-        ),
+        modifier = modifier.animateItem(EffectsSlowSpring),
         backgroundContent = {
             Box(
                 modifier = Modifier
@@ -105,7 +101,7 @@ fun LazyItemScope.SwipeToHideItem(
                     modifier = Modifier.scale(iconScale)
                 ) {
                     AppIcon(action.icon, tint = action.contentColor, modifier = Modifier.size(24.dp))
-                    Text(action.label, style = MaterialTheme.typography.labelSmall, color = action.contentColor)
+                    Text(action.label, style = MaterialTheme.typography.labelMedium, color = action.contentColor)
                 }
             }
         }

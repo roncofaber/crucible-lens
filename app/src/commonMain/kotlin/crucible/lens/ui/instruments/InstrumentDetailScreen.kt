@@ -1,65 +1,83 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
+
 package crucible.lens.ui.instruments
-import androidx.compose.material3.ExperimentalMaterial3Api
-import crucible.lens.platform.*
-import crucible.lens.ui.common.AppIcon
-import crucible.lens.ui.common.AppIcons
-import crucible.lens.ui.common.AppTopBar
-
-
-
-
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.*
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.api.ApiClient
-import crucible.lens.data.api.ApiResult
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.data.repository.CrucibleRepository
-import crucible.lens.data.model.Dataset
-import crucible.lens.data.model.Instrument
-import crucible.lens.data.util.dateGroupKey
 import crucible.lens.data.util.SortField
 import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
+import crucible.lens.data.util.dateGroupKey
 import crucible.lens.data.util.matchesSearch
-import org.koin.compose.koinInject
-import org.koin.compose.viewmodel.koinViewModel
+import crucible.lens.platform.copyToClipboard
+import crucible.lens.platform.getPlatformContext
+import crucible.lens.platform.shareText
+import crucible.lens.platform.showToast
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppScaffold
-import crucible.lens.ui.common.LoadState
+import crucible.lens.ui.common.CollapsingAppTopBar
 import crucible.lens.ui.common.CopyIdMenuItem
+import crucible.lens.ui.common.EmptyListCard
 import crucible.lens.ui.common.ErrorCard
+import crucible.lens.ui.common.GroupByOption
+import crucible.lens.ui.common.LazyColumnScrollbar
+import crucible.lens.ui.common.LoadState
 import crucible.lens.ui.common.LoadingItem
 import crucible.lens.ui.common.RefreshMenuItem
-import crucible.lens.ui.common.ShareMenuItem
-import crucible.lens.platform.showToast
-import crucible.lens.ui.common.LazyColumnScrollbar
+import crucible.lens.ui.common.ResourceControlsBar
+import crucible.lens.ui.common.ResourceRow
 import crucible.lens.ui.common.ScrollToTopButton
-import crucible.lens.ui.common.fadeEndEdge
+import crucible.lens.ui.common.SectionHeader
+import crucible.lens.ui.common.ShareMenuItem
+import crucible.lens.ui.common.stateMapSaver
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 
 private enum class InstrumentDatasetGroupBy(val label: String) {
     NONE("None"), MEASUREMENT("Measurement"), PROJECT("Project"), DATE("Date"),
     SESSION("Session"), FORMAT("Format"), OWNER("Owner")
 }
-
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -71,17 +89,20 @@ fun InstrumentDetailScreen(
     modifier: Modifier = Modifier,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
-    onSearch: () -> Unit = {},
-    onManageInstrument: () -> Unit = {}
+    onManageInstrument: () -> Unit = {},
+    graphExplorerUrl: String = ""
 ) {
     val viewModel: InstrumentDetailViewModel = koinViewModel()
     val repository = koinInject<CrucibleRepository>()
-    val instrument by viewModel.instrument.collectAsState()
-    val datasetsState by viewModel.datasetsState.collectAsState()
-    var searchQuery by remember { mutableStateOf("") }
+    val prefs = koinInject<AppPreferences>()
+    val instrument by viewModel.instrument.collectAsStateWithLifecycle()
+    val datasetsState by viewModel.datasetsState.collectAsStateWithLifecycle()
+    // Saveable, like ProjectDetailScreen's, so a typed filter survives opening a dataset and
+    // coming back — the same reason expandedGroups below is saveable.
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     var sortState by remember { mutableStateOf(SortState(SortField.DATE, false)) }
     var groupBy by remember { mutableStateOf(InstrumentDatasetGroupBy.MEASUREMENT) }
-    val expandedGroups = remember(groupBy) { mutableStateMapOf<String, Boolean>() }
+    val expandedGroups = rememberSaveable(groupBy, saver = stateMapSaver()) { mutableStateMapOf<String, Boolean>() }
 
     var overflowMenuExpanded by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -91,8 +112,7 @@ fun InstrumentDetailScreen(
 
     val datasets = (datasetsState as? LoadState.Success)?.data ?: emptyList()
     val filteredDatasets = remember(datasetsState, searchQuery, sortState) {
-        val list = datasets
-        val filtered = if (searchQuery.isBlank()) list else list.filter { it.matchesSearch(searchQuery) }
+        val filtered = if (searchQuery.isBlank()) datasets else datasets.filter { it.matchesSearch(searchQuery) }
         filtered.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { timestamp ?: creationTime ?: "" })
     }
 
@@ -113,16 +133,53 @@ fun InstrumentDetailScreen(
         }.entries.sortedBy { it.key.lowercase() }
     }
 
+    // Restore the persisted grouping on first composition, mirroring ProjectDetailScreen. valueOf
+    // is guarded because a stored name can outlive its enum entry across an app update.
+    LaunchedEffect(Unit) {
+        groupBy = runCatching { InstrumentDatasetGroupBy.valueOf(prefs.instrumentGroupBy.first()) }
+            .getOrDefault(InstrumentDatasetGroupBy.MEASUREMENT)
+    }
 
     LaunchedEffect(instrumentId) { viewModel.load(instrumentId) }
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
     AppScaffold(
+        modifier = modifier,
         topBar = {
-            AppTopBar(
-                title = "Instrument",
+            CollapsingAppTopBar(
+                name = instrument?.instrumentName ?: instrumentId,
+                icon = AppIcons.Instrument,
+                scrollBehavior = scrollBehavior,
                 onBack = onBack,
+                onTitleClick = onManageInstrument,
+                expandedContent = {
+                    val type = instrument?.instrumentType?.takeIf { it.isNotBlank() }
+                    val location = instrument?.location?.takeIf { it.isNotBlank() }
+                    if (type != null || location != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (type != null) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    AppIcon(AppIcons.Instrument, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(type, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            if (type != null && location != null) {
+                                Text("·", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (location != null) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    AppIcon(AppIcons.LocationAlt, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(location, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                },
                 actions = {
-                    IconButton(onClick = onSearch) { AppIcon(AppIcons.Search) }
+                    IconButton(onClick = onTogglePin) {
+                        AppIcon(AppIcons.Pinned, filled = isPinned, tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current)
+                    }
                     IconButton(onClick = onHome) { AppIcon(AppIcons.Home) }
                     Box {
                         IconButton(onClick = { overflowMenuExpanded = true }) { AppIcon(AppIcons.MoreVert) }
@@ -144,7 +201,11 @@ fun InstrumentDetailScreen(
                                     onClick = { overflowMenuExpanded = false; onManageInstrument() }
                                 )
                                 HorizontalDivider()
-                                RefreshMenuItem { overflowMenuExpanded = false; repository.invalidateInstruments(); viewModel.load(instrumentId, forceRefresh = true) }
+                                RefreshMenuItem {
+                                    overflowMenuExpanded = false
+                                    repository.invalidateInstruments()
+                                    viewModel.load(instrumentId, forceRefresh = true)
+                                }
                             }
                         }
                     }
@@ -155,277 +216,123 @@ fun InstrumentDetailScreen(
         PullToRefreshBox(
             isRefreshing = datasetsState.isRefreshingNow,
             onRefresh = { viewModel.load(instrumentId, forceRefresh = true) },
-            modifier = modifier.fillMaxSize().padding(padding)
+            modifier = Modifier.fillMaxSize().padding(padding)
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    item(key = "instrument_identity") {
-                        instrument?.let { instr ->
-                            InstrumentIdentityHeader(
-                                instrument = instr,
-                                isPinned = isPinned,
-                                onTogglePin = onTogglePin,
-                                onManageInstrument = onManageInstrument
-                            )
-                        }
-                    }
+            // Name, pin, and type/location live in the collapsing top bar (see CollapsingAppTopBar
+            // above) — nothing left to show above the list itself.
+            // nestedScroll attached here, inside PullToRefreshBox's content rather than on its own
+            // modifier, so it's closer to the list than PullToRefreshBox's own connection and gets
+            // first refusal on a downward drag before that connection starts a refresh gesture.
+            Box(modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                     stickyHeader(key = "instrument_controls") {
-                        InstrumentControlsBar(
+                        ResourceControlsBar(
                             searchQuery = searchQuery,
                             onSearchChange = { searchQuery = it },
+                            searchPlaceholder = "Search datasets…",
+                            groupOptions = InstrumentDatasetGroupBy.entries.map { opt ->
+                                GroupByOption(opt.label, opt == groupBy) {
+                                    groupBy = opt
+                                    scope.launch { prefs.saveInstrumentGroupBy(opt.name) }
+                                    showToast(platformCtx, "Grouped by ${opt.label}")
+                                }
+                            },
                             sortState = sortState,
-                            onSortStateChange = { sortState = it; showToast(platformCtx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
-                            groupBy = groupBy,
-                            onGroupByChange = { groupBy = it; showToast(platformCtx, "Grouped by ${it.label}") }
+                            onSortStateChange = {
+                                sortState = it
+                                showToast(platformCtx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}")
+                            }
                         )
                     }
 
-                // ── States ────────────────────────────────────────────────────
-                when (val state = datasetsState) {
-                    is LoadState.Loading -> item(key = "loading") {
-                        LoadingItem(label = "Loading datasets…")
-                    }
-                    is LoadState.Error -> item(key = "error") {
-                        ErrorCard(
-                            title = "Error Loading Datasets",
-                            message = state.message,
-                            modifier = Modifier.padding(16.dp),
-                            onRetry = { viewModel.load(instrumentId, forceRefresh = true) }
-                        )
-                    }
-                    is LoadState.Success -> if (filteredDatasets.isEmpty()) item(key = "empty") {
-                        Card(modifier = Modifier.fillMaxWidth().padding(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    AppIcon(if (searchQuery.isNotBlank()) AppIcons.SearchOff else AppIcons.Dataset, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(if (searchQuery.isNotBlank()) "No matching datasets" else "No datasets", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    when (val state = datasetsState) {
+                        is LoadState.Loading -> item(key = "loading") {
+                            LoadingItem(label = "Loading datasets…")
+                        }
+
+                        is LoadState.Error -> item(key = "error") {
+                            ErrorCard(
+                                title = "Error Loading Datasets",
+                                message = state.message,
+                                modifier = Modifier.padding(16.dp),
+                                onRetry = { viewModel.load(instrumentId, forceRefresh = true) }
+                            )
+                        }
+
+                        is LoadState.Success -> {
+                            if (filteredDatasets.isEmpty()) {
+                                item(key = "empty") {
+                                    EmptyListCard(
+                                        resourceName = "Datasets",
+                                        defaultIcon = AppIcons.Dataset,
+                                        isFiltered = searchQuery.isNotBlank(),
+                                        emptyMessage = "No datasets found for this instrument.",
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
                                 }
-                                Text(if (searchQuery.isNotBlank()) "No datasets match your filter." else "No datasets found for this instrument.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                    else {
-                        if (groupBy == InstrumentDatasetGroupBy.NONE) {
-                            // Flat list — no group headers
-                            items(filteredDatasets, key = { it.uniqueId }) { dataset ->
-                                    DatasetCard(dataset = dataset, onClick = { onDatasetClick(dataset.uniqueId) })
-                                HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
-                            }
-                        } else {
-                        groupedDatasets.forEach { (groupKey, datasetsInGroup) ->
-                            val expanded = expandedGroups[groupKey] == true
-                            stickyHeader(key = "header_$groupKey") {
-                                GroupStickyHeader(
-                                    title = groupKey,
-                                    count = datasetsInGroup.size,
-                                    expanded = expanded,
-                                    onToggle = { expandedGroups[groupKey] = !expanded }
-                                )
-                            }
-                            if (expanded) {
-                                items(datasetsInGroup, key = { it.uniqueId }) { dataset ->
-                                        DatasetCard(dataset = dataset, onClick = { onDatasetClick(dataset.uniqueId) })
-                                    HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
+                            } else if (groupBy == InstrumentDatasetGroupBy.NONE) {
+                                items(filteredDatasets, key = { it.uniqueId }) { dataset ->
+                                    ResourceRow(
+                                        title = dataset.name,
+                                        subtitle = dataset.projectId ?: "No project",
+                                        uniqueId = dataset.uniqueId,
+                                        subtitleMonospace = false,
+                                        graphExplorerUrl = graphExplorerUrl,
+                                        projectId = dataset.projectId,
+                                        resourceType = "dataset",
+                                        onClick = { onDatasetClick(dataset.uniqueId) }
+                                    )
+                                }
+                            } else {
+                                groupedDatasets.forEach { (groupKey, datasetsInGroup) ->
+                                    val expanded = expandedGroups[groupKey] == true
+                                    stickyHeader(key = "header_$groupKey") {
+                                        SectionHeader(
+                                            title = groupKey,
+                                            count = datasetsInGroup.size,
+                                            icon = AppIcons.Dataset,
+                                            expanded = expanded,
+                                            onToggle = { expandedGroups[groupKey] = !expanded }
+                                        )
+                                    }
+                                    if (expanded) {
+                                        items(datasetsInGroup, key = { it.uniqueId }) { dataset ->
+                                            ResourceRow(
+                                                title = dataset.name,
+                                                subtitle = dataset.projectId ?: "No project",
+                                                uniqueId = dataset.uniqueId,
+                                                subtitleMonospace = false,
+                                                graphExplorerUrl = graphExplorerUrl,
+                                                projectId = dataset.projectId,
+                                                resourceType = "dataset",
+                                                onClick = { onDatasetClick(dataset.uniqueId) }
+                                            )
+                                        }
+                                    }
                                 }
                             }
-                        }
-                        }
-                        if ((datasetsState as? LoadState.Success)?.fromCache == true) {
-                            item(key = "cache_age") {
-                                Text(
-                                    text = "Loaded from cache",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                    textAlign = TextAlign.Center
-                                )
+
+                            if (state.fromCache) {
+                                item(key = "cache_age") {
+                                    Text(
+                                        text = "Loaded from cache",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
                 LazyColumnScrollbar(listState = listState, modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd))
-                ScrollToTopButton(visible = showScrollToTop, onClick = { scope.launch { listState.animateScrollToItem(0) } }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp))
-            }
-        }
-    }
-
-}
-
-@Composable
-private fun GroupStickyHeader(title: String, count: Int, expanded: Boolean, onToggle: () -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                AppIcon(AppIcons.Dataset, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), shape = MaterialTheme.shapes.small) {
-                    Text(text = "$count", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                }
-            }
-            AppIcon(if (expanded) AppIcons.ExpandLess else AppIcons.ExpandMore, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-    }
-}
-
-@Composable
-private fun InstrumentIdentityHeader(
-    instrument: Instrument,
-    isPinned: Boolean = false,
-    onTogglePin: () -> Unit = {},
-    onManageInstrument: () -> Unit = {}
-) {
-    Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            // Name (tap -> Manage Instrument) + pin
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.weight(1f).clickable { onManageInstrument() }
-                ) {
-                    AppIcon(AppIcons.Instrument, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
-                    val nameScrollState = rememberScrollState()
-                    Box(modifier = Modifier.weight(1f).fadeEndEdge(nameScrollState.canScrollForward)) {
-                        Text(text = instrument.instrumentName ?: instrument.uniqueId, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.horizontalScroll(nameScrollState))
-                    }
-                }
-                IconButton(onClick = onTogglePin, modifier = Modifier.size(32.dp)) {
-                    AppIcon(AppIcons.Pinned, filled = isPinned, tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current, modifier = Modifier.size(20.dp))
-                }
-            }
-
-            // Type + location
-            val type = instrument.instrumentType?.takeIf { it.isNotBlank() }
-            val location = instrument.location?.takeIf { it.isNotBlank() }
-            if (type != null || location != null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (type != null) Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        AppIcon(AppIcons.Instrument, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(type, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    if (location != null) Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        AppIcon(AppIcons.LocationAlt, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(location, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
+                ScrollToTopButton(
+                    visible = showScrollToTop,
+                    onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                )
             }
         }
     }
 }
-
-@Composable
-private fun InstrumentControlsBar(
-    searchQuery: String = "",
-    onSearchChange: (String) -> Unit = {},
-    sortState: SortState = SortState(),
-    onSortStateChange: (SortState) -> Unit = {},
-    groupBy: InstrumentDatasetGroupBy = InstrumentDatasetGroupBy.MEASUREMENT,
-    onGroupByChange: (InstrumentDatasetGroupBy) -> Unit = {}
-) {
-    var groupMenuExpanded by remember { mutableStateOf(false) }
-    var sortMenuExpanded by remember { mutableStateOf(false) }
-
-    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), shape = MaterialTheme.shapes.medium, modifier = Modifier.weight(1f)) {
-                Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppIcon(AppIcons.Search, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                    Box(modifier = Modifier.weight(1f)) {
-                        if (searchQuery.isEmpty()) Text("Search datasets…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                        BasicTextField(value = searchQuery, onValueChange = onSearchChange, modifier = Modifier.fillMaxWidth(), textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface), cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), singleLine = true)
-                    }
-                    if (searchQuery.isNotEmpty()) AppIcon(AppIcons.ClearInput, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp).clickable { onSearchChange("") })
-                }
-            }
-            // Group-by button
-            Box {
-                IconButton(onClick = { groupMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
-                    AppIcon(AppIcons.GroupBy, modifier = Modifier.size(20.dp))
-                }
-                DropdownMenu(expanded = groupMenuExpanded, onDismissRequest = { groupMenuExpanded = false }) {
-                    DropdownMenuItem(text = { Text("Group by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) }, onClick = {}, enabled = false, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp))
-                    InstrumentDatasetGroupBy.entries.forEach { opt ->
-                        DropdownMenuItem(
-                            text = {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    if (opt == groupBy) AppIcon(AppIcons.SelectionDot, modifier = Modifier.size(6.dp))
-                                    else Spacer(modifier = Modifier.size(6.dp))
-                                    Text(opt.label)
-                                }
-                            },
-                            onClick = { onGroupByChange(opt); groupMenuExpanded = false },
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-            }
-            // Sort button
-            Box {
-                IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
-                    AppIcon(AppIcons.Sort, modifier = Modifier.size(20.dp))
-                }
-                DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
-                    DropdownMenuItem(text = { Text("Sort by", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) }, onClick = {}, enabled = false, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp))
-                    SortField.entries.forEach { field ->
-                        DropdownMenuItem(
-                            text = {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    if (sortState.field == field) AppIcon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource, modifier = Modifier.size(14.dp))
-                                    else Spacer(modifier = Modifier.size(14.dp))
-                                    Text(field.label)
-                                }
-                            },
-                            onClick = {
-                                onSortStateChange(if (sortState.field == field) sortState.copy(ascending = !sortState.ascending) else SortState(field, true))
-                            },
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun DatasetCard(dataset: Dataset, onClick: () -> Unit) {
-    val platformCtx = getPlatformContext()
-    var menuExpanded by remember { mutableStateOf(false) }
-    val subtitle = listOfNotNull(dataset.projectId, dataset.sessionName).joinToString(" · ")
-    Box {
-        ListItem(
-            headlineContent = {
-                Text(dataset.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            },
-            supportingContent = if (subtitle.isNotBlank()) {
-                { Text(subtitle, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            } else null,
-            leadingContent = { AppIcon(AppIcons.Dataset, tint = MaterialTheme.colorScheme.primary) },
-            trailingContent = { AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)) },
-            modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = { menuExpanded = true })
-        )
-        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Copy ID") },
-                leadingIcon = { AppIcon(AppIcons.CopyToClipboard) },
-                onClick = {
-                    menuExpanded = false
-                    copyToClipboard(platformCtx, dataset.uniqueId)
-                }
-            )
-        }
-    }
-}
-

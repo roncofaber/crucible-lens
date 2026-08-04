@@ -23,7 +23,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.ui.common.SearchBar
@@ -50,6 +49,7 @@ import crucible.lens.ui.common.ScrollToTopButton
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -218,7 +218,7 @@ fun ProjectsListScreen(
                                     accentStyle = true
                                 )
                                 Box {
-                                    IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
+                                    IconButton(onClick = { sortMenuExpanded = true }) {
                                         AppIcon(AppIcons.Sort,
                                             modifier = Modifier.size(20.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -285,8 +285,7 @@ fun ProjectsListScreen(
                                             )
                                             Text(
                                                 text = "No Projects Found",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold
+                                                style = MaterialTheme.typography.emphasizedTitleMedium
                                             )
                                         }
                                         Text(
@@ -353,8 +352,7 @@ fun ProjectsListScreen(
                                                     )
                                                     Text(
                                                         text = "No Results Found",
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        fontWeight = FontWeight.Bold
+                                                        style = MaterialTheme.typography.emphasizedTitleMedium
                                                     )
                                                 }
                                                 Text(
@@ -494,7 +492,7 @@ private fun ProjectCard(
             {
                 Text(
                     text = "ID: ${project.projectId}",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -563,7 +561,7 @@ private fun CountChip(
             } else {
                 Text(
                     text = count?.toString() ?: "?",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
