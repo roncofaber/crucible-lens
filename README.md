@@ -39,7 +39,7 @@ Crucible Lens is distributed as an APK (not on the Play Store).
 ### For developers
 
 1. Clone the repository
-2. Open in Android Studio (Hedgehog 2023.1.1 or newer)
+2. Open in Android Studio with support for AGP 9.x (see `gradle/libs.versions.toml` for the exact toolchain versions)
 3. Let Gradle sync complete
 4. Build the installable app with `:androidApp:assembleDebug` (see `CLAUDE.md` for exact commands)
 5. Run on a device or emulator (API 26+)

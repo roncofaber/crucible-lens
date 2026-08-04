@@ -1,9 +1,16 @@
 # Platform Parity: Android vs iOS
 
 Branch: `main`
-Last updated: 2026-07-27
 
-This document captures where Android and iOS implementations differ, what is fully shared, and what remains incomplete on iOS. It also covers the local iOS build/test setup, since the two are closely related.
+## Contents
+
+- [Architecture overview](#architecture-overview)
+- [What is fully shared (commonMain)](#what-is-fully-shared-commonmain)
+- [Platform differences](#platform-differences)
+- [Known gaps on iOS](#known-gaps-on-ios)
+- [UI consistency audit](#ui-consistency-audit)
+- [Building for iOS](#building-for-ios)
+- [Files that differ between platforms](#files-that-differ-between-platforms)
 
 ---
 

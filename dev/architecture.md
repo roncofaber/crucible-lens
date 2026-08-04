@@ -1,7 +1,24 @@
 # Architecture Notes
 
 Branch: `main`
-Last updated: 2026-07-27
+
+## Contents
+
+- [Stack](#stack)
+- [Source set layout](#source-set-layout)
+- [Data models](#data-models-datamodelcrucibleresourcekt)
+- [API](#api-dataapi)
+- [Caching layers](#caching-layers)
+- [ViewModels](#viewmodels)
+- [Pull-to-refresh pattern](#pull-to-refresh-pattern)
+- [Navigation](#navigation-navgraphkt)
+- [ResourceDetailScreen pager](#resourcedetailscreen-pager)
+- [iOS entry point](#ios-entry-point)
+- [Shared utilities](#shared-utilities-datautil)
+- [Preferences](#preferences-datapreferencesapppreferenceskt)
+- [Dependency injection (Koin)](#dependency-injection-koin)
+- [Common gotchas](#common-gotchas)
+- [Known gaps](#known-gaps)
 
 ---
 
@@ -44,6 +61,11 @@ Migrated from `com.android.library` + `src/main/` to `com.android.kotlin.multipl
 `src/androidMain/` — there is no `src/main/` anymore. See "Things that have bitten us before" in
 `CLAUDE.md` for details.
 
+`ProjectDetailScreen` is a layout + state container; the sample and dataset list rendering logic
+(grouping, sorting, pagination) lives in `ProjectResourceLists.kt` — `SamplesList`, `DatasetsList`,
+and the shared `groupedResourceItems` function. This separation keeps list complexity out of the
+screen composable and makes the shared patterns reusable.
+
 ### Package layout (commonMain)
 
 ```
@@ -56,23 +78,29 @@ crucible.lens
 │   ├── preferences/  AppPreferences interface, PreferencesFactory (expect/actual)
 │   ├── repository/   CrucibleRepository — single point of contact for resource/project/instrument fetches
 │   ├── sync/         DataSyncManager — background cache preload via CrucibleRepository
-│   └── util/         SearchExtensions, DateTimeUtils, SortUtils, FormatUtils, CryptoUtils, DuplicateHolder
+│   └── util/         SearchExtensions, DateTimeUtils, SortUtils, FormatUtils, CryptoUtils,
+│                     DuplicateHolder, SearchPickerConstants
 ├── di/               AppModule (Koin module), KoinInit (initKoin())
 └── ui
-    ├── common/       QrCodeDialog, AppTopBar, AppIcons, LazyColumnScrollbar, …
+    ├── common/       LoadState, AppTopBar (+ CollapsingAppTopBar), AppIcons, AppAnimations,
+    │                 ResourceCard, ResourceListComponents (ResourceRow, ListRowDividerInset,
+    │                 ResourceControlsBar, EmptyListCard), SectionHeader, SearchPicker,
+    │                 SwipeToHideItem, NotificationDot, UserComponents, MetadataEditor,
+    │                 SaveableStateMap, QrCodeDialog, LazyColumnScrollbar, …
     ├── create/       CreateSampleScreen, CreateDatasetScreen, CreateEditViewModels, AddFilesScreen
-    ├── detail/       ResourceDetailScreen, ResourceDetailViewModel, EditResourceSheet, LinkResourceSheet
+    ├── detail/       ResourceDetailScreen, ResourceDetailViewModel, EditResourceScreen, LinkResourceSheet
     ├── history/      HistoryScreen
-    ├── home/         HomeScreen
+    ├── home/         HomeScreen, HomeViewModel
     ├── instruments/  InstrumentListScreen/ViewModel, InstrumentDetailScreen/ViewModel, ManageInstrumentScreen/ViewModel
     ├── metadata/     MetadataEditorScreen, MetadataHolder
     ├── navigation/   NavGraph, Screen sealed class
-    ├── projects/     ProjectsListScreen/ViewModel, ProjectDetailScreen/ViewModel, ManageProjectScreen/ViewModel
+    ├── projects/     ProjectsListScreen/ViewModel, ProjectDetailScreen/ViewModel, ManageProjectScreen/ViewModel,
+    │                 ProjectResourceLists (SamplesList, DatasetsList, groupedResourceItems)
     ├── scanner/      QRScannerPlatform (QRCodeScannerView via easyqrscan)
     ├── search/       SearchScreen
     ├── settings/     SettingsScreen, ApiSettingsScreen, AppearanceSettingsScreen, CacheSettingsScreen,
     │                 AboutSettingsScreen, AccountScreen/ViewModel, UserProfileScreen, OrcidLoginScreen
-    └── theme/        CrucibleScannerTheme, Typography
+    └── theme/        Theme.kt (CrucibleScannerTheme), Type.kt (Typography), Shape.kt (Shapes)
 ```
 
 ---
@@ -89,6 +117,11 @@ All JSON models use `@Serializable` + `@SerialName("snake_case")` (kotlinx.seria
 - `ResourceLink` — `{unique_id, resource_type, name?, relationship}` where `relationship`
   is `"parent" | "child" | "associated"` (matches API's Literal type)
 - `Instrument`, `Project`, `UserLead`, `AccountResponse`, `MetadataSearchResult`
+- `ResourceSearchResult` — the unified row type both search modes produce. Its `projectId` is
+  **not** returned by `/resources/metadata/search`; it's populated client-side in name-search mode,
+  where `searchSamples`/`searchDatasets` already return full `Sample`/`Dataset` objects carrying it.
+  So metadata-mode results have a null `projectId` and the row falls back to showing the mfid —
+  an asymmetry to preserve rather than paper over with per-result lookups.
 - Request DTOs: `SampleCreateRequest`, `DatasetCreateRequest`, `ThumbnailCreateRequest`,
   `SampleUpdateRequest`, `DatasetUpdateRequest`
 
@@ -112,7 +145,9 @@ sealed class ApiResult<out T> {
 Key endpoints:
 - `GET /samples/{uuid}?include_links=true` — full sample with relationships
 - `GET /datasets/{uuid}?include_links=true&include_metadata=true` — dataset + scientific metadata inline
-- `GET /projects`, `GET /projects/{id}/users`
+- `GET/POST/PATCH /resources/{unique_id}/metadata` — generic across sample/dataset/instrument, require write access (not just read); all return `{unique_id, scientific_metadata}`, unwrapped to a bare `JsonObject` by `CrucibleApiService`. `POST` creates/replaces (409 if non-empty metadata already exists, unless `?overwrite=true`); `PATCH` shallow-merges `{**existing, **updates}` — new keys added, existing keys overwritten, nested dict values replaced wholesale (not deep-merged), and never 409s. See `CLAUDE.md`'s API rules for how the app decides POST vs PATCH on edit.
+- `GET /projects`, `GET /projects/{id}/users` — `GET /projects` (unlike `/projects/search`, below) only ever returns projects the caller is a member of
+- `DELETE /projects/{id}/users/{orcid}` — admin, the project lead, or the member themselves (self-removal); the lead cannot remove themselves (409) — must transfer leadership first (`PATCH /projects/{id}` with a new `project_lead_username`)
 - `GET /projects/search`, `GET /projects/{id}` — readable by any authenticated user, not just members. `lead` is full `UserRead` (with email) and `scientific_metadata` populated only for members/admins; non-members get `lead` as `UserPublicRead` (no email) and `scientific_metadata` always null, regardless of `?include_metadata=`. This is what makes discover-search (`SearchScreen`'s "Discover" chip) and the non-member view in `ProjectDetailScreen` possible.
 - `GET /instruments`, `GET /instruments/{id}`
 - `GET /datasets?instrument_name=X&limit=N` — datasets by instrument
@@ -144,6 +179,10 @@ CrucibleRepository
   ├── projectsObservableCache    ObservableCache<Unit, List<Project>>       — member projects list
   ├── projectObservableCache     ObservableCache<projectId, Project>        — per-project, incl. non-member
   │                                                                          projects reached via discover-search
+  ├── projectMembersObservableCache ObservableCache<projectId, List<User>>  — fetched alongside the
+  │                                  project itself (ProjectDetailScreen's load effect); shared by the
+  │                                  collapsing header's member count and rememberOwnerNames's owner-groupby
+  │                                  resolution, so GET /projects/{id}/users only ever runs once per project
   ├── instrumentsObservableCache ObservableCache<Unit, List<Instrument>>
   ├── instrumentDatasetsObservableCache ObservableCache<instrumentName, List<Dataset>>
   ├── projectSamplesObservableCache   ObservableCache<projectId, List<Sample>>
@@ -153,9 +192,11 @@ CrucibleRepository
   └── datasetFilesObservableCache ObservableCache<datasetUuid, List<AssociatedFile>>
 
 PersistentProjectCache  (disk, 24h TTL)   — project summary lists only, needs a PlatformContext so it
-                                             stays outside CrucibleRepository; HomeScreen reads it on
+                                             stays outside CrucibleRepository; HomeViewModel reads it on
                                              cold start and calls repository.seedProjects() to warm the
-                                             in-memory cache from it
+                                             in-memory cache from it (HomeScreen supplies the
+                                             PlatformContext, obtained via the @Composable-only
+                                             getPlatformContext(), since the ViewModel itself can't call it)
 ```
 
 `CrucibleRepository.fetchFileUrl(mfid)` — the one exception to "cache everything": signed download URLs are deliberately **not** cached and always fetched fresh. It's only ever called on-demand from a share/download tap, never from a background preload, so there's no repeated-read case a cache would help with — and reusing a stale-but-not-yet-expired signed URL has no upside over asking again.
@@ -172,32 +213,45 @@ Every list/detail/manage/create screen has its own `ViewModel` (commonMain, plat
 constructor-injected via Koin (see "Dependency injection (Koin)" below): `ResourceDetailViewModel`,
 `ProjectsListViewModel`, `ProjectDetailViewModel`, `ManageProjectViewModel`, `InstrumentListViewModel`,
 `InstrumentDetailViewModel`, `ManageInstrumentViewModel`, `AccountViewModel`, `CreateSampleViewModel`,
-`CreateDatasetViewModel`, `EditResourceViewModel`.
+`CreateDatasetViewModel`, `EditResourceViewModel`, `HomeViewModel`.
 
-`ResourceDetailViewModel` is the most involved — it drives the resource detail pager:
-- `uiState: StateFlow<UiState>` — `Idle | Loading | Success(resource, thumbnails, isRefreshing) | Error`
+Most ViewModels expose a single `StateFlow<LoadState<T>>` (`ui/common/LoadState.kt`) rather than
+separate loading/error/data/refreshing flags — see `CLAUDE.md`'s "Key architecture decisions".
+`HomeViewModel` predates that convention's application to this screen and instead exposes three
+separate flows (`projects`, `fetchError`, `isPreloading`) plus a background `preload()` step with
+its own failure-tolerant batching (stops after 5 consecutive project fetch failures) — this mirrors
+the screen's three genuinely independent concerns (the project list itself, a foreground fetch
+error, and a background prefetch that fails silently by design) rather than forcing them into one
+`LoadState`.
+
+`ResourceDetailViewModel` is the exception and the most involved — it drives the resource detail pager:
+- `uiState: StateFlow<UiState>` — `Idle | Loading | Success(uuid, isRefreshing) | Error(message)`.
+  Note `Success` carries **only the uuid**, not the resource or its thumbnails: the screen and every
+  pager page read those from `CrucibleRepository.observeResource(uuid)`/`.observeThumbnails(uuid)`
+  directly, so there is no second copy of resource state to keep in sync.
 - `isSyncing: StateFlow<Boolean>` — true while `DataSyncManager.syncAll()` is running (drives home screen spinner)
 - `fetchResource(uuid)` — shows cached version immediately, always fetches fresh for full detail
-- `refreshResource(uuid)` — evict cache, refetch; if UUID matches current resource → full refresh; if sibling → fetch+cache without changing `_uiState.resource`
-- `getCardState` / `setCardState` — persists expand/collapse state across pager pages
+- `refreshResource(uuid)` / `refreshThumbnails(uuid)` — force-refresh through the repository; observers pick up the fresh value
+- `getCardState` / `setCardState` — persists expand/collapse state across pager pages (LRU-capped at `MAX_CARD_STATE_ENTRIES`)
 - `startBackgroundSync()` / sync is paused during user-initiated refresh and resumed after
-- `preloadRelatedResources(resource)` — background prefetch of linked resource UUIDs
+- `reset()` — clears state when leaving the detail screen
 
 ---
 
 ## Pull-to-refresh pattern
 
-All screens use `PullToRefreshBox` (M3) with a **dedicated refresh flag** separate from the initial-load flag:
+All screens use `PullToRefreshBox` (M3). Screens with a `LoadState`-based ViewModel read the
+refresh flag straight off the state — `LoadState<T>.isRefreshingNow` (`this is Success &&
+isRefreshing`) — rather than keeping a separate screen-local flag; `ProjectsListScreen`,
+`InstrumentListScreen`, `ProjectDetailScreen`, and `InstrumentDetailScreen` all do this.
 
-| Screen | PTR flag | Initial-load flag |
-|---|---|---|
-| ProjectsListScreen | `isUserRefreshing` | `isLoading` |
-| InstrumentListScreen | `isUserRefreshing` | `isLoading` |
-| ProjectDetailScreen | `isRefreshingNow` | `isLoading` |
-| InstrumentDetailScreen | `isRefreshingNow` | `isLoading` |
-| ResourceDetailScreen | `localRefreshState` (via `isRefreshing` from ViewModel) | ViewModel `UiState.Loading` |
+`ResourceDetailScreen` is the one screen with an extra local flag, `localRefreshState`: pulling
+to refresh on a *sibling* page fetches that sibling inline through the repository without
+involving the ViewModel (whose `isRefreshing` tracks only the navigated-to resource), so the
+spinner for that case needs its own flag.
 
-The PTR flag is set to `true` synchronously before the coroutine launches (`if (forceRefresh) flag = true`) and cleared in the coroutine's `finally` block. This ensures the spinner appears immediately on pull and disappears cleanly when done.
+In both cases the flag is set `true` before the coroutine's work and cleared in a `finally`
+block, so the spinner appears immediately on pull and always clears — including on error.
 
 Content does **not** move during pull-to-refresh — the M3 `PullToRefreshBox` indicator overlays the content. This matches the standard Material 3 and iOS `UIRefreshControl` behavior.
 
@@ -208,10 +262,10 @@ Content does **not** move during pull-to-refresh — the M3 `PullToRefreshBox` i
 `Screen` sealed class with `route` strings. Optional args use query params `?argName={argName}`.  
 Special characters in route segments encoded via `encodeRouteSegment()`.
 
-All 23 routes (see `Screen.kt` for the exact list): `Home`, `Scanner`, `Detail`, `History`, `Search`,
-`Projects`, `ProjectDetail`, `ManageProject`, `Instruments`, `InstrumentDetail`, `ManageInstrument`,
-`Settings`, `SettingsApi`, `SettingsAppearance`, `SettingsCache`, `SettingsAbout`, `SettingsAccount`,
-`OrcidLogin`, `CreateSample`, `CreateDataset`, `AddFiles`, `MetadataEditor`, `UserProfile`
+All 24 routes (see `Screen.kt` for the exact list): `Home`, `Scanner`, `Detail`, `EditResource`,
+`History`, `Search`, `Projects`, `ProjectDetail`, `ManageProject`, `Instruments`, `InstrumentDetail`,
+`ManageInstrument`, `Settings`, `SettingsApi`, `SettingsAppearance`, `SettingsCache`, `SettingsAbout`,
+`SettingsAccount`, `OrcidLogin`, `CreateSample`, `CreateDataset`, `AddFiles`, `MetadataEditor`, `UserProfile`
 
 ---
 
@@ -219,13 +273,11 @@ All 23 routes (see `Screen.kt` for the exact list): `Home`, `Scanner`, `Detail`,
 
 Siblings are all samples (or datasets) of the same type within the same project, drawn from the project cache (`sameTypeSamples` / `sameTypeDatasets` params).
 
-- `pageCount = siblingList.size`, `initialPage = siblingIndex` — pager opens at the correct position immediately, no post-composition scroll
-- Lazy enrichment: fetches full resource data (with links) for ±10 pages around the current page; thumbnails for ±2 pages
-- Eviction: resources beyond ±20 pages removed from local maps; thumbnails beyond ±3
-- Primary resource is eagerly seeded into `loadedResources` / `enrichedUuids` on first composition so its page never shows a loading state
-- Swiping is a pure UI gesture — the ViewModel is not updated; `resource` in `UiState.Success` always stays as the navigated-to resource
-- Pull-to-refresh on a sibling fetches and caches that sibling without changing the primary `UiState.resource`; `siblingReloadTrigger` increments after completion to pick up fresh data
-- Per-page loading/content visibility is driven by `enrichedUuids` and `failedEnrichmentUuids` (not by `mfid` comparisons)
+- `pageCount = siblingList.size`, `initialPage = siblingIndex` — pager opens at the correct position immediately (a `LaunchedEffect` scroll only covers the cold-start case where the sibling list wasn't resolved yet). It is a plain bounded pager: no virtual `Int.MAX_VALUE` page count, no wrap-around.
+- **No manual preload or eviction windows.** Each page is `key(pageUuid)`'d and self-contained: it observes `repository.observeResource(pageUuid)`/`.observeThumbnails(pageUuid)` and kicks off its own `LaunchedEffect(pageUuid) { repository.fetchResourceByUuid(pageUuid) }`. `HorizontalPager` decides which pages exist; `ObservableCache`'s TTL + LRU decides what's evicted. There are no `loadedResources`/`enrichedUuids`/`failedEnrichmentUuids` maps and no ±N distance math — earlier versions had all of that and it was the source of several stale/flashing-content bugs.
+- A page renders its lightweight sibling-list stub immediately and swaps in the enriched resource in place once the fetch lands, so there is no per-page spinner or content flash. Only the page-local `enrichmentFailed` flag distinguishes a failed enrichment.
+- Swiping is a pure UI gesture — the ViewModel is not updated; `UiState.Success.uuid` always stays the navigated-to resource.
+- Pull-to-refresh on a sibling calls `fetchResourceByUuid(uuid, forceRefresh = true)` (not invalidate-then-fetch, so observers keep seeing the existing value until the fresh one lands) and that page's own observer picks it up — no reload-trigger counter.
 
 ---
 
@@ -254,6 +306,31 @@ See `dev/platform-parity.md` for Xcode project setup instructions.
 `fetchProjectData(projectId)` (parallel sample+dataset fetch with a per-project mutex) used to live in
 a standalone `ProjectFetcher.kt`; it is now a method on `CrucibleRepository` — see
 "Dependency injection (Koin)" below.
+
+---
+
+## Preferences (`data/preferences/AppPreferences.kt`)
+
+All app configuration is persisted in `AppPreferences` — a platform-agnostic interface with concrete implementations on Android (DataStore) and iOS (NSUserDefaults via multiplatform-settings). Key preferences:
+
+| Preference | Type | Key | Notes |
+|---|---|---|---|
+| API key | `StateFlow<String?>` | `api_key` | |
+| API base URL | `StateFlow<String>` | `api_base_url` | Defaults to `https://crucible.lbl.gov/api/v2/` |
+| Graph Explorer URL | `StateFlow<String>` | `graph_explorer_url` | Defaults to `https://crucible.lbl.gov/explore/` |
+| Theme mode | `StateFlow<String>` | `theme_mode` | `system` / `light` / `dark` |
+| Accent colour | `StateFlow<String>` | `accent_color` | Named palette (blue, purple, green, etc.) or custom hex |
+| Dynamic colour | `StateFlow<Boolean>` | `use_dynamic_color` | Android 12+ only; forced false on iOS |
+| Last visited resource | `StateFlow<String?>` | `last_visited_resource` / `last_visited_resource_name` | |
+| Floating scan button | `StateFlow<Boolean>` | `floating_scan_button` | |
+| Pinned/hidden projects & instruments | `StateFlow<Set<String>>` | `pinned_projects` / `hidden_projects` / `pinned_instruments` / `hidden_instruments` | |
+| User ORCID | `StateFlow<String?>` | `user_orcid` | |
+| User profile | `StateFlow<User?>` | `user_profile` | JSON-serialized |
+| Resource history | `StateFlow<List<HistoryItem>>` | `resource_history` | |
+| Sample group-by | `StateFlow<String>` | `sample_group_by` | Default: `TYPE` — persists ProjectDetailScreen's Samples tab grouping choice |
+| Dataset group-by | `StateFlow<String>` | `dataset_group_by` | Default: `MEASUREMENT` — persists ProjectDetailScreen's Datasets tab grouping choice |
+| Instrument group-by | `StateFlow<String>` | `instrument_group_by` | Default: `MEASUREMENT` — persists InstrumentDetailScreen's grouping choice |
+| Default project tab | `StateFlow<String>` | `default_project_tab` | `SAMPLES` / `DATASETS` |
 
 ---
 
@@ -287,7 +364,7 @@ constructor-injectable dependency rather than a globally-reachable static.
 instead, for its cached file-list/download-URL reads) directly from within the composable rather than
 through an owning ViewModel. This is intentional: each of these
 components is reused from multiple, unrelated parent screens with no single owning ViewModel
-(e.g. `InstrumentPickerField` appears in both `CreateDatasetScreen` and `EditResourceSheet`).
+(e.g. `InstrumentPickerField` appears in both `CreateDatasetScreen` and `EditResourceScreen`).
 Introducing a per-use-site ViewModel, or threading callback props through every parent, would add
 real wiring complexity for no benefit — `koinInject` still gives these components a real, swappable
 dependency rather than a global static, which was the actual problem being solved. Do not "fix" this
@@ -319,9 +396,43 @@ Build for iOS on macOS only.
 **API auth**: header is `Authorization: Bearer <key>` (FastAPI HTTPBearer scheme).
 Not `Api-Key` or `Token`.
 
+**Plain `remember` state doesn't survive navigating to another screen and back** — Navigation-Compose
+only composes the top of the back stack, so pushing a new destination fully disposes the
+composable underneath it; on `popBackStack()`, that composable recomposes from scratch and any
+plain `remember`ed value silently resets to its initial default. This bit
+`ProjectDetailScreen`'s per-group expand/pagination state, which reset after visiting a resource
+detail screen and coming back — fixed via `rememberSaveable` + `stateMapSaver()`
+(`ui/common/SaveableStateMap.kt`). Any screen-level state that must survive a push-and-pop round
+trip — not just scroll position, which `rememberLazyListState()` already saves for free — needs
+`rememberSaveable`, not `remember`.
+
+An earlier, hand-rolled version of `ProjectDetailScreen`'s collapsing header hit this same class of
+bug: its custom scroll-offset state reset to 0 on the way back from a resource detail screen while
+the list's own scroll position stayed put, so the header rendered fully-expanded on top of an
+already-scrolled list — worked around at the time by manually backing that state with
+`rememberSaveable`. That whole hand-rolled mechanism (`CollapsingHeaderState`,
+`Modifier.layout{}` height-shrinking, a custom `NestedScrollConnection`) was later replaced by
+`CollapsingAppTopBar` driven by `TopAppBarDefaults.exitUntilCollapsedScrollBehavior()` (see
+`dev/style.md`'s "Collapsing top bar" section for why it's a custom composable rather than
+`MediumTopAppBar`) — which sidesteps this gotcha entirely, since `rememberTopAppBarState()` is
+already `rememberSaveable` internally; nothing extra to wire up.
+
+This same bug also explains why **`EditResourceScreen` is a full nav destination (`Screen.EditResource`),
+not a bottom sheet** — it used to be `EditResourceSheet`, a `ModalBottomSheet` local to
+`ResourceDetailScreen`, whose "Scientific metadata" section still had to navigate out to the real
+`MetadataEditorScreen` destination and back. That mismatch (a screen-local sheet routing out to a
+real screen) meant `ResourceDetailScreen`'s sheet-visibility flags got disposed on the way there and
+never restored on the way back, so the sheet simply never reopened and the metadata edit was
+silently discarded — patched at the time with `rememberSaveable` sheet flags plus a singleton
+`EditDraftHolder` to ferry in-progress field values across the round trip, then fully resolved by
+converting the sheet into `EditResourceScreen`, a real page that survives its own composition being
+torn down and rebuilt via `rememberSaveable` alone (same pattern `CreateSampleScreen`/
+`CreateDatasetScreen` already used correctly) — no singleton relay needed once it's a real screen.
+Prefer a full nav destination over a bottom sheet for anything whose content itself needs to open
+another nav destination.
+
 ---
 
 ## Known gaps
 
-- `ProjectDetailScreen`'s `ResourceCard` is still a custom `Row`, not the M3 `ListItem` composable already used by `HistoryScreen` and `InstrumentDetailScreen` — migrate when next touching that file.
 - iOS: no deep-link/URL-scheme handling, no launch screen configured — see `dev/platform-parity.md`. Not blocking; iOS distribution isn't active yet.
