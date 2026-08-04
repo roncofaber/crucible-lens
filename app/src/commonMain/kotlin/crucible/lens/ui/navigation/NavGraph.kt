@@ -712,7 +712,6 @@ fun NavGraph(
                 },
                 isPinned = projectId in pinnedProjects,
                 onTogglePin = { scope.launch { prefs.togglePinnedProject(projectId) } },
-                isHidden = projectId in hiddenProjects,
                 onCreateSample = {
                     navController.navigate(Screen.CreateSample.createRoute(projectId))
                 },

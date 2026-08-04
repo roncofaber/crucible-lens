@@ -99,7 +99,6 @@ fun ProjectDetailScreen(
     onResourceClick: (uuid: String, groupBy: String) -> Unit,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
-    isHidden: Boolean = false,
     onCreateSample: () -> Unit = {},
     onCreateDataset: () -> Unit = {},
     onManageProject: () -> Unit = {},
@@ -186,7 +185,7 @@ fun ProjectDetailScreen(
     // user leads, not just this one — so this is as cheap as ProjectsListScreen's refresh, just
     // scoped here to write/zero this project's cache entry.
     fun refreshProjectDetail() {
-        viewModel.load(projectId, isHidden = isHidden, forceRefresh = true)
+        viewModel.load(projectId, forceRefresh = true)
         // load() only force-refreshes samples/datasets. The collapsing header reads the project
         // and its member list from two other caches, so without these a pull-to-refresh left the
         // title, organization, lead and member count stale until their TTL lapsed.
@@ -240,7 +239,7 @@ fun ProjectDetailScreen(
     // member-list cache (the usual case, per the seed above) avoids the round trip entirely; on a
     // cold cache isConfidentlyNonMember is false on the first frame, so members never wait.
     LaunchedEffect(projectId, isConfidentlyNonMember) {
-        if (!isConfidentlyNonMember) viewModel.load(projectId, isHidden = isHidden)
+        if (!isConfidentlyNonMember) viewModel.load(projectId)
     }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
