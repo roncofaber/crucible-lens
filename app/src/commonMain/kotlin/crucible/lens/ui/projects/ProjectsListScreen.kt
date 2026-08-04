@@ -189,59 +189,60 @@ fun ProjectsListScreen(
                 .padding(padding)
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    // Bottom padding clears the ScrollToTopButton FAB (42dp + 16dp margin) so the
-                    // last item — including the Hidden section header/rows — is never obscured.
-                    contentPadding = PaddingValues(bottom = 80.dp)
-                ) {
-                    stickyHeader(key = "search_bar") {
-                        Surface(color = MaterialTheme.colorScheme.background) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                SearchBar(
-                                    query = searchQuery,
-                                    onQueryChange = { searchQuery = it },
-                                    placeholder = "Search by name, ID, or project lead…",
-                                    modifier = Modifier.weight(1f),
-                                    accentStyle = true
-                                )
-                                Box {
-                                    IconButton(onClick = { sortMenuExpanded = true }) {
-                                        AppIcon(AppIcons.Sort,
-                                            modifier = Modifier.size(20.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Search bar sits outside LazyColumn so group headers can stick
+                    // without pushing the search bar off-screen
+                    Surface(color = MaterialTheme.colorScheme.background) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            SearchBar(
+                                query = searchQuery,
+                                onQueryChange = { searchQuery = it },
+                                placeholder = "Search by name, ID, or project lead…",
+                                modifier = Modifier.weight(1f),
+                                accentStyle = true
+                            )
+                            Box {
+                                IconButton(onClick = { sortMenuExpanded = true }) {
+                                    AppIcon(AppIcons.Sort,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
+                                    listOf(SortField.NAME to "Name", SortField.DATE to "Date created").forEach { (field, label) ->
+                                        DropdownMenuItem(
+                                            text = { Text(label) },
+                                            leadingIcon = {
+                                                if (sortState.field == field)
+                                                    AppIcon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource,
+                                                        modifier = Modifier.size(14.dp),
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                else Spacer(Modifier.size(14.dp))
+                                            },
+                                            onClick = {
+                                                sortState = if (sortState.field == field)
+                                                    sortState.copy(ascending = !sortState.ascending)
+                                                else SortState(field, true)
+                                                sortMenuExpanded = false
+                                            }
                                         )
-                                    }
-                                    DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
-                                        listOf(SortField.NAME to "Name", SortField.DATE to "Date created").forEach { (field, label) ->
-                                            DropdownMenuItem(
-                                                text = { Text(label) },
-                                                leadingIcon = {
-                                                    if (sortState.field == field)
-                                                        AppIcon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource,
-                                                            modifier = Modifier.size(14.dp),
-                                                            tint = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    else Spacer(Modifier.size(14.dp))
-                                                },
-                                                onClick = {
-                                                    sortState = if (sortState.field == field)
-                                                        sortState.copy(ascending = !sortState.ascending)
-                                                    else SortState(field, true)
-                                                    sortMenuExpanded = false
-                                                }
-                                            )
-                                        }
                                     }
                                 }
                             }
                         }
                     }
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        // Bottom padding clears the ScrollToTopButton FAB (42dp + 16dp margin) so the
+                        // last item — including the Hidden section header/rows — is never obscured.
+                        contentPadding = PaddingValues(bottom = 80.dp)
+                    ) {
 
                     when {
                         loadState is LoadState.Loading -> item(key = "__loading__") {
@@ -359,7 +360,7 @@ fun ProjectsListScreen(
                                 }
                             } else {
                                 if (syncedProjectsList.isNotEmpty()) {
-                                    item(key = "__synced_header__") {
+                                    stickyHeader(key = "__synced_header__") {
                                         SectionHeader(
                                             title = "Syncing",
                                             count = syncedProjectsList.size,
@@ -414,7 +415,7 @@ fun ProjectsListScreen(
                                 }
 
                                 if (unsyncedProjectsList.isNotEmpty()) {
-                                    item(key = "__unsynced_header__") {
+                                    stickyHeader(key = "__unsynced_header__") {
                                         SectionHeader(
                                             title = "Not syncing",
                                             count = unsyncedProjectsList.size,
@@ -454,6 +455,7 @@ fun ProjectsListScreen(
                                 }
                             }
                         }
+                    }
                     }
                 }
                 LazyColumnScrollbar(
