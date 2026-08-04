@@ -43,25 +43,25 @@ fun SyncPickerScreen(
     val suggested = suggestedProjectIds(projects ?: emptyList(), userOrcid, pinnedProjects)
     val sortedProjects = sortForPicker(projects ?: emptyList(), suggested)
 
+    LaunchedEffect(isFirstRun) {
+        if (isFirstRun) {
+            // Mark setup complete when the picker is shown, not when dismissed. This closes
+            // all exit paths: system back gesture, top-bar arrow, Done button, and process death
+            // all prevent re-entry to the picker. The user's project selection is separate and
+            // saved in saveAndClose() if they complete the flow normally.
+            prefs.saveSyncSetupComplete(true)
+        }
+    }
+
     fun saveAndClose() {
         scope.launch {
             prefs.setSyncedProjects(localSelection)
-            if (isFirstRun) {
-                prefs.saveSyncSetupComplete(true)
-            }
             onDone()
         }
     }
 
     fun handleBack() {
-        if (isFirstRun) {
-            scope.launch {
-                prefs.saveSyncSetupComplete(true)
-                onBack()
-            }
-        } else {
-            onBack()
-        }
+        onBack()
     }
 
     AppScaffold(
