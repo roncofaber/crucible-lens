@@ -736,6 +736,8 @@ fun NavGraph(
                 },
                 isPinned = projectId in pinnedProjects,
                 onTogglePin = { scope.launch { prefs.togglePinnedProject(projectId) } },
+                isSynced = projectId in syncedProjects,
+                onToggleSync = { scope.launch { prefs.toggleSyncedProject(projectId) } },
                 onCreateSample = {
                     navController.navigate(Screen.CreateSample.createRoute(projectId))
                 },

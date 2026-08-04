@@ -99,6 +99,8 @@ fun ProjectDetailScreen(
     onResourceClick: (uuid: String, groupBy: String) -> Unit,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
+    isSynced: Boolean = false,
+    onToggleSync: () -> Unit = {},
     onCreateSample: () -> Unit = {},
     onCreateDataset: () -> Unit = {},
     onManageProject: () -> Unit = {},
@@ -271,7 +273,7 @@ fun ProjectDetailScreen(
                             Text(userDisplayName(lead), style = MaterialTheme.typography.bodyMedium)
                         }
                     }
-                    if (org != null || memberCount != null) {
+                    if (org != null || memberCount != null || !isSynced) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -289,6 +291,15 @@ fun ProjectDetailScreen(
                                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                                     AppIcon(AppIcons.Team, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text(if (memberCount == 1) "1 member" else "$memberCount members", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            if (!isSynced) {
+                                if (org != null || memberCount != null) {
+                                    Text("·", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    AppIcon(AppIcons.SyncPaused, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Not syncing", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
@@ -328,6 +339,11 @@ fun ProjectDetailScreen(
                                     }
                                 },
                                 onClick = { topBarMenuExpanded = false; onManageProject() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(if (isSynced) "Stop syncing" else "Sync this project") },
+                                leadingIcon = { AppIcon(if (isSynced) AppIcons.SyncPaused else AppIcons.Syncing) },
+                                onClick = { topBarMenuExpanded = false; onToggleSync() }
                             )
                             OpenInWebMenuItem { topBarMenuExpanded = false; openUrl(ctx, "$graphExplorerUrl/$projectId") }
                             ShareMenuItem { topBarMenuExpanded = false; shareText(ctx, "$graphExplorerUrl/$projectId", project?.title ?: projectId) }
