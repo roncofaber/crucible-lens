@@ -601,7 +601,7 @@ private fun HomePinnedProjects(
                 ) {
                     AppIcon(AppIcons.Pinned, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f), modifier = Modifier.size(26.dp))
                     Text("No pinned items", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                    Text("Bookmark a project or instrument to pin it here", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                    Text("Choose projects to sync, or pin one to keep it here", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                 }
             }
         }
@@ -668,7 +668,7 @@ private fun HelpDialog(onDismiss: () -> Unit, onSettings: () -> Unit) {
                 HelpSection(AppIcons.Search, "Search",
                     "Search samples, datasets, projects, and instruments by name, type, metadata, or keywords.")
                 HelpSection(AppIcons.Project, "Projects",
-                    "Browse all projects and their contents. Tap the pin icon to keep a project on the home screen. Swipe left to hide it.")
+                    "Browse all projects and their contents. Tap the pin icon to keep a project on the home screen. Swipe left to stop syncing it. Synced projects stay up to date in the background; others still open normally.")
                 HelpSection(AppIcons.Instrument, "Instruments",
                     "Browse instruments at the Molecular Foundry and the datasets collected with each one.")
                 HelpSection(AppIcons.History, "History",
