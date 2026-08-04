@@ -38,6 +38,8 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         private val FLOATING_SCAN_BUTTON = stringPreferencesKey("floating_scan_button")
         private val PINNED_PROJECTS = stringPreferencesKey("pinned_projects")
         private val HIDDEN_PROJECTS = stringPreferencesKey("hidden_projects")
+        private val SYNCED_PROJECTS = stringPreferencesKey("synced_projects")
+        private val SYNC_SETUP_COMPLETE = stringPreferencesKey("sync_setup_complete")
         private val HIDDEN_INSTRUMENTS = stringPreferencesKey("hidden_instruments")
         private val RESOURCE_HISTORY = stringPreferencesKey("resource_history")
         private val SAMPLE_GROUP_BY = stringPreferencesKey("sample_group_by")
@@ -111,6 +113,16 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         prefs[HIDDEN_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     }
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
+
+    override val syncedProjects: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[SYNCED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+    }
+        .stateIn(scope, SharingStarted.Eagerly, emptySet())
+
+    override val syncSetupComplete: StateFlow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[SYNC_SETUP_COMPLETE]?.toBoolean() ?: false
+    }
+        .stateIn(scope, SharingStarted.Eagerly, false)
 
     override val hiddenInstruments: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
         prefs[HIDDEN_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
@@ -232,6 +244,22 @@ class PreferencesManager(private val context: Context) : AppPreferences {
             if (id in current) current.remove(id) else current.add(id)
             prefs[HIDDEN_PROJECTS] = current.joinToString(",")
         }
+    }
+
+    override suspend fun toggleSyncedProject(id: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[SYNCED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+            if (id in current) current.remove(id) else current.add(id)
+            prefs[SYNCED_PROJECTS] = current.joinToString(",")
+        }
+    }
+
+    override suspend fun setSyncedProjects(ids: Set<String>) {
+        context.dataStore.edit { prefs -> prefs[SYNCED_PROJECTS] = ids.joinToString(",") }
+    }
+
+    override suspend fun saveSyncSetupComplete(complete: Boolean) {
+        context.dataStore.edit { prefs -> prefs[SYNC_SETUP_COMPLETE] = complete.toString() }
     }
 
     override suspend fun toggleHiddenInstrument(id: String) {
