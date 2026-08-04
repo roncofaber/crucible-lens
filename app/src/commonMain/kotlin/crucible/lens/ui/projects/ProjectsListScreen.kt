@@ -36,7 +36,7 @@ import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.RefreshMenuItem
-import crucible.lens.ui.common.ToggleHiddenMenuItem
+import crucible.lens.ui.common.ToggleUnsyncedMenuItem
 import crucible.lens.platform.showToast
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
@@ -96,9 +96,9 @@ fun ProjectsListScreen(
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
-    // Projects pending hide — excluded from activeProjects so LazyColumn animates the removal
-    // cleanly. onToggleHide is only called after the snackbar window closes without undo.
-    val pendingHide = remember { mutableStateMapOf<String, Boolean>() }
+    // Projects pending unsync — excluded from syncedProjectsList so LazyColumn animates the removal
+    // cleanly. onToggleSync is only called after the snackbar window closes without undo.
+    val pendingUnsync = remember { mutableStateMapOf<String, Boolean>() }
     // Generation counter per project — bumped on undo so the re-shown item's items() key changes,
     // giving it a fresh SwipeToDismissBoxState (there's no supported way to reset a committed
     // SwipeToDismissBoxState back to Settled without fighting an in-progress drag).
@@ -172,7 +172,7 @@ fun ProjectsListScreen(
                             AppIcon(AppIcons.MoreVert)
                         }
                         DropdownMenu(expanded = listMenuExpanded, onDismissRequest = { listMenuExpanded = false }) {
-                            ToggleHiddenMenuItem(hiddenExpanded) { hiddenExpanded = !hiddenExpanded; listMenuExpanded = false }
+                            ToggleUnsyncedMenuItem(hiddenExpanded) { hiddenExpanded = !hiddenExpanded; listMenuExpanded = false }
                             RefreshMenuItem { listMenuExpanded = false; refreshProjects() }
                         }
                     }
@@ -316,8 +316,8 @@ fun ProjectsListScreen(
                                 }
                             }
 
-                            val activeProjects = filteredProjects
-                                .filter { it.projectId in syncedProjects && pendingHide[it.projectId] != true }
+                            val syncedProjectsList = filteredProjects
+                                .filter { it.projectId in syncedProjects && pendingUnsync[it.projectId] != true }
                                 .applySortState(
                                     sortState,
                                     name = { title?.lowercase() ?: projectId.lowercase() },
@@ -326,7 +326,7 @@ fun ProjectsListScreen(
                                 )
                                 // Pinned always float to top regardless of sort
                                 .sortedByDescending { it.projectId in pinnedProjects }
-                            val hiddenProjectsList = filteredProjects
+                            val unsyncedProjectsList = filteredProjects
                                 .filter { it.projectId !in syncedProjects }
 
                             // Show message when search returns no results
@@ -357,12 +357,24 @@ fun ProjectsListScreen(
                                     }
                                 }
                             } else {
-                                items(activeProjects, key = { "${it.projectId}:${undoGenerations[it.projectId] ?: 0}" }) { project ->
+                                if (syncedProjectsList.isNotEmpty()) {
+                                    item(key = "__synced_header__") {
+                                        SectionHeader(
+                                            title = "Syncing",
+                                            count = syncedProjectsList.size,
+                                            icon = AppIcons.Syncing,
+                                            expanded = true,
+                                            onToggle = {}
+                                        )
+                                    }
+                                }
+
+                                items(syncedProjectsList, key = { "${it.projectId}:${undoGenerations[it.projectId] ?: 0}" }) { project ->
                                     SwipeToHideItem(
                                         direction = SwipeToDismissBoxValue.EndToStart,
                                         action = SwipeAction(
-                                            icon = AppIcons.HideContent,
-                                            label = "Hide",
+                                            icon = AppIcons.SyncPaused,
+                                            label = "Stop syncing",
                                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                         ),
@@ -371,9 +383,10 @@ fun ProjectsListScreen(
                                                 scope = scope,
                                                 snackbarHostState = snackbarHostState,
                                                 itemLabel = project.title ?: project.projectId,
+                                                message = "\"${project.title ?: project.projectId}\" will stop syncing",
                                                 onPending = { pending ->
-                                                    if (pending) pendingHide[project.projectId] = true
-                                                    else pendingHide.remove(project.projectId)
+                                                    if (pending) pendingUnsync[project.projectId] = true
+                                                    else pendingUnsync.remove(project.projectId)
                                                 },
                                                 onConfirmedHide = { onToggleSync(project.projectId) },
                                                 onUndone = {
@@ -397,29 +410,29 @@ fun ProjectsListScreen(
                                     HorizontalDivider(modifier = Modifier.padding(start = ResourceListDividerInset))
                                 }
 
-                                if (hiddenProjectsList.isNotEmpty()) {
-                                    item(key = "__hidden_header__") {
+                                if (unsyncedProjectsList.isNotEmpty()) {
+                                    item(key = "__unsynced_header__") {
                                         SectionHeader(
-                                            title = "Hidden",
-                                            count = hiddenProjectsList.size,
-                                            icon = AppIcons.HideContent,
+                                            title = "Not syncing",
+                                            count = unsyncedProjectsList.size,
+                                            icon = AppIcons.SyncPaused,
                                             expanded = hiddenExpanded,
                                             onToggle = { hiddenExpanded = !hiddenExpanded }
                                         )
                                     }
 
                                     if (hiddenExpanded) {
-                                        items(hiddenProjectsList, key = { "hidden_${it.projectId}" }) { project ->
+                                        items(unsyncedProjectsList, key = { "unsynced_${it.projectId}" }) { project ->
                                             SwipeToHideItem(
                                                 direction = SwipeToDismissBoxValue.StartToEnd,
                                                 action = SwipeAction(
-                                                    icon = AppIcons.ShowContent,
-                                                    label = "Show",
+                                                    icon = AppIcons.Syncing,
+                                                    label = "Start syncing",
                                                     containerColor = MaterialTheme.colorScheme.primary,
                                                     contentColor = MaterialTheme.colorScheme.onPrimary
                                                 ),
                                                 onDismiss = {
-                                                    showToast(platformContext, "Project shown")
+                                                    showToast(platformContext, "Syncing ${project.title ?: project.projectId}")
                                                     onToggleSync(project.projectId)
                                                 }
                                             ) {
@@ -429,7 +442,7 @@ fun ProjectsListScreen(
                                                     onClick = { onProjectClick(project.projectId) },
                                                     isPinned = false,
                                                     onTogglePin = {},
-                                                    isHidden = true
+                                                    isSynced = false
                                                 )
                                             }
                                             HorizontalDivider(modifier = Modifier.padding(start = ResourceListDividerInset))
@@ -461,7 +474,7 @@ private fun ProjectCard(
     onClick: () -> Unit,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
-    isHidden: Boolean = false
+    isSynced: Boolean = true
 ) {
     // Only show ID when it differs from the display name
     val showId = project.title != null && project.title != project.projectId
@@ -491,28 +504,32 @@ private fun ProjectCard(
             }
         } else null,
         leadingContent = {
-            NotificationDot(count = if (isHidden) null else pendingRequestCount) {
-                AppIcon(if (isHidden) AppIcons.HideContent else AppIcons.Project,
-                    tint = if (isHidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
+            NotificationDot(count = pendingRequestCount) {
+                AppIcon(AppIcons.Project,
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
         },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (!isHidden) {
+                if (isSynced) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
                         CountChip(icon = AppIcons.Sample, count = counts?.first, loading = counts?.first == null)
                         CountChip(icon = AppIcons.Dataset, count = counts?.second, loading = counts?.second == null)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
-                    if (!isHidden) {
-                        IconButton(onClick = onTogglePin, modifier = Modifier.size(40.dp)) {
-                            AppIcon(AppIcons.Pinned, filled = isPinned,
-                                modifier = Modifier.size(20.dp),
-                                tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    IconButton(onClick = onTogglePin, modifier = Modifier.size(40.dp)) {
+                        AppIcon(AppIcons.Pinned, filled = isPinned,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (!isSynced) {
+                        AppIcon(AppIcons.SyncPaused,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                 }

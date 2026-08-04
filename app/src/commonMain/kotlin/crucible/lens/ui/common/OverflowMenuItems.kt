@@ -53,3 +53,14 @@ fun ToggleHiddenMenuItem(expanded: Boolean, onClick: () -> Unit) {
         onClick = onClick
     )
 }
+
+@Composable
+fun ToggleUnsyncedMenuItem(expanded: Boolean, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(if (expanded) "Collapse" else "Show not syncing") },
+        leadingIcon = {
+            AppIcon(if (expanded) AppIcons.SyncPaused else AppIcons.Syncing)
+        },
+        onClick = onClick
+    )
+}

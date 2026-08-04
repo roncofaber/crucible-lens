@@ -134,13 +134,14 @@ fun hideWithUndo(
     itemLabel: String,
     onPending: (Boolean) -> Unit,
     onConfirmedHide: () -> Unit,
-    onUndone: () -> Unit = {}
+    onUndone: () -> Unit = {},
+    message: String = "\"$itemLabel\" hidden"
 ) {
     onPending(true)
     onConfirmedHide()
     scope.launch {
         val result = snackbarHostState.showSnackbar(
-            message = "\"$itemLabel\" hidden",
+            message = message,
             actionLabel = "Undo",
             duration = SnackbarDuration.Short
         )
