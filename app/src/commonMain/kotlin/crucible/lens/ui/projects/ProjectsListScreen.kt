@@ -236,6 +236,10 @@ fun ProjectsListScreen(
                             }
                         }
                     }
+                    // Scrollbar is scoped to this Box, not the outer one: the outer Box now
+                    // also contains the search bar, and a scrollbar spanning it would be taller
+                    // than the list it represents.
+                    Box(modifier = Modifier.weight(1f)) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
@@ -457,11 +461,12 @@ fun ProjectsListScreen(
                         }
                     }
                     }
+                    LazyColumnScrollbar(
+                        listState = listState,
+                        modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd).padding(end = 4.dp)
+                    )
+                    }
                 }
-                LazyColumnScrollbar(
-                    listState = listState,
-                    modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd).padding(end = 4.dp)
-                )
                 ScrollToTopButton(
                     visible = showScrollToTop,
                     onClick = { scope.launch { listState.animateScrollToItem(0) } },
