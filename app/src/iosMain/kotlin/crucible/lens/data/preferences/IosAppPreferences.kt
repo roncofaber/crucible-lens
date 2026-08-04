@@ -125,8 +125,15 @@ class IosAppPreferences : AppPreferences {
     }
 
     override suspend fun togglePinnedProject(id: String) {
-        val updated = _pinnedProjects.value.toMutableSet().apply { if (id in this) remove(id) else add(id) }
-        settings.putString("pinned_projects", updated.joinToString(",")); _pinnedProjects.value = updated
+        val current = _pinnedProjects.value.toMutableSet()
+        val adding = id !in current
+        if (adding) current.add(id) else current.remove(id)
+        settings.putString("pinned_projects", current.joinToString(",")); _pinnedProjects.value = current
+        if (adding) {
+            val synced = _syncedProjects.value.toMutableSet()
+            synced.add(id)
+            settings.putString("synced_projects", synced.joinToString(",")); _syncedProjects.value = synced
+        }
     }
 
     override suspend fun toggleHiddenProject(id: String) {

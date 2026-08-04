@@ -699,6 +699,12 @@ fun NavGraph(
         }
 
         composable(Screen.Projects.route) {
+            val setupComplete by prefs.syncSetupComplete.collectAsStateWithLifecycle()
+            LaunchedEffect(setupComplete) {
+                if (!setupComplete && navController.currentDestination?.route == Screen.Projects.route) {
+                    navController.navigate(Screen.SyncedProjects.createRoute(firstRun = true))
+                }
+            }
             ProjectsListScreen(
                 onBack = navigateBack,
                 onHome = navigateHome,

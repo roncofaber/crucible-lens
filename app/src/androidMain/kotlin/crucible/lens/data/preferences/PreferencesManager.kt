@@ -230,11 +230,15 @@ class PreferencesManager(private val context: Context) : AppPreferences {
 
     override suspend fun togglePinnedProject(id: String) {
         context.dataStore.edit { prefs ->
-            val projects = prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
-            val instruments = prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
-            if (id in projects) projects.remove(id)
-            else projects.add(id)
-            prefs[PINNED_PROJECTS] = projects.joinToString(",")
+            val current = prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+            val adding = id !in current
+            if (adding) current.add(id) else current.remove(id)
+            prefs[PINNED_PROJECTS] = current.joinToString(",")
+            if (adding) {
+                val synced = prefs[SYNCED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+                synced.add(id)
+                prefs[SYNCED_PROJECTS] = synced.joinToString(",")
+            }
         }
     }
 
