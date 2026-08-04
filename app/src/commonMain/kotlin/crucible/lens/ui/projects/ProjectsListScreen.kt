@@ -92,8 +92,6 @@ fun ProjectsListScreen(
     var searchQuery by remember { mutableStateOf("") }
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var sortState by remember { mutableStateOf(SortState(SortField.NAME, true)) }
-    // Track which projects were manually unarchived (so we don't auto-archive them again)
-    var manuallyShown by remember { mutableStateOf<Set<String>>(emptySet()) }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -138,12 +136,6 @@ fun ProjectsListScreen(
                             onCountsAvailable = { sampleCount, datasetCount ->
                                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                     viewModel.updateCount(project.projectId, sampleCount, datasetCount)
-
-                                    if (sampleCount == 0 && datasetCount == 0 &&
-                                        project.projectId !in manuallyShown &&
-                                        project.projectId in syncedProjects) {
-                                        onToggleSync(project.projectId)
-                                    }
                                 }
                             }
                         )
@@ -427,7 +419,6 @@ fun ProjectsListScreen(
                                                     contentColor = MaterialTheme.colorScheme.onPrimary
                                                 ),
                                                 onDismiss = {
-                                                    manuallyShown = manuallyShown + project.projectId
                                                     showToast(platformContext, "Project shown")
                                                     onToggleSync(project.projectId)
                                                 }
