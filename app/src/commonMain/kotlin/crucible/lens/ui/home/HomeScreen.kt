@@ -68,7 +68,7 @@ fun HomeScreen(
     onHistory: () -> Unit = {},
     onSearch: () -> Unit = {},
     pinnedProjects: Set<String> = emptySet(),
-    hiddenProjects: Set<String> = emptySet(),
+    syncedProjects: Set<String> = emptySet(),
     onProjectClick: (String) -> Unit = {},
     onTogglePinnedProject: (String) -> Unit = {},
     pinnedInstruments: Set<String> = emptySet(),
@@ -103,8 +103,8 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) { viewModel.loadPersistedCache(platformContext) }
     LaunchedEffect(apiKey) { viewModel.ensureLoaded(apiKey) }
-    LaunchedEffect(allProjects, pinnedProjects, hiddenProjects) {
-        viewModel.preload(platformContext, pinnedProjects, hiddenProjects)
+    LaunchedEffect(allProjects, pinnedProjects, syncedProjects) {
+        viewModel.preload(platformContext, pinnedProjects, syncedProjects)
     }
 
     val pinnedList = remember(pinnedProjects, allProjects) {

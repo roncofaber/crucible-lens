@@ -84,7 +84,7 @@ class HomeViewModel(
         }
     }
 
-    fun preload(platformContext: PlatformContext, pinnedProjects: Set<String>, hiddenProjects: Set<String>) {
+    fun preload(platformContext: PlatformContext, pinnedProjects: Set<String>, syncedProjects: Set<String>) {
         val projects = _projects.value
         if (projects.isEmpty()) return
         preloadJob?.cancel()
@@ -93,9 +93,9 @@ class HomeViewModel(
             try {
                 delay(500)
 
-                // Hidden projects are skipped entirely — no network call until the user unhides them.
+                // Only synced projects are preloaded; everything else fetches on demand when opened.
                 val prioritizedProjects = projects
-                    .filter { it.projectId !in hiddenProjects }
+                    .filter { it.projectId in syncedProjects }
                     .sortedByDescending { it.projectId in pinnedProjects }
                 var consecutiveFailures = 0
                 val maxConsecutiveFailures = 5

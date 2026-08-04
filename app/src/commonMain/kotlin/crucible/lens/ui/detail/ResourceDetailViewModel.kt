@@ -88,24 +88,24 @@ class ResourceDetailViewModel(
 
     private var syncJob: Job? = null
     // Remembered so refreshResource()'s finally block can resume sync with the same
-    // hidden-project filter, without needing NavGraph to call startBackgroundSync() again.
-    private var lastHiddenProjectIds: Set<String> = emptySet()
+    // synced-project filter, without needing NavGraph to call startBackgroundSync() again.
+    private var lastSyncedProjectIds: Set<String> = emptySet()
     private var lastCurrentUserOrcid: String? = null
 
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
     /**
-     * [hiddenProjectIds] are skipped entirely — no network call until the user unhides them.
+     * Only [syncedProjectIds] are preloaded. Everything else fetches on demand when opened.
      * [currentUserOrcid] scopes the pending-join-request-count preload to projects the caller
      * leads — see [DataSyncManager.syncAll].
      */
-    fun startBackgroundSync(hiddenProjectIds: Set<String> = emptySet(), currentUserOrcid: String? = null) {
-        lastHiddenProjectIds = hiddenProjectIds
+    fun startBackgroundSync(syncedProjectIds: Set<String> = emptySet(), currentUserOrcid: String? = null) {
+        lastSyncedProjectIds = syncedProjectIds
         lastCurrentUserOrcid = currentUserOrcid
         _isSyncing.value = true
         syncJob = viewModelScope.launch {
-            try { dataSyncManager.syncAll(hiddenProjectIds, currentUserOrcid) }
+            try { dataSyncManager.syncAll(syncedProjectIds, currentUserOrcid) }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) { }
             finally { _isSyncing.value = false }
@@ -159,7 +159,7 @@ class ResourceDetailViewModel(
                 // Timeout or network failure — error state (if primary) was set above
             } finally {
                 _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = false) else it }
-                if (syncWasActive) startBackgroundSync(lastHiddenProjectIds, lastCurrentUserOrcid)
+                if (syncWasActive) startBackgroundSync(lastSyncedProjectIds, lastCurrentUserOrcid)
             }
         }
     }

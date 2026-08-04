@@ -61,8 +61,8 @@ fun ProjectsListScreen(
     onProjectClick: (String) -> Unit,
     pinnedProjects: Set<String> = emptySet(),
     onTogglePin: (String) -> Unit = {},
-    hiddenProjects: Set<String> = emptySet(),
-    onToggleHide: (String) -> Unit = {},
+    syncedProjects: Set<String> = emptySet(),
+    onToggleSync: (String) -> Unit = {},
     currentUserOrcid: String? = null,
 ) {
     val platformContext = getPlatformContext()
@@ -109,15 +109,15 @@ fun ProjectsListScreen(
     LaunchedEffect(Unit) { /* ViewModel loads on init */ }
 
     // Preload and cache samples/datasets per project in background (also populates counts).
-    // Priority: pinned projects first. Hidden projects are skipped entirely — no network call
-    // is made for them until the user unhides them (this effect re-runs on the next hiddenProjects
-    // change and naturally picks up newly-unhidden projects).
+    // Priority: pinned projects first. Only synced projects are preloaded; everything else
+    // fetches on demand when opened (this effect re-runs on the next syncedProjects change and
+    // naturally picks up newly-synced projects).
     // This automatically cancels when the user navigates away from this screen.
-    // Re-triggers when projects change, hiddenProjects changes, OR reloadTrigger increments.
-    LaunchedEffect(loadState, hiddenProjects) {
+    // Re-triggers when projects change, syncedProjects changes, OR reloadTrigger increments.
+    LaunchedEffect(loadState, syncedProjects) {
         val projectList = (loadState as? LoadState.Success)?.data ?: return@LaunchedEffect
         val prioritizedProjects = projectList
-            .filter { it.projectId !in hiddenProjects }
+            .filter { it.projectId in syncedProjects }
             .sortedByDescending { it.projectId in pinnedProjects }
 
         // Track consecutive failures to stop on network errors (thread-safe for concurrent launches)
@@ -141,8 +141,8 @@ fun ProjectsListScreen(
 
                                     if (sampleCount == 0 && datasetCount == 0 &&
                                         project.projectId !in manuallyShown &&
-                                        project.projectId !in hiddenProjects) {
-                                        onToggleHide(project.projectId)
+                                        project.projectId in syncedProjects) {
+                                        onToggleSync(project.projectId)
                                     }
                                 }
                             }
@@ -325,7 +325,7 @@ fun ProjectsListScreen(
                             }
 
                             val activeProjects = filteredProjects
-                                .filter { it.projectId !in hiddenProjects && pendingHide[it.projectId] != true }
+                                .filter { it.projectId in syncedProjects && pendingHide[it.projectId] != true }
                                 .applySortState(
                                     sortState,
                                     name = { title?.lowercase() ?: projectId.lowercase() },
@@ -335,7 +335,7 @@ fun ProjectsListScreen(
                                 // Pinned always float to top regardless of sort
                                 .sortedByDescending { it.projectId in pinnedProjects }
                             val hiddenProjectsList = filteredProjects
-                                .filter { it.projectId in hiddenProjects }
+                                .filter { it.projectId !in syncedProjects }
 
                             // Show message when search returns no results
                             if (searchQuery.isNotBlank() && filteredProjects.isEmpty()) {
@@ -383,9 +383,9 @@ fun ProjectsListScreen(
                                                     if (pending) pendingHide[project.projectId] = true
                                                     else pendingHide.remove(project.projectId)
                                                 },
-                                                onConfirmedHide = { onToggleHide(project.projectId) },
+                                                onConfirmedHide = { onToggleSync(project.projectId) },
                                                 onUndone = {
-                                                    onToggleHide(project.projectId)
+                                                    onToggleSync(project.projectId)
                                                     undoGenerations[project.projectId] = (undoGenerations[project.projectId] ?: 0) + 1
                                                 }
                                             )
@@ -429,7 +429,7 @@ fun ProjectsListScreen(
                                                 onDismiss = {
                                                     manuallyShown = manuallyShown + project.projectId
                                                     showToast(platformContext, "Project shown")
-                                                    onToggleHide(project.projectId)
+                                                    onToggleSync(project.projectId)
                                                 }
                                             ) {
                                                 ProjectCard(

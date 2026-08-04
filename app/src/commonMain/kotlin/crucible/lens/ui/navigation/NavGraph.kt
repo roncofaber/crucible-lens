@@ -123,6 +123,7 @@ fun NavGraph(
     val floatingScanButton by prefs.floatingScanButton.collectAsStateWithLifecycle()
     val pinnedProjects by prefs.pinnedProjects.collectAsStateWithLifecycle()
     val hiddenProjects by prefs.hiddenProjects.collectAsStateWithLifecycle()
+    val syncedProjects by prefs.syncedProjects.collectAsStateWithLifecycle()
     val pinnedInstruments by prefs.pinnedInstruments.collectAsStateWithLifecycle()
     val hiddenInstruments by prefs.hiddenInstruments.collectAsStateWithLifecycle()
     val resourceHistory by prefs.resourceHistory.collectAsStateWithLifecycle()
@@ -141,13 +142,13 @@ fun NavGraph(
     }
 
     LaunchedEffect(apiKey) {
-        // Reads hiddenProjects/userOrcid as a one-time snapshot at sync start, not as a
+        // Reads syncedProjects/userOrcid as a one-time snapshot at sync start, not as a
         // reactive key — this is a one-shot-per-session background preload, not something
         // that should trigger a full re-sync (including forceRefresh on the whole projects
-        // list) every time a single project is hidden/unhidden. HomeScreen/ProjectsListScreen's
-        // own preload effects already pick up newly-unhidden projects on their next composition.
+        // list) every time a single project is synced/unsynced. HomeScreen/ProjectsListScreen's
+        // own preload effects already pick up newly-synced projects on their next composition.
         if (!apiKey.isNullOrBlank()) {
-            viewModel.startBackgroundSync(hiddenProjects, userOrcid)
+            viewModel.startBackgroundSync(syncedProjects, userOrcid)
         }
     }
 
@@ -309,7 +310,7 @@ fun NavGraph(
                     navController.navigate(Screen.Search.route)
                 },
                 pinnedProjects = pinnedProjects,
-                hiddenProjects = hiddenProjects,
+                syncedProjects = syncedProjects,
                 onProjectClick = { projectId ->
                     navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                 },
@@ -689,8 +690,8 @@ fun NavGraph(
                 },
                 pinnedProjects = pinnedProjects,
                 onTogglePin = { id -> scope.launch { prefs.togglePinnedProject(id) } },
-                hiddenProjects = hiddenProjects,
-                onToggleHide = { id -> scope.launch { prefs.toggleHiddenProject(id) } },
+                syncedProjects = syncedProjects,
+                onToggleSync = { id -> scope.launch { prefs.toggleSyncedProject(id) } },
                 currentUserOrcid = userOrcid
             )
         }
