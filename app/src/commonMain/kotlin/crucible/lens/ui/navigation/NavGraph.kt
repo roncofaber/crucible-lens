@@ -715,6 +715,7 @@ fun NavGraph(
                 onTogglePin = { id -> scope.launch { prefs.togglePinnedProject(id) } },
                 syncedProjects = syncedProjects,
                 onToggleSync = { id -> scope.launch { prefs.toggleSyncedProject(id) } },
+                onManageSyncedProjects = { navController.navigate(Screen.SyncedProjects.createRoute(firstRun = false)) },
                 currentUserOrcid = userOrcid
             )
         }

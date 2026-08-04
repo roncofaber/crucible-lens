@@ -36,7 +36,7 @@ import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.RefreshMenuItem
-import crucible.lens.ui.common.ToggleUnsyncedMenuItem
+import crucible.lens.ui.common.ManageSyncedProjectsMenuItem
 import crucible.lens.platform.showToast
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
@@ -63,6 +63,7 @@ fun ProjectsListScreen(
     onTogglePin: (String) -> Unit = {},
     syncedProjects: Set<String> = emptySet(),
     onToggleSync: (String) -> Unit = {},
+    onManageSyncedProjects: () -> Unit = {},
     currentUserOrcid: String? = null,
 ) {
     val platformContext = getPlatformContext()
@@ -173,7 +174,7 @@ fun ProjectsListScreen(
                             AppIcon(AppIcons.MoreVert)
                         }
                         DropdownMenu(expanded = listMenuExpanded, onDismissRequest = { listMenuExpanded = false }) {
-                            ToggleUnsyncedMenuItem(unsyncedExpanded) { unsyncedExpanded = !unsyncedExpanded; listMenuExpanded = false }
+                            ManageSyncedProjectsMenuItem { listMenuExpanded = false; onManageSyncedProjects() }
                             RefreshMenuItem { listMenuExpanded = false; refreshProjects() }
                         }
                     }

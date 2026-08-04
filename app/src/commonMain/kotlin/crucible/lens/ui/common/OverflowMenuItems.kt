@@ -55,12 +55,10 @@ fun ToggleHiddenMenuItem(expanded: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun ToggleUnsyncedMenuItem(expanded: Boolean, onClick: () -> Unit) {
+fun ManageSyncedProjectsMenuItem(onClick: () -> Unit) {
     DropdownMenuItem(
-        text = { Text(if (expanded) "Collapse" else "Show not syncing") },
-        leadingIcon = {
-            AppIcon(if (expanded) AppIcons.SyncPaused else AppIcons.Syncing)
-        },
+        text = { Text("Manage synced projects") },
+        leadingIcon = { AppIcon(AppIcons.Syncing) },
         onClick = onClick
     )
 }
