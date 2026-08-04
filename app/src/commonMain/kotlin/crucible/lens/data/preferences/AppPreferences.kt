@@ -21,9 +21,9 @@ interface AppPreferences {
     val floatingScanButton: StateFlow<Boolean>
     val pinnedProjects: StateFlow<Set<String>>
     val syncedProjects: StateFlow<Set<String>>
+    val syncSetupComplete: StateFlow<Boolean>
     val pinnedInstruments: StateFlow<Set<String>>
     val hiddenInstruments: StateFlow<Set<String>>
-    val syncSetupComplete: StateFlow<Boolean>
     val userOrcid: StateFlow<String?>
     val userProfile: StateFlow<User?>
     val resourceHistory: StateFlow<List<HistoryItem>>
