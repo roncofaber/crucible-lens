@@ -133,6 +133,8 @@ object AppIcons {
     val TestConnection = AppIconToken(Res.drawable.ic_wifi, contentDescription = "Test connection")
     val Offline       = AppIconToken(Res.drawable.ic_wifi_off)
     val Pending       = AppIconToken(Res.drawable.ic_hourglass_empty)
+    val Syncing       = AppIconToken(Res.drawable.ic_sync, contentDescription = "Syncing")
+    val SyncPaused    = AppIconToken(Res.drawable.ic_sync_disabled, contentDescription = "Not syncing")
     val Private       = AppIconToken(Res.drawable.ic_lock)
     val Public        = AppIconToken(Res.drawable.ic_public)
     val UnknownVisibility = AppIconToken(Res.drawable.ic_help_outline)

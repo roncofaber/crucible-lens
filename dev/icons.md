@@ -103,6 +103,8 @@ Icons marked **FILLED** need to be downloaded twice:
 | wifi | 0 | `ic_wifi.xml` | `TestConnection` |
 | wifi_off | 0 | `ic_wifi_off.xml` | `Offline` |
 | hourglass_empty | 0 | `ic_hourglass_empty.xml` | `Pending` |
+| sync | 0 | `ic_sync.xml` | `Syncing` |
+| sync_disabled | 0 | `ic_sync_disabled.xml` | `SyncPaused` |
 | lock | 0 | `ic_lock.xml` | `Private` |
 | public | 0 | `ic_public.xml` | `Public` |
 | help_outline | 0 | `ic_help_outline.xml` | `UnknownVisibility` |
