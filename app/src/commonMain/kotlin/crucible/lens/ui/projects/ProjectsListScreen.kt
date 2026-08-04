@@ -88,7 +88,8 @@ fun ProjectsListScreen(
     }
     val projectCounts by viewModel.projectCounts.collectAsState()
     // Persistent cache summaries - loaded immediately for instant display
-    var hiddenExpanded by remember { mutableStateOf(false) }
+    var syncedExpanded by remember { mutableStateOf(true) }
+    var unsyncedExpanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var sortState by remember { mutableStateOf(SortState(SortField.NAME, true)) }
@@ -172,7 +173,7 @@ fun ProjectsListScreen(
                             AppIcon(AppIcons.MoreVert)
                         }
                         DropdownMenu(expanded = listMenuExpanded, onDismissRequest = { listMenuExpanded = false }) {
-                            ToggleUnsyncedMenuItem(hiddenExpanded) { hiddenExpanded = !hiddenExpanded; listMenuExpanded = false }
+                            ToggleUnsyncedMenuItem(unsyncedExpanded) { unsyncedExpanded = !unsyncedExpanded; listMenuExpanded = false }
                             RefreshMenuItem { listMenuExpanded = false; refreshProjects() }
                         }
                     }
@@ -363,13 +364,14 @@ fun ProjectsListScreen(
                                             title = "Syncing",
                                             count = syncedProjectsList.size,
                                             icon = AppIcons.Syncing,
-                                            expanded = true,
-                                            onToggle = {}
+                                            expanded = syncedExpanded,
+                                            onToggle = { syncedExpanded = !syncedExpanded }
                                         )
                                     }
                                 }
 
-                                items(syncedProjectsList, key = { "${it.projectId}:${undoGenerations[it.projectId] ?: 0}" }) { project ->
+                                if (syncedExpanded) {
+                                    items(syncedProjectsList, key = { "${it.projectId}:${undoGenerations[it.projectId] ?: 0}" }) { project ->
                                     SwipeToHideItem(
                                         direction = SwipeToDismissBoxValue.EndToStart,
                                         action = SwipeAction(
@@ -408,6 +410,7 @@ fun ProjectsListScreen(
                                         )
                                     }
                                     HorizontalDivider(modifier = Modifier.padding(start = ResourceListDividerInset))
+                                    }
                                 }
 
                                 if (unsyncedProjectsList.isNotEmpty()) {
@@ -416,12 +419,12 @@ fun ProjectsListScreen(
                                             title = "Not syncing",
                                             count = unsyncedProjectsList.size,
                                             icon = AppIcons.SyncPaused,
-                                            expanded = hiddenExpanded,
-                                            onToggle = { hiddenExpanded = !hiddenExpanded }
+                                            expanded = unsyncedExpanded,
+                                            onToggle = { unsyncedExpanded = !unsyncedExpanded }
                                         )
                                     }
 
-                                    if (hiddenExpanded) {
+                                    if (unsyncedExpanded) {
                                         items(unsyncedProjectsList, key = { "unsynced_${it.projectId}" }) { project ->
                                             SwipeToHideItem(
                                                 direction = SwipeToDismissBoxValue.StartToEnd,
