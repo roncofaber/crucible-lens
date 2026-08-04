@@ -123,7 +123,6 @@ fun NavGraph(
     val lastVisitedResourceName by prefs.lastVisitedResourceName.collectAsStateWithLifecycle()
     val floatingScanButton by prefs.floatingScanButton.collectAsStateWithLifecycle()
     val pinnedProjects by prefs.pinnedProjects.collectAsStateWithLifecycle()
-    val hiddenProjects by prefs.hiddenProjects.collectAsStateWithLifecycle()
     val syncedProjects by prefs.syncedProjects.collectAsStateWithLifecycle()
     val pinnedInstruments by prefs.pinnedInstruments.collectAsStateWithLifecycle()
     val hiddenInstruments by prefs.hiddenInstruments.collectAsStateWithLifecycle()

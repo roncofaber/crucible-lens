@@ -3,10 +3,10 @@
 ## [Unreleased]
 
 ### Added
-- Synced projects picker screen (Settings)
 - Manage Project: leave a project from the overflow menu
 
 ### Changed
+- Choose which projects sync in the background; others still open normally
 - Project and instrument headers now collapse smoothly as you scroll, instead of jumping at the halfway point
 - Collapsed headers now match the page background instead of taking on a tint
 - Project and instrument titles open the manage screen when tapped
@@ -44,6 +44,7 @@
 - Search result rows gained the tap-and-hold menu and chevron used everywhere else
 
 ### Fixed
+- Projects with no samples or datasets are no longer hidden automatically
 - Project header member count, title, and organization now update on refresh and after edits
 - Tapping a collapsed project header could open the project lead's profile
 - Refresh, image load, and metadata search failures now show an error instead of failing silently

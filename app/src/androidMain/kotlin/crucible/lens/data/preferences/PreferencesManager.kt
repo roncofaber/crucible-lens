@@ -37,7 +37,6 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         private val LAST_VISITED_RESOURCE_NAME = stringPreferencesKey("last_visited_resource_name")
         private val FLOATING_SCAN_BUTTON = stringPreferencesKey("floating_scan_button")
         private val PINNED_PROJECTS = stringPreferencesKey("pinned_projects")
-        private val HIDDEN_PROJECTS = stringPreferencesKey("hidden_projects")
         private val SYNCED_PROJECTS = stringPreferencesKey("synced_projects")
         private val SYNC_SETUP_COMPLETE = stringPreferencesKey("sync_setup_complete")
         private val HIDDEN_INSTRUMENTS = stringPreferencesKey("hidden_instruments")
@@ -106,11 +105,6 @@ class PreferencesManager(private val context: Context) : AppPreferences {
 
     override val pinnedProjects: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
         prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
-    }
-        .stateIn(scope, SharingStarted.Eagerly, emptySet())
-
-    override val hiddenProjects: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
-        prefs[HIDDEN_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     }
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
@@ -239,14 +233,6 @@ class PreferencesManager(private val context: Context) : AppPreferences {
                 synced.add(id)
                 prefs[SYNCED_PROJECTS] = synced.joinToString(",")
             }
-        }
-    }
-
-    override suspend fun toggleHiddenProject(id: String) {
-        context.dataStore.edit { prefs ->
-            val current = prefs[HIDDEN_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
-            if (id in current) current.remove(id) else current.add(id)
-            prefs[HIDDEN_PROJECTS] = current.joinToString(",")
         }
     }
 

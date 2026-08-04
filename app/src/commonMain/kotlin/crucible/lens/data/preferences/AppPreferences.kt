@@ -20,7 +20,6 @@ interface AppPreferences {
     val lastVisitedResourceName: StateFlow<String?>
     val floatingScanButton: StateFlow<Boolean>
     val pinnedProjects: StateFlow<Set<String>>
-    val hiddenProjects: StateFlow<Set<String>>
     val syncedProjects: StateFlow<Set<String>>
     val pinnedInstruments: StateFlow<Set<String>>
     val hiddenInstruments: StateFlow<Set<String>>
@@ -44,7 +43,6 @@ interface AppPreferences {
     suspend fun saveFloatingScanButton(enabled: Boolean)
     suspend fun clearApiKey()
     suspend fun togglePinnedProject(id: String)
-    suspend fun toggleHiddenProject(id: String)
     suspend fun toggleSyncedProject(id: String)
     suspend fun setSyncedProjects(ids: Set<String>)
     suspend fun togglePinnedInstrument(id: String)

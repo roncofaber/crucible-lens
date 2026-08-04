@@ -43,9 +43,6 @@ class IosAppPreferences : AppPreferences {
     private val _pinnedProjects = MutableStateFlow(settings.getString("pinned_projects", "").toStringSet())
     override val pinnedProjects: StateFlow<Set<String>> = _pinnedProjects.asStateFlow()
 
-    private val _hiddenProjects = MutableStateFlow(settings.getString("hidden_projects", "").toStringSet())
-    override val hiddenProjects: StateFlow<Set<String>> = _hiddenProjects.asStateFlow()
-
     private val _syncedProjects = MutableStateFlow(settings.getString("synced_projects", "").toStringSet())
     override val syncedProjects: StateFlow<Set<String>> = _syncedProjects.asStateFlow()
 
@@ -134,11 +131,6 @@ class IosAppPreferences : AppPreferences {
             synced.add(id)
             settings.putString("synced_projects", synced.joinToString(",")); _syncedProjects.value = synced
         }
-    }
-
-    override suspend fun toggleHiddenProject(id: String) {
-        val updated = _hiddenProjects.value.toMutableSet().apply { if (id in this) remove(id) else add(id) }
-        settings.putString("hidden_projects", updated.joinToString(",")); _hiddenProjects.value = updated
     }
 
     override suspend fun toggleSyncedProject(id: String) {

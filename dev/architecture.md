@@ -262,10 +262,10 @@ Content does **not** move during pull-to-refresh — the M3 `PullToRefreshBox` i
 `Screen` sealed class with `route` strings. Optional args use query params `?argName={argName}`.  
 Special characters in route segments encoded via `encodeRouteSegment()`.
 
-All 24 routes (see `Screen.kt` for the exact list): `Home`, `Scanner`, `Detail`, `EditResource`,
+All 25 routes (see `Screen.kt` for the exact list): `Home`, `Scanner`, `Detail`, `EditResource`,
 `History`, `Search`, `Projects`, `ProjectDetail`, `ManageProject`, `Instruments`, `InstrumentDetail`,
 `ManageInstrument`, `Settings`, `SettingsApi`, `SettingsAppearance`, `SettingsCache`, `SettingsAbout`,
-`SettingsAccount`, `OrcidLogin`, `CreateSample`, `CreateDataset`, `AddFiles`, `MetadataEditor`, `UserProfile`
+`SettingsAccount`, `OrcidLogin`, `CreateSample`, `CreateDataset`, `AddFiles`, `MetadataEditor`, `UserProfile`, `SyncedProjects`
 
 ---
 
@@ -323,7 +323,10 @@ All app configuration is persisted in `AppPreferences` — a platform-agnostic i
 | Dynamic colour | `StateFlow<Boolean>` | `use_dynamic_color` | Android 12+ only; forced false on iOS |
 | Last visited resource | `StateFlow<String?>` | `last_visited_resource` / `last_visited_resource_name` | |
 | Floating scan button | `StateFlow<Boolean>` | `floating_scan_button` | |
-| Pinned/hidden projects & instruments | `StateFlow<Set<String>>` | `pinned_projects` / `hidden_projects` / `pinned_instruments` / `hidden_instruments` | |
+| Pinned projects | `StateFlow<Set<String>>` | `pinned_projects` | |
+| Synced projects | `StateFlow<Set<String>>` | `synced_projects` | Projects to preload in background via `DataSyncManager.syncAll()` |
+| Sync setup complete | `StateFlow<Boolean>` | `sync_setup_complete` | Set when user completes first-visit sync picker |
+| Pinned/hidden instruments | `StateFlow<Set<String>>` | `pinned_instruments` / `hidden_instruments` | |
 | User ORCID | `StateFlow<String?>` | `user_orcid` | |
 | User profile | `StateFlow<User?>` | `user_profile` | JSON-serialized |
 | Resource history | `StateFlow<List<HistoryItem>>` | `resource_history` | |
