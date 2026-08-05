@@ -33,6 +33,7 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         private val GRAPH_EXPLORER_URL = stringPreferencesKey("graph_explorer_url")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
         private val ACCENT_COLOR = stringPreferencesKey("accent_color")
+        private val ACCENT_STYLE = stringPreferencesKey("accent_style")
         private val LAST_VISITED_RESOURCE = stringPreferencesKey("last_visited_resource")
         private val LAST_VISITED_RESOURCE_NAME = stringPreferencesKey("last_visited_resource_name")
         private val FLOATING_SCAN_BUTTON = stringPreferencesKey("floating_scan_button")
@@ -59,6 +60,7 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         const val THEME_MODE_LIGHT = "light"
         const val THEME_MODE_DARK = "dark"
         const val DEFAULT_ACCENT_COLOR = "blue"
+        const val DEFAULT_ACCENT_STYLE = "tonal_spot"
 
         private val profileJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true }
     }
@@ -87,6 +89,11 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         preferences[ACCENT_COLOR] ?: DEFAULT_ACCENT_COLOR
     }
         .stateIn(scope, SharingStarted.Eagerly, DEFAULT_ACCENT_COLOR)
+
+    override val accentStyle: StateFlow<String> = context.dataStore.data.map { preferences ->
+        preferences[ACCENT_STYLE] ?: DEFAULT_ACCENT_STYLE
+    }
+        .stateIn(scope, SharingStarted.Eagerly, DEFAULT_ACCENT_STYLE)
 
     override val lastVisitedResource: StateFlow<String?> = context.dataStore.data.map { preferences ->
         preferences[LAST_VISITED_RESOURCE]
@@ -200,6 +207,12 @@ class PreferencesManager(private val context: Context) : AppPreferences {
     override suspend fun saveAccentColor(color: String) {
         context.dataStore.edit { preferences ->
             preferences[ACCENT_COLOR] = color
+        }
+    }
+
+    override suspend fun saveAccentStyle(style: String) {
+        context.dataStore.edit { preferences ->
+            preferences[ACCENT_STYLE] = style
         }
     }
 

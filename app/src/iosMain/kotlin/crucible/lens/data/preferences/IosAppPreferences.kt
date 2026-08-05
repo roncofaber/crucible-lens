@@ -28,6 +28,9 @@ class IosAppPreferences : AppPreferences {
     private val _accentColor = MutableStateFlow(settings.getString("accent_color", AppPreferences.DEFAULT_ACCENT_COLOR))
     override val accentColor: StateFlow<String> = _accentColor.asStateFlow()
 
+    private val _accentStyle = MutableStateFlow(settings.getString("accent_style", AppPreferences.DEFAULT_ACCENT_STYLE))
+    override val accentStyle: StateFlow<String> = _accentStyle.asStateFlow()
+
     private val _useDynamicColor = MutableStateFlow(settings.getBoolean("use_dynamic_color", false))
     override val useDynamicColor: StateFlow<Boolean> = _useDynamicColor.asStateFlow()
 
@@ -102,6 +105,10 @@ class IosAppPreferences : AppPreferences {
 
     override suspend fun saveAccentColor(color: String) {
         settings.putString("accent_color", color); _accentColor.value = color
+    }
+
+    override suspend fun saveAccentStyle(style: String) {
+        settings.putString("accent_style", style); _accentStyle.value = style
     }
 
     override suspend fun saveUseDynamicColor(enabled: Boolean) {
