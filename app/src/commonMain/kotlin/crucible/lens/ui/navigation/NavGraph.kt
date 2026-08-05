@@ -38,7 +38,6 @@ import crucible.lens.ui.settings.AppearanceSettingsScreen
 import crucible.lens.ui.settings.CacheSettingsScreen
 import crucible.lens.ui.settings.AboutSettingsScreen
 import crucible.lens.ui.settings.TypographySettingsScreen
-import crucible.lens.ui.settings.ThemePreviewScreen
 import crucible.lens.ui.settings.AccountScreen
 import crucible.lens.ui.settings.AccountViewModel
 import crucible.lens.ui.settings.UserProfileScreen
@@ -358,7 +357,6 @@ fun NavGraph(
                 onNavigateToSyncedProjects = { navController.navigate(Screen.SyncedProjects.createRoute(firstRun = false)) },
                 onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },
                 onNavigateToTypography = { navController.navigate(Screen.SettingsTypography.route) },
-                onNavigateToThemePreview = { navController.navigate(Screen.SettingsThemePreview.route) },
                 onBack = navigateBack,
                 onHome = navigateHome
             )
@@ -421,15 +419,6 @@ fun NavGraph(
 
         composable(Screen.SettingsTypography.route) {
             TypographySettingsScreen(
-                onBack = navigateBack,
-                onHome = navigateHome
-            )
-        }
-
-        composable(Screen.SettingsThemePreview.route) {
-            ThemePreviewScreen(
-                currentAccentColor = accentColor,
-                darkTheme = darkTheme,
                 onBack = navigateBack,
                 onHome = navigateHome
             )

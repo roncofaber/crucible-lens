@@ -6,6 +6,7 @@
 - Manage Project: leave a project from the overflow menu
 
 ### Changed
+- Accent colors now generate a full theme, with a new style picker in Appearance settings
 - Choose which projects sync in the background; others still open normally
 - Resource detail field labels are now larger and medium-weight to stand out from their values
 - Linked/parent/child sample and dataset rows show their type icon again
