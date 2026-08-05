@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.platform.supportsDynamicColor
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.theme.accentColorPalette
+import crucible.lens.ui.theme.accentColorToColor
 import crucible.lens.ui.theme.readableOn
 
 @Composable
@@ -274,15 +276,6 @@ private fun settingsChipBorder(selected: Boolean) = FilterChipDefaults.filterChi
     selected = selected
 )
 
-/** Single source of truth for the named accent colors - see also [accentColorToColor]. */
-private val accentColorPalette: List<Pair<String, Color>> = listOf(
-    "blue"   to Color(0xFF1976D2), "indigo" to Color(0xFF3F51B5),
-    "purple" to Color(0xFF9C27B0), "pink"   to Color(0xFFE91E63),
-    "red"    to Color(0xFFD32F2F), "orange" to Color(0xFFF57C00),
-    "amber"  to Color(0xFFFFA000), "green"  to Color(0xFF388E3C),
-    "teal"   to Color(0xFF00796B), "brown"  to Color(0xFF5D4037),
-)
-
 @Composable
 private fun ColorPickerDialog(
     currentColor: String,
@@ -366,14 +359,3 @@ private fun ColorPickerDialog(
 
 private fun isValidHex(hex: String): Boolean =
     hex.length == 6 && hex.all { it in '0'..'9' || it in 'A'..'F' || it in 'a'..'f' }
-
-internal fun accentColorToColor(colorName: String): Color {
-    if (colorName.startsWith("#") && colorName.length == 7) {
-        return try {
-            val hex = colorName.substring(1).toLong(16)
-            Color((0xFF000000L or hex).toInt())
-        } catch (_: Exception) { Color(0xFF1976D2) }
-    }
-    return accentColorPalette.firstOrNull { it.first == colorName.lowercase() }?.second
-        ?: Color(0xFF1976D2)
-}

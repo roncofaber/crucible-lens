@@ -65,7 +65,7 @@ fun ThemePreviewScreen(
     onBack: () -> Unit,
     onHome: () -> Unit
 ) {
-    val currentScheme = resolveAccentColorScheme(currentAccentColor, darkTheme)
+    val currentScheme = resolveAccentColorScheme(currentAccentColor, "tonal_spot", darkTheme)
     val seed = currentScheme.primary
 
     AppScaffold(
