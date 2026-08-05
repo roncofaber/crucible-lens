@@ -173,8 +173,29 @@ fun CrucibleScannerTheme(
     content: @Composable () -> Unit
 ) {
     // Dynamic colour already derives a full tonal palette from the wallpaper, so it is used as-is.
-    // Everything else goes through withAccentSurfaces() — see its KDoc.
-    val colorScheme = resolveDynamicColorScheme(darkTheme).takeIf { dynamicColor } ?: withAccentSurfaces(when {
+    // Everything else goes through resolveAccentColorScheme() (withAccentSurfaces() internally) —
+    // see that function's KDoc. Extracted to a standalone function (not inlined here) so the debug
+    // Theme Preview screen (ui/settings/ThemePreviewScreen.kt) can resolve "today's real scheme"
+    // for a given accent/theme without duplicating this logic.
+    val colorScheme = resolveDynamicColorScheme(darkTheme).takeIf { dynamicColor }
+        ?: resolveAccentColorScheme(accentColor, darkTheme)
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = Typography,
+        shapes = Shapes,
+        content = content
+    )
+}
+
+/**
+ * Resolves the non-dynamic-colour scheme for a given accent choice (named palette or `#hex`) and
+ * theme mode — the exact logic [CrucibleScannerTheme] uses, extracted so [ThemePreviewScreen]
+ * (`ui/settings/ThemePreviewScreen.kt`) can call the same resolution for its "Current" comparison
+ * panel instead of re-deriving it and risking drift from production.
+ */
+internal fun resolveAccentColorScheme(accentColor: String, darkTheme: Boolean): ColorScheme =
+    withAccentSurfaces(when {
         accentColor.startsWith("#") -> {
             val c = try {
                 Color(parseHexColor(accentColor))
@@ -210,14 +231,6 @@ fun CrucibleScannerTheme(
             else     -> if (darkTheme) BlueDarkColorScheme   else BlueLightColorScheme
         }
     })
-
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        shapes = Shapes,
-        content = content
-    )
-}
 
 private fun parseHexColor(hex: String): Long {
     val cleanHex = hex.removePrefix("#")
