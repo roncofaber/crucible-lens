@@ -32,6 +32,7 @@ fun SettingsScreen(
     onNavigateToSyncedProjects: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onNavigateToTypography: () -> Unit,
+    onNavigateToThemePreview: () -> Unit,
     onBack: () -> Unit,
     onHome: () -> Unit
 ) {
@@ -100,6 +101,12 @@ fun SettingsScreen(
                     title = "Typography",
                     subtitle = "Debug - type scale reference",
                     onClick = onNavigateToTypography
+                )
+                SettingsRow(
+                    icon = AppIcons.ColorPicker,
+                    title = "Theme Preview",
+                    subtitle = "Debug - compare surface color systems",
+                    onClick = onNavigateToThemePreview
                 )
             }
         }
