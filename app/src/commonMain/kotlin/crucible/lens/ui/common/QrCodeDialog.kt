@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Image
@@ -76,12 +75,7 @@ fun QrCodeDialog(mfid: String, name: String, onDismiss: () -> Unit) {
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    mfid,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                IdText(mfid)
             }
         },
         confirmButton = {
@@ -187,12 +181,7 @@ fun QrCodeDialogWithNavigation(
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            resource.uniqueId,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        IdText(resource.uniqueId)
                     }
                 }
             }

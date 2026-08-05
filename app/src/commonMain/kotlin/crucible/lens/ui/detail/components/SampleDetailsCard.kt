@@ -14,7 +14,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.Sample
 import crucible.lens.data.util.formatDateTime
@@ -23,6 +22,7 @@ import crucible.lens.data.util.userDisplayName
 import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
+import crucible.lens.ui.common.IdText
 import crucible.lens.ui.common.StandardSizeAnim
 import kotlinx.serialization.json.JsonPrimitive
 import crucible.lens.ui.theme.emphasizedTitleMedium
@@ -72,12 +72,7 @@ internal fun SampleDetailsCard(
             }
 
             // MFID left-aligned below title
-            Text(
-                text = sample.uniqueId,
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            IdText(text = sample.uniqueId)
             Spacer(modifier = Modifier.height(6.dp))
 
             // Deletion warning

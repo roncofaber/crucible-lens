@@ -15,7 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.repository.CrucibleRepository
@@ -24,6 +23,7 @@ import crucible.lens.data.model.Sample
 import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.ui.common.CopyIdMenuItem
+import crucible.lens.ui.common.IdText
 import crucible.lens.ui.common.OpenInWebMenuItem
 import crucible.lens.ui.common.ShareMenuItem
 import crucible.lens.platform.copyToClipboard
@@ -206,11 +206,7 @@ private fun HistoryCard(
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(formatRelativeTime(item.timestamp), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(item.uuid, style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(start = 8.dp))
+                        IdText(item.uuid, modifier = Modifier.padding(start = 8.dp))
                     }
                 }
             },

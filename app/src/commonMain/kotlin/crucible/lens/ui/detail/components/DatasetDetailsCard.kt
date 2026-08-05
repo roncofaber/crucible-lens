@@ -14,7 +14,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.repository.CrucibleRepository
@@ -25,6 +24,7 @@ import crucible.lens.data.util.userDisplayName
 import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
+import crucible.lens.ui.common.IdText
 import crucible.lens.ui.common.StandardSizeAnim
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
@@ -78,12 +78,7 @@ internal fun DatasetDetailsCard(
             }
 
             // MFID left-aligned below title
-            Text(
-                text = dataset.uniqueId,
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            IdText(text = dataset.uniqueId)
             Spacer(modifier = Modifier.height(4.dp))
 
             // Deletion warning

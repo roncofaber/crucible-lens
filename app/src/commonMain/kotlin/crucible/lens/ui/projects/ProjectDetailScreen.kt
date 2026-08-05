@@ -61,6 +61,7 @@ import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.util.SortState
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.data.util.userDisplayName
+import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
 import crucible.lens.platform.shareText
@@ -71,6 +72,8 @@ import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.CollapsingAppTopBar
 import crucible.lens.ui.common.ContentFastCrossfadeSpec
+import crucible.lens.ui.common.CopyIdMenuItem
+import crucible.lens.ui.common.IdText
 import crucible.lens.ui.common.GroupByOption
 import crucible.lens.ui.common.LoadState
 import crucible.lens.ui.common.NotificationDot
@@ -304,6 +307,12 @@ fun ProjectDetailScreen(
                             }
                         }
                     }
+                    // Least essential identity field, so it's last - the shared IdText style
+                    // (monospace, dimmed) used by every other machine ID in the app, not the
+                    // sans-serif prose used for org/members/sync-status above. Tap to copy,
+                    // matching InstrumentDetailScreen's overflow-menu Copy ID action for the same
+                    // purpose.
+                    IdText(text = projectId, modifier = Modifier.clickable { copyToClipboard(ctx, projectId) })
                 },
                 actions = {
                     IconButton(onClick = onTogglePin) {
@@ -345,6 +354,7 @@ fun ProjectDetailScreen(
                                 leadingIcon = { AppIcon(if (isSynced) AppIcons.SyncPaused else AppIcons.Syncing) },
                                 onClick = { topBarMenuExpanded = false; onToggleSync() }
                             )
+                            CopyIdMenuItem { topBarMenuExpanded = false; copyToClipboard(ctx, projectId) }
                             OpenInWebMenuItem { topBarMenuExpanded = false; openUrl(ctx, "$graphExplorerUrl/$projectId") }
                             ShareMenuItem { topBarMenuExpanded = false; shareText(ctx, "$graphExplorerUrl/$projectId", project?.title ?: projectId) }
                             HorizontalDivider()

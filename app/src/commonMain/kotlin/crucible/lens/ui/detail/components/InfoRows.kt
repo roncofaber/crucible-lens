@@ -28,7 +28,7 @@ internal fun InfoRow(
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = "$label:",
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(0.3f)
         )
@@ -60,7 +60,7 @@ internal fun ClickableInfoRow(
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = "$label:",
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(0.3f)
         )

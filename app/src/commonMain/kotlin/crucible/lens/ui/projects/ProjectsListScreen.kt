@@ -13,6 +13,7 @@ import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppTopBar
+import crucible.lens.ui.common.IdText
 import crucible.lens.ui.common.ResourceListDividerInset
 import crucible.lens.ui.common.SectionHeader
 import crucible.lens.ui.common.SwipeAction
@@ -504,15 +505,7 @@ private fun ProjectCard(
             )
         },
         supportingContent = if (showId) {
-            {
-                Text(
-                    text = "ID: ${project.projectId}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            { IdText("#${project.projectId}") }
         } else null,
         leadingContent = {
             NotificationDot(count = pendingRequestCount) {
