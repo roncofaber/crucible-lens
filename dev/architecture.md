@@ -62,9 +62,12 @@ Migrated from `com.android.library` + `src/main/` to `com.android.kotlin.multipl
 `CLAUDE.md` for details.
 
 `ProjectDetailScreen` is a layout + state container; the sample and dataset list rendering logic
-(grouping, sorting, pagination) lives in `ProjectResourceLists.kt` — `SamplesList`, `DatasetsList`,
-and the shared `groupedResourceItems` function. This separation keeps list complexity out of the
-screen composable and makes the shared patterns reusable.
+(grouping, sorting) lives in `ProjectResourceLists.kt` — `SamplesList`, `DatasetsList`, and the
+shared `groupedResourceItems` function. This separation keeps list complexity out of the screen
+composable and makes the shared patterns reusable. Groups render in full — no "Load more"
+button/cap — since `CrucibleRepository.fetchProjectData` already fetches and caches the complete
+sample/dataset lists before this screen renders, so there's no network page left to defer, and
+`LazyColumn` only composes/measures items near the viewport regardless of how many are registered.
 
 ### Package layout (commonMain)
 
@@ -403,7 +406,7 @@ Not `Api-Key` or `Token`.
 only composes the top of the back stack, so pushing a new destination fully disposes the
 composable underneath it; on `popBackStack()`, that composable recomposes from scratch and any
 plain `remember`ed value silently resets to its initial default. This bit
-`ProjectDetailScreen`'s per-group expand/pagination state, which reset after visiting a resource
+`ProjectDetailScreen`'s per-group expand state, which reset after visiting a resource
 detail screen and coming back — fixed via `rememberSaveable` + `stateMapSaver()`
 (`ui/common/SaveableStateMap.kt`). Any screen-level state that must survive a push-and-pop round
 trip — not just scroll position, which `rememberLazyListState()` already saves for free — needs

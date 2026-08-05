@@ -7,6 +7,14 @@
 
 ### Changed
 - Choose which projects sync in the background; others still open normally
+- Resource detail field labels are now larger and medium-weight to stand out from their values
+- Linked/parent/child sample and dataset rows show their type icon again
+- Project/instrument headers are tinted while expanded, fading to plain background as they collapse
+- Removed the search icon from the resource detail screen
+- Normalized shadow/tint depth on cards, banners, and bottom action bars to Material 3 levels
+- Project/instrument header's expanded tint is more noticeable
+- Resource row IDs are fainter so the name stands out more
+- Sample/dataset groups now scroll through everything directly instead of a "Load more" button
 - Project and instrument headers now collapse smoothly as you scroll, instead of jumping at the halfway point
 - Collapsed headers now match the page background instead of taking on a tint
 - Project and instrument titles open the manage screen when tapped
@@ -44,6 +52,18 @@
 - Search result rows gained the tap-and-hold menu and chevron used everywhere else
 
 ### Fixed
+- Swiping to sync/unsync a project felt laggy and added a haptic tick at the commit point
+- Dataset file download/share icons no longer shift position when tapped or when a file is pending
+- Project screen's header shows the project ID, tap to copy
+- API settings screen restyled to match the rest of Settings; connection test now sits below the fields it tests
+- Account screen: added a button to copy your API key
+- Home screen footer no longer wraps or gets clipped on narrow screens
+- IDs (mfid, project/instrument ID) now look consistent everywhere they appear
+- Link Resource sheet no longer shows the project name in monospace next to the ID
+- Project list rows show "#id" instead of "ID: id" beneath the project name
+- Linked/parent/child resource rows use a proper tinted background instead of a flat grey overlay
+- Removed an unexplained shadow on dataset thumbnail cards
+- Status/navigation bar icons were invisible (white on white) in light theme
 - Projects with no samples or datasets are no longer hidden automatically
 - Project header member count, title, and organization now update on refresh and after edits
 - Tapping a collapsed project header could open the project lead's profile

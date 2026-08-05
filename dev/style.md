@@ -5,6 +5,7 @@
 - [Compose experimental opt-ins](#compose-experimental-opt-ins)
 - [Spacing & layout](#spacing--layout)
 - [Rows & cards](#rows--cards)
+- [Elevation](#elevation)
 - [Typography](#typography)
 - [AnimatedVisibility for lazy-list items](#animatedvisibility-for-lazy-list-items)
 - [Tabs + grouping](#tabs--grouping-projectdetailscreen-pattern)
@@ -116,6 +117,60 @@ navigating back.
 
 ---
 
+## Elevation
+
+`ui/common/AppElevation.kt` declares the 6 canonical M3 elevation levels (`Level0`–`Level5` =
+0/1/3/6/8/12dp) — pass these to `tonalElevation`, `shadowElevation`,
+`CardDefaults.cardElevation()`, and `FloatingActionButtonDefaults.elevation()` instead of an
+inline `Xdp`. An audit found several one-off values (2dp on a thumbnail card, 6dp on a home-screen
+banner, 8dp on two different hand-rolled bottom bars, 4dp/8dp on a mini FAB) that were each either
+a level that doesn't exist in the M3 scale, a canonical level borrowed from the wrong component's
+tier, or `Level4`/`Level5` used as a resting value when M3 reserves those two for
+hover/focus/dragged states only. All were normalized to `AppElevation` per the resting-level
+mapping in that file's KDoc (sourced from `m3.material.io/styles/elevation`).
+
+A follow-up pass on the resource detail screen found two more one-offs, since fixed:
+`ThumbnailsSection`'s card had an elevation override at all - `BasicInfoCard`, `SampleDetailsCard`/
+`DatasetDetailsCard`, `LinkedResourceCards`, and `AssociatedFilesCard` on that same screen all use a
+bare `Card { }` with no override, which resolves to M3's own filled-card default (`Level0`, 0dp,
+flat) - so the thumbnail card was the only one on the screen with any shadow, for no documented
+reason. Dropped the override rather than keeping it, since nothing about thumbnail media on this
+screen meets M3's stated bar for shadow use (protection from a busy background, or signalling
+interactivity) that its flat siblings don't also meet. If a future thumbnail redesign wants
+elevation back, document why, the way `QrCodeDialog`'s `tonalElevation = 0` carve-out does for the
+opposite case.
+
+`LinkedResourceCards.kt`'s `ResourceRow` also used a raw `MaterialTheme.colorScheme.onSurface.copy(alpha
+= 0.06f)` background instead of a real container role - a plain alpha-blend of a *foreground* color
+role doesn't track the user's accent colour the way `surfaceContainer*`/`surfaceVariant` do, so it
+read as flat grey in every palette while everything else picked up the accent. Changed to
+`surfaceVariant`, matching the same "flat tinted row" convention already used by roughly ten other
+call sites in the app (`AddFilesScreen`, `ManageInstrumentScreen`, `ErrorCard`, `MetadataEditor`,
+`ResourceDetailScreen`, `NavGraph`, `ResourceListComponents`, `InstrumentListScreen`,
+`ProjectsListScreen`) rather than introducing a second, accent-derived treatment for the same kind
+of element.
+
+**M3 elevation and container colour are two separate decisions, not one.** Per M3's current
+guidance, *"surface tint colour is deprecated, use elevation level tokens instead"* and *"surface
+roles are not tied to elevation"* — the modern pattern is: pick a dp level for shadow/z-depth, and
+pick a `surface`/`surfaceContainer*` role for colour, independently. This matters because Compose's
+automatic tonal-elevation blend (`Surface`'s `tonalElevation` parameter) **only applies when
+`color` is left at the default `colorScheme.surface`** — setting any other explicit `color` (e.g.
+`surfaceVariant`) makes `tonalElevation` a silent no-op. `HomeScreen.kt`'s search pill had exactly
+this bug (`color = surfaceVariant` with a `tonalElevation = 2.dp` that did nothing); the fix was to
+drop the dead parameter, not raise the value.
+
+**The collapsing top bar's expanded/collapsed tint** (see below) is a deliberate exception to the
+letter of M3's own app-bar table, which assigns the *scrolled* state elevation (`Level2`) and the
+*resting* state none (`Level0`) — the opposite of what this app does. That's because
+`CollapsingAppTopBar`'s content is padded below the bar rather than scrolling underneath it, so
+there's no "something is now behind me" moment for elevation to signal; the tint there is a
+containment choice (marking the hero block as its own panel), not an elevation one. Don't treat
+that inversion as a precedent for other app bars — it applies to this one component for this
+specific structural reason.
+
+---
+
 ## Typography
 
 | Treatment | Role | Size / weight | Colour |
@@ -127,16 +182,31 @@ navigating back.
 | Text input | `bodyLarge` | 16 Regular | M3's own text-field default; never set it |
 | **Row title / body copy / paragraphs** | `bodyMedium` | 14 Regular | `onSurface` |
 | Button / chip label | `labelLarge` | 14 Medium | M3's own button default; never set it |
-| Secondary line / caption / metadata / ID | `bodySmall` | 12 Regular | `onSurfaceVariant` |
+| Secondary line / caption / metadata | `bodySmall` | 12 Regular | `onSurfaceVariant` |
+| Machine ID (mfid, project/instrument ID) | `bodySmall` monospace, via `IdText` (`ui/common/IdText.kt`) | 12 Regular | `onSurfaceVariant.copy(alpha = 0.6f)` |
 | Inline section label | `labelMedium` | 12 Medium | `primary` (or `onSurfaceVariant` when nested in a card that already carries an accent) |
+| Detail row label (`InfoRow`/`ClickableInfoRow`) | `titleSmall` | 14 Medium | `onSurfaceVariant` |
 
 Count badges use the inline-label treatment (`labelMedium` + `primary` + `fontFeatureSettings = "tnum"`).
 
+**`IdText`** (`ui/common/IdText.kt`) is the shared look for any mfid/project/instrument ID -
+`bodySmall`, monospace by default (`monospace = false` opts out), dimmed to 60% alpha since an ID
+is the least essential thing on a name-first row or card. It's purely visual - callers attach
+click/copy behaviour themselves via `modifier` (some IDs are tap-to-copy, some sit next to a
+separate copy button, some are inert and reachable only via a row's long-press menu). Before this
+existed, `ResourceCard`, `SampleDetailsCard`/`DatasetDetailsCard`, and `ProjectDetailScreen`'s
+header each hand-rolled the same `bodySmall` + `Monospace` + `onSurfaceVariant` combination with a
+drifting alpha (some dimmed, some not) - use `IdText` for any new one instead of another one-off.
+**Don't reach for it on a tinted container** (e.g. a banner on `primaryContainer`) - its color is
+hardcoded to `onSurfaceVariant`, which assumes a plain `surface` background; `SearchScreen`'s
+"Open resource directly" suggestion banner is a real example that correctly stays a hand-written
+`Text` for exactly this reason.
+
 **Size cap:** nothing above 22 sp. Only two sizes carry all the chrome - 22 for surface titles, 16 for both header kinds - and weight (Regular / Medium / Bold) does the rest. This keeps the palette small and manageable.
 
-**Retired roles:** all three `display*`, all three `headline*`, `titleSmall`, `labelSmall`, and 13 of the 15 emphasized variants. Reaching for any of these means the element's job has not been decided yet - not that the system is missing a role.
+**Retired roles:** all three `display*`, all three `headline*`, `labelSmall`, and all but two of the emphasized variants. Reaching for any of these means the element's job has not been decided yet - not that the system is missing a role.
 
-**Governing principle:** pick the role that means the thing; carry emphasis with colour and container, not weight. Weight is the weakest of the three channels.
+**Governing principle:** pick the role that means the thing; carry emphasis with colour and container, not weight. Weight is the weakest of the three channels. The detail-row label is the one place emphasis still comes from weight, but it no longer needs a synthetic `emphasizedX` override to get there: `titleSmall` (14 Medium) sits one step up from the value's `bodyMedium` (14 Regular) - same size, so the two align in a `label: value` row, with weight plus the muted `onSurfaceVariant` colour doing the differentiation. This is why `titleSmall` is sanctioned here despite being retired everywhere else - it isn't reused as a generic "medium-emphasis" role, only for this specific row shape.
 
 **Stock ramp only.** The type scale is stock M3 1.4.0 with zero deviations. Every `Text` uses a plain `MaterialTheme.typography.X`. No extension properties on `Typography`, no `fontSize =` outside `Type.kt`, and no `.copy()` that changes a role's size or weight. If a size feels wrong, change the element's role, not the ramp. One-off size tweaks are how a scale stops being a scale.
 
@@ -159,9 +229,14 @@ grep -rnE "fontSize = " --include=*.kt app/src/commonMain/kotlin/crucible/lens/u
 Should return exactly one - the 13 sp monospace field in `MetadataEditorScreen.kt`.
 
 ```bash
-grep -rnE 'typography\.(headline|display)|typography\.titleSmall|typography\.labelSmall' --include=*.kt app/src/commonMain/kotlin/crucible/lens/ui | grep -v theme/Type.kt | grep -v TypographySettingsScreen
+grep -rnE 'typography\.(headline|display)|typography\.labelSmall' --include=*.kt app/src/commonMain/kotlin/crucible/lens/ui | grep -v theme/Type.kt | grep -v TypographySettingsScreen
 ```
 Should return zero.
+
+```bash
+grep -rn 'typography\.titleSmall' --include=*.kt app/src/commonMain/kotlin/crucible/lens/ui | grep -v theme/Type.kt | grep -v TypographySettingsScreen
+```
+Should return only the two hits in `InfoRows.kt` (`InfoRow`/`ClickableInfoRow`'s label).
 
 ```bash
 grep -rhoE 'typography\.emphasized[A-Za-z]+' --include=*.kt app/src/commonMain/kotlin/crucible/lens/ui | grep -v TypographySettings | sort -u
@@ -202,13 +277,20 @@ Compose 1.4.0 ships the emphasized tokens but every accessor is `internal` - the
 
 `Type.kt` declares all 15 emphasized variants so the block mirrors M3's real scale, but only these
 two are sanctioned. The other 13 are retired: emphasising a `body*` or `label*` role means the
-element wants a different role, not a heavier one.
+element wants a different role, not a heavier one. The detail-row label (`InfoRow`/
+`ClickableInfoRow`) used to be one of these (`emphasizedLabelMedium`) but now uses stock `titleSmall`
+instead - see the Typography table above - since it sits at the same 14sp size as the value it
+labels rather than needing a synthetic Bold override at a smaller size.
 
 When CMP ships a stable M3 exposing the official accessors, delete the block in `Type.kt` and rename `emphasizedTitleMedium` / `emphasizedTitleLarge` -> `titleMediumEmphasized` / `titleLargeEmphasized` throughout.
 
 **Colour, not weight, for accent.** M3 puts body text on `onSurface`, with `onSurfaceVariant` as the muted alternative, and reserves `primary` for hyperlinks. Section headers get their accent from the container plus a tinted icon, not from primary-coloured body text.
 
 **Tabular figures** (`fontFeatureSettings = "tnum"`) on any number that changes in place - counts, timers - so digits don't shift width. `SectionHeader`'s count badge does this.
+
+**A line that must never wrap or clip: `autoSize`, on one `Text`, not several.** M3 1.4.0's `Text` (via Foundation 1.10.3's `BasicText`) takes a stable `autoSize: TextAutoSize?` parameter - `TextAutoSize.StepBased(minFontSize, maxFontSize)` shrinks that `Text`'s font to the largest size that still fits its constraints at `maxLines`, falling back to `overflow` (use `TextOverflow.Ellipsis`) only if it still doesn't fit at `minFontSize`. Cap `maxFontSize` at the role's own size (e.g. `MaterialTheme.typography.bodySmall.fontSize`) so it only ever shrinks, never grows past the intended design. `HomeScreen`'s footer (`Crucible Lens vX.Y.Z • by Crucible Team • Molecular Foundry`) uses this: `maxLines = 1` + `autoSize` guarantees it never wraps to a second line or gets clipped past the screen edge on a narrow phone or a longer version string.
+
+**This only works as one `Text`.** `autoSize` measures and shrinks a single `Text`/`BasicText` call's content as a unit; three separate `Text`s in a `Row` (as the footer used to be, split by color/clickability) each measure and autosize independently against the same available width, landing on different font sizes with no guarantee they line up. Where a line needs multiple colours or a clickable segment, build one `AnnotatedString` (`buildAnnotatedString` + `withStyle(SpanStyle(color = …))`) and attach the click behaviour as a `LinkAnnotation.Clickable` span (`withLink`) inside that same string, rather than reaching for a separate `Modifier.clickable` `Text`.
 
 ---
 
@@ -307,6 +389,16 @@ after several other approaches:
   constraints, so this reports a stable value throughout the collapse/expand animation, not a
   shrinking one) and feeding it into `heightOffsetLimit` via a `SideEffect`. Any future rewrite of
   this composable that stops calling a real M3 app bar composable needs to keep doing this.
+- **Container colour lerps `surfaceContainerHigh` (expanded) -> `surface` (collapsed)**, read via
+  `drawBehind` on the wrapping `Surface` (itself `color = Color.Transparent`) so the blend is a
+  draw-phase read of `collapsedFraction`, not a composable-time one - consistent with every other
+  scroll-driven value in this composable. Expanded uses a stronger tier of the same accent-derived
+  container family `SectionHeader` uses (`surfaceContainerHigh`'s 5% primary blend, vs.
+  `SectionHeader`'s compact `surfaceContainer` at 3.5%) - this hero block is the single largest,
+  highest-emphasis container on the screen, so a plain `surfaceContainer` read as too subtle to
+  register as a distinct panel. Fully collapsed always matches `surface` exactly (the same tone as
+  the page background), which is what the earlier "collapsed bar looks like a different colour than
+  the page" bug required.
 - **The pin toggle moved into the top bar's `actions`** (before home/overflow — the search icon was
   dropped from this row entirely, since the inline filter field in `ResourceControlsBar` already
   covers in-screen search and the top bar was crowded), so it's
@@ -336,13 +428,19 @@ after several other approaches:
   section used to describe in more detail).
 - **`LazyColumn`'s `content: LazyListScope.() -> Unit` is not itself a composable slot** — only
   the trailing lambdas passed to `item {}`/`stickyHeader {}`/`items {}` are. This is why
-  `groupedResourceItems` (the shared grouping/sticky-header/pagination logic used by both
+  `groupedResourceItems` (the shared grouping/sticky-header rendering logic used by both
   `SamplesList` and `DatasetsList`) is a plain function, not `@Composable` — any `@Composable`
-  state it needs (`rememberOwnerNames`, `rememberSaveable` expand/pagination maps, the
-  grouped-items computation) is resolved by the calling `@Composable` function
-  (`SamplesList`/`DatasetsList`) and passed in as plain values; the shared function only calls
-  `item`/`stickyHeader` itself, with the actual `@Composable` calls (`ResourceCard`, etc.) living
-  inside those trailing lambdas. `loadMoreItem` already proved this shape before this pattern existed.
+  state it needs (`rememberOwnerNames`, the `rememberSaveable` expand-state map, the grouping and
+  sorting) is resolved by the calling `@Composable` function (`SamplesList`/`DatasetsList`) and
+  passed in as plain, already-sorted values; the shared function only calls `item`/`stickyHeader`
+  itself, with the actual `@Composable` calls (`ResourceCard`, etc.) living inside those trailing
+  lambdas. There's no manual pagination/"Load more" step anymore — every group renders in full
+  (the data's already entirely in memory; `LazyColumn` only composes what's near the viewport
+  regardless of how many items are registered) — but the constraint on where `@Composable` state
+  can live is unchanged, which is why the grouping (`remember(samples, groupBy, ownerNames)`) and
+  the per-group sort (`remember(groupedByKey, sortState)`, kept separate so a sort-only change
+  doesn't redo the more expensive regrouping) both still live in `SamplesList`/`DatasetsList`, not
+  in `groupedResourceItems` itself.
 - The top bar's `name` is gated on the entity itself resolving (`project?.title ?: projectId` /
   `instrument?.instrumentName ?: instrumentId`), **not** on the resource-list load state — the
   project/instrument fetch is usually already warm (from the list screen) and independent of the

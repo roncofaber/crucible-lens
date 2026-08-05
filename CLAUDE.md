@@ -16,7 +16,7 @@ Deep reference material (concepts, design decisions, full structure) lives in `d
 | File | Covers | Update it when you... |
 |---|---|---|
 | `dev/architecture.md` | Full stack table, package-by-package layout, data models, full API endpoint list, caching layers (`CrucibleRepository`/`ObservableCache`), ViewModels, pull-to-refresh pattern, navigation routes, Koin DI details, common gotchas, known gaps | Add/rename a package, add an API endpoint, change caching behavior, add a ViewModel, change DI wiring |
-| `dev/style.md` | Compose `@OptIn` conventions, spacing/layout values, row/card and typography styles, `AnimatedVisibility` list-item pattern, "no comments" rule | Establish or change a UI styling convention that should apply project-wide |
+| `dev/style.md` | Compose `@OptIn` conventions, spacing/layout values, row/card and typography styles, elevation levels, `AnimatedVisibility` list-item pattern, "no comments" rule | Establish or change a UI styling convention that should apply project-wide |
 | `dev/platform-parity.md` | What's shared vs. Android/iOS-only, known iOS gaps, iOS build/Xcode setup instructions | Add a platform-specific feature, close an iOS gap, change the iOS build process |
 | `dev/icons.md` | Material Symbols download manifest — exact icon names/fill variants per `AppIcons` token | Add a new icon token |
 
@@ -127,6 +127,10 @@ All specs live in `ui/common/AppAnimations.kt` — never inline a tween in UI co
 - **Nav timing**: `NavEnterDuration = 300`, `NavExitDuration = 200`. Navigation screen transitions keep tween-based specs.
 - **`ExpandChevron`**: the single composable for every expand/collapse chevron — `fast = true` for nested elements
 
+## Elevation
+
+All levels live in `ui/common/AppElevation.kt` (`Level0`–`Level5` = 0/1/3/6/8/12dp, M3's 6 canonical values) — never inline a one-off `Xdp` on `tonalElevation`/`shadowElevation`/`CardDefaults.cardElevation()`/`FloatingActionButtonDefaults.elevation()`. `Level4`/`Level5` are hover/focus/drag-only per M3 spec — don't use them as a resting value. See `dev/style.md`'s Elevation section for the full component → level mapping and the tonal-elevation-is-a-no-op-once-you-set-`color` gotcha.
+
 ## Theming
 
 - **`ui/theme/Theme.kt`** — `CrucibleScannerTheme`, passing `colorScheme`, `typography`, and `shapes` to `MaterialTheme`.
@@ -153,3 +157,4 @@ No version force needed. CMP 1.10.x naturally resolves to `androidx.compose.mate
 - `SearchBar` in `SearchScreen` uses the deprecated `expanded/onExpandedChange` API (the new `SearchBarState` API requires M3 1.5.0+ which is still alpha). This is intentional — migrate when M3 1.5.0 stabilises.
 - Swipe-to-hide lives in one shared `ui/common/SwipeToHideItem.kt` (used by `ProjectsListScreen`/`InstrumentListScreen`): bare `rememberSwipeToDismissBoxState()` plus `SwipeToDismissBox`'s `onDismiss` callback — don't reintroduce the deprecated `confirmValueChange` overload. Re-arming a dismissed item is done by changing the caller's `key()`, never by resetting the state (see that file's KDoc).
 - The only `@Suppress("DEPRECATION")` in `ui/` is `DateTimePickerField.kt` (kotlinx-datetime's `monthNumber`/`dayOfMonth`).
+- Targeting SDK 35+ means the OS enforces edge-to-edge unconditionally, but status/nav bar icon *contrast* isn't automatic — `MainActivity.kt` sets `WindowCompat.getInsetsController(...).isAppearanceLightStatusBars`/`isAppearanceLightNavigationBars` from the resolved `darkTheme` (not raw system dark mode) so they stay legible and follow the in-app Light/Dark/System preference, not just the OS setting.
