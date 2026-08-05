@@ -28,11 +28,13 @@ import crucible.lens.ui.theme.readableOn
 fun AppearanceSettingsScreen(
     currentThemeMode: String,
     currentAccentColor: String,
+    currentAccentStyle: String,
     currentFloatingScanButton: Boolean,
     currentUseDynamicColor: Boolean = false,
     currentDefaultProjectTab: String,
     onThemeModeSave: (String) -> Unit,
     onAccentColorSave: (String) -> Unit,
+    onAccentStyleSave: (String) -> Unit,
     onFloatingScanButtonSave: (Boolean) -> Unit,
     onUseDynamicColorSave: (Boolean) -> Unit = {},
     onDefaultProjectTabSave: (String) -> Unit,
@@ -42,6 +44,7 @@ fun AppearanceSettingsScreen(
     val dynamicColorSupported = supportsDynamicColor()
     var themeModeInput          by remember { mutableStateOf(currentThemeMode) }
     var accentColorInput        by remember { mutableStateOf(currentAccentColor) }
+    var accentStyleInput        by remember { mutableStateOf(currentAccentStyle) }
     var floatingScanButtonInput by remember { mutableStateOf(currentFloatingScanButton) }
     var useDynamicColorInput    by remember { mutableStateOf(currentUseDynamicColor) }
     var defaultProjectTabInput  by remember { mutableStateOf(currentDefaultProjectTab) }
@@ -49,6 +52,7 @@ fun AppearanceSettingsScreen(
 
     LaunchedEffect(currentThemeMode)         { themeModeInput         = currentThemeMode }
     LaunchedEffect(currentAccentColor)       { accentColorInput       = currentAccentColor }
+    LaunchedEffect(currentAccentStyle)       { accentStyleInput       = currentAccentStyle }
     LaunchedEffect(currentFloatingScanButton){ floatingScanButtonInput = currentFloatingScanButton }
     LaunchedEffect(currentUseDynamicColor)   { useDynamicColorInput   = currentUseDynamicColor }
     LaunchedEffect(currentDefaultProjectTab) { defaultProjectTabInput = currentDefaultProjectTab }
@@ -161,6 +165,40 @@ fun AppearanceSettingsScreen(
                         }
                     }
                 }
+
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AppIcon(AppIcons.ColorPicker, tint = MaterialTheme.colorScheme.primary)
+                            Text("Style", style = MaterialTheme.typography.titleMedium)
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(
+                                "tonal_spot" to "Tonal Spot", "neutral" to "Neutral",
+                                "vibrant" to "Vibrant", "expressive" to "Expressive"
+                            ).forEach { (value, label) ->
+                                FilterChip(
+                                    selected = accentStyleInput == value,
+                                    onClick = { accentStyleInput = value; onAccentStyleSave(value) },
+                                    label = { Text(label) },
+                                    leadingIcon = if (accentStyleInput == value) {
+                                        { AppIcon(AppIcons.Selected, modifier = Modifier.size(18.dp)) }
+                                    } else null,
+                                    modifier = Modifier.weight(1f),
+                                    colors = settingsChipColors(),
+                                    border = settingsChipBorder(selected = accentStyleInput == value)
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             // Floating scan button
@@ -237,6 +275,7 @@ fun AppearanceSettingsScreen(
                     themeModeInput = "system";                              onThemeModeSave("system")
                     useDynamicColorInput = false;                           onUseDynamicColorSave(false)
                     accentColorInput = "blue";                              onAccentColorSave("blue")
+                    accentStyleInput = "tonal_spot";                        onAccentStyleSave("tonal_spot")
                     floatingScanButtonInput = true;                         onFloatingScanButtonSave(true)
                     defaultProjectTabInput = AppPreferences.PROJECT_TAB_SAMPLES
                     onDefaultProjectTabSave(AppPreferences.PROJECT_TAB_SAMPLES)

@@ -117,6 +117,7 @@ fun NavGraph(
     val graphExplorerUrl by prefs.graphExplorerUrl.collectAsStateWithLifecycle()
     val themeMode by prefs.themeMode.collectAsStateWithLifecycle()
     val accentColor by prefs.accentColor.collectAsStateWithLifecycle()
+    val accentStyle by prefs.accentStyle.collectAsStateWithLifecycle()
     val useDynamicColor by prefs.useDynamicColor.collectAsStateWithLifecycle()
     val darkTheme = themeMode == AppPreferences.THEME_MODE_DARK ||
         (themeMode == AppPreferences.THEME_MODE_SYSTEM && isSystemInDarkTheme())
@@ -395,11 +396,13 @@ fun NavGraph(
             AppearanceSettingsScreen(
                 currentThemeMode = themeMode,
                 currentAccentColor = accentColor,
+                currentAccentStyle = accentStyle,
                 currentFloatingScanButton = floatingScanButton,
                 currentUseDynamicColor = useDynamicColor,
                 currentDefaultProjectTab = defaultProjectTab,
                 onThemeModeSave = { mode -> scope.launch { prefs.saveThemeMode(mode) } },
                 onAccentColorSave = { color -> scope.launch { prefs.saveAccentColor(color) } },
+                onAccentStyleSave = { style -> scope.launch { prefs.saveAccentStyle(style) } },
                 onUseDynamicColorSave = { enabled -> scope.launch { prefs.saveUseDynamicColor(enabled) } },
                 onFloatingScanButtonSave = { enabled -> scope.launch { prefs.saveFloatingScanButton(enabled) } },
                 onDefaultProjectTabSave = { tab -> scope.launch { prefs.saveDefaultProjectTab(tab) } },

@@ -136,7 +136,7 @@ All levels live in `ui/common/AppElevation.kt` (`Level0`–`Level5` = 0/1/3/6/8/
 - **`ui/theme/Theme.kt`** — `CrucibleScannerTheme`, passing `colorScheme`, `typography`, and `shapes` to `MaterialTheme`.
 - **`ui/theme/Type.kt`** — all 15 M3 type roles declared explicitly, matching M3 1.4.0's `TypographyTokens` defaults exactly — zero deviations from the stock ramp.
 - **`ui/theme/Shape.kt`** — full M3 shape scale declared explicitly (4/8/12/16/28dp). Always reference `MaterialTheme.shapes.X`, never a hardcoded `RoundedCornerShape(N.dp)`.
-- **Accent colors**: 10 named palettes plus a custom-hex path, each with light/dark variants, all in `Theme.kt`. Dynamic color (Android 12+/API 31+) takes priority when enabled.
+- **Accent colors**: 10 named seed colors plus a custom-hex path (`accentColorToColor()` in `Theme.kt`), fed into `com.materialkolor.dynamicColorScheme()` to generate a complete scheme — not hand-authored per role. The user also picks a `PaletteStyle` (Tonal Spot / Neutral / Vibrant / Expressive) in Settings → Appearance, persisted as `AppPreferences.accentStyle`. Dynamic color (Android 12+/API 31+) takes priority when enabled, and is unaffected by the style choice — it already derives its own scheme from the wallpaper.
 - **No adaptive/window-size-class layout** — phones only. A deliberate scope decision, not an oversight.
 
 ## M3 dependency

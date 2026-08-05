@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
             // StateFlows always have their current value — no initial value needed
             val themeMode by preferencesManager.themeMode.collectAsState()
             val accentColor by preferencesManager.accentColor.collectAsState()
+            val accentStyle by preferencesManager.accentStyle.collectAsState()
             val useDynamicColor by preferencesManager.useDynamicColor.collectAsState()
             val darkTheme = themeMode == PreferencesManager.THEME_MODE_DARK ||
                 (themeMode == PreferencesManager.THEME_MODE_SYSTEM && isSystemInDarkTheme())
@@ -77,7 +78,8 @@ class MainActivity : ComponentActivity() {
             CrucibleScannerTheme(
                 darkTheme = darkTheme,
                 dynamicColor = useDynamicColor,
-                accentColor = accentColor
+                accentColor = accentColor,
+                accentStyle = accentStyle
             ) {
                 NavGraph(
                     navController = navController,

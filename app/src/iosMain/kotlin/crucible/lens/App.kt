@@ -29,13 +29,15 @@ actual fun App() {
     // Only collect what's needed for theming — NavGraph collects everything else
     val themeMode by prefs.themeMode.collectAsState(initial = AppPreferences.THEME_MODE_SYSTEM)
     val accentColor by prefs.accentColor.collectAsState(initial = AppPreferences.DEFAULT_ACCENT_COLOR)
+    val accentStyle by prefs.accentStyle.collectAsState(initial = AppPreferences.DEFAULT_ACCENT_STYLE)
     val darkTheme = themeMode == AppPreferences.THEME_MODE_DARK ||
         (themeMode == AppPreferences.THEME_MODE_SYSTEM && isSystemInDarkTheme())
 
     CrucibleScannerTheme(
         darkTheme = darkTheme,
         dynamicColor = false,
-        accentColor = accentColor
+        accentColor = accentColor,
+        accentStyle = accentStyle
     ) {
         NavGraph(
             navController = navController,
