@@ -161,6 +161,12 @@ kotlin {
                 implementation(libs.koin.core)
                 implementation(libs.koin.compose)
                 implementation(libs.koin.compose.viewmodel)
+
+                // MaterialKolor: generates a proper Material You (HCT tonal-palette) ColorScheme
+                // from a single seed color - used by the debug Theme Preview screen (Task 3) to
+                // compare against this app's current accent-into-surface blending. See
+                // docs/superpowers/specs/2026-08-05-theme-color-system-design.md.
+                implementation(libs.materialkolor)
             }
         }
 
