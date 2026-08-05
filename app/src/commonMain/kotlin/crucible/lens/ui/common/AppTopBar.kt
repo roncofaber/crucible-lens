@@ -26,7 +26,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -150,18 +153,25 @@ fun CollapsingAppTopBar(
     // state it writes and cannot invalidate itself in a loop.
     val publishedHeightPx = remember { intArrayOf(-1) }
 
-    // The bar keeps `surface` at every scroll position - the same tone as the `background` the
-    // content sits on - so it never reads as a differently-coloured panel, at any scroll position.
-    //
-    // M3's own bars lerp to `surfaceContainer` when scrolled, but this app's theme overrides that
-    // role to `lerp(surface, primary, 0.035f)` (see withAccentSurfaces). Stock M3 separates the bar
-    // by *lightness* (Neutral98 -> Neutral94), which reads as depth; an accent blend at the same
-    // lightness reads as a colour cast instead. Neither a tint nor a divider is used here: the
-    // content is padded below the bar by the Scaffold rather than scrolling under it, so there is
-    // nothing to separate from.
+    // Expanded = tinted `surfaceContainerHigh`, collapsed = plain `surface`, matching the page
+    // background exactly so the compact bar never reads as a differently-coloured panel once it
+    // settles. `surfaceContainerHigh` (5% primary blend) rather than the compact `surfaceContainer`
+    // (3.5%, what SectionHeader uses for in-list rows) - this hero block is the single largest,
+    // highest-emphasis container on the screen, so it earns a stronger tier of the same
+    // accent-derived family rather than an invented one-off value. The two are captured here and
+    // lerped by `collapsedFraction` inside `drawBehind` below - a deferred draw-phase read, not a
+    // composable-time one, so scrolling never recomposes this composable (same reasoning as every
+    // other collapsedFraction read in this function).
+    val expandedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    val collapsedContainerColor = MaterialTheme.colorScheme.surface
     Surface(
-        color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth()
+        color = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                drawRect(lerp(expandedContainerColor, collapsedContainerColor, scrollBehavior.state.collapsedFraction))
+            }
     ) {
         Column(modifier = Modifier.windowInsetsPadding(TopAppBarDefaults.windowInsets)) {
             // Nav icon + actions always occupy a fixed-height row, same whether expanded or

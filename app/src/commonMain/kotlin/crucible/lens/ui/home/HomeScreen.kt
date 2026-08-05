@@ -1,6 +1,7 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.home
 import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppElevation
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
@@ -23,9 +24,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -204,7 +212,7 @@ fun HomeScreen(
             ) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = AppElevation.Level1)
                 ) {
                     Row(
                         modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
@@ -321,12 +329,15 @@ private fun HomeLogo(isDarkTheme: Boolean) {
 
 @Composable
 private fun HomeSearchPill(onClick: () -> Unit, onScan: () -> Unit) {
+    // tonalElevation has no effect once `color` is set to anything other than the default
+    // `colorScheme.surface` - Compose's auto tonal-elevation blend only applies to that one role.
+    // Containment here comes from the explicit `surfaceVariant` role instead, per M3's current
+    // guidance that surface roles aren't tied to elevation (see AppElevation's KDoc).
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().height(52.dp),
         shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 2.dp
+        color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Row(
             modifier = Modifier.fillMaxSize().padding(start = 16.dp, end = 4.dp),
@@ -641,18 +652,35 @@ private fun HomeFooter(graphExplorerUrl: String) {
         }
         val footerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
         val footerStyle = MaterialTheme.typography.bodySmall
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Crucible Lens ${displayVersionName()} • by ", style = footerStyle, color = footerColor)
-            Text(
-                "Crucible Team",
-                style = footerStyle,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier.clickable {
+        // One Text, not three - TextAutoSize shrinks a single Text as a unit to fit the
+        // available width; three separate Texts in a Row would each measure and shrink (or
+        // overflow) independently, landing on different sizes and no longer lining up. The
+        // "Crucible Team" link is a LinkAnnotation.Clickable span within the same AnnotatedString
+        // rather than a separate clickable Text, for the same reason.
+        val footerText = buildAnnotatedString {
+            withStyle(SpanStyle(color = footerColor)) {
+                append("Crucible Lens ${displayVersionName()} • by ")
+            }
+            withLink(
+                LinkAnnotation.Clickable(tag = "crucible_team", linkInteractionListener = {
                     openUrl(ctx, "https://crucible.lbl.gov/")
+                })
+            ) {
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))) {
+                    append("Crucible Team")
                 }
-            )
-            Text(" • Molecular Foundry", style = footerStyle, color = footerColor)
+            }
+            withStyle(SpanStyle(color = footerColor)) {
+                append(" • Molecular Foundry")
+            }
         }
+        Text(
+            text = footerText,
+            style = footerStyle,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = footerStyle.fontSize)
+        )
     }
 }
 

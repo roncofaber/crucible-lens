@@ -58,6 +58,7 @@ private fun LinkedResourceCard(
                 ) {
                     for (link in links) {
                         ResourceRow(
+                            icon = headerIcon,
                             name = link.name ?: "",
                             onClick = { onNavigateToResource(link.uniqueId) },
                             onLongClick = onUnlink?.let { { it(link.uniqueId, link.name ?: "") } }
@@ -128,6 +129,7 @@ internal fun ChildDatasetsCard(
 internal fun ResourceRow(
     name: String,
     subtitle: String? = null,
+    icon: AppIconToken? = null,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null
 ) {
@@ -135,11 +137,15 @@ internal fun ResourceRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(vertical = 10.dp, horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (icon != null) {
+            AppIcon(icon, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.width(10.dp))
+        }
         if (subtitle != null) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(

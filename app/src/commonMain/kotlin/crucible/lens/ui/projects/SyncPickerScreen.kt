@@ -1,6 +1,7 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.projects
 import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppElevation
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppTopBar
@@ -73,11 +74,15 @@ fun SyncPickerScreen(
         },
         bottomBar = {
             if (isFirstRun) {
+                // Same persistent-bottom-action tier as SettingsCommon's save bar
+                // (AppElevation.Level2) - here expressed as a drop shadow rather than tonal
+                // colour since this bar floats with a margin rather than sitting flush, so a
+                // shadow reads better in the gap it leaves around itself.
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    shadowElevation = 8.dp
+                    shadowElevation = AppElevation.Level2
                 ) {
                     Button(
                         onClick = ::saveAndClose,

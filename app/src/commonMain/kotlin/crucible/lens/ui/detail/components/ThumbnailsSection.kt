@@ -45,8 +45,7 @@ internal fun ThumbnailsSection(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                .padding(vertical = 8.dp)
         ) {
             var imageState by remember { mutableStateOf<String?>(null) }
 
