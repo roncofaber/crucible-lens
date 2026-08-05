@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -97,58 +96,39 @@ private fun rememberOwnerNames(
     return ownerNames to ownerNamesReady
 }
 
-private fun LazyListScope.loadMoreItem(
-    keyPrefix: String,
-    groupKey: String,
-    displayed: Int,
-    total: Int,
-    onLoadMore: () -> Unit
-) {
-    if (displayed < total) {
-        val remaining = total - displayed
-        item(key = "load_more_${keyPrefix}_$groupKey") {
-            TextButton(
-                onClick = onLoadMore,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-            ) {
-                Text(
-                    "Load ${minOf(50, remaining)} more… ($remaining remaining)",
-                    style = MaterialTheme.typography.labelMedium
-                )
-            }
-        }
-    }
-}
-
 /**
  * Shared content for [SamplesList]/[DatasetsList]'s LazyColumn: empty state, optional grouping with
- * sticky headers + per-group pagination, and the flat (ungrouped) list — everything that doesn't
- * depend on whether [T] is a Sample or Dataset. Emits directly into the caller's LazyColumn.
+ * sticky headers, and the flat (ungrouped) list — everything that doesn't depend on whether [T] is
+ * a Sample or Dataset. Emits directly into the caller's LazyColumn.
+ *
+ * Every group renders in full rather than an incremental "Load more" slice: the data is already
+ * entirely in memory by the time this runs (`CrucibleRepository.fetchProjectData` fetches and
+ * caches the complete sample/dataset lists up front, there's no further network page to defer),
+ * and `LazyColumn` only composes/measures items near the viewport regardless of how many are
+ * registered — the flat/ungrouped branch below has always rendered its full list this way. Capping
+ * a group's `items()` call bought nothing but an extra tap.
  *
  * Deliberately NOT @Composable: a LazyColumn's `content: LazyListScope.() -> Unit` builder lambda
  * is not itself a composable slot (only the `item {}`/`stickyHeader {}` trailing lambdas are), so
- * any @Composable state (owner names, rememberSaveable expand/pagination maps, the grouped-items
+ * any @Composable state (owner names, rememberSaveable expand-state map, the grouping/sort
  * computation) has to live in the calling @Composable function — see [SamplesList]/[DatasetsList],
- * which pass the already-resolved groupedItems/expandedGroups/displayedCounts in here.
+ * which pass the already-grouped-and-sorted `flatItems`/`groupedItems` and `expandedGroups` in here.
  */
 @OptIn(ExperimentalFoundationApi::class)
 private fun <T : CrucibleResource> LazyListScope.groupedResourceItems(
-    items: List<T>,
     projectId: String,
     graphExplorerUrl: String,
     isGrouped: Boolean,
-    groupedItems: List<Map.Entry<String, List<T>>>,
+    flatItems: List<T>,
+    groupedItems: List<Pair<String, List<T>>>,
     resourceIcon: AppIconToken,
     resourceType: String,
-    sortState: SortState,
     onItemClick: (String) -> Unit,
     expandedGroups: SnapshotStateMap<String, Boolean>,
-    displayedCounts: SnapshotStateMap<String, Int>,
     cacheAgeMinutes: Long?
 ) {
     if (!isGrouped) {
-        val sortedItems = items.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTimeOrEmpty() })
-        items(sortedItems, key = { it.uniqueId }) { resource ->
+        items(flatItems, key = { it.uniqueId }) { resource ->
             ResourceRow(
                 title = resource.name,
                 subtitle = resource.uniqueId,
@@ -159,15 +139,13 @@ private fun <T : CrucibleResource> LazyListScope.groupedResourceItems(
                 onClick = { onItemClick(resource.uniqueId) }
             )
         }
-    } else groupedItems.forEach { (groupKey, itemsInGroup) ->
+    } else groupedItems.forEach { (groupKey, sortedItems) ->
         val expanded = expandedGroups[groupKey] == true
-        val sortedItems = itemsInGroup.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTimeOrEmpty() })
-        val displayedCount = displayedCounts[groupKey] ?: 50
 
         stickyHeader(key = "header_${resourceType}_$groupKey") {
             SectionHeader(
                 title = groupKey,
-                count = itemsInGroup.size,
+                count = sortedItems.size,
                 icon = resourceIcon,
                 expanded = expanded,
                 onToggle = { expandedGroups[groupKey] = !expanded }
@@ -175,7 +153,7 @@ private fun <T : CrucibleResource> LazyListScope.groupedResourceItems(
         }
 
         if (expanded) {
-            items(sortedItems.take(displayedCount), key = { it.uniqueId }) { resource ->
+            items(sortedItems, key = { it.uniqueId }) { resource ->
                 ResourceRow(
                     title = resource.name,
                     subtitle = resource.uniqueId,
@@ -185,9 +163,6 @@ private fun <T : CrucibleResource> LazyListScope.groupedResourceItems(
                     resourceType = resourceType,
                     onClick = { onItemClick(resource.uniqueId) }
                 )
-            }
-            loadMoreItem(resourceType, groupKey, displayedCount, sortedItems.size) {
-                displayedCounts[groupKey] = displayedCount + 50
             }
         }
     }
@@ -223,7 +198,10 @@ internal fun SamplesList(
     val repository = koinInject<CrucibleRepository>()
     val isGrouped = groupBy != SampleGroupBy.NONE
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == SampleGroupBy.OWNER, projectId)
-    val groupedItems = remember(samples, groupBy, ownerNames.toMap()) {
+    // Grouping only depends on data/groupBy/owner names, so a sort-order change alone doesn't
+    // recompute it; sorting is a separate memo below keyed on sortState too, so toggling sort
+    // alone doesn't redo the (more expensive) regrouping either.
+    val groupedByKey = remember(samples, groupBy, ownerNames.toMap()) {
         if (!isGrouped) emptyList()
         else samples.groupBy { sample -> when (groupBy) {
             SampleGroupBy.NONE  -> ""
@@ -232,8 +210,15 @@ internal fun SamplesList(
             SampleGroupBy.OWNER -> sample.ownerOrcid?.let { ownerNames[it] ?: it } ?: "Unknown owner"
         } }.entries.sortedBy { it.key.lowercase() }
     }
+    val sortedFlatItems = remember(samples, sortState) {
+        samples.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTimeOrEmpty() })
+    }
+    val groupedItems = remember(groupedByKey, sortState) {
+        groupedByKey.map { (key, itemsInGroup) ->
+            key to itemsInGroup.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTimeOrEmpty() })
+        }
+    }
     val expandedGroups = rememberSaveable(groupBy, saver = stateMapSaver()) { mutableStateMapOf<String, Boolean>() }
-    val displayedCounts = rememberSaveable(groupBy, saver = stateMapSaver()) { mutableStateMapOf<String, Int>() }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
@@ -257,17 +242,15 @@ internal fun SamplesList(
                     }
                 }
                 else -> groupedResourceItems(
-                    items = samples,
                     projectId = projectId,
                     graphExplorerUrl = graphExplorerUrl,
                     isGrouped = isGrouped,
+                    flatItems = sortedFlatItems,
                     groupedItems = groupedItems,
                     resourceIcon = AppIcons.Sample,
                     resourceType = "sample",
-                    sortState = sortState,
                     onItemClick = onSampleClick,
                     expandedGroups = expandedGroups,
-                    displayedCounts = displayedCounts,
                     cacheAgeMinutes = if (fromCache) repository.projectDataAgeMinutes(projectId) ?: 0 else null
                 )
             }
@@ -300,7 +283,10 @@ internal fun DatasetsList(
     val repository = koinInject<CrucibleRepository>()
     val isGrouped = groupBy != DatasetGroupBy.NONE
     val (ownerNames, ownerNamesReady) = rememberOwnerNames(groupBy == DatasetGroupBy.OWNER, projectId)
-    val groupedItems = remember(datasets, groupBy, ownerNames.toMap()) {
+    // Grouping only depends on data/groupBy/owner names, so a sort-order change alone doesn't
+    // recompute it; sorting is a separate memo below keyed on sortState too, so toggling sort
+    // alone doesn't redo the (more expensive) regrouping either.
+    val groupedByKey = remember(datasets, groupBy, ownerNames.toMap()) {
         if (!isGrouped) emptyList()
         else datasets.groupBy { dataset -> when (groupBy) {
             DatasetGroupBy.NONE        -> ""
@@ -312,8 +298,15 @@ internal fun DatasetsList(
             DatasetGroupBy.OWNER       -> dataset.ownerOrcid?.let { ownerNames[it] ?: it } ?: "Unknown owner"
         } }.entries.sortedBy { it.key.lowercase() }
     }
+    val sortedFlatItems = remember(datasets, sortState) {
+        datasets.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTimeOrEmpty() })
+    }
+    val groupedItems = remember(groupedByKey, sortState) {
+        groupedByKey.map { (key, itemsInGroup) ->
+            key to itemsInGroup.applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTimeOrEmpty() })
+        }
+    }
     val expandedGroups = rememberSaveable(groupBy, saver = stateMapSaver()) { mutableStateMapOf<String, Boolean>() }
-    val displayedCounts = rememberSaveable(groupBy, saver = stateMapSaver()) { mutableStateMapOf<String, Int>() }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
@@ -337,17 +330,15 @@ internal fun DatasetsList(
                     }
                 }
                 else -> groupedResourceItems(
-                    items = datasets,
                     projectId = projectId,
                     graphExplorerUrl = graphExplorerUrl,
                     isGrouped = isGrouped,
+                    flatItems = sortedFlatItems,
                     groupedItems = groupedItems,
                     resourceIcon = AppIcons.Dataset,
                     resourceType = "dataset",
-                    sortState = sortState,
                     onItemClick = onDatasetClick,
                     expandedGroups = expandedGroups,
-                    displayedCounts = displayedCounts,
                     cacheAgeMinutes = if (fromCache) repository.projectDataAgeMinutes(projectId) ?: 0 else null
                 )
             }

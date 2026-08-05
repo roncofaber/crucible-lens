@@ -1,7 +1,6 @@
 package crucible.lens.ui.common
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,12 +16,18 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -60,6 +65,30 @@ data class SwipeAction(
  * The reveal background is a flat, edge-to-edge rectangle (not rounded) to match [content]
  * being a full-bleed [androidx.compose.material3.ListItem] rather than an inset [androidx.compose.material3.Card] —
  * rounding it would show a rounded tonal box behind a square-edged row.
+ *
+ * **Feedback during the live drag is direct, not sprung.** Background alpha is a plain, undamped
+ * function of `dismissState.progress`, matching Material's "progressive reveal" guidance for swipe
+ * actions (the hidden content should track the finger 1:1) and read inside `drawBehind` - the draw
+ * phase - rather than at composition time, so a continuous drag never recomposes this row.
+ *
+ * **Icon and label render at a fixed size throughout the drag** — deliberately not scaled by
+ * `dismissState.progress`. An earlier version grew both from 75% to 125% of nominal size over the
+ * drag (and sprang the scale via `animateFloatAsState`, which also recomposed on every drag frame
+ * since the read happened at composition time). That made the label visibly larger than its own
+ * `labelMedium` role would suggest - a `graphicsLayer` scale transform stretches already-laid-out
+ * glyphs rather than relaying text out at a bigger font size, so it read as blown-up text, not
+ * "bigger and still crisp." Reserving growth for the icon alone was considered and rejected too:
+ * icon and label share one `graphicsLayer` on their common `Column`, and decoupling them would
+ * mean re-introducing per-drag-frame composition-time reads to size them independently - the exact
+ * cost this component now avoids everywhere else.
+ *
+ * **The one animated moment is the commit-threshold crossing**, mirroring Gmail's swipe-to-archive
+ * pattern: a haptic tick (`HapticFeedbackType.GestureThresholdActivate`, whose own docs describe
+ * exactly this "eligible past a threshold, cancellable by moving back past it" gesture) plus a
+ * discrete scale "pop" (`commitPulse`, snapped to 1.15 then sprung back to 1.0) fire once, exactly
+ * when `dismissState.targetValue` changes - not continuously through the rest of the drag. That's
+ * a genuinely discrete event (it only changes at the threshold boundary), unlike `progress`, so
+ * springing it doesn't introduce the drag-lag a continuous spring would.
  */
 @Composable
 fun LazyItemScope.SwipeToHideItem(
@@ -70,14 +99,21 @@ fun LazyItemScope.SwipeToHideItem(
     content: @Composable () -> Unit
 ) {
     val dismissState = rememberSwipeToDismissBoxState()
-    val iconScale by animateFloatAsState(
-        targetValue = 0.75f + 0.5f * dismissState.progress,
-        animationSpec = SpatialDefaultSpring,
-        label = "swipeIconScale"
-    )
     val alignment = if (direction == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd
     val edgePadding = if (direction == SwipeToDismissBoxValue.StartToEnd)
         Modifier.padding(start = 20.dp) else Modifier.padding(end = 20.dp)
+
+    val hapticFeedback = LocalHapticFeedback.current
+    val commitPulse = remember { Animatable(1f) }
+    var previousTarget by remember { mutableStateOf(dismissState.targetValue) }
+    LaunchedEffect(dismissState.targetValue) {
+        if (dismissState.targetValue != previousTarget) {
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+            commitPulse.snapTo(1.15f)
+            commitPulse.animateTo(1f, animationSpec = SpatialDefaultSpring)
+        }
+        previousTarget = dismissState.targetValue
+    }
 
     SwipeToDismissBox(
         state = dismissState,
@@ -89,16 +125,18 @@ fun LazyItemScope.SwipeToHideItem(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        action.containerColor.copy(alpha = 0.4f + 0.6f * dismissState.progress),
-                        RectangleShape
-                    )
+                    .drawBehind {
+                        drawRect(action.containerColor.copy(alpha = 0.4f + 0.6f * dismissState.progress))
+                    }
                     .then(edgePadding),
                 contentAlignment = alignment
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.scale(iconScale)
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = commitPulse.value
+                        scaleY = commitPulse.value
+                    }
                 ) {
                     AppIcon(action.icon, tint = action.contentColor, modifier = Modifier.size(24.dp))
                     Text(action.label, style = MaterialTheme.typography.labelMedium, color = action.contentColor)

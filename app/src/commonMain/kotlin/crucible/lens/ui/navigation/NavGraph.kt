@@ -552,7 +552,6 @@ fun NavGraph(
                         onNavigateToInstrument = { instrumentId ->
                             navController.navigate(Screen.InstrumentDetail.createRoute(instrumentId))
                         },
-                        onSearch = navigateSearch,
                         onHome = navigateHome,
                         onRefresh = { uuid ->
                             viewModel.refreshResource(uuid)

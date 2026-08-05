@@ -74,7 +74,6 @@ fun ResourceDetailScreen(
     onNavigateToResource: (String) -> Unit,
     onNavigateToProject: (String) -> Unit,
     onNavigateToInstrument: (String) -> Unit = {},
-    onSearch: () -> Unit = {},
     onHome: () -> Unit,
     onRefresh: (uuid: String) -> Unit,
     onDuplicate: (CrucibleResource) -> Unit = {},
@@ -236,9 +235,6 @@ fun ResourceDetailScreen(
                 title = if (resource is Sample) "Sample" else "Dataset",
                 onBack = onBack,
                 actions = {
-                    IconButton(onClick = onSearch) {
-                        AppIcon(AppIcons.Search)
-                    }
                     IconButton(onClick = onHome) {
                         AppIcon(AppIcons.Home)
                     }

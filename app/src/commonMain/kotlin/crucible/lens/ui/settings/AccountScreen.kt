@@ -23,6 +23,7 @@ import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.model.User
 import crucible.lens.data.util.formatDateTime
 import crucible.lens.data.util.userDisplayName
+import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
 import crucible.lens.ui.common.AppScaffold
@@ -211,6 +212,7 @@ fun AccountScreen(
                                     ExpandChevron(expanded = advancedExpanded)
                                 }
                                 if (advancedExpanded) {
+                                    val apiKeyPlatformCtx = getPlatformContext()
                                     Text(
                                         "Manually set API key (for service accounts)",
                                         style = MaterialTheme.typography.bodySmall,
@@ -225,8 +227,16 @@ fun AccountScreen(
                                         singleLine = true,
                                         visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
                                         trailingIcon = {
-                                            IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
-                                                AppIcon(if (apiKeyVisible) AppIcons.HideContent else AppIcons.ShowContent)
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                IconButton(
+                                                    onClick = { copyToClipboard(apiKeyPlatformCtx, apiKeyInput) },
+                                                    enabled = apiKeyInput.isNotBlank()
+                                                ) {
+                                                    AppIcon(AppIcons.CopyToClipboard)
+                                                }
+                                                IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
+                                                    AppIcon(if (apiKeyVisible) AppIcons.HideContent else AppIcons.ShowContent)
+                                                }
                                             }
                                         }
                                     )
