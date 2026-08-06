@@ -149,7 +149,7 @@ fun AddFilesScreen(
             } else {
                 files.forEachIndexed { index, (bytes, asThumbnail) ->
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.5f))
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(10.dp),

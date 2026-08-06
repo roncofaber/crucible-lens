@@ -1,4 +1,5 @@
 package crucible.lens.ui.detail.components
+import crucible.lens.ui.common.AppContentAlpha
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
@@ -64,7 +65,7 @@ private fun FileActionSlot(icon: AppIconToken, visual: FileActionVisual, onClick
     Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
         when (visual) {
             FileActionVisual.Loading -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-            FileActionVisual.Disabled -> AppIcon(icon, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+            FileActionVisual.Disabled -> AppIcon(icon, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = AppContentAlpha.Disabled))
             FileActionVisual.Enabled -> IconButton(onClick = onClick) {
                 AppIcon(icon, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
             }
@@ -129,7 +130,7 @@ internal fun AssociatedFilesCard(
     if (filesState !is AssociatedFilesState.Success) return
 
     Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-        Card {
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
             Column(modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim)) {
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable { val new = !expanded; expanded = new; onExpandedChange(new) },

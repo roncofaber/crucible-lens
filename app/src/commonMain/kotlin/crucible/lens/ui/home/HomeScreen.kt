@@ -10,6 +10,7 @@ import crucible.lens.platform.*
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -171,13 +172,13 @@ fun HomeScreen(
                 // Fixed content — always visible, never scrolls
                 HomeLogo(isDarkTheme = isDarkTheme)
                 HomeSearchPill(onClick = onSearch, onScan = onScanClick)
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 HomeBrowseSection(
                     onBrowseProjects = onBrowseProjects,
                     onBrowseInstruments = onBrowseInstruments
                 )
                 HomeCreateSection(onCreateSample = onCreateSample, onCreateDataset = onCreateDataset)
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 if (lastVisitedResource != null && lastVisitedResourceName != null) {
                     HomeLastVisited(
                         name = lastVisitedResourceName,
@@ -319,7 +320,7 @@ private fun HomeLogo(isDarkTheme: Boolean) {
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
             )
@@ -331,22 +332,23 @@ private fun HomeLogo(isDarkTheme: Boolean) {
 private fun HomeSearchPill(onClick: () -> Unit, onScan: () -> Unit) {
     // tonalElevation has no effect once `color` is set to anything other than the default
     // `colorScheme.surface` - Compose's auto tonal-elevation blend only applies to that one role.
-    // Containment here comes from the explicit `surfaceVariant` role instead, per M3's current
-    // guidance that surface roles aren't tied to elevation (see AppElevation's KDoc).
+    // Containment here comes from the explicit `secondaryContainer` role instead, per M3's current
+    // guidance that surface roles aren't tied to elevation (see AppElevation's KDoc) - matches the
+    // same treatment as every other search field in the app (`ui/common/SearchBar.kt`).
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().height(52.dp),
         shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = MaterialTheme.colorScheme.secondaryContainer
     ) {
         Row(
             modifier = Modifier.fillMaxSize().padding(start = 16.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppIcon(AppIcons.Search, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-            Text("Search samples, datasets...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f).padding(start = 12.dp))
+            AppIcon(AppIcons.Search, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(20.dp))
+            Text("Search samples, datasets...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.weight(1f).padding(start = 12.dp))
             IconButton(onClick = onScan) {
-                AppIcon(AppIcons.ScanQr, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                AppIcon(AppIcons.ScanQr, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -363,7 +365,6 @@ private fun HomeBrowseSection(
             Button(
                 onClick = onBrowseProjects,
                 modifier = Modifier.weight(1f).height(72.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = MaterialTheme.shapes.medium,
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
@@ -376,7 +377,6 @@ private fun HomeBrowseSection(
             Button(
                 onClick = onBrowseInstruments,
                 modifier = Modifier.weight(1f).height(72.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = MaterialTheme.shapes.medium,
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
@@ -398,7 +398,9 @@ private fun HomeCreateSection(onCreateSample: () -> Unit, onCreateDataset: () ->
             OutlinedButton(
                 onClick = onCreateSample,
                 modifier = Modifier.weight(1f).height(52.dp),
-                shape = MaterialTheme.shapes.medium
+                shape = MaterialTheme.shapes.medium,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
             ) {
                 AppIcon(AppIcons.Add, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
@@ -407,7 +409,9 @@ private fun HomeCreateSection(onCreateSample: () -> Unit, onCreateDataset: () ->
             OutlinedButton(
                 onClick = onCreateDataset,
                 modifier = Modifier.weight(1f).height(52.dp),
-                shape = MaterialTheme.shapes.medium
+                shape = MaterialTheme.shapes.medium,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
             ) {
                 AppIcon(AppIcons.Dataset, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
@@ -603,16 +607,16 @@ private fun HomePinnedProjects(
         } else {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    AppIcon(AppIcons.Pinned, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f), modifier = Modifier.size(26.dp))
-                    Text("No pinned items", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                    Text("Choose projects to sync, or pin one to keep it here", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                    AppIcon(AppIcons.Pinned, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(26.dp))
+                    Text("No pinned items", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Choose projects to sync, or pin one to keep it here", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -650,7 +654,7 @@ private fun HomeFooter(graphExplorerUrl: String) {
             Spacer(modifier = Modifier.width(6.dp))
             Text("Open Crucible Web")
         }
-        val footerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        val footerColor = MaterialTheme.colorScheme.onSurfaceVariant
         val footerStyle = MaterialTheme.typography.bodySmall
         // One Text, not three - TextAutoSize shrinks a single Text as a unit to fit the
         // available width; three separate Texts in a Row would each measure and shrink (or
@@ -666,7 +670,7 @@ private fun HomeFooter(graphExplorerUrl: String) {
                     openUrl(ctx, "https://crucible.lbl.gov/")
                 })
             ) {
-                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))) {
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
                     append("Crucible Team")
                 }
             }

@@ -204,8 +204,7 @@ fun ProjectsListScreen(
                                 query = searchQuery,
                                 onQueryChange = { searchQuery = it },
                                 placeholder = "Search by name, ID, or project lead…",
-                                modifier = Modifier.weight(1f),
-                                accentStyle = true
+                                modifier = Modifier.weight(1f)
                             )
                             Box {
                                 IconButton(onClick = { sortMenuExpanded = true }) {
@@ -550,7 +549,7 @@ private fun CountChip(
     loading: Boolean
 ) {
     Surface(
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+        color = MaterialTheme.colorScheme.primaryContainer,
         shape = MaterialTheme.shapes.small
     ) {
         Row(
@@ -562,19 +561,19 @@ private fun CountChip(
             AppIcon(
                 icon,
                 modifier = Modifier.size(11.dp),
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
             )
             if (loading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(10.dp),
                     strokeWidth = 1.5.dp,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             } else {
                 Text(
                     text = count?.toString() ?: "?",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }

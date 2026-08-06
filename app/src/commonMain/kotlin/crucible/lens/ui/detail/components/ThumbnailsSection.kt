@@ -45,7 +45,8 @@ internal fun ThumbnailsSection(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp)
+                .padding(vertical = 8.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
         ) {
             var imageState by remember { mutableStateOf<String?>(null) }
 
@@ -104,7 +105,7 @@ internal fun ThumbnailsSection(
                     Text(
                         "Hold to delete",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(8.dp)

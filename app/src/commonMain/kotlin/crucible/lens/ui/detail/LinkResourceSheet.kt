@@ -171,7 +171,7 @@ fun LinkResourceSheet(
                                     maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                 val sub = listOfNotNull(selProjectName, selType.replaceFirstChar { it.uppercase() }).joinToString(" · ")
                                 if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer)
                             }
                             IconButton(onClick = {
                                 selectedResource = null; input = ""; resolvedUuid = null; resolvedType = null
@@ -286,7 +286,7 @@ fun LinkResourceSheet(
                                     // truncate together as one line, so they're spans of one
                                     // AnnotatedString rather than separate Texts in a Row - a
                                     // Row wouldn't ellipsize as a unit the way a single Text does.
-                                    val idColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    val idColor = MaterialTheme.colorScheme.onSurfaceVariant
                                     val subtitle = buildAnnotatedString {
                                         if (projectName != null) {
                                             append(projectName)

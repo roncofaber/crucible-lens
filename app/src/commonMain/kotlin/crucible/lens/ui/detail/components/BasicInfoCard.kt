@@ -1,4 +1,5 @@
 package crucible.lens.ui.detail.components
+import crucible.lens.ui.common.AppContentAlpha
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
 
@@ -35,7 +36,10 @@ internal fun BasicInfoCard(
     totalCount: Int = 0,
     siblingsResolved: Boolean = true
 ) {
-    Card(border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+    ) {
         Column(
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -85,7 +89,7 @@ internal fun BasicInfoCard(
                 ) {
                     AppIcon(AppIcons.CarouselPrev,
                         tint = if (onPrev != null) MaterialTheme.colorScheme.primary
-                               else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                               else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = AppContentAlpha.Disabled)
                     )
                 }
                 // Small inline spinner while siblings are still loading (a rare,
@@ -119,7 +123,7 @@ internal fun BasicInfoCard(
                 ) {
                     AppIcon(AppIcons.NavigateNext,
                         tint = if (onNext != null) MaterialTheme.colorScheme.primary
-                               else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                               else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = AppContentAlpha.Disabled)
                     )
                 }
             }

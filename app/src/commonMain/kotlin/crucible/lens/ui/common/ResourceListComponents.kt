@@ -109,7 +109,7 @@ fun ResourceControlsBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Surface(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                color = MaterialTheme.colorScheme.secondaryContainer,
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.weight(1f)
             ) {
@@ -118,20 +118,20 @@ fun ResourceControlsBar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    AppIcon(AppIcons.Search, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                    AppIcon(AppIcons.Search, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(18.dp))
                     Box(modifier = Modifier.weight(1f)) {
                         if (searchQuery.isEmpty()) {
                             Text(
                                 text = searchPlaceholder,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                         }
                         BasicTextField(
                             value = searchQuery,
                             onValueChange = onSearchChange,
                             modifier = Modifier.fillMaxWidth(),
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSecondaryContainer),
                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                             singleLine = true
                         )
@@ -139,7 +139,7 @@ fun ResourceControlsBar(
                     if (searchQuery.isNotEmpty()) {
                         AppIcon(
                             AppIcons.ClearInput,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
                             modifier = Modifier.size(18.dp).clickable { onSearchChange("") }
                         )
                     }

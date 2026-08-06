@@ -214,7 +214,10 @@ fun ManageProjectScreen(
 
 @Composable
 private fun ProjectInfoCard(project: Project, onUserClick: (String) -> Unit = {}) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             InfoRow(icon = AppIcons.Project, label = "Title", value = project.title ?: "—")
             InfoRow(icon = AppIcons.Business, label = "Organization", value = project.organization ?: "—")
@@ -243,7 +246,10 @@ private fun ProjectEditCard(
     onSave: () -> Unit,
     onCancel: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Edit Project", style = MaterialTheme.typography.emphasizedTitleMedium)
 
@@ -301,7 +307,10 @@ private fun PendingRequestsCard(
     onReject: (JoinRequest) -> Unit,
     onUserClick: (String) -> Unit = {}
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Pending Requests (${requests.size})", style = MaterialTheme.typography.emphasizedTitleMedium)
             requests.forEach { request ->
@@ -357,7 +366,10 @@ private fun MembersCard(
     onUserClick: (String) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(true) }
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         Column(
             modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim),
             verticalArrangement = Arrangement.spacedBy(8.dp)

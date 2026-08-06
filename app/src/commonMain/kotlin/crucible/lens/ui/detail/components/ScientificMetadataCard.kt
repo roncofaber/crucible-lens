@@ -38,7 +38,7 @@ internal fun ScientificMetadataCard(
     var expanded by remember { mutableStateOf(initialExpanded) }
     var expandAll by remember { mutableStateOf(initialExpandAll) }
 
-    Card {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -146,7 +146,7 @@ internal fun MetadataTree(data: Map<String, Any?>, indentLevel: Int, expandAll: 
                     modifier = Modifier
                         .padding(vertical = 4.dp)
                         .padding(start = (indentLevel * 16).dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    color = MaterialTheme.colorScheme.outlineVariant
                 )
             }
         }

@@ -16,9 +16,9 @@ import crucible.lens.ui.common.AppIcons
 @Composable
 internal fun dirtyFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedBorderColor = MaterialTheme.colorScheme.primary,
-    unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+    unfocusedBorderColor = MaterialTheme.colorScheme.tertiary,
     focusedLabelColor = MaterialTheme.colorScheme.primary,
-    unfocusedLabelColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+    unfocusedLabelColor = MaterialTheme.colorScheme.tertiary
 )
 
 @Composable

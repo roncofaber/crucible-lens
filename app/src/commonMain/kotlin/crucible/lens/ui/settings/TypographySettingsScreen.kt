@@ -165,13 +165,13 @@ private fun GroupHeaderExample() {
                 Text("Sample Group", style = MaterialTheme.typography.titleMedium)
             }
             Surface(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                color = MaterialTheme.colorScheme.primaryContainer,
                 shape = MaterialTheme.shapes.small
             ) {
                 Text(
                     "3",
                     style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
-                    color = MaterialTheme.colorScheme.primary,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }
@@ -189,7 +189,10 @@ private fun GroupHeaderExample() {
 
 @Composable
 private fun CardExample() {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

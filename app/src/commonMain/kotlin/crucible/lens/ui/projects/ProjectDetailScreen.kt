@@ -528,7 +528,7 @@ private fun NonMemberContent(
             AppIcon(
                 if (isPending) AppIcons.Pending else AppIcons.PersonAdd,
                 modifier = Modifier.size(40.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 text = "You're not a member of this project",

@@ -171,7 +171,7 @@ private fun <T : CrucibleResource> LazyListScope.groupedResourceItems(
             Text(
                 text = "Cached ${cacheAgeMinutes}m ago",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 textAlign = TextAlign.Center
             )

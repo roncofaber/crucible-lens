@@ -39,7 +39,7 @@ fun MetadataEditor(
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.5f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
@@ -64,13 +64,13 @@ fun MetadataEditor(
                     )
                     if (entries.isNotEmpty()) {
                         Surface(
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            color = MaterialTheme.colorScheme.primaryContainer,
                             shape = MaterialTheme.shapes.small
                         ) {
                             Text(
                                 "${entries.count { it.first.isNotBlank() }}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
@@ -95,7 +95,7 @@ fun MetadataEditor(
                         Text(
                             "No metadata fields. Tap + to add one.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
@@ -116,7 +116,7 @@ fun MetadataEditor(
                                 textStyle = MaterialTheme.typography.bodySmall,
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
                                 )
                             )
                             OutlinedTextField(
@@ -130,7 +130,7 @@ fun MetadataEditor(
                                 textStyle = MaterialTheme.typography.bodySmall,
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
                                 )
                             )
                             IconButton(
@@ -141,7 +141,7 @@ fun MetadataEditor(
                             ) {
                                 AppIcon(AppIcons.Delete,
                                     modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                                    tint = MaterialTheme.colorScheme.error
                                 )
                             }
                         }

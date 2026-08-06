@@ -499,7 +499,7 @@ private fun DirectLookupCard(mfid: String, onClick: (String) -> Unit) {
                     mfid,
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }

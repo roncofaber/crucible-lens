@@ -38,7 +38,7 @@ internal fun SampleDetailsCard(
 ) {
     val platformCtx = getPlatformContext()
     var advanced by remember { mutableStateOf(initialAdvanced) }
-    Card {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim)) {
             val projectId = sample.projectId
 

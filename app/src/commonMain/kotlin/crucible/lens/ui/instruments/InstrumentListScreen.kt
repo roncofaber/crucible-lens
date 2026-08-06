@@ -156,8 +156,7 @@ fun InstrumentListScreen(
                                     query = searchQuery,
                                     onQueryChange = { searchQuery = it },
                                     placeholder = "Search by name, type, manufacturer…",
-                                    modifier = Modifier.weight(1f),
-                                    accentStyle = true
+                                    modifier = Modifier.weight(1f)
                                 )
                                 Box {
                                     IconButton(onClick = { sortMenuExpanded = true }) {

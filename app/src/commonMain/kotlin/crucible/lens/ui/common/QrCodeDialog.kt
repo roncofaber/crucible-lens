@@ -112,7 +112,7 @@ fun QrCodeDialogWithNavigation(
                 if (pagerState.currentPage > 0) {
                     AppIcon(AppIcons.CarouselPrev,
                         modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
                     Spacer(Modifier.size(20.dp))
@@ -152,7 +152,7 @@ fun QrCodeDialogWithNavigation(
                 if (pagerState.currentPage < resources.size - 1) {
                     AppIcon(AppIcons.NavigateNext,
                         modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
                     Spacer(Modifier.size(20.dp))

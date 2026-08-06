@@ -44,7 +44,7 @@ internal fun DatasetDetailsCard(
     val platformCtx = getPlatformContext()
     val repository = koinInject<CrucibleRepository>()
     var advanced by remember { mutableStateOf(initialAdvanced) }
-    Card {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim)) {
             val projectId = dataset.projectId
 

@@ -17,22 +17,20 @@ fun SearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     placeholder: String,
-    modifier: Modifier = Modifier,
-    accentStyle: Boolean = false
+    modifier: Modifier = Modifier
 ) {
     Surface(
-        color = if (accentStyle) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                else MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.5f),
-        shape = if (accentStyle) MaterialTheme.shapes.medium else MaterialTheme.shapes.extraSmall,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.extraSmall,
         modifier = modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = if (accentStyle) 12.dp else 16.dp, vertical = if (accentStyle) 8.dp else 10.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             AppIcon(AppIcons.Search,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = Modifier.size(18.dp)
             )
             Box(modifier = Modifier.weight(1f)) {
@@ -40,7 +38,7 @@ fun SearchBar(
                     Text(
                         placeholder,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 }
                 BasicTextField(
@@ -48,15 +46,15 @@ fun SearchBar(
                     onValueChange = onQueryChange,
                     modifier = Modifier.fillMaxWidth(),
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
                     ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.onSecondaryContainer),
                     singleLine = true
                 )
             }
             if (query.isNotEmpty()) {
                 AppIcon(AppIcons.ClearInput,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.size(18.dp).clickable { onQueryChange("") }
                 )
             }

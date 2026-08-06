@@ -106,7 +106,10 @@ fun ManageInstrumentScreen(
 
 @Composable
 private fun InstrumentInfoCard(instrument: Instrument) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             InfoRow(icon = AppIcons.Instrument, label = "Name", value = instrument.instrumentName ?: "—")
             InfoRow(icon = AppIcons.Category, label = "Type", value = instrument.instrumentType ?: "—")
@@ -140,7 +143,10 @@ private fun InstrumentEditCard(
     onSave: () -> Unit,
     onCancel: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Edit Instrument", style = MaterialTheme.typography.emphasizedTitleMedium)
 

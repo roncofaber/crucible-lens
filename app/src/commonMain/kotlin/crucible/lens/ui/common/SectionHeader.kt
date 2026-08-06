@@ -27,9 +27,9 @@ import androidx.compose.foundation.layout.Row
  *
  * `surfaceContainer` is the right role here because M3 expresses elevation as tonal colour rather
  * than shadow, and this header pins via `stickyHeader`, so it needs to read as chrome sitting
- * above the list. That only works because `Theme.kt` generates the whole scheme — including
- * container roles — from the active accent via MaterialKolor; before that they came from M3's
- * purple-seeded baseline and looked foreign in every palette but purple.
+ * above the list. That only works because every accent in `ui/theme/accents/` is a fully
+ * hand-curated static `ColorScheme` with every role assigned; before that, unset roles fell
+ * through to M3's purple-seeded baseline and looked foreign in every palette but purple.
  *
  * Pass [onToggle] only when the section can actually collapse. When it is null the chevron is not
  * drawn and the row is not clickable, because a control that renders as interactive and does
@@ -72,13 +72,13 @@ fun SectionHeader(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Surface(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    color = MaterialTheme.colorScheme.primaryContainer,
                     shape = MaterialTheme.shapes.small
                 ) {
                     Text(
                         text = "$count",
                         style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }

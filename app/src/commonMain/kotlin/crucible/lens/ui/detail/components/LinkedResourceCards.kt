@@ -33,7 +33,7 @@ private fun LinkedResourceCard(
 ) {
     var expanded by remember { mutableStateOf(initialExpanded) }
 
-    Card {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim)) {
             Row(
                 modifier = Modifier
@@ -137,7 +137,7 @@ internal fun ResourceRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.surface)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(vertical = 10.dp, horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -171,6 +171,6 @@ internal fun ResourceRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        AppIcon(AppIcons.NavigateNext, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+        AppIcon(AppIcons.NavigateNext, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

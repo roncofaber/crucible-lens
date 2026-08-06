@@ -37,7 +37,7 @@ object ScrollbarDefaults {
 fun LazyColumnScrollbar(
     listState: LazyListState,
     modifier: Modifier = Modifier,
-    thumbColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+    thumbColor: Color = MaterialTheme.colorScheme.primary,
     thumbWidth: Dp = ScrollbarDefaults.ThumbWidth
 ) {
     val density = LocalDensity.current
