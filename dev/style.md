@@ -73,11 +73,11 @@ Annotate the narrowest scope that needs it, not a blanket three-API line:
 
 | Use | Style |
 |-----|-------|
-| Info / section card (empty states, metadata blocks, error banners) | `containerColor = surfaceContainerLow` (or `surfaceContainerLow.copy(alpha = 0.5f)` for a softer nested block); no elevation |
+| Info / section card (empty states, metadata blocks, error banners) | `containerColor = surfaceContainerLow`; no elevation |
 | Thumbnails block (`detail/components/ThumbnailsSection.kt`) | `cardElevation(2.dp)` |
 | Home screen's primary scan card (`HomeScreen.kt`) | `cardElevation(6.dp)` — deliberately the one prominent, "this is the main action" surface |
 | Section / group header (`SectionHeader`) | `Surface(color = surfaceContainer)` — see "Accent-derived surfaces" below |
-| Tinted accent surface (stat tiles, the count badge inside `SectionHeader`) | `Surface(color = primary.copy(alpha = 0.12f–0.15f))` |
+| Tinted accent surface (stat tiles, the count badge inside `SectionHeader`) | `Surface(color = primaryContainer)`, content `onPrimaryContainer` — no alpha; see "No custom alpha" below |
 
 Those two elevations are the *only* `cardElevation` calls in the app — a new elevated card
 needs a reason, not a default.
@@ -88,24 +88,59 @@ M3 expresses elevation as **tonal colour**, not shadow: chrome that sits above c
 `surfaceContainer*` role rather than a shadow or a `tonalElevation` parameter. Reach for
 `surfaceContainer` for anything pinned — sticky section headers especially.
 
-That only works because `Theme.kt`'s `resolveAccentColorScheme()` generates the *entire* scheme —
-every container role included — from the chosen accent color via MaterialKolor's
-`dynamicColorScheme()`, not just `primary`/`secondary`/`tertiary`. Before that migration, hand-written
-palettes only set those three roles, so every container role fell through to M3's baseline — which
-is generated from a *purple* seed, and made a blue-accented app render purple-grey headers. Dynamic
-colour is deliberately excluded from this resolution, since it already derives a full tonal palette
-from the wallpaper.
+That only works because `Theme.kt`'s `resolveAccentColorScheme()` looks up a fully hand-curated
+static `ColorScheme` per accent (`ui/theme/accents/` — one file per named accent, exported from the
+Material Theme Builder) — every container role explicitly assigned, not just
+`primary`/`secondary`/`tertiary`. Before this, hand-written palettes only set those three roles, so
+every container role fell through to M3's baseline — which is generated from a *purple* seed, and
+made a blue-accented app render purple-grey headers.
 
-Consequence worth knowing: every surface/container role now shifts with the user's accent *and*
-their chosen `PaletteStyle` (Tonal Spot/Neutral/Vibrant/Expressive, picked in Settings → Appearance).
-Don't hardcode a grey where you want "slightly raised" — use the role and it follows the theme.
+Consequence worth knowing: every surface/container role shifts with the user's accent choice *and*
+their chosen contrast level (Standard/Medium/High, matching M3's real contrast-level spec — see each
+accent file's `LightStandard`/`LightMedium`/`LightHigh`/`Dark*` vals). There's no runtime color
+generation anywhere in this app — adding an eleventh accent means exporting a new Theme Builder
+bundle and adding one more file to `ui/theme/accents/`, not writing a formula. Don't hardcode a grey
+where you want "slightly raised" — use the role and it follows the theme.
 
-Keep the ratios small. M3's own container steps move *lightness* within a near-neutral palette, so
-blending toward a full-chroma primary at the same nominal percentage is a far stronger effect. The
-first version used 2–12% and visibly washed the entire expanded `SearchBar` — which takes
-`surfaceContainerHigh` — in the accent. **Container roles are sized for compact chrome; a
-full-screen surface should use plain `surface`**, which is why `SearchScreen` overrides
-`SearchBarDefaults.colors(containerColor = surface)` rather than accepting the M3 default.
+**Container roles are sized for compact chrome; a full-screen surface should use plain `surface`**,
+which is why `SearchScreen` overrides `SearchBarDefaults.colors(containerColor = surface)` rather
+than accepting the M3 default.
+
+### No custom alpha
+
+M3 already pre-computes every emphasis level as a distinct, contrast-guaranteed role. Fading a role
+with `.copy(alpha = X)` is almost always a workaround for a role that already exists — and it quietly
+reopens the exact contrast risk that role's generated value exists to close (that's why
+`onSurfaceVariant` is its own computed colour rather than "`onSurface` at 60%" — dimming it further
+undoes the guarantee). A color-role audit found ~50 ad hoc alpha values across the app (several
+different numbers doing the same job, e.g. `primary.copy(alpha = 0.12f–0.15f)` for badge
+backgrounds, `onSurfaceVariant.copy(alpha = 0.4f–0.7f)` for secondary text). None of them earned
+their alpha:
+
+| Need | Reach for | Not |
+|---|---|---|
+| De-emphasized text/icon on a plain surface | `onSurfaceVariant`, full opacity | `onSurface`/`onSurfaceVariant.copy(alpha = X)` |
+| De-emphasized text/icon on a container (`errorContainer`, `primaryContainer`, ...) | the matching `onXContainer`, full opacity | `onXContainer.copy(alpha = X)` — hierarchy within a container comes from type scale (size/weight), not a second opacity signal on top of the first |
+| Tinted "selected/accent" chip or badge background | `primaryContainer` / `onPrimaryContainer` | `primary.copy(alpha = 0.12–0.15f)` |
+| Decorative divider | `outlineVariant`, full opacity | `outlineVariant.copy(alpha = X)` |
+| Text field border | `outline` (M3's own stock default already) | `outline.copy(alpha = X)` |
+
+**Disabled content is the one legitimate exception**, and it's still not an arbitrary number:
+`AppContentAlpha.Disabled` (`ui/common/AppContentAlpha.kt`) is `0.38f`, the exact value M3's own
+stock components use for disabled icon/label content (confirmed against `FilledButtonTokens.kt` in
+the resolved M3 1.4.0 sources — `DisabledIconOpacity`/`DisabledLabelTextOpacity` are both `0.38f`,
+paired with `onSurfaceVariant`). Disabled is a *state* any element can enter, not a fixed color
+family — WCAG 1.4.3 explicitly exempts inactive components from the normal contrast requirement, so
+Material implements it everywhere as a fixed opacity reduction rather than a role. Use
+`onSurfaceVariant.copy(alpha = AppContentAlpha.Disabled)` for a genuinely disabled element; never a
+one-off number.
+
+`LazyColumnScrollbar`'s thumb used to fade `primary` to 60% for exactly this reason — a scrollbar
+thumb only needs to avoid fully hiding scrolled content, which sounds like a legitimate functional
+case for alpha. It's solid `primary` now: a scrollbar thumb is narrow enough, and moves fast enough,
+that full opacity doesn't meaningfully block reading the content underneath it in practice. If a
+genuine "must show through" need ever comes up, it doesn't map to any M3 role — treat it as a
+one-off, not a precedent for reintroducing alpha elsewhere.
 
 ### Collapsible section headers
 
@@ -191,14 +226,16 @@ specific structural reason.
 | **Row title / body copy / paragraphs** | `bodyMedium` | 14 Regular | `onSurface` |
 | Button / chip label | `labelLarge` | 14 Medium | M3's own button default; never set it |
 | Secondary line / caption / metadata | `bodySmall` | 12 Regular | `onSurfaceVariant` |
-| Machine ID (mfid, project/instrument ID) | `bodySmall` monospace, via `IdText` (`ui/common/IdText.kt`) | 12 Regular | `onSurfaceVariant.copy(alpha = 0.6f)` |
+| Machine ID (mfid, project/instrument ID) | `bodySmall` monospace, via `IdText` (`ui/common/IdText.kt`) | 12 Regular | `onSurfaceVariant` |
 | Inline section label | `labelMedium` | 12 Medium | `primary` (or `onSurfaceVariant` when nested in a card that already carries an accent) |
 | Detail row label (`InfoRow`/`ClickableInfoRow`) | `titleSmall` | 14 Medium | `onSurfaceVariant` |
 
-Count badges use the inline-label treatment (`labelMedium` + `primary` + `fontFeatureSettings = "tnum"`).
+Count badges use the inline-label treatment (`labelMedium` + `fontFeatureSettings = "tnum"`) on a
+`primaryContainer` surface with `onPrimaryContainer` content - no alpha; see "No custom alpha"
+below.
 
 **`IdText`** (`ui/common/IdText.kt`) is the shared look for any mfid/project/instrument ID -
-`bodySmall`, monospace by default (`monospace = false` opts out), dimmed to 60% alpha since an ID
+`bodySmall`, monospace by default (`monospace = false` opts out), `onSurfaceVariant` since an ID
 is the least essential thing on a name-first row or card. It's purely visual - callers attach
 click/copy behaviour themselves via `modifier` (some IDs are tap-to-copy, some sit next to a
 separate copy button, some are inert and reachable only via a row's long-press menu). Before this

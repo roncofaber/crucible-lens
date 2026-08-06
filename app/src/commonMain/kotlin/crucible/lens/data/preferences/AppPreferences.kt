@@ -15,7 +15,7 @@ interface AppPreferences {
     val graphExplorerUrl: StateFlow<String>
     val themeMode: StateFlow<String>
     val accentColor: StateFlow<String>
-    val accentStyle: StateFlow<String>
+    val accentContrast: StateFlow<String>
     val useDynamicColor: StateFlow<Boolean>
     val lastVisitedResource: StateFlow<String?>
     val lastVisitedResourceName: StateFlow<String?>
@@ -39,7 +39,7 @@ interface AppPreferences {
     suspend fun saveGraphExplorerUrl(url: String)
     suspend fun saveThemeMode(mode: String)
     suspend fun saveAccentColor(color: String)
-    suspend fun saveAccentStyle(style: String)
+    suspend fun saveAccentContrast(contrast: String)
     suspend fun saveUseDynamicColor(enabled: Boolean)
     suspend fun saveLastVisitedResource(uuid: String, name: String)
     suspend fun saveFloatingScanButton(enabled: Boolean)
@@ -68,7 +68,7 @@ interface AppPreferences {
         const val THEME_MODE_SYSTEM = "system"
         const val THEME_MODE_LIGHT = "light"
         const val THEME_MODE_DARK = "dark"
-        const val DEFAULT_ACCENT_COLOR = "blue"
-        const val DEFAULT_ACCENT_STYLE = "tonal_spot"
+        const val DEFAULT_ACCENT_COLOR = "carmine"
+        const val DEFAULT_ACCENT_CONTRAST = "standard"
     }
 }

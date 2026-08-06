@@ -116,7 +116,7 @@ fun NavGraph(
     val graphExplorerUrl by prefs.graphExplorerUrl.collectAsStateWithLifecycle()
     val themeMode by prefs.themeMode.collectAsStateWithLifecycle()
     val accentColor by prefs.accentColor.collectAsStateWithLifecycle()
-    val accentStyle by prefs.accentStyle.collectAsStateWithLifecycle()
+    val accentContrast by prefs.accentContrast.collectAsStateWithLifecycle()
     val useDynamicColor by prefs.useDynamicColor.collectAsStateWithLifecycle()
     val darkTheme = themeMode == AppPreferences.THEME_MODE_DARK ||
         (themeMode == AppPreferences.THEME_MODE_SYSTEM && isSystemInDarkTheme())
@@ -394,13 +394,13 @@ fun NavGraph(
             AppearanceSettingsScreen(
                 currentThemeMode = themeMode,
                 currentAccentColor = accentColor,
-                currentAccentStyle = accentStyle,
+                currentAccentContrast = accentContrast,
                 currentFloatingScanButton = floatingScanButton,
                 currentUseDynamicColor = useDynamicColor,
                 currentDefaultProjectTab = defaultProjectTab,
                 onThemeModeSave = { mode -> scope.launch { prefs.saveThemeMode(mode) } },
                 onAccentColorSave = { color -> scope.launch { prefs.saveAccentColor(color) } },
-                onAccentStyleSave = { style -> scope.launch { prefs.saveAccentStyle(style) } },
+                onAccentContrastSave = { contrast -> scope.launch { prefs.saveAccentContrast(contrast) } },
                 onUseDynamicColorSave = { enabled -> scope.launch { prefs.saveUseDynamicColor(enabled) } },
                 onFloatingScanButtonSave = { enabled -> scope.launch { prefs.saveFloatingScanButton(enabled) } },
                 onDefaultProjectTabSave = { tab -> scope.launch { prefs.saveDefaultProjectTab(tab) } },
@@ -633,13 +633,13 @@ fun NavGraph(
                                 Text(
                                     text = state.message,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
                                     textAlign = TextAlign.Center
                                 )
 
                                 HorizontalDivider(
                                     modifier = Modifier.padding(vertical = 8.dp),
-                                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.2f)
+                                    color = MaterialTheme.colorScheme.outlineVariant
                                 )
 
                                 Text(
@@ -990,6 +990,6 @@ private fun ErrorHint(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
+        color = MaterialTheme.colorScheme.onErrorContainer
     )
 }

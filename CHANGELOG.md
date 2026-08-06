@@ -6,7 +6,7 @@
 - Manage Project: leave a project from the overflow menu
 
 ### Changed
-- Accent colors now generate a full theme, with a new style picker in Appearance settings
+- New accent color choices, each with its own light/dark theme, plus a contrast level picker in Appearance settings
 - Refined a few card and status colors for better consistency with the app's accent
 - Choose which projects sync in the background; others still open normally
 - Resource detail field labels are now larger and medium-weight to stand out from their values

@@ -55,7 +55,7 @@ class MainActivity : ComponentActivity() {
             // StateFlows always have their current value — no initial value needed
             val themeMode by preferencesManager.themeMode.collectAsState()
             val accentColor by preferencesManager.accentColor.collectAsState()
-            val accentStyle by preferencesManager.accentStyle.collectAsState()
+            val accentContrast by preferencesManager.accentContrast.collectAsState()
             val useDynamicColor by preferencesManager.useDynamicColor.collectAsState()
             val darkTheme = themeMode == PreferencesManager.THEME_MODE_DARK ||
                 (themeMode == PreferencesManager.THEME_MODE_SYSTEM && isSystemInDarkTheme())
@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
                 darkTheme = darkTheme,
                 dynamicColor = useDynamicColor,
                 accentColor = accentColor,
-                accentStyle = accentStyle
+                accentContrast = accentContrast
             ) {
                 NavGraph(
                     navController = navController,

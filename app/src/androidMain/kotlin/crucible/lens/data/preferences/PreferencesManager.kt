@@ -33,7 +33,7 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         private val GRAPH_EXPLORER_URL = stringPreferencesKey("graph_explorer_url")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
         private val ACCENT_COLOR = stringPreferencesKey("accent_color")
-        private val ACCENT_STYLE = stringPreferencesKey("accent_style")
+        private val ACCENT_CONTRAST = stringPreferencesKey("accent_contrast")
         private val LAST_VISITED_RESOURCE = stringPreferencesKey("last_visited_resource")
         private val LAST_VISITED_RESOURCE_NAME = stringPreferencesKey("last_visited_resource_name")
         private val FLOATING_SCAN_BUTTON = stringPreferencesKey("floating_scan_button")
@@ -59,8 +59,8 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         const val THEME_MODE_SYSTEM = "system"
         const val THEME_MODE_LIGHT = "light"
         const val THEME_MODE_DARK = "dark"
-        const val DEFAULT_ACCENT_COLOR = "blue"
-        const val DEFAULT_ACCENT_STYLE = "tonal_spot"
+        const val DEFAULT_ACCENT_COLOR = "carmine"
+        const val DEFAULT_ACCENT_CONTRAST = "standard"
 
         private val profileJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true }
     }
@@ -90,10 +90,10 @@ class PreferencesManager(private val context: Context) : AppPreferences {
     }
         .stateIn(scope, SharingStarted.Eagerly, DEFAULT_ACCENT_COLOR)
 
-    override val accentStyle: StateFlow<String> = context.dataStore.data.map { preferences ->
-        preferences[ACCENT_STYLE] ?: DEFAULT_ACCENT_STYLE
+    override val accentContrast: StateFlow<String> = context.dataStore.data.map { preferences ->
+        preferences[ACCENT_CONTRAST] ?: DEFAULT_ACCENT_CONTRAST
     }
-        .stateIn(scope, SharingStarted.Eagerly, DEFAULT_ACCENT_STYLE)
+        .stateIn(scope, SharingStarted.Eagerly, DEFAULT_ACCENT_CONTRAST)
 
     override val lastVisitedResource: StateFlow<String?> = context.dataStore.data.map { preferences ->
         preferences[LAST_VISITED_RESOURCE]
@@ -210,9 +210,9 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         }
     }
 
-    override suspend fun saveAccentStyle(style: String) {
+    override suspend fun saveAccentContrast(contrast: String) {
         context.dataStore.edit { preferences ->
-            preferences[ACCENT_STYLE] = style
+            preferences[ACCENT_CONTRAST] = contrast
         }
     }
 

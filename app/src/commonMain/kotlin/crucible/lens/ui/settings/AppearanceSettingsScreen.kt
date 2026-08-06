@@ -15,7 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.platform.supportsDynamicColor
@@ -28,13 +28,13 @@ import crucible.lens.ui.theme.readableOn
 fun AppearanceSettingsScreen(
     currentThemeMode: String,
     currentAccentColor: String,
-    currentAccentStyle: String,
+    currentAccentContrast: String,
     currentFloatingScanButton: Boolean,
     currentUseDynamicColor: Boolean = false,
     currentDefaultProjectTab: String,
     onThemeModeSave: (String) -> Unit,
     onAccentColorSave: (String) -> Unit,
-    onAccentStyleSave: (String) -> Unit,
+    onAccentContrastSave: (String) -> Unit,
     onFloatingScanButtonSave: (Boolean) -> Unit,
     onUseDynamicColorSave: (Boolean) -> Unit = {},
     onDefaultProjectTabSave: (String) -> Unit,
@@ -44,7 +44,7 @@ fun AppearanceSettingsScreen(
     val dynamicColorSupported = supportsDynamicColor()
     var themeModeInput          by remember { mutableStateOf(currentThemeMode) }
     var accentColorInput        by remember { mutableStateOf(currentAccentColor) }
-    var accentStyleInput        by remember { mutableStateOf(currentAccentStyle) }
+    var accentContrastInput     by remember { mutableStateOf(currentAccentContrast) }
     var floatingScanButtonInput by remember { mutableStateOf(currentFloatingScanButton) }
     var useDynamicColorInput    by remember { mutableStateOf(currentUseDynamicColor) }
     var defaultProjectTabInput  by remember { mutableStateOf(currentDefaultProjectTab) }
@@ -52,7 +52,7 @@ fun AppearanceSettingsScreen(
 
     LaunchedEffect(currentThemeMode)         { themeModeInput         = currentThemeMode }
     LaunchedEffect(currentAccentColor)       { accentColorInput       = currentAccentColor }
-    LaunchedEffect(currentAccentStyle)       { accentStyleInput       = currentAccentStyle }
+    LaunchedEffect(currentAccentContrast)    { accentContrastInput    = currentAccentContrast }
     LaunchedEffect(currentFloatingScanButton){ floatingScanButtonInput = currentFloatingScanButton }
     LaunchedEffect(currentUseDynamicColor)   { useDynamicColorInput   = currentUseDynamicColor }
     LaunchedEffect(currentDefaultProjectTab) { defaultProjectTabInput = currentDefaultProjectTab }
@@ -77,7 +77,10 @@ fun AppearanceSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Theme mode
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -110,7 +113,10 @@ fun AppearanceSettingsScreen(
 
             // Dynamic color — Android 12+ only
             if (dynamicColorSupported) {
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -141,7 +147,10 @@ fun AppearanceSettingsScreen(
 
             // Accent color — hidden when dynamic color is active
             if (!useDynamicColorInput) {
-                Card(modifier = Modifier.fillMaxWidth().clickable { showColorPicker = true }) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable { showColorPicker = true },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -166,39 +175,37 @@ fun AppearanceSettingsScreen(
                     }
                 }
 
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             AppIcon(AppIcons.ColorPicker, tint = MaterialTheme.colorScheme.primary)
-                            Text("Style", style = MaterialTheme.typography.titleMedium)
+                            Text("Contrast", style = MaterialTheme.typography.titleMedium)
                         }
                         Spacer(modifier = Modifier.height(12.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             listOf(
-                                "tonal_spot" to "Tonal Spot", "neutral" to "Neutral",
-                                "vibrant" to "Vibrant", "expressive" to "Expressive"
-                            ).chunked(2).forEach { rowStyles ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    rowStyles.forEach { (value, label) ->
-                                        FilterChip(
-                                            selected = accentStyleInput == value,
-                                            onClick = { accentStyleInput = value; onAccentStyleSave(value) },
-                                            label = { Text(label) },
-                                            leadingIcon = if (accentStyleInput == value) {
-                                                { AppIcon(AppIcons.Selected, modifier = Modifier.size(18.dp)) }
-                                            } else null,
-                                            modifier = Modifier.weight(1f),
-                                            colors = settingsChipColors(),
-                                            border = settingsChipBorder(selected = accentStyleInput == value)
-                                        )
-                                    }
-                                }
+                                "standard" to "Standard", "medium" to "Medium", "high" to "High"
+                            ).forEach { (value, label) ->
+                                FilterChip(
+                                    selected = accentContrastInput == value,
+                                    onClick = { accentContrastInput = value; onAccentContrastSave(value) },
+                                    label = { Text(label) },
+                                    leadingIcon = if (accentContrastInput == value) {
+                                        { AppIcon(AppIcons.Selected, modifier = Modifier.size(18.dp)) }
+                                    } else null,
+                                    modifier = Modifier.weight(1f),
+                                    colors = settingsChipColors(),
+                                    border = settingsChipBorder(selected = accentContrastInput == value)
+                                )
                             }
                         }
                     }
@@ -206,7 +213,10 @@ fun AppearanceSettingsScreen(
             }
 
             // Floating scan button
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -235,7 +245,10 @@ fun AppearanceSettingsScreen(
             }
 
             // Default project tab
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -278,8 +291,9 @@ fun AppearanceSettingsScreen(
                 onClick = {
                     themeModeInput = "system";                              onThemeModeSave("system")
                     useDynamicColorInput = false;                           onUseDynamicColorSave(false)
-                    accentColorInput = "blue";                              onAccentColorSave("blue")
-                    accentStyleInput = "tonal_spot";                        onAccentStyleSave("tonal_spot")
+                    accentColorInput = AppPreferences.DEFAULT_ACCENT_COLOR; onAccentColorSave(AppPreferences.DEFAULT_ACCENT_COLOR)
+                    accentContrastInput = AppPreferences.DEFAULT_ACCENT_CONTRAST
+                    onAccentContrastSave(AppPreferences.DEFAULT_ACCENT_CONTRAST)
                     floatingScanButtonInput = true;                         onFloatingScanButtonSave(true)
                     defaultProjectTabInput = AppPreferences.PROJECT_TAB_SAMPLES
                     onDefaultProjectTabSave(AppPreferences.PROJECT_TAB_SAMPLES)
@@ -304,9 +318,9 @@ fun AppearanceSettingsScreen(
 
 @Composable
 private fun settingsChipColors() = FilterChipDefaults.filterChipColors(
-    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-    selectedLabelColor = MaterialTheme.colorScheme.primary,
-    selectedLeadingIconColor = MaterialTheme.colorScheme.primary
+    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
 )
 
 @Composable
@@ -326,20 +340,23 @@ private fun ColorPickerDialog(
     onDismiss: () -> Unit
 ) {
     val colors = accentColorPalette
-    var showCustomInput by remember { mutableStateOf(false) }
-    var customHex by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Choose Accent Color") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                colors.chunked(5).forEach { rowColors ->
+                colors.chunked(4).forEach { rowColors ->
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         rowColors.forEach { (name, color) ->
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
                             Box(
                                 modifier = Modifier
-                                    .weight(1f).aspectRatio(1f)
+                                    .fillMaxWidth().aspectRatio(1f)
                                     .background(color, shape = MaterialTheme.shapes.medium)
                                     .border(
                                         width = if (currentColor == name) 3.dp else 1.dp,
@@ -353,52 +370,21 @@ private fun ColorPickerDialog(
                                     AppIcon(AppIcons.Selected, tint = readableOn(color), modifier = Modifier.size(24.dp))
                                 }
                             }
-                        }
-                    }
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                if (!showCustomInput) {
-                    OutlinedButton(onClick = { showCustomInput = true }, modifier = Modifier.fillMaxWidth()) {
-                        AppIcon(AppIcons.Appearance)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Custom Color (Hex)")
-                    }
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = customHex,
-                            onValueChange = { customHex = it.uppercase() },
-                            label = { Text("Hex Color") },
-                            placeholder = { Text("1976D2") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            prefix = { Text("#") },
-                            isError = customHex.isNotEmpty() && !isValidHex(customHex)
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            OutlinedButton(
-                                onClick = { showCustomInput = false; customHex = "" },
-                                modifier = Modifier.weight(1f)
-                            ) { Text("Cancel") }
-                            Button(
-                                onClick = { if (isValidHex(customHex)) { onColorSelected("#$customHex"); onDismiss() } },
-                                enabled = isValidHex(customHex),
-                                modifier = Modifier.weight(1f)
-                            ) { Text("Apply") }
+                            Text(
+                                text = name.replaceFirstChar { it.uppercase() },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            }
                         }
                     }
                 }
             }
         },
         confirmButton = {
-            if (!showCustomInput) {
-                TextButton(onClick = onDismiss) { Text("Close") }
-            }
+            TextButton(onClick = onDismiss) { Text("Close") }
         }
     )
 }
-
-private fun isValidHex(hex: String): Boolean =
-    hex.length == 6 && hex.all { it in '0'..'9' || it in 'A'..'F' || it in 'a'..'f' }
