@@ -88,7 +88,7 @@ internal fun DatasetDetailsCard(
                     color = when (datasetDeletionStatus) {
                         "approved" -> MaterialTheme.colorScheme.errorContainer
                         "pending"  -> MaterialTheme.colorScheme.tertiaryContainer
-                        else       -> MaterialTheme.colorScheme.surfaceVariant
+                        else       -> MaterialTheme.colorScheme.surfaceContainerLow
                     },
                     shape = MaterialTheme.shapes.small,
                     modifier = Modifier.fillMaxWidth()

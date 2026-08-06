@@ -73,7 +73,7 @@ Annotate the narrowest scope that needs it, not a blanket three-API line:
 
 | Use | Style |
 |-----|-------|
-| Info / section card (empty states, metadata blocks, error banners) | `containerColor = surfaceVariant` (or `surfaceVariant.copy(alpha = 0.5f)` for a softer nested block); no elevation |
+| Info / section card (empty states, metadata blocks, error banners) | `containerColor = surfaceContainerLow` (or `surfaceContainerLow.copy(alpha = 0.5f)` for a softer nested block); no elevation |
 | Thumbnails block (`detail/components/ThumbnailsSection.kt`) | `cardElevation(2.dp)` |
 | Home screen's primary scan card (`HomeScreen.kt`) | `cardElevation(6.dp)` — deliberately the one prominent, "this is the main action" surface |
 | Section / group header (`SectionHeader`) | `Surface(color = surfaceContainer)` — see "Accent-derived surfaces" below |
@@ -88,14 +88,17 @@ M3 expresses elevation as **tonal colour**, not shadow: chrome that sits above c
 `surfaceContainer*` role rather than a shadow or a `tonalElevation` parameter. Reach for
 `surfaceContainer` for anything pinned — sticky section headers especially.
 
-That only works because `Theme.kt`'s `withAccentSurfaces()` rebuilds all five container roles from
-the active scheme's `primary`. The hand-written palettes set only primary/secondary/tertiary, so
-before that every container role fell through to M3's baseline — which is generated from a *purple*
-seed, and made a blue-accented app render purple-grey headers. Dynamic colour is deliberately
-excluded, since it already derives a full tonal palette from the wallpaper.
+That only works because `Theme.kt`'s `resolveAccentColorScheme()` generates the *entire* scheme —
+every container role included — from the chosen accent color via MaterialKolor's
+`dynamicColorScheme()`, not just `primary`/`secondary`/`tertiary`. Before that migration, hand-written
+palettes only set those three roles, so every container role fell through to M3's baseline — which
+is generated from a *purple* seed, and made a blue-accented app render purple-grey headers. Dynamic
+colour is deliberately excluded from this resolution, since it already derives a full tonal palette
+from the wallpaper.
 
-Consequence worth knowing: `surfaceContainer` now shifts with the user's accent. Don't hardcode a
-grey where you want "slightly raised" — use the role and it follows the theme.
+Consequence worth knowing: every surface/container role now shifts with the user's accent *and*
+their chosen `PaletteStyle` (Tonal Spot/Neutral/Vibrant/Expressive, picked in Settings → Appearance).
+Don't hardcode a grey where you want "slightly raised" — use the role and it follows the theme.
 
 Keep the ratios small. M3's own container steps move *lightness* within a near-neutral palette, so
 blending toward a full-chroma primary at the same nominal percentage is a far stronger effect. The
@@ -140,15 +143,20 @@ interactivity) that its flat siblings don't also meet. If a future thumbnail red
 elevation back, document why, the way `QrCodeDialog`'s `tonalElevation = 0` carve-out does for the
 opposite case.
 
-`LinkedResourceCards.kt`'s `ResourceRow` also used a raw `MaterialTheme.colorScheme.onSurface.copy(alpha
+`LinkedResourceCards.kt`'s `ResourceRow` originally used a raw `MaterialTheme.colorScheme.onSurface.copy(alpha
 = 0.06f)` background instead of a real container role - a plain alpha-blend of a *foreground* color
-role doesn't track the user's accent colour the way `surfaceContainer*`/`surfaceVariant` do, so it
-read as flat grey in every palette while everything else picked up the accent. Changed to
-`surfaceVariant`, matching the same "flat tinted row" convention already used by roughly ten other
-call sites in the app (`AddFilesScreen`, `ManageInstrumentScreen`, `ErrorCard`, `MetadataEditor`,
-`ResourceDetailScreen`, `NavGraph`, `ResourceListComponents`, `InstrumentListScreen`,
-`ProjectsListScreen`) rather than introducing a second, accent-derived treatment for the same kind
-of element.
+role doesn't track the user's accent colour the way a real surface role does, so it read as flat grey
+in every palette while everything else picked up the accent. It's now `surface` — the row nests
+inside `LinkedResourceCard`'s outer `Card` (M3's default `surfaceContainerHighest`), so it needs to
+*recede* relative to its parent, not share a tier with it.
+
+A later color-role audit retired the legacy `surfaceVariant` role app-wide (it isn't one of M3's
+current canonical roles) in favor of `surfaceContainerLow` for the "flat tinted row / info card"
+convention used by roughly ten call sites (`AddFilesScreen`, `MetadataEditor`, `SearchBar`,
+`ResourceListComponents`, `InstrumentListScreen`, `ProjectsListScreen`, `UserComponents`,
+`SampleDetailsCard`, `DatasetDetailsCard`) rather than introducing a second, accent-derived treatment
+for the same kind of element. `ResourceRow`'s `surface` choice is deliberately different from this
+convention, precisely because it's nested rather than standalone.
 
 **M3 elevation and container colour are two separate decisions, not one.** Per M3's current
 guidance, *"surface tint colour is deprecated, use elevation level tokens instead"* and *"surface

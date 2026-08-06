@@ -22,7 +22,7 @@ fun SearchBar(
 ) {
     Surface(
         color = if (accentStyle) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                else MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.5f),
         shape = if (accentStyle) MaterialTheme.shapes.medium else MaterialTheme.shapes.extraSmall,
         modifier = modifier.fillMaxWidth()
     ) {

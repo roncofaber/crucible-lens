@@ -7,6 +7,7 @@
 
 ### Changed
 - Accent colors now generate a full theme, with a new style picker in Appearance settings
+- Refined a few card and status colors for better consistency with the app's accent
 - Choose which projects sync in the background; others still open normally
 - Resource detail field labels are now larger and medium-weight to stand out from their values
 - Linked/parent/child sample and dataset rows show their type icon again

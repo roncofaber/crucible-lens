@@ -82,7 +82,7 @@ internal fun SampleDetailsCard(
                     color = when (sampleDeletionStatus) {
                         "approved" -> MaterialTheme.colorScheme.errorContainer
                         "pending"  -> MaterialTheme.colorScheme.tertiaryContainer
-                        else       -> MaterialTheme.colorScheme.surfaceVariant
+                        else       -> MaterialTheme.colorScheme.surfaceContainerLow
                     },
                     shape = MaterialTheme.shapes.small,
                     modifier = Modifier.fillMaxWidth()

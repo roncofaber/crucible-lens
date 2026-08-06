@@ -622,7 +622,7 @@ fun NavGraph(
                             ) {
                                 AppIcon(AppIcons.Error,
                                     modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.error
+                                    tint = MaterialTheme.colorScheme.onErrorContainer
                                 )
                                 Text(
                                     text = "Unable to Load Resource",
