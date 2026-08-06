@@ -176,25 +176,29 @@ fun AppearanceSettingsScreen(
                             Text("Style", style = MaterialTheme.typography.titleMedium)
                         }
                         Spacer(modifier = Modifier.height(12.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf(
                                 "tonal_spot" to "Tonal Spot", "neutral" to "Neutral",
                                 "vibrant" to "Vibrant", "expressive" to "Expressive"
-                            ).forEach { (value, label) ->
-                                FilterChip(
-                                    selected = accentStyleInput == value,
-                                    onClick = { accentStyleInput = value; onAccentStyleSave(value) },
-                                    label = { Text(label) },
-                                    leadingIcon = if (accentStyleInput == value) {
-                                        { AppIcon(AppIcons.Selected, modifier = Modifier.size(18.dp)) }
-                                    } else null,
-                                    modifier = Modifier.weight(1f),
-                                    colors = settingsChipColors(),
-                                    border = settingsChipBorder(selected = accentStyleInput == value)
-                                )
+                            ).chunked(2).forEach { rowStyles ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    rowStyles.forEach { (value, label) ->
+                                        FilterChip(
+                                            selected = accentStyleInput == value,
+                                            onClick = { accentStyleInput = value; onAccentStyleSave(value) },
+                                            label = { Text(label) },
+                                            leadingIcon = if (accentStyleInput == value) {
+                                                { AppIcon(AppIcons.Selected, modifier = Modifier.size(18.dp)) }
+                                            } else null,
+                                            modifier = Modifier.weight(1f),
+                                            colors = settingsChipColors(),
+                                            border = settingsChipBorder(selected = accentStyleInput == value)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
