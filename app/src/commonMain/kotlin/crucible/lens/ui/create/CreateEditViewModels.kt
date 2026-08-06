@@ -9,6 +9,7 @@ import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.DatasetUpdateRequest
 import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.model.SampleUpdateRequest
+import crucible.lens.ui.common.MetadataWrite
 import kotlinx.serialization.json.JsonObject
 import crucible.lens.data.model.ThumbnailCreateRequest
 import crucible.lens.data.util.PlatformCrypto
@@ -42,23 +43,30 @@ class CreateSampleViewModel(
         if (_saveState.value is SaveState.Saving) return
         _saveState.value = SaveState.Saving
         viewModelScope.launch {
-            _saveState.value = try {
+            try {
                 when (val resp = apiClient.service.createSample(request)) {
                     is ApiResult.Success -> {
-                        val sample = resp.data
+                        var sample = resp.data
                         repository.cacheResource(sample.uniqueId, sample)
                         projectId?.let { repository.invalidateProjectData(it) }
+                        var metadataWarning: String? = null
                         if (!metadata.isNullOrEmpty()) {
-                            apiClient.service.postResourceMetadata(sample.uniqueId, metadata)
+                            when (val metaResp = apiClient.service.postResourceMetadata(sample.uniqueId, metadata)) {
+                                is ApiResult.Success -> {
+                                    sample = sample.copy(scientificMetadata = metaResp.data)
+                                    repository.cacheResource(sample.uniqueId, sample)
+                                }
+                                is ApiResult.Error -> metadataWarning = "Sample created, but metadata failed to save (${metaResp.code})"
+                            }
                         }
-                        SaveState.Success(sample.uniqueId)
+                        _saveState.value = SaveState.Success(sample.uniqueId, uploadWarning = metadataWarning)
                     }
-                    is ApiResult.Error -> SaveState.Error("Save failed (${resp.code})")
+                    is ApiResult.Error -> _saveState.value = SaveState.Error("Save failed (${resp.code})")
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                SaveState.Error("Connection error — check your network")
+                _saveState.value = SaveState.Error("Connection error — check your network")
             }
         }
     }
@@ -80,13 +88,14 @@ class CreateDatasetViewModel(
         if (_saveState.value is SaveState.Saving) return
         _saveState.value = SaveState.Saving
         viewModelScope.launch {
-            _saveState.value = try {
+            try {
                 val createResp = apiClient.service.createDataset(request)
                 if (createResp !is ApiResult.Success) {
                     val code = (createResp as? ApiResult.Error)?.code ?: -1
-                    return@launch run { _saveState.value = SaveState.Error("Could not create dataset ($code)") }
+                    _saveState.value = SaveState.Error("Could not create dataset ($code)")
+                    return@launch
                 }
-                val newDataset = createResp.data
+                var newDataset = createResp.data
                 val newUuid = newDataset.uniqueId
                 repository.cacheResource(newUuid, newDataset)
                 request.projectId?.let { repository.invalidateProjectData(it) }
@@ -138,21 +147,28 @@ class CreateDatasetViewModel(
                     }
                 }
 
-                val warning = when {
-                    uploadFailures > 0 && thumbnailFailures > 0 ->
-                        "Dataset created, but $uploadFailures file upload(s) and $thumbnailFailures thumbnail(s) failed"
-                    uploadFailures > 0 -> "Dataset created, but $uploadFailures file upload(s) failed"
-                    thumbnailFailures > 0 -> "Dataset created, but $thumbnailFailures thumbnail(s) failed to upload"
-                    else -> null
-                }
+                var metadataFailed = false
                 if (!metadata.isNullOrEmpty()) {
-                    apiClient.service.postResourceMetadata(newUuid, metadata)
+                    when (val metaResp = apiClient.service.postResourceMetadata(newUuid, metadata)) {
+                        is ApiResult.Success -> {
+                            newDataset = newDataset.copy(scientificMetadata = metaResp.data)
+                            repository.cacheResource(newUuid, newDataset)
+                        }
+                        is ApiResult.Error -> metadataFailed = true
+                    }
                 }
-                SaveState.Success(newUuid, uploadWarning = warning)
+
+                val problems = buildList {
+                    if (uploadFailures > 0) add("$uploadFailures file upload(s) failed")
+                    if (thumbnailFailures > 0) add("$thumbnailFailures thumbnail(s) failed to upload")
+                    if (metadataFailed) add("metadata failed to save")
+                }
+                val warning = if (problems.isEmpty()) null else "Dataset created, but " + problems.joinToString(" and ")
+                _saveState.value = SaveState.Success(newUuid, uploadWarning = warning)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                SaveState.Error("Connection error — check your network")
+                _saveState.value = SaveState.Error("Connection error — check your network")
             }
         }
     }
@@ -170,49 +186,75 @@ class EditResourceViewModel(
     private val _saveState = MutableStateFlow<SaveState>(SaveState.Idle)
     val saveState: StateFlow<SaveState> = _saveState.asStateFlow()
 
-    // metadata: null = unchanged or empty, skip the API call. Non-null = changed and non-empty, post it.
-    fun updateSample(uuid: String, request: SampleUpdateRequest, metadata: JsonObject? = null) {
+    // metadataWrite: null = unchanged or blank, skip the API call. Merge -> PATCH (only the
+    // changed keys, so a concurrent edit to any other key survives). Replace -> POST ?overwrite=true
+    // (only needed when a key was deleted in the editor, since PATCH can't express a delete).
+    fun updateSample(uuid: String, request: SampleUpdateRequest, metadataWrite: MetadataWrite? = null) {
         if (_saveState.value is SaveState.Saving) return
         _saveState.value = SaveState.Saving
         viewModelScope.launch {
-            _saveState.value = try {
+            try {
                 when (val resp = apiClient.service.updateSample(uuid, request)) {
                     is ApiResult.Success -> {
-                        repository.cacheResource(uuid, resp.data)
-                        if (metadata != null) {
-                            apiClient.service.postResourceMetadata(uuid, metadata, overwrite = true)
+                        var sample = resp.data
+                        if (metadataWrite != null) {
+                            val metaResp = when (metadataWrite) {
+                                is MetadataWrite.Merge -> apiClient.service.patchResourceMetadata(uuid, metadataWrite.updates)
+                                is MetadataWrite.Replace -> apiClient.service.postResourceMetadata(uuid, metadataWrite.full, overwrite = true)
+                            }
+                            when (metaResp) {
+                                is ApiResult.Success -> sample = sample.copy(scientificMetadata = metaResp.data)
+                                is ApiResult.Error -> {
+                                    repository.cacheResource(uuid, sample)
+                                    _saveState.value = SaveState.Error("Saved, but metadata failed to save (${metaResp.code})")
+                                    return@launch
+                                }
+                            }
                         }
-                        SaveState.Success(uuid)
+                        repository.cacheResource(uuid, sample)
+                        _saveState.value = SaveState.Success(uuid)
                     }
-                    is ApiResult.Error -> SaveState.Error("Save failed (${resp.code})")
+                    is ApiResult.Error -> _saveState.value = SaveState.Error("Save failed (${resp.code})")
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                SaveState.Error("Connection error — check your network")
+                _saveState.value = SaveState.Error("Connection error — check your network")
             }
         }
     }
 
-    fun updateDataset(uuid: String, request: DatasetUpdateRequest, metadata: JsonObject? = null) {
+    fun updateDataset(uuid: String, request: DatasetUpdateRequest, metadataWrite: MetadataWrite? = null) {
         if (_saveState.value is SaveState.Saving) return
         _saveState.value = SaveState.Saving
         viewModelScope.launch {
-            _saveState.value = try {
+            try {
                 when (val resp = apiClient.service.updateDataset(uuid, request)) {
                     is ApiResult.Success -> {
-                        repository.cacheResource(uuid, resp.data)
-                        if (metadata != null) {
-                            apiClient.service.postResourceMetadata(uuid, metadata, overwrite = true)
+                        var dataset = resp.data
+                        if (metadataWrite != null) {
+                            val metaResp = when (metadataWrite) {
+                                is MetadataWrite.Merge -> apiClient.service.patchResourceMetadata(uuid, metadataWrite.updates)
+                                is MetadataWrite.Replace -> apiClient.service.postResourceMetadata(uuid, metadataWrite.full, overwrite = true)
+                            }
+                            when (metaResp) {
+                                is ApiResult.Success -> dataset = dataset.copy(scientificMetadata = metaResp.data)
+                                is ApiResult.Error -> {
+                                    repository.cacheResource(uuid, dataset)
+                                    _saveState.value = SaveState.Error("Saved, but metadata failed to save (${metaResp.code})")
+                                    return@launch
+                                }
+                            }
                         }
-                        SaveState.Success(uuid)
+                        repository.cacheResource(uuid, dataset)
+                        _saveState.value = SaveState.Success(uuid)
                     }
-                    is ApiResult.Error -> SaveState.Error("Save failed (${resp.code})")
+                    is ApiResult.Error -> _saveState.value = SaveState.Error("Save failed (${resp.code})")
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                SaveState.Error("Connection error — check your network")
+                _saveState.value = SaveState.Error("Connection error — check your network")
             }
         }
     }

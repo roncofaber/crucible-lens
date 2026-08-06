@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.size
+import crucible.lens.ui.common.AppElevation
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -41,9 +42,12 @@ fun ScrollToTopButton(
             modifier = Modifier.size(42.dp),
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             shape = MaterialTheme.shapes.extraLarge,
+            // A tier below a standard FAB's Level3 resting elevation, matching this button's
+            // smaller 42dp size and lower emphasis; pressed still steps up exactly one M3 level,
+            // same as a standard FAB going Level3 -> Level4 on interaction.
             elevation = FloatingActionButtonDefaults.elevation(
-                defaultElevation = 4.dp,
-                pressedElevation = 8.dp
+                defaultElevation = AppElevation.Level2,
+                pressedElevation = AppElevation.Level3
             )
         ) {
             AppIcon(AppIcons.ScrollToTop,

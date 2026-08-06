@@ -9,15 +9,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import crucible.lens.ui.common.AppElevation
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
 
 @Composable
 internal fun dirtyFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedBorderColor = MaterialTheme.colorScheme.primary,
-    unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+    unfocusedBorderColor = MaterialTheme.colorScheme.tertiary,
     focusedLabelColor = MaterialTheme.colorScheme.primary,
-    unfocusedLabelColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+    unfocusedLabelColor = MaterialTheme.colorScheme.tertiary
 )
 
 @Composable
@@ -31,7 +32,11 @@ internal fun SettingsSaveBar(
         enter = expandVertically(expandFrom = Alignment.Bottom),
         exit = shrinkVertically(shrinkTowards = Alignment.Bottom)
     ) {
-        Surface(tonalElevation = 8.dp, shadowElevation = 8.dp) {
+        // Persistent bottom action row - same "toolbar" tier as M3's own scrolled-app-bar/nav-bar/
+        // menu chrome (AppElevation.Level2), expressed via tonal colour alone per M3's guidance
+        // that plain surfaces use tonal difference for separation rather than stacking a shadow
+        // on top too.
+        Surface(tonalElevation = AppElevation.Level2) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

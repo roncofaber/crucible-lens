@@ -53,3 +53,12 @@ fun ToggleHiddenMenuItem(expanded: Boolean, onClick: () -> Unit) {
         onClick = onClick
     )
 }
+
+@Composable
+fun ManageSyncedProjectsMenuItem(onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text("Manage synced projects") },
+        leadingIcon = { AppIcon(AppIcons.Syncing) },
+        onClick = onClick
+    )
+}

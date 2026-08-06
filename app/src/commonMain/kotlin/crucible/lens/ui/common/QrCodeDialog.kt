@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Image
@@ -76,12 +75,7 @@ fun QrCodeDialog(mfid: String, name: String, onDismiss: () -> Unit) {
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    mfid,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                IdText(mfid)
             }
         },
         confirmButton = {
@@ -118,7 +112,7 @@ fun QrCodeDialogWithNavigation(
                 if (pagerState.currentPage > 0) {
                     AppIcon(AppIcons.CarouselPrev,
                         modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
                     Spacer(Modifier.size(20.dp))
@@ -158,7 +152,7 @@ fun QrCodeDialogWithNavigation(
                 if (pagerState.currentPage < resources.size - 1) {
                     AppIcon(AppIcons.NavigateNext,
                         modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
                     Spacer(Modifier.size(20.dp))
@@ -187,12 +181,7 @@ fun QrCodeDialogWithNavigation(
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            resource.uniqueId,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        IdText(resource.uniqueId)
                     }
                 }
             }

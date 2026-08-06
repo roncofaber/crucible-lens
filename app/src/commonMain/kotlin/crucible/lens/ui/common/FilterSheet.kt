@@ -74,7 +74,7 @@ fun FilterSheet(
             }
 
             // ── Common ────────────────────────────────────────────────────────
-            Text("Common", style = MaterialTheme.typography.labelSmall,
+            Text("Common", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary)
 
             FilterTextField(
@@ -105,7 +105,7 @@ fun FilterSheet(
                     onClick = { local = local.copy(createdAfter = "") },
                     modifier = Modifier.align(Alignment.End).height(28.dp),
                     contentPadding = PaddingValues(horizontal = 8.dp)
-                ) { Text("Clear", style = MaterialTheme.typography.labelSmall) }
+                ) { Text("Clear") }
             }
             DateTimePickerField(
                 value = local.createdBefore,
@@ -118,13 +118,13 @@ fun FilterSheet(
                     onClick = { local = local.copy(createdBefore = "") },
                     modifier = Modifier.align(Alignment.End).height(28.dp),
                     contentPadding = PaddingValues(horizontal = 8.dp)
-                ) { Text("Clear", style = MaterialTheme.typography.labelSmall) }
+                ) { Text("Clear") }
             }
 
             HorizontalDivider()
 
             // ── Datasets ──────────────────────────────────────────────────────
-            Text("Datasets", style = MaterialTheme.typography.labelSmall,
+            Text("Datasets", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary)
 
             FilterTextField(
@@ -154,7 +154,7 @@ fun FilterSheet(
             HorizontalDivider()
 
             // ── Samples ───────────────────────────────────────────────────────
-            Text("Samples", style = MaterialTheme.typography.labelSmall,
+            Text("Samples", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary)
 
             FilterTextField(
@@ -185,10 +185,6 @@ private fun OwnerPickerField(
     onOwnerCleared: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<User>>(emptyList()) }
-    var isSearching by remember { mutableStateOf(false) }
-    var expanded by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     val apiClient = koinInject<ApiClient>()
 
     if (ownerOrcid.isNotBlank()) {
@@ -200,7 +196,7 @@ private fun OwnerPickerField(
             modifier = Modifier.fillMaxWidth(),
             leadingIcon = { AppIcon(AppIcons.User) },
             trailingIcon = {
-                IconButton(onClick = { query = ""; results = emptyList(); onOwnerCleared() }) {
+                IconButton(onClick = { query = ""; onOwnerCleared() }) {
                     AppIcon(AppIcons.ClearInput)
                 }
             }
@@ -208,43 +204,20 @@ private fun OwnerPickerField(
         return
     }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
-        UserSearchField(
-            query = query,
-            onQueryChange = { q ->
-                query = q
-                expanded = true
-                scope.launch {
-                    if (q.length < 3) { results = emptyList(); isSearching = false; return@launch }
-                    delay(350)
-                    isSearching = true
-                    results = (apiClient.service.searchUsers(q) as? ApiResult.Success)?.data ?: emptyList()
-                    isSearching = false
-                }
-            },
-            isSearching = isSearching,
-            label = "Owner"
-        )
-        DropdownMenu(
-            expanded = expanded && results.isNotEmpty(),
-            onDismissRequest = { expanded = false },
-            properties = PopupProperties(focusable = false),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            results.take(6).forEach { user ->
-                DropdownMenuItem(
-                    text = {
-                        val name = listOfNotNull(user.firstName, user.lastName).joinToString(" ")
-                        Column {
-                            Text("@${user.username}", style = MaterialTheme.typography.bodyMedium)
-                            if (name.isNotBlank()) Text(name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    },
-                    onClick = { expanded = false; query = ""; onOwnerSelected(user) }
-                )
-            }
-        }
+    val (results, isSearching) = rememberDebouncedSearchResults<User>(query = query) { q ->
+        apiClient.service.searchUsers(q)
     }
+    SearchPickerField(
+        query = query,
+        onQueryChange = { query = it },
+        isSearching = isSearching,
+        results = results,
+        onSelect = { user -> query = ""; onOwnerSelected(user) },
+        label = "Owner",
+        leadingIcon = AppIcons.Search,
+        modifier = Modifier.fillMaxWidth(),
+        itemContent = { user -> UserPickerItemContent(user) }
+    )
 }
 
 @Composable

@@ -3,6 +3,7 @@ package crucible.lens.ui.detail
 import androidx.compose.material3.ExperimentalMaterial3Api
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.IdText
 
 
 
@@ -18,7 +19,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 
 
@@ -29,6 +34,8 @@ import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.data.preferences.HistoryItem
+import crucible.lens.data.util.SEARCH_DEBOUNCE_MS
+import crucible.lens.data.util.SEARCH_MIN_QUERY_LENGTH
 import crucible.lens.ui.scanner.QRCodeScannerView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -78,10 +85,10 @@ fun LinkResourceSheet(
     // Server-side fuzzy name search, scoped to the current project
     LaunchedEffect(input) {
         val q = input.trim()
-        if (q.length < 3 || q.contains(' ').not() && q.length >= 10) {
+        if (q.length < SEARCH_MIN_QUERY_LENGTH || q.contains(' ').not() && q.length >= 10) {
             searchResults = emptyList(); return@LaunchedEffect
         }
-        delay(300)
+        delay(SEARCH_DEBOUNCE_MS)
         isSearchingNames = true
         val samples = (apiClient.service.searchSamples(q, projectId, limit = 6) as? ApiResult.Success)?.data ?: emptyList()
         val datasets = (apiClient.service.searchDatasets(q, projectId, limit = 6) as? ApiResult.Success)?.data ?: emptyList()
@@ -163,8 +170,8 @@ fun LinkResourceSheet(
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                                     maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                 val sub = listOfNotNull(selProjectName, selType.replaceFirstChar { it.uppercase() }).joinToString(" · ")
-                                if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
+                                if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer)
                             }
                             IconButton(onClick = {
                                 selectedResource = null; input = ""; resolvedUuid = null; resolvedType = null
@@ -216,7 +223,6 @@ fun LinkResourceSheet(
                     label = { Text("Search by name or paste UUID") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium,
                     leadingIcon = { AppIcon(AppIcons.Search) },
                     trailingIcon = {
                         when {
@@ -275,13 +281,26 @@ fun LinkResourceSheet(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(result.name, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                                    val subtitle = listOfNotNull(projectName, result.uniqueId).joinToString(" · ")
-                                    Text(subtitle, style = MaterialTheme.typography.labelSmall,
-                                        fontFamily = FontFamily.Monospace,
+                                    // Project name and mfid need different styling (prose vs.
+                                    // monospace ID, full vs. dimmed opacity) but must still
+                                    // truncate together as one line, so they're spans of one
+                                    // AnnotatedString rather than separate Texts in a Row - a
+                                    // Row wouldn't ellipsize as a unit the way a single Text does.
+                                    val idColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    val subtitle = buildAnnotatedString {
+                                        if (projectName != null) {
+                                            append(projectName)
+                                            append(" · ")
+                                        }
+                                        withStyle(SpanStyle(fontFamily = FontFamily.Monospace, color = idColor)) {
+                                            append(result.uniqueId)
+                                        }
+                                    }
+                                    Text(subtitle, style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1)
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
-                                Text(resultType, style = MaterialTheme.typography.labelSmall,
+                                Text(resultType, style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
@@ -303,7 +322,6 @@ fun LinkResourceSheet(
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = directionExpanded) },
                             leadingIcon = { AppIcon(AppIcons.ResourceHierarchy) },
                             modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                            textStyle = MaterialTheme.typography.bodyMedium,
                         )
                         ExposedDropdownMenu(
                             expanded = directionExpanded,
@@ -368,10 +386,7 @@ fun LinkResourceSheet(
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(item.name, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                                        Text(item.uuid, style = MaterialTheme.typography.labelSmall,
-                                            fontFamily = FontFamily.Monospace,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1)
+                                        IdText(item.uuid)
                                     }
                                 }
                             }

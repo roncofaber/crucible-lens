@@ -216,22 +216,31 @@ class CrucibleApiService(
         wrapper["scientific_metadata"] as? JsonObject ?: kotlinx.serialization.json.JsonObject(emptyMap())
     }
 
-    // POST /resources/{uuid}/metadata — creates or replaces all metadata (use overwrite=true to replace existing)
-    suspend fun postResourceMetadata(uuid: String, metadata: JsonObject, overwrite: Boolean = false): ApiResult<Unit> = safeCall {
-        client.post("${baseUrl}resources/$uuid/metadata${if (overwrite) "?overwrite=true" else ""}") {
+    // POST /resources/{uuid}/metadata — creates or replaces all metadata (use overwrite=true to
+    // replace existing; without it, 409s if non-empty metadata already exists — now that
+    // expectSuccess=true is set on the client, that 409 actually surfaces as ApiResult.Error
+    // instead of being silently swallowed). Returns { unique_id, scientific_metadata: {...} } —
+    // extract the inner field, same as getResourceMetadata, instead of discarding the response.
+    suspend fun postResourceMetadata(uuid: String, metadata: JsonObject, overwrite: Boolean = false): ApiResult<JsonObject> = safeCall {
+        val wrapper: JsonObject = client.post("${baseUrl}resources/$uuid/metadata${if (overwrite) "?overwrite=true" else ""}") {
             header("Authorization", "Bearer $apiKey")
             contentType(io.ktor.http.ContentType.Application.Json)
             setBody(metadata)
         }.body()
+        wrapper["scientific_metadata"] as? JsonObject ?: kotlinx.serialization.json.JsonObject(emptyMap())
     }
 
-    // PATCH /resources/{uuid}/metadata — merges into existing metadata (safe even if none exists yet)
-    suspend fun patchResourceMetadata(uuid: String, metadata: JsonObject): ApiResult<Unit> = safeCall {
-        client.patch("${baseUrl}resources/$uuid/metadata") {
+    // PATCH /resources/{uuid}/metadata — shallow-merges `updates` on top of whatever's already
+    // stored server-side ({**existing, **updates}); safe even if no metadata exists yet. Nested
+    // dict values are replaced wholesale, not deep-merged. Returns the merged result the same
+    // shape as postResourceMetadata.
+    suspend fun patchResourceMetadata(uuid: String, updates: JsonObject): ApiResult<JsonObject> = safeCall {
+        val wrapper: JsonObject = client.patch("${baseUrl}resources/$uuid/metadata") {
             header("Authorization", "Bearer $apiKey")
             contentType(io.ktor.http.ContentType.Application.Json)
-            setBody(metadata)
+            setBody(updates)
         }.body()
+        wrapper["scientific_metadata"] as? JsonObject ?: kotlinx.serialization.json.JsonObject(emptyMap())
     }
 
     suspend fun getThumbnails(uuid: String): ApiResult<List<Thumbnail>> = safeCall {

@@ -1,7 +1,6 @@
 package crucible.lens.ui.common
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -38,7 +37,7 @@ object ScrollbarDefaults {
 fun LazyColumnScrollbar(
     listState: LazyListState,
     modifier: Modifier = Modifier,
-    thumbColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+    thumbColor: Color = MaterialTheme.colorScheme.primary,
     thumbWidth: Dp = ScrollbarDefaults.ThumbWidth
 ) {
     val density = LocalDensity.current
@@ -49,7 +48,7 @@ fun LazyColumnScrollbar(
     val isActive = isDragging || listState.isScrollInProgress
     val thumbAlpha by animateFloatAsState(
         targetValue = if (isActive) 1f else 0f,
-        animationSpec = tween(durationMillis = if (isActive) 100 else 600),
+        animationSpec = if (isActive) ScrollbarShowSpec else ScrollbarHideSpec,
         label = "scrollbar_alpha"
     )
 

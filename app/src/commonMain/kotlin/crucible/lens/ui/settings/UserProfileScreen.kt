@@ -11,7 +11,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
@@ -23,6 +22,7 @@ import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.UserAvatar
 import org.koin.compose.koinInject
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun UserProfileScreen(
@@ -97,14 +97,14 @@ fun UserProfileScreen(
                                 UserAvatar(
                                     firstName = u.firstName,
                                     lastName = u.lastName,
-                                    size = 48.dp
+                                    size = 48.dp,
+                                    orcid = u.uniqueId
                                 )
                                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     if (displayName != null) {
                                         Text(
                                             displayName,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.SemiBold
+                                            style = MaterialTheme.typography.emphasizedTitleMedium
                                         )
                                     }
                                     if (u.username != null) {
@@ -141,7 +141,7 @@ fun UserProfileScreen(
                                     ) {
                                         Text(
                                             "ORCID",
-                                            style = MaterialTheme.typography.labelSmall,
+                                            style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Text(

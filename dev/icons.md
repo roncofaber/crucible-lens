@@ -64,9 +64,10 @@ Icons marked **FILLED** need to be downloaded twice:
 | search_off | 0 | `ic_search_off.xml` | `NoResults` |
 | chevron_right | 0 | `ic_chevron_right.xml` | `NavigateNext` |
 | chevron_left | 0 | `ic_chevron_left.xml` | `CarouselPrev` |
-| expand_more | 0 | `ic_expand_more.xml` | *(internal — ExpandChevron only)* |
+| expand_more | 0 | `ic_expand_more.xml` | `ExpandMore`, `ExpandLess` (same file, rotated) |
 | keyboard_double_arrow_up | 0 | `ic_keyboard_double_arrow_up.xml` | `ScrollToTop` |
-| more_vert | 0 | `ic_more_vert.xml` | `OverflowMenu` |
+| more_vert | 0 | `ic_more_vert.xml` | `MoreVert` |
+| close | 0 | `ic_clear.xml` | `ClearInput` |
 | filter_alt | 0 | `ic_filter_alt.xml` | `Filter` |
 | swap_vert | 0 | `ic_swap_vert.xml` | `Sort` |
 | tune | 0 | `ic_tune.xml` | `GroupBy` |
@@ -102,6 +103,8 @@ Icons marked **FILLED** need to be downloaded twice:
 | wifi | 0 | `ic_wifi.xml` | `TestConnection` |
 | wifi_off | 0 | `ic_wifi_off.xml` | `Offline` |
 | hourglass_empty | 0 | `ic_hourglass_empty.xml` | `Pending` |
+| sync | 0 | `ic_sync.xml` | `Syncing` |
+| sync_disabled | 0 | `ic_sync_disabled.xml` | `SyncPaused` |
 | lock | 0 | `ic_lock.xml` | `Private` |
 | public | 0 | `ic_public.xml` | `Public` |
 | help_outline | 0 | `ic_help_outline.xml` | `UnknownVisibility` |
@@ -158,7 +161,6 @@ Icons marked **FILLED** need to be downloaded twice:
 | info | 0 | `ic_info.xml` | `Info` |
 | lightbulb | 0 | `ic_lightbulb.xml` | `Tip` |
 | help | 0 | `ic_help.xml` | `Help` |
-| storage | 0 | `ic_storage_cache.xml` | `Cache` |
 
 ## Misc
 
@@ -167,14 +169,32 @@ Icons marked **FILLED** need to be downloaded twice:
 | circle | 0 | `ic_circle.xml` | `SelectionDot` |
 | location_on | 0 | `ic_location_on.xml` | `LocationAlt` |
 
+## Brand glyphs (NOT Material Symbols)
+
+These three don't come from fonts.google.com — they're hand-added brand marks, so the
+style/weight/grade rules above don't apply. Match the existing files: a 24dp/24-viewport
+`<vector>` with a solid `android:fillColor` (the value is irrelevant — `AppIcon` tints it),
+scaling the official artwork down rather than redrawing it.
+
+| Save as | AppIcons name | Used by |
+|---------|---------------|---------|
+| `ic_orcid.xml` | `Orcid` | ORCID sign-in, profile links |
+| `ic_discord.xml` | `Discord` | About screen |
+| `ic_python.xml` | `Python` | About screen (nano-crucible client link) |
+
 ---
 
 ## Notes
 
-- **`storage`** appears twice (file size field + cache settings). Download once as `ic_storage.xml` for file size and once as `ic_storage_cache.xml` for cache — or use the same file with different `AppIcons` tokens. Revisit when fixing the dual-use icon issue.
-- **`expand_more`** is only used internally by `ExpandChevron` — not exposed in `AppIcons`.
-- **`ExpandLess`** is no longer used — `ExpandChevron` handles both states by rotating `expand_more`.
+- **`storage`** is shared by two tokens — `FileStorage` (file size field) and `Cache` (cache
+  settings) — both pointing at the same `ic_storage.xml`. There is no `ic_storage_cache.xml`;
+  one drawable, two semantic names, which is fine.
+- **`expand_more`** backs both `ExpandMore` and `ExpandLess` — one file, rotated. Prefer the
+  `ExpandChevron` composable (`AppAnimations.kt`); the two tokens exist only for edge cases
+  where a static, non-animated chevron is needed.
 - **`notes`** replaces both `Icons.AutoMirrored.Filled.Notes` and `Icons.Default.Notes`.
 - **`help`** replaces both `Icons.AutoMirrored.Filled.Help` and `Icons.AutoMirrored.Filled.HelpOutline` — download `help_outline` variant separately if needed.
+- The drawable folder also holds `crucible_text_{light,dark}.png` (wordmark) — not icons, not
+  counted below.
 
-## Total: 101 XML files (99 icons + 2 extra for bookmark fill states + 1 duplicate for storage)
+## Total: 108 XML files — every one is referenced by an `AppIcons` token, and every token resolves to a file on disk (no orphans in either direction).

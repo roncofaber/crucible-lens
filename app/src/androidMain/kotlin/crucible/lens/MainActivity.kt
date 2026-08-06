@@ -5,10 +5,13 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.navigation.compose.rememberNavController
 import crucible.lens.data.network.ConnectivityObserver
 import crucible.lens.data.preferences.AppPreferences
@@ -52,14 +55,31 @@ class MainActivity : ComponentActivity() {
             // StateFlows always have their current value — no initial value needed
             val themeMode by preferencesManager.themeMode.collectAsState()
             val accentColor by preferencesManager.accentColor.collectAsState()
+            val accentContrast by preferencesManager.accentContrast.collectAsState()
             val useDynamicColor by preferencesManager.useDynamicColor.collectAsState()
             val darkTheme = themeMode == PreferencesManager.THEME_MODE_DARK ||
                 (themeMode == PreferencesManager.THEME_MODE_SYSTEM && isSystemInDarkTheme())
 
+            // Targeting SDK 35+ means the OS enforces edge-to-edge unconditionally - content
+            // already draws behind the status/navigation bars regardless of any opt-in here. What
+            // isn't automatic is icon *contrast*: status/nav bar icons default to light (made for
+            // a dark backdrop), so they vanish against this app's light theme unless explicitly
+            // told to switch dark when the resolved theme is light. Tied to `darkTheme` (which
+            // already folds in the in-app Light/Dark/System preference, not just the OS setting)
+            // so toggling the in-app theme flips icon contrast immediately, not just a system-wide
+            // dark mode change.
+            val view = LocalView.current
+            SideEffect {
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !darkTheme
+                insetsController.isAppearanceLightNavigationBars = !darkTheme
+            }
+
             CrucibleScannerTheme(
                 darkTheme = darkTheme,
                 dynamicColor = useDynamicColor,
-                accentColor = accentColor
+                accentColor = accentColor,
+                accentContrast = accentContrast
             ) {
                 NavGraph(
                     navController = navController,

@@ -11,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.ResourceLink
@@ -20,12 +19,12 @@ import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.StandardSizeAnim
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 private fun LinkedResourceCard(
     title: String,
     headerIcon: AppIconToken,
-    rowIcon: AppIconToken,
     links: List<ResourceLink>,
     onNavigateToResource: (String) -> Unit,
     onUnlink: ((uuid: String, name: String) -> Unit)?,
@@ -34,7 +33,7 @@ private fun LinkedResourceCard(
 ) {
     var expanded by remember { mutableStateOf(initialExpanded) }
 
-    Card {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim)) {
             Row(
                 modifier = Modifier
@@ -48,8 +47,7 @@ private fun LinkedResourceCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "$title (${links.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.emphasizedTitleMedium
                 )
             }
 
@@ -60,7 +58,7 @@ private fun LinkedResourceCard(
                 ) {
                     for (link in links) {
                         ResourceRow(
-                            icon = rowIcon,
+                            icon = headerIcon,
                             name = link.name ?: "",
                             onClick = { onNavigateToResource(link.uniqueId) },
                             onLongClick = onUnlink?.let { { it(link.uniqueId, link.name ?: "") } }
@@ -79,7 +77,7 @@ internal fun LinkedSamplesCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) = LinkedResourceCard("Linked Samples", AppIcons.Sample, AppIcons.Sample, samples, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
+) = LinkedResourceCard("Linked Samples", AppIcons.Sample, samples, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun ParentSamplesCard(
@@ -88,7 +86,7 @@ internal fun ParentSamplesCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) = LinkedResourceCard("Parent Samples", AppIcons.ParentResource, AppIcons.Sample, parents, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
+) = LinkedResourceCard("Parent Samples", AppIcons.ParentResource, parents, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun ChildSamplesCard(
@@ -97,7 +95,7 @@ internal fun ChildSamplesCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) = LinkedResourceCard("Child Samples", AppIcons.ChildResource, AppIcons.Sample, children, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
+) = LinkedResourceCard("Child Samples", AppIcons.ChildResource, children, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun LinkedDatasetsCard(
@@ -106,7 +104,7 @@ internal fun LinkedDatasetsCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) = LinkedResourceCard("Linked Datasets", AppIcons.Dataset, AppIcons.Dataset, datasets, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
+) = LinkedResourceCard("Linked Datasets", AppIcons.Dataset, datasets, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun ParentDatasetsCard(
@@ -115,7 +113,7 @@ internal fun ParentDatasetsCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) = LinkedResourceCard("Parent Datasets", AppIcons.ParentResource, AppIcons.Dataset, parents, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
+) = LinkedResourceCard("Parent Datasets", AppIcons.ParentResource, parents, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 internal fun ChildDatasetsCard(
@@ -124,14 +122,14 @@ internal fun ChildDatasetsCard(
     onUnlink: ((uuid: String, name: String) -> Unit)? = null,
     initialExpanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
-) = LinkedResourceCard("Child Datasets", AppIcons.ChildResource, AppIcons.Dataset, children, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
+) = LinkedResourceCard("Child Datasets", AppIcons.ChildResource, children, onNavigateToResource, onUnlink, initialExpanded, onExpandChange)
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 internal fun ResourceRow(
-    icon: AppIconToken,
     name: String,
     subtitle: String? = null,
+    icon: AppIconToken? = null,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null
 ) {
@@ -139,19 +137,20 @@ internal fun ResourceRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(vertical = 10.dp, horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AppIcon(icon, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(modifier = Modifier.width(12.dp))
+        if (icon != null) {
+            AppIcon(icon, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.width(10.dp))
+        }
         if (subtitle != null) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = name,
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -167,12 +166,11 @@ internal fun ResourceRow(
             Text(
                 text = name,
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
                 modifier = Modifier.weight(1f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
-        AppIcon(AppIcons.NavigateNext, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+        AppIcon(AppIcons.NavigateNext, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

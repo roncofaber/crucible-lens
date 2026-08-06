@@ -13,6 +13,7 @@ import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppTopBar
+import crucible.lens.ui.common.IdText
 import crucible.lens.ui.common.ResourceListDividerInset
 import crucible.lens.ui.common.SectionHeader
 import crucible.lens.ui.common.SwipeAction
@@ -23,7 +24,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.ui.common.SearchBar
@@ -37,7 +37,7 @@ import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.RefreshMenuItem
-import crucible.lens.ui.common.ToggleHiddenMenuItem
+import crucible.lens.ui.common.ManageSyncedProjectsMenuItem
 import crucible.lens.platform.showToast
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
@@ -50,6 +50,7 @@ import crucible.lens.ui.common.ScrollToTopButton
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -61,8 +62,9 @@ fun ProjectsListScreen(
     onProjectClick: (String) -> Unit,
     pinnedProjects: Set<String> = emptySet(),
     onTogglePin: (String) -> Unit = {},
-    hiddenProjects: Set<String> = emptySet(),
-    onToggleHide: (String) -> Unit = {},
+    syncedProjects: Set<String> = emptySet(),
+    onToggleSync: (String) -> Unit = {},
+    onManageSyncedProjects: () -> Unit = {},
     currentUserOrcid: String? = null,
 ) {
     val platformContext = getPlatformContext()
@@ -88,19 +90,18 @@ fun ProjectsListScreen(
     }
     val projectCounts by viewModel.projectCounts.collectAsState()
     // Persistent cache summaries - loaded immediately for instant display
-    var hiddenExpanded by remember { mutableStateOf(false) }
+    var syncedExpanded by remember { mutableStateOf(true) }
+    var unsyncedExpanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var sortState by remember { mutableStateOf(SortState(SortField.NAME, true)) }
-    // Track which projects were manually unarchived (so we don't auto-archive them again)
-    var manuallyShown by remember { mutableStateOf<Set<String>>(emptySet()) }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
-    // Projects pending hide — excluded from activeProjects so LazyColumn animates the removal
-    // cleanly. onToggleHide is only called after the snackbar window closes without undo.
-    val pendingHide = remember { mutableStateMapOf<String, Boolean>() }
+    // Projects pending unsync — excluded from syncedProjectsList so LazyColumn animates the removal
+    // cleanly. onToggleSync is only called after the snackbar window closes without undo.
+    val pendingUnsync = remember { mutableStateMapOf<String, Boolean>() }
     // Generation counter per project — bumped on undo so the re-shown item's items() key changes,
     // giving it a fresh SwipeToDismissBoxState (there's no supported way to reset a committed
     // SwipeToDismissBoxState back to Settled without fighting an in-progress drag).
@@ -109,15 +110,15 @@ fun ProjectsListScreen(
     LaunchedEffect(Unit) { /* ViewModel loads on init */ }
 
     // Preload and cache samples/datasets per project in background (also populates counts).
-    // Priority: pinned projects first. Hidden projects are skipped entirely — no network call
-    // is made for them until the user unhides them (this effect re-runs on the next hiddenProjects
-    // change and naturally picks up newly-unhidden projects).
+    // Priority: pinned projects first. Only synced projects are preloaded; everything else
+    // fetches on demand when opened (this effect re-runs on the next syncedProjects change and
+    // naturally picks up newly-synced projects).
     // This automatically cancels when the user navigates away from this screen.
-    // Re-triggers when projects change, hiddenProjects changes, OR reloadTrigger increments.
-    LaunchedEffect(loadState, hiddenProjects) {
+    // Re-triggers when projects change, syncedProjects changes, OR reloadTrigger increments.
+    LaunchedEffect(loadState, syncedProjects) {
         val projectList = (loadState as? LoadState.Success)?.data ?: return@LaunchedEffect
         val prioritizedProjects = projectList
-            .filter { it.projectId !in hiddenProjects }
+            .filter { it.projectId in syncedProjects }
             .sortedByDescending { it.projectId in pinnedProjects }
 
         // Track consecutive failures to stop on network errors (thread-safe for concurrent launches)
@@ -138,12 +139,6 @@ fun ProjectsListScreen(
                             onCountsAvailable = { sampleCount, datasetCount ->
                                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                     viewModel.updateCount(project.projectId, sampleCount, datasetCount)
-
-                                    if (sampleCount == 0 && datasetCount == 0 &&
-                                        project.projectId !in manuallyShown &&
-                                        project.projectId !in hiddenProjects) {
-                                        onToggleHide(project.projectId)
-                                    }
                                 }
                             }
                         )
@@ -180,7 +175,7 @@ fun ProjectsListScreen(
                             AppIcon(AppIcons.MoreVert)
                         }
                         DropdownMenu(expanded = listMenuExpanded, onDismissRequest = { listMenuExpanded = false }) {
-                            ToggleHiddenMenuItem(hiddenExpanded) { hiddenExpanded = !hiddenExpanded; listMenuExpanded = false }
+                            ManageSyncedProjectsMenuItem { listMenuExpanded = false; onManageSyncedProjects() }
                             RefreshMenuItem { listMenuExpanded = false; refreshProjects() }
                         }
                     }
@@ -196,59 +191,63 @@ fun ProjectsListScreen(
                 .padding(padding)
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    // Bottom padding clears the ScrollToTopButton FAB (42dp + 16dp margin) so the
-                    // last item — including the Hidden section header/rows — is never obscured.
-                    contentPadding = PaddingValues(bottom = 80.dp)
-                ) {
-                    stickyHeader(key = "search_bar") {
-                        Surface(color = MaterialTheme.colorScheme.background) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                SearchBar(
-                                    query = searchQuery,
-                                    onQueryChange = { searchQuery = it },
-                                    placeholder = "Search by name, ID, or project lead…",
-                                    modifier = Modifier.weight(1f),
-                                    accentStyle = true
-                                )
-                                Box {
-                                    IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
-                                        AppIcon(AppIcons.Sort,
-                                            modifier = Modifier.size(20.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Search bar sits outside LazyColumn so group headers can stick
+                    // without pushing the search bar off-screen
+                    Surface(color = MaterialTheme.colorScheme.background) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            SearchBar(
+                                query = searchQuery,
+                                onQueryChange = { searchQuery = it },
+                                placeholder = "Search by name, ID, or project lead…",
+                                modifier = Modifier.weight(1f)
+                            )
+                            Box {
+                                IconButton(onClick = { sortMenuExpanded = true }) {
+                                    AppIcon(AppIcons.Sort,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
+                                    listOf(SortField.NAME to "Name", SortField.DATE to "Date created").forEach { (field, label) ->
+                                        DropdownMenuItem(
+                                            text = { Text(label) },
+                                            leadingIcon = {
+                                                if (sortState.field == field)
+                                                    AppIcon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource,
+                                                        modifier = Modifier.size(14.dp),
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                else Spacer(Modifier.size(14.dp))
+                                            },
+                                            onClick = {
+                                                sortState = if (sortState.field == field)
+                                                    sortState.copy(ascending = !sortState.ascending)
+                                                else SortState(field, true)
+                                                sortMenuExpanded = false
+                                            }
                                         )
-                                    }
-                                    DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
-                                        listOf(SortField.NAME to "Name", SortField.DATE to "Date created").forEach { (field, label) ->
-                                            DropdownMenuItem(
-                                                text = { Text(label) },
-                                                leadingIcon = {
-                                                    if (sortState.field == field)
-                                                        AppIcon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource,
-                                                            modifier = Modifier.size(14.dp),
-                                                            tint = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    else Spacer(Modifier.size(14.dp))
-                                                },
-                                                onClick = {
-                                                    sortState = if (sortState.field == field)
-                                                        sortState.copy(ascending = !sortState.ascending)
-                                                    else SortState(field, true)
-                                                    sortMenuExpanded = false
-                                                }
-                                            )
-                                        }
                                     }
                                 }
                             }
                         }
                     }
+                    // Scrollbar is scoped to this Box, not the outer one: the outer Box now
+                    // also contains the search bar, and a scrollbar spanning it would be taller
+                    // than the list it represents.
+                    Box(modifier = Modifier.weight(1f)) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        // Bottom padding clears the ScrollToTopButton FAB (42dp + 16dp margin) so the
+                        // last item — including the Hidden section header/rows — is never obscured.
+                        contentPadding = PaddingValues(bottom = 80.dp)
+                    ) {
 
                     when {
                         loadState is LoadState.Loading -> item(key = "__loading__") {
@@ -276,7 +275,7 @@ fun ProjectsListScreen(
                             ) {
                                 Card(
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -285,8 +284,7 @@ fun ProjectsListScreen(
                                             )
                                             Text(
                                                 text = "No Projects Found",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold
+                                                style = MaterialTheme.typography.emphasizedTitleMedium
                                             )
                                         }
                                         Text(
@@ -325,8 +323,8 @@ fun ProjectsListScreen(
                                 }
                             }
 
-                            val activeProjects = filteredProjects
-                                .filter { it.projectId !in hiddenProjects && pendingHide[it.projectId] != true }
+                            val syncedProjectsList = filteredProjects
+                                .filter { it.projectId in syncedProjects && pendingUnsync[it.projectId] != true }
                                 .applySortState(
                                     sortState,
                                     name = { title?.lowercase() ?: projectId.lowercase() },
@@ -335,8 +333,8 @@ fun ProjectsListScreen(
                                 )
                                 // Pinned always float to top regardless of sort
                                 .sortedByDescending { it.projectId in pinnedProjects }
-                            val hiddenProjectsList = filteredProjects
-                                .filter { it.projectId in hiddenProjects }
+                            val unsyncedProjectsList = filteredProjects
+                                .filter { it.projectId !in syncedProjects }
 
                             // Show message when search returns no results
                             if (searchQuery.isNotBlank() && filteredProjects.isEmpty()) {
@@ -344,7 +342,7 @@ fun ProjectsListScreen(
                                     Box(modifier = Modifier.fillParentMaxWidth(), contentAlignment = Alignment.Center) {
                                         Card(
                                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
                                         ) {
                                             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -353,8 +351,7 @@ fun ProjectsListScreen(
                                                     )
                                                     Text(
                                                         text = "No Results Found",
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        fontWeight = FontWeight.Bold
+                                                        style = MaterialTheme.typography.emphasizedTitleMedium
                                                     )
                                                 }
                                                 Text(
@@ -367,12 +364,25 @@ fun ProjectsListScreen(
                                     }
                                 }
                             } else {
-                                items(activeProjects, key = { "${it.projectId}:${undoGenerations[it.projectId] ?: 0}" }) { project ->
+                                if (syncedProjectsList.isNotEmpty()) {
+                                    stickyHeader(key = "__synced_header__") {
+                                        SectionHeader(
+                                            title = "Syncing",
+                                            count = syncedProjectsList.size,
+                                            icon = AppIcons.Syncing,
+                                            expanded = syncedExpanded,
+                                            onToggle = { syncedExpanded = !syncedExpanded }
+                                        )
+                                    }
+                                }
+
+                                if (syncedExpanded) {
+                                    items(syncedProjectsList, key = { "${it.projectId}:${undoGenerations[it.projectId] ?: 0}" }) { project ->
                                     SwipeToHideItem(
                                         direction = SwipeToDismissBoxValue.EndToStart,
                                         action = SwipeAction(
-                                            icon = AppIcons.HideContent,
-                                            label = "Hide",
+                                            icon = AppIcons.SyncPaused,
+                                            label = "Stop syncing",
                                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                         ),
@@ -381,13 +391,14 @@ fun ProjectsListScreen(
                                                 scope = scope,
                                                 snackbarHostState = snackbarHostState,
                                                 itemLabel = project.title ?: project.projectId,
+                                                message = "\"${project.title ?: project.projectId}\" will stop syncing",
                                                 onPending = { pending ->
-                                                    if (pending) pendingHide[project.projectId] = true
-                                                    else pendingHide.remove(project.projectId)
+                                                    if (pending) pendingUnsync[project.projectId] = true
+                                                    else pendingUnsync.remove(project.projectId)
                                                 },
-                                                onConfirmedHide = { onToggleHide(project.projectId) },
+                                                onConfirmedHide = { onToggleSync(project.projectId) },
                                                 onUndone = {
-                                                    onToggleHide(project.projectId)
+                                                    onToggleSync(project.projectId)
                                                     undoGenerations[project.projectId] = (undoGenerations[project.projectId] ?: 0) + 1
                                                 }
                                             )
@@ -405,33 +416,33 @@ fun ProjectsListScreen(
                                         )
                                     }
                                     HorizontalDivider(modifier = Modifier.padding(start = ResourceListDividerInset))
+                                    }
                                 }
 
-                                if (hiddenProjectsList.isNotEmpty()) {
-                                    item(key = "__hidden_header__") {
+                                if (unsyncedProjectsList.isNotEmpty()) {
+                                    stickyHeader(key = "__unsynced_header__") {
                                         SectionHeader(
-                                            title = "Hidden",
-                                            count = hiddenProjectsList.size,
-                                            icon = AppIcons.HideContent,
-                                            expanded = hiddenExpanded,
-                                            onToggle = { hiddenExpanded = !hiddenExpanded }
+                                            title = "Not syncing",
+                                            count = unsyncedProjectsList.size,
+                                            icon = AppIcons.SyncPaused,
+                                            expanded = unsyncedExpanded,
+                                            onToggle = { unsyncedExpanded = !unsyncedExpanded }
                                         )
                                     }
 
-                                    if (hiddenExpanded) {
-                                        items(hiddenProjectsList, key = { "hidden_${it.projectId}" }) { project ->
+                                    if (unsyncedExpanded) {
+                                        items(unsyncedProjectsList, key = { "unsynced_${it.projectId}" }) { project ->
                                             SwipeToHideItem(
                                                 direction = SwipeToDismissBoxValue.StartToEnd,
                                                 action = SwipeAction(
-                                                    icon = AppIcons.ShowContent,
-                                                    label = "Show",
+                                                    icon = AppIcons.Syncing,
+                                                    label = "Start syncing",
                                                     containerColor = MaterialTheme.colorScheme.primary,
                                                     contentColor = MaterialTheme.colorScheme.onPrimary
                                                 ),
                                                 onDismiss = {
-                                                    manuallyShown = manuallyShown + project.projectId
-                                                    showToast(platformContext, "Project shown")
-                                                    onToggleHide(project.projectId)
+                                                    showToast(platformContext, "Syncing ${project.title ?: project.projectId}")
+                                                    onToggleSync(project.projectId)
                                                 }
                                             ) {
                                                 ProjectCard(
@@ -440,7 +451,7 @@ fun ProjectsListScreen(
                                                     onClick = { onProjectClick(project.projectId) },
                                                     isPinned = false,
                                                     onTogglePin = {},
-                                                    isHidden = true
+                                                    isSynced = false
                                                 )
                                             }
                                             HorizontalDivider(modifier = Modifier.padding(start = ResourceListDividerInset))
@@ -450,11 +461,13 @@ fun ProjectsListScreen(
                             }
                         }
                     }
+                    }
+                    LazyColumnScrollbar(
+                        listState = listState,
+                        modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd).padding(end = 4.dp)
+                    )
+                    }
                 }
-                LazyColumnScrollbar(
-                    listState = listState,
-                    modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd).padding(end = 4.dp)
-                )
                 ScrollToTopButton(
                     visible = showScrollToTop,
                     onClick = { scope.launch { listState.animateScrollToItem(0) } },
@@ -472,7 +485,7 @@ private fun ProjectCard(
     onClick: () -> Unit,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
-    isHidden: Boolean = false
+    isSynced: Boolean = true
 ) {
     // Only show ID when it differs from the display name
     val showId = project.title != null && project.title != project.projectId
@@ -491,39 +504,35 @@ private fun ProjectCard(
             )
         },
         supportingContent = if (showId) {
-            {
-                Text(
-                    text = "ID: ${project.projectId}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            { IdText("#${project.projectId}") }
         } else null,
         leadingContent = {
-            NotificationDot(count = if (isHidden) null else pendingRequestCount) {
-                AppIcon(if (isHidden) AppIcons.HideContent else AppIcons.Project,
-                    tint = if (isHidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
+            NotificationDot(count = pendingRequestCount) {
+                AppIcon(AppIcons.Project,
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
         },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (!isHidden) {
+                if (isSynced) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
                         CountChip(icon = AppIcons.Sample, count = counts?.first, loading = counts?.first == null)
                         CountChip(icon = AppIcons.Dataset, count = counts?.second, loading = counts?.second == null)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
-                    if (!isHidden) {
-                        IconButton(onClick = onTogglePin, modifier = Modifier.size(40.dp)) {
-                            AppIcon(AppIcons.Pinned, filled = isPinned,
-                                modifier = Modifier.size(20.dp),
-                                tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    IconButton(onClick = onTogglePin, modifier = Modifier.size(40.dp)) {
+                        AppIcon(AppIcons.Pinned, filled = isPinned,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (!isSynced) {
+                        AppIcon(AppIcons.SyncPaused,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                 }
@@ -540,7 +549,7 @@ private fun CountChip(
     loading: Boolean
 ) {
     Surface(
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+        color = MaterialTheme.colorScheme.primaryContainer,
         shape = MaterialTheme.shapes.small
     ) {
         Row(
@@ -552,19 +561,19 @@ private fun CountChip(
             AppIcon(
                 icon,
                 modifier = Modifier.size(11.dp),
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
             )
             if (loading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(10.dp),
                     strokeWidth = 1.5.dp,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             } else {
                 Text(
                     text = count?.toString() ?: "?",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }

@@ -2,6 +2,7 @@
 package crucible.lens.ui.navigation
 import androidx.compose.material3.ExperimentalMaterial3Api
 import crucible.lens.platform.*
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -36,16 +37,19 @@ import crucible.lens.ui.settings.OrcidLoginScreen
 import crucible.lens.ui.settings.AppearanceSettingsScreen
 import crucible.lens.ui.settings.CacheSettingsScreen
 import crucible.lens.ui.settings.AboutSettingsScreen
+import crucible.lens.ui.settings.TypographySettingsScreen
 import crucible.lens.ui.settings.AccountScreen
 import crucible.lens.ui.settings.AccountViewModel
 import crucible.lens.ui.settings.UserProfileScreen
 import crucible.lens.ui.detail.ResourceDetailViewModel
 import crucible.lens.ui.detail.UiState
 import crucible.lens.ui.detail.ResourceDetailScreen
+import crucible.lens.ui.detail.EditResourceScreen
 import crucible.lens.ui.projects.ProjectsListScreen
 import crucible.lens.ui.projects.ProjectDetailScreen
 import crucible.lens.ui.projects.ManageProjectScreen
 import crucible.lens.ui.projects.ManageProjectViewModel
+import crucible.lens.ui.projects.SyncPickerScreen
 import crucible.lens.ui.instruments.InstrumentListScreen
 import crucible.lens.ui.instruments.InstrumentDetailScreen
 import crucible.lens.ui.instruments.ManageInstrumentScreen
@@ -112,6 +116,7 @@ fun NavGraph(
     val graphExplorerUrl by prefs.graphExplorerUrl.collectAsStateWithLifecycle()
     val themeMode by prefs.themeMode.collectAsStateWithLifecycle()
     val accentColor by prefs.accentColor.collectAsStateWithLifecycle()
+    val accentContrast by prefs.accentContrast.collectAsStateWithLifecycle()
     val useDynamicColor by prefs.useDynamicColor.collectAsStateWithLifecycle()
     val darkTheme = themeMode == AppPreferences.THEME_MODE_DARK ||
         (themeMode == AppPreferences.THEME_MODE_SYSTEM && isSystemInDarkTheme())
@@ -119,7 +124,7 @@ fun NavGraph(
     val lastVisitedResourceName by prefs.lastVisitedResourceName.collectAsStateWithLifecycle()
     val floatingScanButton by prefs.floatingScanButton.collectAsStateWithLifecycle()
     val pinnedProjects by prefs.pinnedProjects.collectAsStateWithLifecycle()
-    val hiddenProjects by prefs.hiddenProjects.collectAsStateWithLifecycle()
+    val syncedProjects by prefs.syncedProjects.collectAsStateWithLifecycle()
     val pinnedInstruments by prefs.pinnedInstruments.collectAsStateWithLifecycle()
     val hiddenInstruments by prefs.hiddenInstruments.collectAsStateWithLifecycle()
     val resourceHistory by prefs.resourceHistory.collectAsStateWithLifecycle()
@@ -138,13 +143,13 @@ fun NavGraph(
     }
 
     LaunchedEffect(apiKey) {
-        // Reads hiddenProjects/userOrcid as a one-time snapshot at sync start, not as a
+        // Reads syncedProjects/userOrcid as a one-time snapshot at sync start, not as a
         // reactive key — this is a one-shot-per-session background preload, not something
         // that should trigger a full re-sync (including forceRefresh on the whole projects
-        // list) every time a single project is hidden/unhidden. HomeScreen/ProjectsListScreen's
-        // own preload effects already pick up newly-unhidden projects on their next composition.
+        // list) every time a single project is synced/unsynced. HomeScreen/ProjectsListScreen's
+        // own preload effects already pick up newly-synced projects on their next composition.
         if (!apiKey.isNullOrBlank()) {
-            viewModel.startBackgroundSync(hiddenProjects, userOrcid)
+            viewModel.startBackgroundSync(syncedProjects, userOrcid)
         }
     }
 
@@ -306,7 +311,7 @@ fun NavGraph(
                     navController.navigate(Screen.Search.route)
                 },
                 pinnedProjects = pinnedProjects,
-                hiddenProjects = hiddenProjects,
+                syncedProjects = syncedProjects,
                 onProjectClick = { projectId ->
                     navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                 },
@@ -343,11 +348,15 @@ fun NavGraph(
             SettingsScreen(
                 currentApiKey = apiKey,
                 userUsername = userUsername,
+                syncedCount = syncedProjects.size,
+                totalProjectCount = repository.getCachedProjects()?.size ?: 0,
                 onNavigateToAccount = { navController.navigate(Screen.SettingsAccount.route) },
                 onNavigateToApi = { navController.navigate(Screen.SettingsApi.route) },
                 onNavigateToAppearance = { navController.navigate(Screen.SettingsAppearance.route) },
                 onNavigateToCache = { navController.navigate(Screen.SettingsCache.route) },
+                onNavigateToSyncedProjects = { navController.navigate(Screen.SyncedProjects.createRoute(firstRun = false)) },
                 onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },
+                onNavigateToTypography = { navController.navigate(Screen.SettingsTypography.route) },
                 onBack = navigateBack,
                 onHome = navigateHome
             )
@@ -385,11 +394,13 @@ fun NavGraph(
             AppearanceSettingsScreen(
                 currentThemeMode = themeMode,
                 currentAccentColor = accentColor,
+                currentAccentContrast = accentContrast,
                 currentFloatingScanButton = floatingScanButton,
                 currentUseDynamicColor = useDynamicColor,
                 currentDefaultProjectTab = defaultProjectTab,
                 onThemeModeSave = { mode -> scope.launch { prefs.saveThemeMode(mode) } },
                 onAccentColorSave = { color -> scope.launch { prefs.saveAccentColor(color) } },
+                onAccentContrastSave = { contrast -> scope.launch { prefs.saveAccentContrast(contrast) } },
                 onUseDynamicColorSave = { enabled -> scope.launch { prefs.saveUseDynamicColor(enabled) } },
                 onFloatingScanButtonSave = { enabled -> scope.launch { prefs.saveFloatingScanButton(enabled) } },
                 onDefaultProjectTabSave = { tab -> scope.launch { prefs.saveDefaultProjectTab(tab) } },
@@ -401,6 +412,13 @@ fun NavGraph(
         composable(Screen.SettingsAbout.route) {
             AboutSettingsScreen(
                 isDarkTheme = darkTheme,
+                onBack = navigateBack,
+                onHome = navigateHome
+            )
+        }
+
+        composable(Screen.SettingsTypography.route) {
+            TypographySettingsScreen(
                 onBack = navigateBack,
                 onHome = navigateHome
             )
@@ -423,6 +441,20 @@ fun NavGraph(
             CacheSettingsScreen(
                 onBack = navigateBack,
                 onHome = navigateHome
+            )
+        }
+
+        composable(
+            route = Screen.SyncedProjects.route,
+            arguments = listOf(
+                navArgument("firstRun") { type = NavType.StringType; defaultValue = "false" }
+            )
+        ) { backStackEntry ->
+            val firstRun = backStackEntry.savedStateHandle.get<String>("firstRun")?.toBoolean() ?: false
+            SyncPickerScreen(
+                isFirstRun = firstRun,
+                onDone = navigateBack,
+                onBack = navigateBack
             )
         }
 
@@ -523,18 +555,18 @@ fun NavGraph(
                         onNavigateToInstrument = { instrumentId ->
                             navController.navigate(Screen.InstrumentDetail.createRoute(instrumentId))
                         },
-                        onSearch = navigateSearch,
                         onHome = navigateHome,
                         onRefresh = { uuid ->
                             viewModel.refreshResource(uuid)
                         },
                         getCardState = { key -> viewModel.getCardState(mfid, key) },
                         onCardStateChange = { key, value -> viewModel.setCardState(mfid, key, value) },
+                        onRequestDeletion = { resourceId, reason -> viewModel.requestDeletion(resourceId, reason) },
                         onNavigateToAddFiles = { datasetUuid ->
                             navController.navigate(Screen.AddFiles.createRoute(datasetUuid))
                         },
-                        onNavigateToMetadataEditor = {
-                            navController.navigate(Screen.MetadataEditor.route)
+                        onNavigateToEdit = { uuid ->
+                            navController.navigate(Screen.EditResource.createRoute(uuid))
                         },
                         onNavigateToUser = { identifier ->
                             navController.navigate(Screen.UserProfile.createRoute(identifier))
@@ -590,24 +622,24 @@ fun NavGraph(
                             ) {
                                 AppIcon(AppIcons.Error,
                                     modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.error
+                                    tint = MaterialTheme.colorScheme.onErrorContainer
                                 )
                                 Text(
                                     text = "Unable to Load Resource",
-                                    style = MaterialTheme.typography.titleLarge,
+                                    style = MaterialTheme.typography.emphasizedTitleMedium,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     textAlign = TextAlign.Center
                                 )
                                 Text(
                                     text = state.message,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
                                     textAlign = TextAlign.Center
                                 )
 
                                 HorizontalDivider(
                                     modifier = Modifier.padding(vertical = 8.dp),
-                                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.2f)
+                                    color = MaterialTheme.colorScheme.outlineVariant
                                 )
 
                                 Text(
@@ -654,7 +686,26 @@ fun NavGraph(
             } // end Box wrapper
         }
 
+        composable(
+            route = Screen.EditResource.route,
+            arguments = listOf(navArgument("mfid") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val mfid = backStackEntry.savedStateHandle.get<String>("mfid") ?: ""
+            EditResourceScreen(
+                uuid = mfid,
+                onBack = navigateBack,
+                onSaved = { navController.popBackStack() },
+                onOpenMetadataEditor = { navController.navigate(Screen.MetadataEditor.route) }
+            )
+        }
+
         composable(Screen.Projects.route) {
+            val setupComplete by prefs.syncSetupComplete.collectAsStateWithLifecycle()
+            LaunchedEffect(setupComplete) {
+                if (!setupComplete && navController.currentDestination?.route == Screen.Projects.route) {
+                    navController.navigate(Screen.SyncedProjects.createRoute(firstRun = true))
+                }
+            }
             ProjectsListScreen(
                 onBack = navigateBack,
                 onHome = navigateHome,
@@ -664,8 +715,9 @@ fun NavGraph(
                 },
                 pinnedProjects = pinnedProjects,
                 onTogglePin = { id -> scope.launch { prefs.togglePinnedProject(id) } },
-                hiddenProjects = hiddenProjects,
-                onToggleHide = { id -> scope.launch { prefs.toggleHiddenProject(id) } },
+                syncedProjects = syncedProjects,
+                onToggleSync = { id -> scope.launch { prefs.toggleSyncedProject(id) } },
+                onManageSyncedProjects = { navController.navigate(Screen.SyncedProjects.createRoute(firstRun = false)) },
                 currentUserOrcid = userOrcid
             )
         }
@@ -681,13 +733,13 @@ fun NavGraph(
                 graphExplorerUrl = graphExplorerUrl,
                 onBack = navigateBack,
                 onHome = navigateHome,
-                onSearch = navigateSearch,
                 onResourceClick = { mfid, groupBy ->
                     navController.navigate(Screen.Detail.createRoute(mfid, groupBy))
                 },
                 isPinned = projectId in pinnedProjects,
                 onTogglePin = { scope.launch { prefs.togglePinnedProject(projectId) } },
-                isHidden = projectId in hiddenProjects,
+                isSynced = projectId in syncedProjects,
+                onToggleSync = { scope.launch { prefs.toggleSyncedProject(projectId) } },
                 onCreateSample = {
                     navController.navigate(Screen.CreateSample.createRoute(projectId))
                 },
@@ -748,13 +800,13 @@ fun NavGraph(
                 onTogglePin = { scope.launch { prefs.togglePinnedInstrument(instrumentId) } },
                 onBack = navigateBack,
                 onHome = navigateHome,
-                onSearch = navigateSearch,
                 onDatasetClick = { mfid ->
                     navController.navigate(Screen.Detail.createRoute(mfid))
                 },
                 onManageInstrument = {
                     navController.navigate(Screen.ManageInstrument.createRoute(instrumentId))
-                }
+                },
+                graphExplorerUrl = graphExplorerUrl
             )
         }
 
@@ -866,6 +918,7 @@ fun NavGraph(
             SearchScreen(
                 apiKey = apiKey,
                 userOrcid = userOrcid,
+                graphExplorerUrl = graphExplorerUrl,
                 onBack = navigateBack,
                 onHome = navigateHome,
                 onResourceClick = { uuid ->
@@ -937,6 +990,6 @@ private fun ErrorHint(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
+        color = MaterialTheme.colorScheme.onErrorContainer
     )
 }

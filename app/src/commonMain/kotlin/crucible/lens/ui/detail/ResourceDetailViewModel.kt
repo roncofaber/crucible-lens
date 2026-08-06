@@ -4,6 +4,8 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import crucible.lens.data.api.ApiClient
+import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.repository.ResourceResult
@@ -27,7 +29,8 @@ private const val MAX_CARD_STATE_ENTRIES = 50
 
 class ResourceDetailViewModel(
     private val repository: CrucibleRepository,
-    private val dataSyncManager: DataSyncManager
+    private val dataSyncManager: DataSyncManager,
+    private val apiClient: ApiClient
 ) : ViewModel() {
 
     // Tracks the active fetch/refresh so navigating to a new resource
@@ -85,24 +88,24 @@ class ResourceDetailViewModel(
 
     private var syncJob: Job? = null
     // Remembered so refreshResource()'s finally block can resume sync with the same
-    // hidden-project filter, without needing NavGraph to call startBackgroundSync() again.
-    private var lastHiddenProjectIds: Set<String> = emptySet()
+    // synced-project filter, without needing NavGraph to call startBackgroundSync() again.
+    private var lastSyncedProjectIds: Set<String> = emptySet()
     private var lastCurrentUserOrcid: String? = null
 
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
     /**
-     * [hiddenProjectIds] are skipped entirely — no network call until the user unhides them.
+     * Only [syncedProjectIds] are preloaded. Everything else fetches on demand when opened.
      * [currentUserOrcid] scopes the pending-join-request-count preload to projects the caller
      * leads — see [DataSyncManager.syncAll].
      */
-    fun startBackgroundSync(hiddenProjectIds: Set<String> = emptySet(), currentUserOrcid: String? = null) {
-        lastHiddenProjectIds = hiddenProjectIds
+    fun startBackgroundSync(syncedProjectIds: Set<String> = emptySet(), currentUserOrcid: String? = null) {
+        lastSyncedProjectIds = syncedProjectIds
         lastCurrentUserOrcid = currentUserOrcid
         _isSyncing.value = true
         syncJob = viewModelScope.launch {
-            try { dataSyncManager.syncAll(hiddenProjectIds, currentUserOrcid) }
+            try { dataSyncManager.syncAll(syncedProjectIds, currentUserOrcid) }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) { }
             finally { _isSyncing.value = false }
@@ -112,6 +115,11 @@ class ResourceDetailViewModel(
     fun reset() {
         _uiState.value = UiState.Idle
     }
+
+    // No repository wrapper - a deletion request is a one-off write with nothing to cache,
+    // same precedent as the join-request calls (called directly via apiClient.service.*).
+    suspend fun requestDeletion(resourceId: String, reason: String?): ApiResult<Unit> =
+        apiClient.service.requestDeletion(resourceId = resourceId, reason = reason?.trim()?.ifBlank { null })
 
     fun refreshResource(uuid: String) {
         activeFetchJob?.cancel()
@@ -151,7 +159,7 @@ class ResourceDetailViewModel(
                 // Timeout or network failure — error state (if primary) was set above
             } finally {
                 _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = false) else it }
-                if (syncWasActive) startBackgroundSync(lastHiddenProjectIds, lastCurrentUserOrcid)
+                if (syncWasActive) startBackgroundSync(lastSyncedProjectIds, lastCurrentUserOrcid)
             }
         }
     }

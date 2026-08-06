@@ -1,4 +1,5 @@
 package crucible.lens.ui.detail.components
+import crucible.lens.ui.common.AppContentAlpha
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
 
@@ -19,12 +20,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.ui.common.fadeEndEdge
+import crucible.lens.ui.theme.emphasizedTitleLarge
 
 @Composable
 internal fun BasicInfoCard(
@@ -35,7 +36,10 @@ internal fun BasicInfoCard(
     totalCount: Int = 0,
     siblingsResolved: Boolean = true
 ) {
-    Card(border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+    ) {
         Column(
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -59,8 +63,7 @@ internal fun BasicInfoCard(
                 ) {
                     Text(
                         text = name,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.emphasizedTitleLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Clip,
                         textAlign = if (nameOverflows) TextAlign.Start else TextAlign.Center,
@@ -86,7 +89,7 @@ internal fun BasicInfoCard(
                 ) {
                     AppIcon(AppIcons.CarouselPrev,
                         tint = if (onPrev != null) MaterialTheme.colorScheme.primary
-                               else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                               else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = AppContentAlpha.Disabled)
                     )
                 }
                 // Small inline spinner while siblings are still loading (a rare,
@@ -120,7 +123,7 @@ internal fun BasicInfoCard(
                 ) {
                     AppIcon(AppIcons.NavigateNext,
                         tint = if (onNext != null) MaterialTheme.colorScheme.primary
-                               else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                               else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = AppContentAlpha.Disabled)
                     )
                 }
             }

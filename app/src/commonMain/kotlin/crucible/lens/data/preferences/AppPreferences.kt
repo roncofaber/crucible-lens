@@ -15,12 +15,14 @@ interface AppPreferences {
     val graphExplorerUrl: StateFlow<String>
     val themeMode: StateFlow<String>
     val accentColor: StateFlow<String>
+    val accentContrast: StateFlow<String>
     val useDynamicColor: StateFlow<Boolean>
     val lastVisitedResource: StateFlow<String?>
     val lastVisitedResourceName: StateFlow<String?>
     val floatingScanButton: StateFlow<Boolean>
     val pinnedProjects: StateFlow<Set<String>>
-    val hiddenProjects: StateFlow<Set<String>>
+    val syncedProjects: StateFlow<Set<String>>
+    val syncSetupComplete: StateFlow<Boolean>
     val pinnedInstruments: StateFlow<Set<String>>
     val hiddenInstruments: StateFlow<Set<String>>
     val userOrcid: StateFlow<String?>
@@ -28,6 +30,7 @@ interface AppPreferences {
     val resourceHistory: StateFlow<List<HistoryItem>>
     val sampleGroupBy: StateFlow<String>
     val datasetGroupBy: StateFlow<String>
+    val instrumentGroupBy: StateFlow<String>
     val defaultProjectTab: StateFlow<String>
 
     // Saves
@@ -36,14 +39,17 @@ interface AppPreferences {
     suspend fun saveGraphExplorerUrl(url: String)
     suspend fun saveThemeMode(mode: String)
     suspend fun saveAccentColor(color: String)
+    suspend fun saveAccentContrast(contrast: String)
     suspend fun saveUseDynamicColor(enabled: Boolean)
     suspend fun saveLastVisitedResource(uuid: String, name: String)
     suspend fun saveFloatingScanButton(enabled: Boolean)
     suspend fun clearApiKey()
     suspend fun togglePinnedProject(id: String)
-    suspend fun toggleHiddenProject(id: String)
+    suspend fun toggleSyncedProject(id: String)
+    suspend fun setSyncedProjects(ids: Set<String>)
     suspend fun togglePinnedInstrument(id: String)
     suspend fun toggleHiddenInstrument(id: String)
+    suspend fun saveSyncSetupComplete(complete: Boolean)
     suspend fun saveUserOrcid(orcid: String?)
     suspend fun saveUserProfile(user: User?)
     suspend fun clearUserProfile()
@@ -51,6 +57,7 @@ interface AppPreferences {
     suspend fun clearHistory()
     suspend fun saveSampleGroupBy(value: String)
     suspend fun saveDatasetGroupBy(value: String)
+    suspend fun saveInstrumentGroupBy(value: String)
     suspend fun saveDefaultProjectTab(tab: String)
 
     companion object {
@@ -61,6 +68,7 @@ interface AppPreferences {
         const val THEME_MODE_SYSTEM = "system"
         const val THEME_MODE_LIGHT = "light"
         const val THEME_MODE_DARK = "dark"
-        const val DEFAULT_ACCENT_COLOR = "blue"
+        const val DEFAULT_ACCENT_COLOR = "carmine"
+        const val DEFAULT_ACCENT_CONTRAST = "standard"
     }
 }

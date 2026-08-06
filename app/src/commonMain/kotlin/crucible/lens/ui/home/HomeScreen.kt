@@ -1,6 +1,7 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 package crucible.lens.ui.home
 import androidx.compose.material3.ExperimentalMaterial3Api
+import crucible.lens.ui.common.AppElevation
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
@@ -9,12 +10,12 @@ import crucible.lens.platform.*
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -24,10 +25,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -36,17 +43,20 @@ import androidx.compose.ui.graphics.Color
 
 
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.data.model.Project
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.NotificationDot
+import crucible.lens.ui.common.TaglineEnterSpec
+import crucible.lens.ui.common.TaglineExitSpec
 import crucible.lens.ui.common.allLoadingMessages
 import crucible.lens.ui.common.fadeEndEdge
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
+import crucible.lens.ui.theme.emphasizedTitleMedium
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -67,7 +77,7 @@ fun HomeScreen(
     onHistory: () -> Unit = {},
     onSearch: () -> Unit = {},
     pinnedProjects: Set<String> = emptySet(),
-    hiddenProjects: Set<String> = emptySet(),
+    syncedProjects: Set<String> = emptySet(),
     onProjectClick: (String) -> Unit = {},
     onTogglePinnedProject: (String) -> Unit = {},
     pinnedInstruments: Set<String> = emptySet(),
@@ -82,6 +92,7 @@ fun HomeScreen(
     var clickCount by remember { mutableIntStateOf(0) }
     val platformContext = getPlatformContext()
     val repository = koinInject<CrucibleRepository>()
+    val viewModel: HomeViewModel = koinViewModel()
     var backPressedOnce by remember { mutableStateOf(false) }
 
     BackPressHandler(enabled = !backPressedOnce) {
@@ -95,83 +106,14 @@ fun HomeScreen(
         }
     }
 
-    var allProjects by remember { mutableStateOf(repository.getCachedProjects() ?: emptyList()) }
-    var fetchError by remember { mutableStateOf<String?>(null) }
-    var retryTrigger by remember { mutableIntStateOf(0) }
-    var isPreloading by remember { mutableStateOf(false) }
+    val allProjects by viewModel.projects.collectAsStateWithLifecycle()
+    val fetchError by viewModel.fetchError.collectAsStateWithLifecycle()
+    val isPreloading by viewModel.isPreloading.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) {
-        val persistentData = PersistentProjectCache.load(platformContext)
-        if (persistentData != null && allProjects.isEmpty()) {
-            repository.seedProjects(persistentData)
-            allProjects = persistentData
-        }
-    }
-
-    LaunchedEffect(apiKey, retryTrigger) {
-        if (apiKey.isNullOrBlank()) return@LaunchedEffect
-        try {
-            when (val response = repository.fetchProjects()) {
-                is crucible.lens.data.api.ApiResult.Success -> {
-                    allProjects = response.data
-                    fetchError = null
-                }
-                is crucible.lens.data.api.ApiResult.Error -> {
-                    fetchError = response.message
-                }
-            }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            fetchError = e.message ?: "Network error"
-        }
-    }
-
-    LaunchedEffect(apiKey) {
-        if (apiKey.isNullOrBlank()) return@LaunchedEffect
-        try { repository.fetchInstruments() }
-        catch (e: kotlinx.coroutines.CancellationException) { throw e }
-        catch (_: Exception) { }
-    }
-
-    LaunchedEffect(allProjects, pinnedProjects, hiddenProjects) {
-        if (apiKey.isNullOrBlank() || allProjects.isEmpty()) return@LaunchedEffect
-        isPreloading = true
-        try {
-        kotlinx.coroutines.delay(500)
-
-        // Hidden projects are skipped entirely — no network call until the user unhides them.
-        val prioritizedProjects = allProjects
-            .filter { it.projectId !in hiddenProjects }
-            .sortedByDescending { it.projectId in pinnedProjects }
-        var consecutiveFailures = 0
-        val maxConsecutiveFailures = 5
-
-        prioritizedProjects.chunked(3).forEach { batch ->
-            if (consecutiveFailures >= maxConsecutiveFailures) return@forEach
-            batch.forEach { project ->
-                launch(kotlinx.coroutines.Dispatchers.Default) {
-                    try {
-                        repository.fetchProjectData(project.projectId)
-                        consecutiveFailures = 0
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        consecutiveFailures++
-                    }
-                }
-            }
-            kotlinx.coroutines.delay(150)
-        }
-
-        launch(kotlinx.coroutines.Dispatchers.Default) {
-            try { PersistentProjectCache.save(platformContext, allProjects) }
-            catch (e: kotlinx.coroutines.CancellationException) { throw e }
-            catch (_: Exception) {}
-        }
-        } finally {
-            isPreloading = false
-        }
+    LaunchedEffect(Unit) { viewModel.loadPersistedCache(platformContext) }
+    LaunchedEffect(apiKey) { viewModel.ensureLoaded(apiKey) }
+    LaunchedEffect(allProjects, pinnedProjects, syncedProjects) {
+        viewModel.preload(platformContext, pinnedProjects, syncedProjects)
     }
 
     val pinnedList = remember(pinnedProjects, allProjects) {
@@ -204,7 +146,7 @@ fun HomeScreen(
                                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                             }
                         } else {
-                            IconButton(onClick = { fetchError = null; retryTrigger++ }) {
+                            IconButton(onClick = { viewModel.refresh(apiKey) }) {
                                 AppIcon(AppIcons.Refresh)
                             }
                         }
@@ -230,13 +172,13 @@ fun HomeScreen(
                 // Fixed content — always visible, never scrolls
                 HomeLogo(isDarkTheme = isDarkTheme)
                 HomeSearchPill(onClick = onSearch, onScan = onScanClick)
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 HomeBrowseSection(
                     onBrowseProjects = onBrowseProjects,
                     onBrowseInstruments = onBrowseInstruments
                 )
                 HomeCreateSection(onCreateSample = onCreateSample, onCreateDataset = onCreateDataset)
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 if (lastVisitedResource != null && lastVisitedResourceName != null) {
                     HomeLastVisited(
                         name = lastVisitedResourceName,
@@ -271,7 +213,7 @@ fun HomeScreen(
             ) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = AppElevation.Level1)
                 ) {
                     Row(
                         modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
@@ -289,15 +231,15 @@ fun HomeScreen(
                             modifier = Modifier.weight(1f)
                         )
                         TextButton(
-                            onClick = { fetchError = null; retryTrigger++ },
+                            onClick = { viewModel.refresh(apiKey) },
                             colors = ButtonDefaults.textButtonColors(
                                 contentColor = MaterialTheme.colorScheme.onErrorContainer
                             )
                         ) {
-                            Text("Retry", style = MaterialTheme.typography.labelMedium)
+                            Text("Retry")
                         }
                         IconButton(
-                            onClick = { fetchError = null },
+                            onClick = { viewModel.dismissError() },
                             modifier = Modifier.size(32.dp)
                         ) {
                             AppIcon(AppIcons.ClearInput,
@@ -371,14 +313,14 @@ private fun HomeLogo(isDarkTheme: Boolean) {
             targetState = tagline,
             modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp),
             transitionSpec = {
-                fadeIn(tween(durationMillis = 500, delayMillis = 200)) togetherWith fadeOut(tween(durationMillis = 300))
+                fadeIn(TaglineEnterSpec) togetherWith fadeOut(TaglineExitSpec)
             },
             label = "tagline"
         ) { text ->
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
             )
@@ -388,21 +330,25 @@ private fun HomeLogo(isDarkTheme: Boolean) {
 
 @Composable
 private fun HomeSearchPill(onClick: () -> Unit, onScan: () -> Unit) {
+    // tonalElevation has no effect once `color` is set to anything other than the default
+    // `colorScheme.surface` - Compose's auto tonal-elevation blend only applies to that one role.
+    // Containment here comes from the explicit `secondaryContainer` role instead, per M3's current
+    // guidance that surface roles aren't tied to elevation (see AppElevation's KDoc) - matches the
+    // same treatment as every other search field in the app (`ui/common/SearchBar.kt`).
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().height(52.dp),
         shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 2.dp
+        color = MaterialTheme.colorScheme.secondaryContainer
     ) {
         Row(
             modifier = Modifier.fillMaxSize().padding(start = 16.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppIcon(AppIcons.Search, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-            Text("Search samples, datasets...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f).padding(start = 12.dp))
+            AppIcon(AppIcons.Search, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(20.dp))
+            Text("Search samples, datasets...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.weight(1f).padding(start = 12.dp))
             IconButton(onClick = onScan) {
-                AppIcon(AppIcons.ScanQr, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                AppIcon(AppIcons.ScanQr, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -414,32 +360,30 @@ private fun HomeBrowseSection(
     onBrowseInstruments: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Browse", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        Text("Browse", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = onBrowseProjects,
                 modifier = Modifier.weight(1f).height(72.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = MaterialTheme.shapes.medium,
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     AppIcon(AppIcons.Project, modifier = Modifier.size(28.dp))
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("Projects", style = MaterialTheme.typography.labelMedium)
+                    Text("Projects")
                 }
             }
             Button(
                 onClick = onBrowseInstruments,
                 modifier = Modifier.weight(1f).height(72.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = MaterialTheme.shapes.medium,
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     AppIcon(AppIcons.Instrument, modifier = Modifier.size(28.dp))
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("Instruments", style = MaterialTheme.typography.labelMedium)
+                    Text("Instruments")
                 }
             }
         }
@@ -449,25 +393,29 @@ private fun HomeBrowseSection(
 @Composable
 private fun HomeCreateSection(onCreateSample: () -> Unit, onCreateDataset: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Create", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        Text("Create", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(
                 onClick = onCreateSample,
                 modifier = Modifier.weight(1f).height(52.dp),
-                shape = MaterialTheme.shapes.medium
+                shape = MaterialTheme.shapes.medium,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
             ) {
                 AppIcon(AppIcons.Add, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("New Sample", style = MaterialTheme.typography.labelMedium)
+                Text("New Sample")
             }
             OutlinedButton(
                 onClick = onCreateDataset,
                 modifier = Modifier.weight(1f).height(52.dp),
-                shape = MaterialTheme.shapes.medium
+                shape = MaterialTheme.shapes.medium,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
             ) {
                 AppIcon(AppIcons.Dataset, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("New Dataset", style = MaterialTheme.typography.labelMedium)
+                Text("New Dataset")
             }
         }
     }
@@ -484,14 +432,14 @@ private fun HomeLastVisited(name: String, onClick: () -> Unit, onHistory: () -> 
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 AppIcon(AppIcons.History, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                Text("Last Visited", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Text("Last Visited", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             }
             Row(
                 modifier = Modifier.clickable(onClick = onHistory),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Text("See all", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Text("See all", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 AppIcon(AppIcons.NavigateNext, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
             }
         }
@@ -514,7 +462,6 @@ private fun HomeLastVisited(name: String, onClick: () -> Unit, onHistory: () -> 
                     Text(
                         text = name,
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Clip,
                         modifier = Modifier.basicMarquee()
@@ -590,7 +537,7 @@ private fun HomePinnedProjects(
             modifier = Modifier.padding(bottom = 6.dp)
         ) {
             AppIcon(AppIcons.Pinned, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-            Text("Pinned", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Text("Pinned", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         }
         // Scrollable cards area — fade at bottom signals more content
         val pinnedScrollState = rememberScrollState()
@@ -623,8 +570,7 @@ private fun HomePinnedProjects(
                         }
                         Text(
                             text = project.title ?: project.projectId,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
@@ -649,8 +595,7 @@ private fun HomePinnedProjects(
                         AppIcon(AppIcons.Instrument, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
                         Text(
                             text = instrument.instrumentName ?: instrument.uniqueId,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
@@ -662,16 +607,16 @@ private fun HomePinnedProjects(
         } else {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    AppIcon(AppIcons.Pinned, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f), modifier = Modifier.size(26.dp))
-                    Text("No pinned items", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                    Text("Bookmark a project or instrument to pin it here", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                    AppIcon(AppIcons.Pinned, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(26.dp))
+                    Text("No pinned items", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Choose projects to sync, or pin one to keep it here", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -707,22 +652,39 @@ private fun HomeFooter(graphExplorerUrl: String) {
         }) {
             AppIcon(AppIcons.WebUrl, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("Open Crucible Web", style = MaterialTheme.typography.labelLarge)
+            Text("Open Crucible Web")
         }
-        val footerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-        val footerStyle = MaterialTheme.typography.labelSmall
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Crucible Lens v${appVersionName()} • by ", style = footerStyle, color = footerColor)
-            Text(
-                "Crucible Team",
-                style = footerStyle,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier.clickable {
+        val footerColor = MaterialTheme.colorScheme.onSurfaceVariant
+        val footerStyle = MaterialTheme.typography.bodySmall
+        // One Text, not three - TextAutoSize shrinks a single Text as a unit to fit the
+        // available width; three separate Texts in a Row would each measure and shrink (or
+        // overflow) independently, landing on different sizes and no longer lining up. The
+        // "Crucible Team" link is a LinkAnnotation.Clickable span within the same AnnotatedString
+        // rather than a separate clickable Text, for the same reason.
+        val footerText = buildAnnotatedString {
+            withStyle(SpanStyle(color = footerColor)) {
+                append("Crucible Lens ${displayVersionName()} • by ")
+            }
+            withLink(
+                LinkAnnotation.Clickable(tag = "crucible_team", linkInteractionListener = {
                     openUrl(ctx, "https://crucible.lbl.gov/")
+                })
+            ) {
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
+                    append("Crucible Team")
                 }
-            )
-            Text(" • Molecular Foundry", style = footerStyle, color = footerColor)
+            }
+            withStyle(SpanStyle(color = footerColor)) {
+                append(" • Molecular Foundry")
+            }
         }
+        Text(
+            text = footerText,
+            style = footerStyle,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = footerStyle.fontSize)
+        )
     }
 }
 
@@ -730,7 +692,7 @@ private fun HomeFooter(graphExplorerUrl: String) {
 private fun HelpDialog(onDismiss: () -> Unit, onSettings: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("How to use Crucible Lens", style = MaterialTheme.typography.titleLarge) },
+        title = { Text("How to use Crucible Lens") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 HelpSection(AppIcons.ScanQr, "Scan QR Codes",
@@ -738,7 +700,7 @@ private fun HelpDialog(onDismiss: () -> Unit, onSettings: () -> Unit) {
                 HelpSection(AppIcons.Search, "Search",
                     "Search samples, datasets, projects, and instruments by name, type, metadata, or keywords.")
                 HelpSection(AppIcons.Project, "Projects",
-                    "Browse all projects and their contents. Tap the pin icon to keep a project on the home screen. Swipe left to hide it.")
+                    "Browse all projects and their contents. Tap the pin icon to keep a project on the home screen. Swipe left to stop syncing it. Synced projects stay up to date in the background; others still open normally.")
                 HelpSection(AppIcons.Instrument, "Instruments",
                     "Browse instruments at the Molecular Foundry and the datasets collected with each one.")
                 HelpSection(AppIcons.History, "History",
@@ -750,7 +712,7 @@ private fun HelpDialog(onDismiss: () -> Unit, onSettings: () -> Unit) {
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Need to configure your API key? ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Go to Settings.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable(onClick = onSettings))
+                    Text("Go to Settings.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.clickable(onClick = onSettings))
                 }
             }
         },
@@ -763,7 +725,7 @@ private fun HelpSection(icon: AppIconToken, title: String, description: String) 
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
         AppIcon(icon, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(title, style = MaterialTheme.typography.emphasizedTitleMedium)
             Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -774,7 +736,7 @@ private fun EasterEggDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { AppIcon(AppIcons.AiFeature, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp)) },
-        title = { Text("Loading Messages", style = MaterialTheme.typography.titleLarge) },
+        title = { Text("Loading Messages") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
@@ -785,7 +747,7 @@ private fun EasterEggDialog(onDismiss: () -> Unit) {
                 Spacer(modifier = Modifier.height(8.dp))
                 allLoadingMessages.forEachIndexed { index, message ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
-                        Text("${index + 1}.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
+                        Text("${index + 1}.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(28.dp))
                         Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                     }
                 }

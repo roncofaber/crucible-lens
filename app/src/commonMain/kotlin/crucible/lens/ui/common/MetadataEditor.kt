@@ -12,7 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -22,6 +21,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 /**
  * Structured key-value metadata editor.
@@ -39,7 +39,7 @@ fun MetadataEditor(
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
@@ -59,19 +59,18 @@ fun MetadataEditor(
                     )
                     Text(
                         "Metadata",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.emphasizedTitleMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
                     if (entries.isNotEmpty()) {
                         Surface(
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            color = MaterialTheme.colorScheme.primaryContainer,
                             shape = MaterialTheme.shapes.small
                         ) {
                             Text(
                                 "${entries.count { it.first.isNotBlank() }}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
@@ -96,7 +95,7 @@ fun MetadataEditor(
                         Text(
                             "No metadata fields. Tap + to add one.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
@@ -117,7 +116,7 @@ fun MetadataEditor(
                                 textStyle = MaterialTheme.typography.bodySmall,
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
                                 )
                             )
                             OutlinedTextField(
@@ -131,7 +130,7 @@ fun MetadataEditor(
                                 textStyle = MaterialTheme.typography.bodySmall,
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
                                 )
                             )
                             IconButton(
@@ -142,7 +141,7 @@ fun MetadataEditor(
                             ) {
                                 AppIcon(AppIcons.Delete,
                                     modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                                    tint = MaterialTheme.colorScheme.error
                                 )
                             }
                         }
@@ -221,4 +220,28 @@ fun mergeMetadataEntries(
 ): List<Pair<String, String>> {
     val existingKeys = existing.map { it.first.trim().lowercase() }.toSet()
     return existing + extracted.filter { it.first.trim().lowercase() !in existingKeys }
+}
+
+/**
+ * How to write an edited metadata object back to the server, decided by [diffMetadataWrite].
+ * PATCH (server-side shallow merge) is preferred whenever possible since it only touches the
+ * top-level keys that actually changed — a concurrent edit to any other key survives. POST with
+ * overwrite is only used when PATCH cannot express the edit (a key deletion — a missing key in a
+ * PATCH body means "leave alone", not "remove").
+ */
+sealed class MetadataWrite {
+    data class Merge(val updates: JsonObject) : MetadataWrite()
+    data class Replace(val full: JsonObject) : MetadataWrite()
+}
+
+/**
+ * Compares the metadata as loaded ([original]) against the user's edited version ([edited]) and
+ * decides how to write it back. Returns null if nothing changed (skip the API call entirely).
+ */
+fun diffMetadataWrite(original: JsonObject, edited: JsonObject): MetadataWrite? {
+    if (original == edited) return null
+    val deletedKeys = original.keys - edited.keys
+    if (deletedKeys.isNotEmpty()) return MetadataWrite.Replace(edited)
+    val changed = edited.filterKeys { key -> edited.getValue(key) != original[key] }
+    return if (changed.isEmpty()) null else MetadataWrite.Merge(JsonObject(changed))
 }

@@ -17,13 +17,13 @@ import kotlinx.coroutines.coroutineScope
 class DataSyncManager(private val repository: CrucibleRepository) {
 
     /**
-     * [hiddenProjectIds] are skipped entirely — no network call is made for them until the
-     * user unhides them (at which point the next syncAll()/preload naturally picks them up).
-     * [currentUserOrcid] determines which projects' pending-join-request counts to cache —
+     * Only [syncedProjectIds] are preloaded. Everything else is left alone until the user opens it,
+     * at which point it fetches on demand - syncing controls background freshness, never access.
+     * [currentUserOrcid] determines which projects' pending-join-request counts to cache -
      * GET /join_requests with no group_name returns exactly the caller's own led projects'
      * requests, so a non-lead (currentUserOrcid == null or leads nothing) skips the call.
      */
-    suspend fun syncAll(hiddenProjectIds: Set<String> = emptySet(), currentUserOrcid: String? = null) {
+    suspend fun syncAll(syncedProjectIds: Set<String> = emptySet(), currentUserOrcid: String? = null) {
         coroutineScope {
             // Always attempt a fresh network fetch; fall back to whatever is
             // already cached if the network call fails.
@@ -35,8 +35,8 @@ class DataSyncManager(private val repository: CrucibleRepository) {
                 ?: emptyList()
             instrumentsDeferred.await()
 
-            // Load samples + datasets for every non-hidden project in batches
-            projects.filter { it.projectId !in hiddenProjectIds }.chunked(5).forEach { batch ->
+            // Load samples + datasets for every synced project in batches
+            projects.filter { it.projectId in syncedProjectIds }.chunked(5).forEach { batch ->
                 coroutineScope {
                     batch.map { project ->
                         async {

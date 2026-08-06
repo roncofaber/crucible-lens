@@ -14,8 +14,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.Sample
 import crucible.lens.data.util.formatDateTime
@@ -24,8 +22,10 @@ import crucible.lens.data.util.userDisplayName
 import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
+import crucible.lens.ui.common.IdText
 import crucible.lens.ui.common.StandardSizeAnim
 import kotlinx.serialization.json.JsonPrimitive
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 internal fun SampleDetailsCard(
@@ -38,7 +38,7 @@ internal fun SampleDetailsCard(
 ) {
     val platformCtx = getPlatformContext()
     var advanced by remember { mutableStateOf(initialAdvanced) }
-    Card {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim)) {
             val projectId = sample.projectId
 
@@ -50,8 +50,7 @@ internal fun SampleDetailsCard(
             ) {
                 Text(
                     text = "Sample Information",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.emphasizedTitleMedium
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
@@ -73,12 +72,7 @@ internal fun SampleDetailsCard(
             }
 
             // MFID left-aligned below title
-            Text(
-                text = sample.uniqueId,
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            IdText(text = sample.uniqueId)
             Spacer(modifier = Modifier.height(6.dp))
 
             // Deletion warning
@@ -88,7 +82,7 @@ internal fun SampleDetailsCard(
                     color = when (sampleDeletionStatus) {
                         "approved" -> MaterialTheme.colorScheme.errorContainer
                         "pending"  -> MaterialTheme.colorScheme.tertiaryContainer
-                        else       -> MaterialTheme.colorScheme.surfaceVariant
+                        else       -> MaterialTheme.colorScheme.surfaceContainerLow
                     },
                     shape = MaterialTheme.shapes.small,
                     modifier = Modifier.fillMaxWidth()

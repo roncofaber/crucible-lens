@@ -28,6 +28,9 @@ class IosAppPreferences : AppPreferences {
     private val _accentColor = MutableStateFlow(settings.getString("accent_color", AppPreferences.DEFAULT_ACCENT_COLOR))
     override val accentColor: StateFlow<String> = _accentColor.asStateFlow()
 
+    private val _accentContrast = MutableStateFlow(settings.getString("accent_contrast", AppPreferences.DEFAULT_ACCENT_CONTRAST))
+    override val accentContrast: StateFlow<String> = _accentContrast.asStateFlow()
+
     private val _useDynamicColor = MutableStateFlow(settings.getBoolean("use_dynamic_color", false))
     override val useDynamicColor: StateFlow<Boolean> = _useDynamicColor.asStateFlow()
 
@@ -43,8 +46,11 @@ class IosAppPreferences : AppPreferences {
     private val _pinnedProjects = MutableStateFlow(settings.getString("pinned_projects", "").toStringSet())
     override val pinnedProjects: StateFlow<Set<String>> = _pinnedProjects.asStateFlow()
 
-    private val _hiddenProjects = MutableStateFlow(settings.getString("hidden_projects", "").toStringSet())
-    override val hiddenProjects: StateFlow<Set<String>> = _hiddenProjects.asStateFlow()
+    private val _syncedProjects = MutableStateFlow(settings.getString("synced_projects", "").toStringSet())
+    override val syncedProjects: StateFlow<Set<String>> = _syncedProjects.asStateFlow()
+
+    private val _syncSetupComplete = MutableStateFlow(settings.getBoolean("sync_setup_complete", false))
+    override val syncSetupComplete: StateFlow<Boolean> = _syncSetupComplete.asStateFlow()
 
     private val _hiddenInstruments = MutableStateFlow(settings.getString("hidden_instruments", "").toStringSet())
     override val hiddenInstruments: StateFlow<Set<String>> = _hiddenInstruments.asStateFlow()
@@ -73,6 +79,9 @@ class IosAppPreferences : AppPreferences {
     private val _datasetGroupBy = MutableStateFlow(settings.getString("dataset_group_by", "MEASUREMENT"))
     override val datasetGroupBy: StateFlow<String> = _datasetGroupBy.asStateFlow()
 
+    private val _instrumentGroupBy = MutableStateFlow(settings.getString("instrument_group_by", "MEASUREMENT"))
+    override val instrumentGroupBy: StateFlow<String> = _instrumentGroupBy.asStateFlow()
+
     private val _defaultProjectTab = MutableStateFlow(settings.getString("default_project_tab", AppPreferences.PROJECT_TAB_SAMPLES))
     override val defaultProjectTab: StateFlow<String> = _defaultProjectTab.asStateFlow()
 
@@ -98,6 +107,10 @@ class IosAppPreferences : AppPreferences {
         settings.putString("accent_color", color); _accentColor.value = color
     }
 
+    override suspend fun saveAccentContrast(contrast: String) {
+        settings.putString("accent_contrast", contrast); _accentContrast.value = contrast
+    }
+
     override suspend fun saveUseDynamicColor(enabled: Boolean) {
         settings.putBoolean("use_dynamic_color", enabled); _useDynamicColor.value = enabled
     }
@@ -116,13 +129,28 @@ class IosAppPreferences : AppPreferences {
     }
 
     override suspend fun togglePinnedProject(id: String) {
-        val updated = _pinnedProjects.value.toMutableSet().apply { if (id in this) remove(id) else add(id) }
-        settings.putString("pinned_projects", updated.joinToString(",")); _pinnedProjects.value = updated
+        val current = _pinnedProjects.value.toMutableSet()
+        val adding = id !in current
+        if (adding) current.add(id) else current.remove(id)
+        settings.putString("pinned_projects", current.joinToString(",")); _pinnedProjects.value = current
+        if (adding) {
+            val synced = _syncedProjects.value.toMutableSet()
+            synced.add(id)
+            settings.putString("synced_projects", synced.joinToString(",")); _syncedProjects.value = synced
+        }
     }
 
-    override suspend fun toggleHiddenProject(id: String) {
-        val updated = _hiddenProjects.value.toMutableSet().apply { if (id in this) remove(id) else add(id) }
-        settings.putString("hidden_projects", updated.joinToString(",")); _hiddenProjects.value = updated
+    override suspend fun toggleSyncedProject(id: String) {
+        val updated = _syncedProjects.value.toMutableSet().apply { if (id in this) remove(id) else add(id) }
+        settings.putString("synced_projects", updated.joinToString(",")); _syncedProjects.value = updated
+    }
+
+    override suspend fun setSyncedProjects(ids: Set<String>) {
+        settings.putString("synced_projects", ids.joinToString(",")); _syncedProjects.value = ids
+    }
+
+    override suspend fun saveSyncSetupComplete(complete: Boolean) {
+        settings.putBoolean("sync_setup_complete", complete); _syncSetupComplete.value = complete
     }
 
     override suspend fun toggleHiddenInstrument(id: String) {
@@ -167,6 +195,10 @@ class IosAppPreferences : AppPreferences {
 
     override suspend fun saveDatasetGroupBy(value: String) {
         settings.putString("dataset_group_by", value); _datasetGroupBy.value = value
+    }
+
+    override suspend fun saveInstrumentGroupBy(value: String) {
+        settings.putString("instrument_group_by", value); _instrumentGroupBy.value = value
     }
 
     override suspend fun saveDefaultProjectTab(tab: String) {

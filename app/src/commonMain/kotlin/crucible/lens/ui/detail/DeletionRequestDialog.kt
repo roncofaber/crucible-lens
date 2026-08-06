@@ -7,24 +7,22 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.CrucibleResource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import org.koin.compose.koinInject
 
 @Composable
 internal fun DeletionRequestDialog(
     resource: CrucibleResource,
     onDismiss: () -> Unit,
+    onSubmit: suspend (reason: String?) -> ApiResult<Unit>,
     onSubmitted: () -> Unit
 ) {
     var reason by remember { mutableStateOf("") }
     var isSubmitting by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    val apiClient = koinInject<ApiClient>()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -43,13 +41,12 @@ internal fun DeletionRequestDialog(
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                     maxLines = 4,
-                    textStyle = MaterialTheme.typography.bodyMedium,
                 )
                 if (errorMsg != null) {
                     Text(
                         errorMsg!!,
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
@@ -61,10 +58,7 @@ internal fun DeletionRequestDialog(
                         isSubmitting = true
                         errorMsg = null
                         try {
-                            val resp = apiClient.service.requestDeletion(
-                                resourceId = resource.uniqueId,
-                                reason = reason.trim().ifBlank { null }
-                            )
+                            val resp = onSubmit(reason.trim().ifBlank { null })
                             when (resp) {
                                 is ApiResult.Success -> onSubmitted()
                                 is ApiResult.Error -> errorMsg = "Failed (${resp.code}) — a request may already exist"

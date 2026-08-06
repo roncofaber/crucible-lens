@@ -33,14 +33,17 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         private val GRAPH_EXPLORER_URL = stringPreferencesKey("graph_explorer_url")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
         private val ACCENT_COLOR = stringPreferencesKey("accent_color")
+        private val ACCENT_CONTRAST = stringPreferencesKey("accent_contrast")
         private val LAST_VISITED_RESOURCE = stringPreferencesKey("last_visited_resource")
         private val LAST_VISITED_RESOURCE_NAME = stringPreferencesKey("last_visited_resource_name")
         private val FLOATING_SCAN_BUTTON = stringPreferencesKey("floating_scan_button")
         private val PINNED_PROJECTS = stringPreferencesKey("pinned_projects")
-        private val HIDDEN_PROJECTS = stringPreferencesKey("hidden_projects")
+        private val SYNCED_PROJECTS = stringPreferencesKey("synced_projects")
+        private val SYNC_SETUP_COMPLETE = stringPreferencesKey("sync_setup_complete")
         private val HIDDEN_INSTRUMENTS = stringPreferencesKey("hidden_instruments")
         private val RESOURCE_HISTORY = stringPreferencesKey("resource_history")
         private val SAMPLE_GROUP_BY = stringPreferencesKey("sample_group_by")
+        private val INSTRUMENT_GROUP_BY = stringPreferencesKey("instrument_group_by")
         private val DATASET_GROUP_BY = stringPreferencesKey("dataset_group_by")
         private val DEFAULT_PROJECT_TAB = stringPreferencesKey("default_project_tab")
         private val USER_ORCID = stringPreferencesKey("user_orcid")
@@ -56,7 +59,8 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         const val THEME_MODE_SYSTEM = "system"
         const val THEME_MODE_LIGHT = "light"
         const val THEME_MODE_DARK = "dark"
-        const val DEFAULT_ACCENT_COLOR = "blue"
+        const val DEFAULT_ACCENT_COLOR = "carmine"
+        const val DEFAULT_ACCENT_CONTRAST = "standard"
 
         private val profileJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true }
     }
@@ -86,6 +90,11 @@ class PreferencesManager(private val context: Context) : AppPreferences {
     }
         .stateIn(scope, SharingStarted.Eagerly, DEFAULT_ACCENT_COLOR)
 
+    override val accentContrast: StateFlow<String> = context.dataStore.data.map { preferences ->
+        preferences[ACCENT_CONTRAST] ?: DEFAULT_ACCENT_CONTRAST
+    }
+        .stateIn(scope, SharingStarted.Eagerly, DEFAULT_ACCENT_CONTRAST)
+
     override val lastVisitedResource: StateFlow<String?> = context.dataStore.data.map { preferences ->
         preferences[LAST_VISITED_RESOURCE]
     }
@@ -106,10 +115,15 @@ class PreferencesManager(private val context: Context) : AppPreferences {
     }
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
-    override val hiddenProjects: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
-        prefs[HIDDEN_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+    override val syncedProjects: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[SYNCED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     }
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
+
+    override val syncSetupComplete: StateFlow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[SYNC_SETUP_COMPLETE]?.toBoolean() ?: false
+    }
+        .stateIn(scope, SharingStarted.Eagerly, false)
 
     override val hiddenInstruments: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
         prefs[HIDDEN_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
@@ -123,6 +137,11 @@ class PreferencesManager(private val context: Context) : AppPreferences {
 
     override val datasetGroupBy: StateFlow<String> = context.dataStore.data.map { prefs ->
         prefs[DATASET_GROUP_BY] ?: "MEASUREMENT"
+    }
+        .stateIn(scope, SharingStarted.Eagerly, "MEASUREMENT")
+
+    override val instrumentGroupBy: StateFlow<String> = context.dataStore.data.map { prefs ->
+        prefs[INSTRUMENT_GROUP_BY] ?: "MEASUREMENT"
     }
         .stateIn(scope, SharingStarted.Eagerly, "MEASUREMENT")
 
@@ -191,6 +210,12 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         }
     }
 
+    override suspend fun saveAccentContrast(contrast: String) {
+        context.dataStore.edit { preferences ->
+            preferences[ACCENT_CONTRAST] = contrast
+        }
+    }
+
     override suspend fun saveLastVisitedResource(uuid: String, name: String) {
         context.dataStore.edit { preferences ->
             preferences[LAST_VISITED_RESOURCE] = uuid
@@ -212,20 +237,32 @@ class PreferencesManager(private val context: Context) : AppPreferences {
 
     override suspend fun togglePinnedProject(id: String) {
         context.dataStore.edit { prefs ->
-            val projects = prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
-            val instruments = prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
-            if (id in projects) projects.remove(id)
-            else projects.add(id)
-            prefs[PINNED_PROJECTS] = projects.joinToString(",")
+            val current = prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+            val adding = id !in current
+            if (adding) current.add(id) else current.remove(id)
+            prefs[PINNED_PROJECTS] = current.joinToString(",")
+            if (adding) {
+                val synced = prefs[SYNCED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+                synced.add(id)
+                prefs[SYNCED_PROJECTS] = synced.joinToString(",")
+            }
         }
     }
 
-    override suspend fun toggleHiddenProject(id: String) {
+    override suspend fun toggleSyncedProject(id: String) {
         context.dataStore.edit { prefs ->
-            val current = prefs[HIDDEN_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+            val current = prefs[SYNCED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
             if (id in current) current.remove(id) else current.add(id)
-            prefs[HIDDEN_PROJECTS] = current.joinToString(",")
+            prefs[SYNCED_PROJECTS] = current.joinToString(",")
         }
+    }
+
+    override suspend fun setSyncedProjects(ids: Set<String>) {
+        context.dataStore.edit { prefs -> prefs[SYNCED_PROJECTS] = ids.joinToString(",") }
+    }
+
+    override suspend fun saveSyncSetupComplete(complete: Boolean) {
+        context.dataStore.edit { prefs -> prefs[SYNC_SETUP_COMPLETE] = complete.toString() }
     }
 
     override suspend fun toggleHiddenInstrument(id: String) {
@@ -242,6 +279,10 @@ class PreferencesManager(private val context: Context) : AppPreferences {
 
     override suspend fun saveDatasetGroupBy(value: String) {
         context.dataStore.edit { prefs -> prefs[DATASET_GROUP_BY] = value }
+    }
+
+    override suspend fun saveInstrumentGroupBy(value: String) {
+        context.dataStore.edit { prefs -> prefs[INSTRUMENT_GROUP_BY] = value }
     }
 
     override suspend fun saveDefaultProjectTab(tab: String) {

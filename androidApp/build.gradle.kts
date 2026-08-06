@@ -51,6 +51,14 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Distinct applicationId from release so a debug build never collides with an
+            // installed release build's signature (Android refuses to install over a
+            // differently-signed APK of the same package, surfacing as a bare
+            // "App not installed" with no explanation) — debug and release can now coexist
+            // on the same device instead of requiring an uninstall to switch between them.
+            applicationIdSuffix = ".debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

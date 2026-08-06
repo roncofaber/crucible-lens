@@ -30,7 +30,7 @@ fun NotificationDot(
         badge = {
             if (count != null && count > 0) {
                 Badge(modifier = Modifier.size(12.dp)) {
-                    Text(count.toString(), style = MaterialTheme.typography.labelSmall)
+                    Text(count.toString(), style = MaterialTheme.typography.labelMedium)
                 }
             }
         },

@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import crucible.lens.ui.common.AppIcon
-import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.EffectsFastSpring
 import crucible.lens.ui.common.EffectsDefaultSpring
@@ -20,14 +19,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
@@ -35,17 +30,15 @@ import crucible.lens.data.model.ResourceSearchResult
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.FilterSheet
 import crucible.lens.ui.common.SearchFilters
+import crucible.lens.ui.common.SectionHeader
+import crucible.lens.ui.common.LoadingContent
+import crucible.lens.ui.common.EmptyListCard
+import crucible.lens.ui.common.ErrorCard
+import crucible.lens.ui.common.ResourceRow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
-
-// Maps resource type string to the correct icon.
-private fun iconForType(resourceType: String?) = when (resourceType) {
-    "sample" -> AppIcons.Sample
-    "project" -> AppIcons.Project
-    else -> AppIcons.Dataset
-}
 
 @Composable
 fun SearchScreen(
@@ -55,7 +48,8 @@ fun SearchScreen(
     onResourceClick: (String) -> Unit,
     onProjectClick: (String) -> Unit,
     modifier: Modifier = Modifier,
-    userOrcid: String? = null
+    userOrcid: String? = null,
+    graphExplorerUrl: String = ""
 ) {
     val apiClient = koinInject<ApiClient>()
     val repository = koinInject<CrucibleRepository>()
@@ -72,6 +66,12 @@ fun SearchScreen(
         .collectAsStateWithLifecycle(initialValue = null)
     val memberProjectIds = remember(memberProjects) { memberProjects?.map { it.projectId }?.toSet() }
 
+    // Result sections start open — you searched to see results, not to be shown three closed
+    // drawers. Saveable so collapsing a section survives opening a result and coming back.
+    var projectsExpanded by rememberSaveable { mutableStateOf(true) }
+    var samplesExpanded by rememberSaveable { mutableStateOf(true) }
+    var datasetsExpanded by rememberSaveable { mutableStateOf(true) }
+
     var activeFilters by remember { mutableStateOf(SearchFilters()) }
     var isFilterLoading by remember { mutableStateOf(false) }
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -84,6 +84,8 @@ fun SearchScreen(
 
     var metadataResults by remember { mutableStateOf<List<ResourceSearchResult>?>(null) }
     var isMetadataSearching by remember { mutableStateOf(false) }
+    var metadataSearchError by remember { mutableStateOf<String?>(null) }
+    var metadataRetryTrigger by remember { mutableIntStateOf(0) }
 
     var isFirstComposition by remember { mutableStateOf(true) }
 
@@ -103,10 +105,10 @@ fun SearchScreen(
         isNameSearching = true
         val q = query.trim()
         val samples = (apiClient.service.searchSamples(q) as? ApiResult.Success)?.data
-            ?.map { ResourceSearchResult(it.uniqueId, "sample", it.name, it.ownerOrcid) }
+            ?.map { ResourceSearchResult(it.uniqueId, "sample", it.name, it.ownerOrcid, projectId = it.projectId) }
             ?: emptyList()
         val datasets = (apiClient.service.searchDatasets(q) as? ApiResult.Success)?.data
-            ?.map { ResourceSearchResult(it.uniqueId, "dataset", it.name, it.ownerOrcid) }
+            ?.map { ResourceSearchResult(it.uniqueId, "dataset", it.name, it.ownerOrcid, projectId = it.projectId) }
             ?: emptyList()
         // /projects/search returns every matching project regardless of membership — when the
         // discover toggle is off, drop results the user isn't a member of, matching this
@@ -140,7 +142,7 @@ fun SearchScreen(
                 creationTimeGte = after,
                 creationTimeLte = before
             ) as? ApiResult.Success)?.data
-                ?.map { ResourceSearchResult(it.uniqueId, "sample", it.name, it.ownerOrcid) }
+                ?.map { ResourceSearchResult(it.uniqueId, "sample", it.name, it.ownerOrcid, projectId = it.projectId) }
                 ?: emptyList()
             val datasets = (apiClient.service.getFilteredDatasets(
                 projectId = projectId,
@@ -152,7 +154,7 @@ fun SearchScreen(
                 creationTimeGte = after,
                 creationTimeLte = before
             ) as? ApiResult.Success)?.data
-                ?.map { ResourceSearchResult(it.uniqueId, "dataset", it.name, it.ownerOrcid) }
+                ?.map { ResourceSearchResult(it.uniqueId, "dataset", it.name, it.ownerOrcid, projectId = it.projectId) }
                 ?: emptyList()
             nameResults = samples + datasets
         } catch (e: CancellationException) {
@@ -162,20 +164,26 @@ fun SearchScreen(
     }
 
     // Metadata search — fires in metadata mode
-    LaunchedEffect(query, metadataMode) {
+    LaunchedEffect(query, metadataMode, metadataRetryTrigger) {
         if (!metadataMode) {
-            metadataResults = null; isMetadataSearching = false; return@LaunchedEffect
+            metadataResults = null; isMetadataSearching = false; metadataSearchError = null; return@LaunchedEffect
         }
-        if (query.length < 3) { metadataResults = null; return@LaunchedEffect }
+        if (query.length < 3) { metadataResults = null; metadataSearchError = null; return@LaunchedEffect }
         if (!isFirstComposition) delay(350)
         isFirstComposition = false
         isMetadataSearching = true
-        metadataResults = try {
-            (apiClient.service.searchScientificMetadata(query.trim()) as? ApiResult.Success)?.data
-                ?: emptyList()
+        metadataSearchError = null
+        try {
+            when (val response = apiClient.service.searchScientificMetadata(query.trim())) {
+                is ApiResult.Success -> metadataResults = response.data
+                is ApiResult.Error -> { metadataResults = emptyList(); metadataSearchError = response.message }
+            }
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Exception) { emptyList() }
+        } catch (e: Exception) {
+            metadataResults = emptyList()
+            metadataSearchError = e.message ?: "Metadata search failed"
+        }
         isMetadataSearching = false
     }
 
@@ -216,6 +224,12 @@ fun SearchScreen(
 
     Box(modifier = modifier.fillMaxSize().semantics { isTraversalGroup = true }) {
         SearchBar(
+            // M3 defaults this to surfaceContainerHigh. That role is meant for compact chrome; an
+            // expanded SearchBar is effectively the whole screen, so any tint on it reads as a
+            // coloured page rather than a raised surface — and it would fight the tinted section
+            // headers inside it. Plain surface keeps the results on the same ground as every other
+            // list in the app.
+            colors = SearchBarDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
@@ -318,21 +332,33 @@ fun SearchScreen(
                     // ── Content area ──────────────────────────────────────────
                     Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                         when {
-                            apiKey.isNullOrBlank() -> SearchEmptyState(
-                                icon = AppIcons.Key,
-                                title = "No API key",
-                                subtitle = "Configure your API key in Settings to search"
+                            apiKey.isNullOrBlank() -> EmptyListCard(
+                                resourceName = "API key",
+                                defaultIcon = AppIcons.Key,
+                                isFiltered = false,
+                                emptyMessage = "Configure your API key in Settings to search"
                             )
-                            query.isBlank() && !filtersActive -> SearchEmptyState(
-                                icon = AppIcons.Search,
-                                title = "Start typing",
-                                subtitle = "Type at least 3 characters to search samples, datasets and projects"
+                            query.isBlank() && !filtersActive -> EmptyListCard(
+                                resourceName = "results",
+                                defaultIcon = AppIcons.Search,
+                                isFiltered = false,
+                                emptyMessage = "Type at least 3 characters to search samples, datasets and projects"
                             )
-                            isSearchLoading -> SearchLoadingState()
-                            !hasResults && mfidCandidate == null -> SearchEmptyState(
-                                icon = AppIcons.SearchOff,
-                                title = "No results",
-                                subtitle = if (metadataMode)
+                            isSearchLoading -> LoadingContent(title = "Searching")
+                            metadataMode && metadataSearchError != null -> ErrorCard(
+                                title = "Metadata search failed",
+                                message = metadataSearchError ?: "",
+                                onRetry = { metadataSearchError = null; metadataRetryTrigger++ }
+                            )
+                            // isFiltered = false despite this being the no-matches case:
+                            // EmptyListCard's filtered branch hardcodes "No <x> match your search."
+                            // and discards emptyMessage, which would throw away the mode-aware
+                            // hint below. Passing SearchOff explicitly gives the same icon.
+                            !hasResults && mfidCandidate == null -> EmptyListCard(
+                                resourceName = "Results",
+                                defaultIcon = AppIcons.SearchOff,
+                                isFiltered = false,
+                                emptyMessage = if (metadataMode)
                                     "No metadata matches found — try a different term"
                                 else
                                     "No name matches found — try metadata search"
@@ -351,35 +377,74 @@ fun SearchScreen(
 
                                 // Projects (name mode only — metadata search doesn't return projects)
                                 if (projectResults.isNotEmpty()) {
-                                    item(key = "header_projects") { SearchSectionHeader("Projects (${projectResults.size})") }
-                                    items(projectResults, key = { it.uniqueId }) { result ->
-                                        SearchResultItem(
-                                            result = result,
-                                            isNonMemberProject = memberProjectIds != null && result.uniqueId !in memberProjectIds
+                                    item(key = "header_projects") { SectionHeader(title = "Projects", count = projectResults.size, icon = AppIcons.Project,
+                                            expanded = projectsExpanded, onToggle = { projectsExpanded = !projectsExpanded }) }
+                                    if (projectsExpanded) items(projectResults, key = { it.uniqueId }) { result ->
+                                        // The muted text alone doesn't say *why* the row is
+                                        // greyed, so the snippet line carries the reason.
+                                        val isNonMember = memberProjectIds != null &&
+                                            result.uniqueId !in memberProjectIds
+                                        ResourceRow(
+                                            title = result.name ?: result.uniqueId,
+                                            subtitle = result.uniqueId,
+                                            uniqueId = result.uniqueId,
+                                            snippet = if (isNonMember) "Not a member" else null,
+                                            muted = isNonMember
                                         ) { onProjectClick(result.uniqueId) }
-                                        HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
                                     }
                                 }
 
                                 // Samples
                                 if (sampleResults.isNotEmpty()) {
                                     item(key = "header_samples") {
-                                        SearchSectionHeader("Samples (${sampleResults.size})")
+                                        SectionHeader(title = "Samples", count = sampleResults.size, icon = AppIcons.Sample,
+                                            expanded = samplesExpanded, onToggle = { samplesExpanded = !samplesExpanded })
                                     }
-                                    items(sampleResults, key = { it.uniqueId }) { result ->
-                                        SearchResultItem(result) { onResourceClick(result.uniqueId) }
-                                        HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
+                                    if (samplesExpanded) items(sampleResults, key = { it.uniqueId }) { result ->
+                                        val snippet = result.scientificMetadata
+                                            ?.entries?.take(2)
+                                            ?.joinToString(" · ") { (k, v) -> "$k: $v" }
+                                        // Searching spans every project, so "which project" is
+                                        // the useful disambiguator; the mfid stays one tap away
+                                        // via Copy ID. Metadata-mode results carry no project_id,
+                                        // so those fall back to the mfid.
+                                        ResourceRow(
+                                            title = result.name ?: result.uniqueId,
+                                            subtitle = result.projectId ?: result.uniqueId,
+                                            subtitleMonospace = result.projectId == null,
+                                            uniqueId = result.uniqueId,
+                                            snippet = snippet,
+                                            graphExplorerUrl = graphExplorerUrl,
+                                            projectId = result.projectId,
+                                            resourceType = result.resourceType ?: "sample"
+                                        ) { onResourceClick(result.uniqueId) }
                                     }
                                 }
 
                                 // Datasets (includes untyped results from metadata search)
                                 if (datasetResults.isNotEmpty()) {
                                     item(key = "header_datasets") {
-                                        SearchSectionHeader("Datasets (${datasetResults.size})")
+                                        SectionHeader(title = "Datasets", count = datasetResults.size, icon = AppIcons.Dataset,
+                                            expanded = datasetsExpanded, onToggle = { datasetsExpanded = !datasetsExpanded })
                                     }
-                                    items(datasetResults, key = { it.uniqueId }) { result ->
-                                        SearchResultItem(result) { onResourceClick(result.uniqueId) }
-                                        HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
+                                    if (datasetsExpanded) items(datasetResults, key = { it.uniqueId }) { result ->
+                                        val snippet = result.scientificMetadata
+                                            ?.entries?.take(2)
+                                            ?.joinToString(" · ") { (k, v) -> "$k: $v" }
+                                        // Searching spans every project, so "which project" is
+                                        // the useful disambiguator; the mfid stays one tap away
+                                        // via Copy ID. Metadata-mode results carry no project_id,
+                                        // so those fall back to the mfid.
+                                        ResourceRow(
+                                            title = result.name ?: result.uniqueId,
+                                            subtitle = result.projectId ?: result.uniqueId,
+                                            subtitleMonospace = result.projectId == null,
+                                            uniqueId = result.uniqueId,
+                                            snippet = snippet,
+                                            graphExplorerUrl = graphExplorerUrl,
+                                            projectId = result.projectId,
+                                            resourceType = result.resourceType ?: "sample"
+                                        ) { onResourceClick(result.uniqueId) }
                                     }
                                 }
                             }
@@ -400,114 +465,6 @@ fun SearchScreen(
     }
 }
 
-@Composable
-private fun SearchResultItem(
-    result: ResourceSearchResult,
-    isNonMemberProject: Boolean = false,
-    onClick: () -> Unit
-) {
-    val snippet = result.scientificMetadata
-        ?.entries?.take(2)
-        ?.joinToString(" · ") { (k, v) -> "$k: $v" }
-    ListItem(
-        headlineContent = {
-            Text(result.name ?: result.uniqueId, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        },
-        supportingContent = {
-            Column {
-                if (isNonMemberProject) {
-                    Text(
-                        "Not a member",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else if (snippet != null) {
-                    Text(
-                        snippet,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Text(
-                    result.uniqueId,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        leadingContent = {
-            // Muted tint signals "not fully accessible", same convention used for hidden
-            // projects/instruments elsewhere — a non-member project isn't hidden, but the
-            // muted treatment reads the same way: "this isn't fully yours yet". Tapping still
-            // opens ProjectDetailScreen, which can cold-open a non-member project's basic
-            // info; the "Request to join" action lives there, not here.
-            AppIcon(iconForType(result.resourceType), tint = if (isNonMemberProject) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary)
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.clickable(onClick = onClick)
-    )
-}
-
-@Composable
-private fun SearchSectionHeader(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
-    )
-}
-
-@Composable
-private fun SearchLoadingState() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            CircularProgressIndicator()
-            Text(
-                "Searching...",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-private fun SearchEmptyState(icon: AppIconToken, title: String, subtitle: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(32.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                AppIcon(icon, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun FilterLoadingBar(visible: Boolean) {
@@ -535,15 +492,14 @@ private fun DirectLookupCard(mfid: String, onClick: (String) -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     "Open resource directly",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
                     mfid,
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }

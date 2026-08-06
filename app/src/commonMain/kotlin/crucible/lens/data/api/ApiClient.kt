@@ -29,6 +29,12 @@ class ApiClient {
     fun getApiKey() = apiKey
 
     private val httpClient: HttpClient = HttpClient {
+        // Ktor defaults expectSuccess to false, meaning a non-2xx response (e.g. a 409 from
+        // POST /resources/{id}/metadata when metadata already exists) is returned as a normal
+        // response rather than thrown — and .body<Unit>() unconditionally succeeds regardless of
+        // status, so any ApiResult<Unit> call would silently report success on a failed request.
+        // Setting this true makes safeCall's existing ResponseException handler actually catch it.
+        expectSuccess = true
         install(ContentNegotiation) {
             json(Json {
                 ignoreUnknownKeys = true

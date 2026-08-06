@@ -7,6 +7,7 @@ import crucible.lens.ui.create.CreateDatasetViewModel
 import crucible.lens.ui.create.CreateSampleViewModel
 import crucible.lens.ui.create.EditResourceViewModel
 import crucible.lens.ui.detail.ResourceDetailViewModel
+import crucible.lens.ui.home.HomeViewModel
 import crucible.lens.ui.instruments.InstrumentDetailViewModel
 import crucible.lens.ui.instruments.InstrumentListViewModel
 import crucible.lens.ui.instruments.ManageInstrumentViewModel
@@ -29,6 +30,7 @@ val appModule = module {
     single { DataSyncManager(get()) }
 
     viewModelOf(::ResourceDetailViewModel)
+    viewModelOf(::HomeViewModel)
     viewModelOf(::AccountViewModel)
     viewModelOf(::ProjectsListViewModel)
     viewModelOf(::ProjectDetailViewModel)

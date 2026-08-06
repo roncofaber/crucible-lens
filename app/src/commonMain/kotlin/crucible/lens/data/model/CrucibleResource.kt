@@ -204,7 +204,11 @@ data class ResourceSearchResult(
     @SerialName("creation_time") val creationTime: String? = null,
     @SerialName("modification_time") val modificationTime: String? = null,
     val rank: Float? = null,
-    @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null
+    @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null,
+    // Not returned by /resources/metadata/search — that endpoint has no project_id. Populated
+    // client-side in name-search mode, where the underlying Sample/Dataset already carries it,
+    // so a result row can say which project it belongs to when searching across all of them.
+    @SerialName("project_id") val projectId: String? = null
 )
 
 @Serializable

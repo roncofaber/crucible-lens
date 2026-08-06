@@ -1,22 +1,12 @@
 package crucible.lens.ui.common
-import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.window.PopupProperties
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiClient
-import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.Instrument
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 @Composable
@@ -25,60 +15,21 @@ fun InstrumentPickerField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var results by remember { mutableStateOf<List<Instrument>>(emptyList()) }
-    var isSearching by remember { mutableStateOf(false) }
-    var expanded by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     val apiClient = koinInject<ApiClient>()
-
-    LaunchedEffect(value) {
-        if (value.length < 3) { results = emptyList(); return@LaunchedEffect }
-        delay(300)
-        isSearching = true
-        results = when (val resp = apiClient.service.searchInstruments(value)) {
-            is ApiResult.Success -> resp.data
-            is ApiResult.Error -> emptyList()
-        }
-        isSearching = false
-        expanded = results.isNotEmpty()
+    val (results, isSearching) = rememberDebouncedSearchResults<Instrument>(query = value) { q ->
+        apiClient.service.searchInstruments(q)
     }
 
-    Box(modifier = modifier) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = {
-                onValueChange(it)
-                expanded = true
-            },
-            label = { Text("Instrument") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .onFocusChanged { if (it.isFocused && value.length >= 3) expanded = true },
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium,
-            leadingIcon = { AppIcon(AppIcons.Instrument) },
-            trailingIcon = {
-                when {
-                    isSearching -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    value.isNotEmpty() -> IconButton(onClick = { onValueChange(""); expanded = false }) {
-                        AppIcon(AppIcons.ClearInput)
-                    }
-                }
-            }
-        )
-
-        DropdownMenu(
-            expanded = expanded && results.isNotEmpty(),
-            onDismissRequest = { expanded = false },
-            properties = PopupProperties(focusable = false),
-            modifier = Modifier.heightIn(max = 240.dp)
-        ) {
-            results.forEach { instrument ->
-                DropdownMenuItem(
-                    text = { Text(instrument.instrumentName ?: instrument.uniqueId) },
-                    onClick = { onValueChange(instrument.instrumentName ?: ""); expanded = false }
-                )
-            }
-        }
-    }
+    SearchPickerField(
+        query = value,
+        onQueryChange = onValueChange,
+        isSearching = isSearching,
+        results = results,
+        onSelect = { instrument -> onValueChange(instrument.instrumentName ?: "") },
+        label = "Instrument",
+        leadingIcon = AppIcons.Instrument,
+        modifier = modifier,
+        reopenOnFocus = true,
+        itemContent = { instrument -> Text(instrument.instrumentName ?: instrument.uniqueId, style = MaterialTheme.typography.bodyMedium) }
+    )
 }

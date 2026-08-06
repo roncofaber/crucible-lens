@@ -10,6 +10,7 @@ import crucible.lens.data.model.Instrument
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.Thumbnail
+import crucible.lens.data.model.User
 import crucible.lens.data.model.creationTimeOrEmpty
 import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
@@ -213,6 +214,29 @@ class CrucibleRepository(
     fun getCachedProject(projectId: String): Project? = projectObservableCache.get(projectId)
 
     fun invalidateProject(projectId: String) = projectObservableCache.invalidate(projectId)
+
+    // Per-project member list — fetched alongside the project itself (see ProjectDetailScreen's
+    // load effect) so both the collapsing header's member count and owner-groupby name resolution
+    // (rememberOwnerNames) share one cached fetch instead of hitting GET /projects/{id}/users twice.
+    private val projectMembersObservableCache = ObservableCache<String, List<User>>(
+        ttlMillis = 10 * 60 * 1000L,
+        maxSize = 50
+    )
+
+    suspend fun fetchProjectMembers(projectId: String, forceRefresh: Boolean = false): ApiResult<List<User>> {
+        if (!forceRefresh) {
+            projectMembersObservableCache.get(projectId)?.let { return ApiResult.Success(it) }
+        }
+        return api.getProjectUsers(projectId).also { result ->
+            if (result is ApiResult.Success) projectMembersObservableCache.put(projectId, result.data)
+        }
+    }
+
+    fun observeProjectMembers(projectId: String): Flow<List<User>?> = projectMembersObservableCache.observe(projectId)
+
+    fun getCachedProjectMembers(projectId: String): List<User>? = projectMembersObservableCache.get(projectId)
+
+    fun invalidateProjectMembers(projectId: String) = projectMembersObservableCache.invalidate(projectId)
 
     // Pending join-request count per project, for the lead-facing badge on Home/Projects list.
     // Only ever populated for projects the current user leads (DataSyncManager filters by
@@ -510,6 +534,7 @@ class CrucibleRepository(
         thumbnailObservableCache.invalidateAll()
         projectsObservableCache.invalidateAll()
         projectObservableCache.invalidateAll()
+        projectMembersObservableCache.invalidateAll()
         instrumentsObservableCache.invalidateAll()
         instrumentDatasetsObservableCache.invalidateAll()
         projectSamplesObservableCache.invalidateAll()

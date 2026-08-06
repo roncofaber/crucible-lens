@@ -3,17 +3,90 @@
 ## [Unreleased]
 
 ### Added
-- Project/Instrument detail screens: tap the name to open Manage Project/Manage Instrument
-- Manage Project: "Add member" moved to an inline row in the Members card, and to the overflow menu; Manage Instrument's overflow menu gained the same treatment
+- Manage Project: leave a project from the overflow menu
 
 ### Changed
-- Project/Instrument detail headers now scroll away with the list instead of staying fixed, leaving more room for content — search/sort stays pinned at the top
-- Names shown throughout the app (owners, project leads, members, requesters) now show the full name by default instead of `@username`
-- Cache settings screen now reports instrument and associated-file counts alongside projects/samples/datasets
+- New accent color choices, each with its own light/dark theme, plus a contrast level picker in Appearance settings
+- Refined a few card and status colors for better consistency with the app's accent
+- Choose which projects sync in the background; others still open normally
+- Resource detail field labels are now larger and medium-weight to stand out from their values
+- Linked/parent/child sample and dataset rows show their type icon again
+- Project/instrument headers are tinted while expanded, fading to plain background as they collapse
+- Removed the search icon from the resource detail screen
+- Normalized shadow/tint depth on cards, banners, and bottom action bars to Material 3 levels
+- Project/instrument header's expanded tint is more noticeable
+- Resource row IDs are fainter so the name stands out more
+- Sample/dataset groups now scroll through everything directly instead of a "Load more" button
+- Project and instrument headers now collapse smoothly as you scroll, instead of jumping at the halfway point
+- Collapsed headers now match the page background instead of taking on a tint
+- Project and instrument titles open the manage screen when tapped
+- List rows no longer repeat the section header's icon
+- Refined text sizing and hierarchy across lists, headers, and buttons
+- Names now show in full instead of `@username`
+- Cache settings shows instrument and file counts too
+- Avatars now get a unique color per person
+- Manage Project: Add member now sits above the member list, styled like a member row
+- Manage Project: members are sorted alphabetically by last name
+- Manage Project: any member can add a new member, not just the lead
+- Manage Project: Add Member sheet now supports adding multiple people without closing
+- Manage Project: Add Member search field now says "Search user" (also matches by name)
+- User search results now show name and avatar first, username smaller below
+- Debug builds show "dev" instead of a version number wherever the app version appears
+- Editing a sample or dataset now opens a full screen instead of a bottom sheet
+- Group section titles now stand apart from the rows beneath them
+- Project and instrument screens now show the name in the top bar, collapsing as you scroll
+- Project screen's top bar now shows the lead, organization, and member count while expanded
+- Instrument screen's top bar now shows the type and location while expanded
+- Pin button on project/instrument screens stays visible while scrolled
+- Removed the search icon from project/instrument screens (use the search field on screen instead)
+- Search bar and tabs no longer slide with the page when switching between samples and datasets
+- Instrument dataset rows now match the project screen's style, showing the project instead of the dataset ID
+- Instrument dataset rows can now open in web or be shared, matching sample/dataset rows elsewhere
+- Group headers are larger, on a tinted background, with an icon matching the rows below
+- Icon-only buttons are easier to tap
+- Avatar initials and the selected accent swatch stay legible on light colours
+- Text weights across the app now come from Material's own emphasis styles
+- Counts in group headers no longer shift width as they change
+- Tinted surfaces now follow your accent colour instead of always looking purple-grey
+- Search results show which project they belong to
+- Search result sections can be collapsed
+- Search results now look and behave like lists elsewhere, with the same rows and section headers
+- Search result rows gained the tap-and-hold menu and chevron used everywhere else
 
 ### Fixed
-- Pulling to refresh the Instruments list or an instrument's dataset list could still show stale data
-- File share/download links are now always fetched fresh instead of reusing a possibly-stale cached URL
+- Swiping to sync/unsync a project felt laggy and added a haptic tick at the commit point
+- Dataset file download/share icons no longer shift position when tapped or when a file is pending
+- Project screen's header shows the project ID, tap to copy
+- API settings screen restyled to match the rest of Settings; connection test now sits below the fields it tests
+- Account screen: added a button to copy your API key
+- Home screen footer no longer wraps or gets clipped on narrow screens
+- IDs (mfid, project/instrument ID) now look consistent everywhere they appear
+- Link Resource sheet no longer shows the project name in monospace next to the ID
+- Project list rows show "#id" instead of "ID: id" beneath the project name
+- Linked/parent/child resource rows use a proper tinted background instead of a flat grey overlay
+- Removed an unexplained shadow on dataset thumbnail cards
+- Status/navigation bar icons were invisible (white on white) in light theme
+- Projects with no samples or datasets are no longer hidden automatically
+- Project header member count, title, and organization now update on refresh and after edits
+- Tapping a collapsed project header could open the project lead's profile
+- Refresh, image load, and metadata search failures now show an error instead of failing silently
+- Project screen no longer leaks memory each time it is opened
+- Instrument grouping choice is now remembered, like the project screen's
+- Instrument search text survives opening a dataset and going back
+- "Not a member" notice no longer sits high on the screen
+- Instrument list/dataset refresh could show stale data
+- File share/download links are no longer cached
+- Debug builds could fail to install over a release build
+- Expanded groups now stay expanded after opening a sample/dataset and going back
+- Add Member sheet could overflow and cut off results
+- Searching for a project lead no longer shifts the form as you type
+- Already-added members now show as "Added" instead of a re-addable button
+- Editing scientific metadata could silently fail without any error shown
+- Metadata edits now merge instead of overwriting other fields changed elsewhere
+- Editing metadata no longer discards the edit and other unsaved changes after tapping Done
+- Project header no longer overlaps the list after opening a sample/dataset and going back
+- Scrollbar no longer runs behind the project header while scrolling
+- Project/instrument screens could become completely unscrollable
 
 ## [0.7.0] – 2026-07-28
 

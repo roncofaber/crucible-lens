@@ -20,6 +20,7 @@ import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.HealthStatus
 import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.theme.emphasizedTitleMedium
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -101,40 +102,78 @@ fun ApiSettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Endpoints", style = MaterialTheme.typography.titleLarge)
-            Text(
-                "Leave as default unless you're using a custom deployment.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            OutlinedTextField(
-                value = apiBaseUrlInput,
-                onValueChange = { apiBaseUrlInput = it; healthState = HealthState.Idle },
-                label = { Text("API Base URL") },
-                placeholder = { Text(AppPreferences.DEFAULT_API_BASE_URL) },
+            // Endpoints — one card holding both URL fields, matching the per-setting Card
+            // convention used by AppearanceSettingsScreen/CacheSettingsScreen (icon + title +
+            // description, then content) rather than loose top-level fields.
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { AppIcon(AppIcons.ApiEndpoint) },
-                trailingIcon = {
-                    if (apiBaseUrlInput != AppPreferences.DEFAULT_API_BASE_URL) {
-                        IconButton(onClick = {
-                            apiBaseUrlInput = AppPreferences.DEFAULT_API_BASE_URL
-                            healthState = HealthState.Idle
-                        }) { AppIcon(AppIcons.ResetToDefault) }
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AppIcon(AppIcons.ApiEndpoint, tint = MaterialTheme.colorScheme.primary)
+                        Text("Endpoints", style = MaterialTheme.typography.emphasizedTitleMedium)
                     }
-                },
-                singleLine = true,
-                colors = if (apiBaseUrlDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
-            )
+                    Text(
+                        "Leave as default unless you're using a custom deployment.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
-            Card(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = apiBaseUrlInput,
+                        onValueChange = { apiBaseUrlInput = it; healthState = HealthState.Idle },
+                        label = { Text("API Base URL") },
+                        placeholder = { Text(AppPreferences.DEFAULT_API_BASE_URL) },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = { AppIcon(AppIcons.ApiEndpoint) },
+                        trailingIcon = {
+                            if (apiBaseUrlInput != AppPreferences.DEFAULT_API_BASE_URL) {
+                                IconButton(onClick = {
+                                    apiBaseUrlInput = AppPreferences.DEFAULT_API_BASE_URL
+                                    healthState = HealthState.Idle
+                                }) { AppIcon(AppIcons.ResetToDefault) }
+                            }
+                        },
+                        singleLine = true,
+                        colors = if (apiBaseUrlDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
+                    )
+
+                    OutlinedTextField(
+                        value = graphExplorerUrlInput,
+                        onValueChange = { graphExplorerUrlInput = it },
+                        label = { Text("Crucible Web URL") },
+                        placeholder = { Text("https://crucible.lbl.gov/explore/") },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = { AppIcon(AppIcons.WebUrl) },
+                        singleLine = true,
+                        supportingText = { Text("Web interface for browsing and exploring resources", style = MaterialTheme.typography.bodySmall) },
+                        colors = if (graphExplorerUrlDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
+                    )
+                }
+            }
+
+            // Connection test — below the fields it tests, not between them.
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Connection", style = MaterialTheme.typography.titleSmall)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AppIcon(AppIcons.TestConnection, tint = MaterialTheme.colorScheme.primary)
+                            Text("Connection", style = MaterialTheme.typography.emphasizedTitleMedium)
+                        }
                         OutlinedButton(
                             onClick = { healthManualTrigger++ },
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
@@ -171,7 +210,7 @@ fun ApiSettingsScreen(
                                         s.dbMs?.let { "${it.toInt()} ms" },
                                         s.version?.let { "v$it" }
                                     ).joinToString(" · ")
-                                    if (details.isNotBlank()) Text(details, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (details.isNotBlank()) Text(details, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
@@ -182,18 +221,6 @@ fun ApiSettingsScreen(
                     }
                 }
             }
-
-            OutlinedTextField(
-                value = graphExplorerUrlInput,
-                onValueChange = { graphExplorerUrlInput = it },
-                label = { Text("Crucible Web URL") },
-                placeholder = { Text("https://crucible.lbl.gov/explore/") },
-                modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { AppIcon(AppIcons.WebUrl) },
-                singleLine = true,
-                supportingText = { Text("Web interface for browsing and exploring resources", style = MaterialTheme.typography.bodySmall) },
-                colors = if (graphExplorerUrlDirty) dirtyFieldColors() else OutlinedTextFieldDefaults.colors()
-            )
 
             Spacer(Modifier.height(16.dp))
         }

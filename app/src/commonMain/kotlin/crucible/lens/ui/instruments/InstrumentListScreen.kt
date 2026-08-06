@@ -16,7 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.Instrument
@@ -42,6 +41,7 @@ import crucible.lens.ui.common.hideWithUndo
 import crucible.lens.platform.showToast
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun InstrumentListScreen(
@@ -156,11 +156,10 @@ fun InstrumentListScreen(
                                     query = searchQuery,
                                     onQueryChange = { searchQuery = it },
                                     placeholder = "Search by name, type, manufacturer…",
-                                    modifier = Modifier.weight(1f),
-                                    accentStyle = true
+                                    modifier = Modifier.weight(1f)
                                 )
                                 Box {
-                                    IconButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.size(36.dp)) {
+                                    IconButton(onClick = { sortMenuExpanded = true }) {
                                         AppIcon(AppIcons.Sort,
                                             modifier = Modifier.size(20.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -217,7 +216,7 @@ fun InstrumentListScreen(
                             ) {
                                 Card(
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -227,8 +226,7 @@ fun InstrumentListScreen(
                                             )
                                             Text(
                                                 if (searchQuery.isNotBlank()) "No matching instruments" else "No instruments",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold
+                                                style = MaterialTheme.typography.emphasizedTitleMedium
                                             )
                                         }
                                         Text(
@@ -353,7 +351,7 @@ private fun InstrumentCard(
         },
         supportingContent = if (!instrument.location.isNullOrBlank()) {
             {
-                Text(instrument.location, style = MaterialTheme.typography.labelSmall,
+                Text(instrument.location, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         } else null,

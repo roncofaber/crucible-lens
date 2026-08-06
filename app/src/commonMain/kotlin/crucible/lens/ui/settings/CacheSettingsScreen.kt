@@ -12,7 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.data.repository.CrucibleRepository
@@ -20,6 +19,7 @@ import crucible.lens.platform.getPlatformContext
 import crucible.lens.ui.common.AppScaffold
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun CacheSettingsScreen(
@@ -58,7 +58,10 @@ fun CacheSettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -74,8 +77,7 @@ fun CacheSettingsScreen(
                         )
                         Text(
                             "Cached data",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold
+                            style = MaterialTheme.typography.emphasizedTitleMedium
                         )
                     }
                     val stats = cacheStats

@@ -118,7 +118,7 @@ fun AddFilesScreen(
                         if (isUploading) {
                             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                         } else {
-                            Text("Done", style = MaterialTheme.typography.labelLarge)
+                            Text("Done")
                         }
                     }
                 }
@@ -149,7 +149,7 @@ fun AddFilesScreen(
             } else {
                 files.forEachIndexed { index, (bytes, asThumbnail) ->
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(10.dp),

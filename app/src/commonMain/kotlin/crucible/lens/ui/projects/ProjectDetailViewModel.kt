@@ -23,7 +23,7 @@ class ProjectDetailViewModel(
 
     private var currentProjectId: String? = null
 
-    fun load(projectId: String, isHidden: Boolean = false, forceRefresh: Boolean = false) {
+    fun load(projectId: String, forceRefresh: Boolean = false) {
         if (projectId == currentProjectId && !forceRefresh &&
             _loadState.value is LoadState.Success) return
         currentProjectId = projectId
@@ -40,15 +40,6 @@ class ProjectDetailViewModel(
                 if (cachedSamples != null && cachedDatasets != null && !forceRefresh) {
                     _loadState.value = LoadState.Success(
                         ProjectContent(cachedSamples, cachedDatasets), fromCache = true
-                    )
-                    return@launch
-                }
-
-                if (isHidden) {
-                    val fromCache = cachedSamples != null && cachedDatasets != null
-                    _loadState.value = LoadState.Success(
-                        ProjectContent(cachedSamples ?: emptyList(), cachedDatasets ?: emptyList()),
-                        fromCache = fromCache
                     )
                     return@launch
                 }

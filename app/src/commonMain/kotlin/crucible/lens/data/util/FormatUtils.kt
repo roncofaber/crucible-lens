@@ -77,3 +77,11 @@ fun userDisplayName(firstName: String?, lastName: String?, username: String?, un
 
 fun userDisplayName(user: User?): String =
     userDisplayName(user?.firstName, user?.lastName, user?.username, user?.uniqueId)
+
+/**
+ * Sort key for alphabetizing member/user lists by last name — falls back to username, then
+ * ORCID, for users without a name on file, so they still sort predictably instead of clumping
+ * at one end.
+ */
+fun userSortKey(user: User?): String =
+    (user?.lastName?.takeIf { it.isNotBlank() } ?: user?.username ?: user?.uniqueId ?: "").lowercase()
