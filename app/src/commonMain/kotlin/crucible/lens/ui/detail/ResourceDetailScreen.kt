@@ -769,8 +769,12 @@ fun ResourceDetailScreen(
         var isUnlinking by remember { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = { if (!isUnlinking) pendingUnlink = null },
-            icon = { AppIcon(AppIcons.UnlinkResource) },
-            title = { Text("Unlink resource") },
+            title = {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AppIcon(AppIcons.UnlinkResource, tint = MaterialTheme.colorScheme.error)
+                    Text("Unlink resource?")
+                }
+            },
             text = { Text("Remove link to \"${req.name}\"? The resources themselves will not be deleted.") },
             confirmButton = {
                 Button(

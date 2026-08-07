@@ -1,167 +1,108 @@
 # Platform Parity: Android vs iOS
 
-Branch: `main`
+All UI lives in `commonMain` and renders identically on both platforms. Platform differences are
+isolated to:
 
-## Contents
+- `app/src/androidMain/kotlin/crucible/lens/` - Android actuals
+- `app/src/iosMain/kotlin/crucible/lens/` - iOS actuals
+- `androidApp/` - thin Android shell (signing, ProGuard, manifest, entry point)
+- `iosApp/` - Xcode project + Swift entry point
 
-- [Architecture overview](#architecture-overview)
-- [What is fully shared (commonMain)](#what-is-fully-shared-commonmain)
-- [Platform differences](#platform-differences)
-- [Known gaps on iOS](#known-gaps-on-ios)
-- [UI consistency audit](#ui-consistency-audit)
-- [Building for iOS](#building-for-ios)
-- [Files that differ between platforms](#files-that-differ-between-platforms)
-
----
-
-## Architecture overview
-
-The app uses **Kotlin Multiplatform + Compose Multiplatform**. All UI screens live in `commonMain` and render identically on both platforms. Platform differences are isolated to:
-
-- `app/src/androidMain/kotlin/crucible/lens/` — Android actuals
-- `app/src/iosMain/kotlin/crucible/lens/` — iOS actuals
-- `androidApp/` — thin Android application shell (signing, ProGuard, manifest, entry point)
-- `iosApp/` — Xcode project + Swift entry point
-
-The iOS entry point is `iosMain/App.kt` (called via `MainViewController.kt` → `ContentView.swift` → `iOSApp.swift`).
+The iOS entry point is `iosMain/App.kt`, reached via `MainViewController.kt` → `ContentView.swift` →
+`iOSApp.swift`.
 
 ---
 
-## What is fully shared (commonMain)
+## Fully shared (commonMain)
 
 | Area | Notes |
 |---|---|
-| All UI screens, including `CreateDatasetScreen` | Same composables, same layout, same Material 3 theme, on both platforms |
-| Navigation | Single `NavGraph.kt` — all 23 routes reachable on both platforms |
-| API client | Ktor-based `CrucibleApiService`, `CrucibleRepository`, all data models |
-| Caching | `CrucibleRepository`'s `ObservableCache`s, `PersistentProjectCache` |
-| QR scanning | `easyqrscan` composable — same scanner on both platforms |
-| QR code display | `qr-kit` `rememberQrKitPainter` — same on both platforms |
-| ORCID login WebView | `compose-webview-multiplatform` — same on both platforms |
-| Image picker | Native `UIImagePickerController`/`PHPickerViewController` on iOS; `ActivityResultContracts` + CameraX on Android — no third-party image-picker library on either platform |
-| Theme / colour schemes | Identical Material 3 theme, dark/light, accent colours |
-| Preferences reactivity | Both platforms expose `StateFlow` — Android via DataStore, iOS via NSUserDefaults (`multiplatform-settings`) |
-| App logo | Both platforms render the actual logo image resource (`crucible_text_dark`/`crucible_text_light`) — no plain-text fallback on either platform |
-| App version string | Android reads `AppBuildConfig.VERSION_NAME` (generated at build time); iOS reads `NSBundle.mainBundle`'s `CFBundleShortVersionString`, falling back to a hardcoded string only if that Info.plist key is missing |
-| Toast notifications | Native `Toast.makeText` on Android; `showToast()` posts to `platform.ToastBus` (`MutableSharedFlow<String>`) on iOS, rendered by `ui.common.ToastHost` — a Compose banner hosted once in `NavGraph`'s root `BoxWithConstraints` |
+| All UI screens | Same composables, layout, and Material 3 theme on both platforms |
+| Navigation | Single `NavGraph.kt`; every route reachable on both |
+| API client + caching | `CrucibleApiService`, `CrucibleRepository`, `ObservableCache`, `PersistentProjectCache`, all data models |
+| QR scan + display | `easyqrscan` and `qr-kit` composables |
+| ORCID login WebView | `compose-webview-multiplatform` |
+| Theme / colour schemes | Identical M3 theme, dark/light, accent colours |
+| Preferences reactivity | Both expose `StateFlow` - DataStore on Android, NSUserDefaults on iOS |
+| App logo | Both render the real image resource (`crucible_text_dark`/`_light`) - no text fallback |
+| Animations, `HorizontalPager`, `LazyColumnScrollbar` | Identical behaviour |
+| Pull-to-refresh | `PullToRefreshBox`; the indicator overlays content rather than shifting it, matching M3 and iOS `UIRefreshControl`. An earlier content-slide attempt via `distanceFraction` produced bounce artifacts, since that API conflates the user gesture with the internal refresh animation |
 
 ---
 
 ## Platform differences
 
-### Features fully implemented on Android, not on iOS
+### Android-only
 
 | Feature | Android | iOS |
 |---|---|---|
-| **Splash screen** | `androidx.core:core-splashscreen` | None configured — needs an Xcode launch screen |
-| **Deep links** | `intent.data` parsed in `MainActivity` | `deepLinkUuid = null` (future: URL scheme registration) |
+| **Splash screen** | `androidx.core:core-splashscreen` | None - needs an Xcode launch screen |
+| **Deep links** | `intent.data` parsed in `MainActivity` | `deepLinkUuid = null`; needs URL-scheme registration |
+| **Dynamic colour** | Android 12+ | Forced `false`. Not a bug - Appearance settings hides the toggle where `supportsDynamicColor()` is false, so there's no dead control |
 
-### Features with different underlying implementation
+### Same feature, different implementation
 
 | Feature | Android | iOS |
 |---|---|---|
-| Preferences persistence | DataStore Preferences (reactive, file-backed) | NSUserDefaults via `multiplatform-settings` |
-| Connectivity monitoring | `ConnectivityManager.NetworkCallback` | None — `ConnectivityObserver.isOnline` is hardcoded `true`, assuming iOS reconnects on its own |
+| Preferences persistence | DataStore (reactive, file-backed) | NSUserDefaults via `multiplatform-settings` |
+| Connectivity monitoring | `ConnectivityManager.NetworkCallback` | None - `ConnectivityObserver.isOnline` is hardcoded `true`, assuming iOS reconnects on its own |
 | Clipboard | `ClipboardManager` | `UIPasteboard` |
 | URL opening | `Intent.ACTION_VIEW` | `UIApplication.openURL` |
 | Share sheet | `Intent.ACTION_SEND` via chooser | `UIActivityViewController` |
-| Image picker | CameraX + `ActivityResultContracts` | `UIImagePickerController` (camera) + `PHPickerViewController` (gallery) |
+| Image picker | CameraX + `ActivityResultContracts` | `UIImagePickerController` (camera) + `PHPickerViewController` (gallery) - no third-party library on either platform |
+| Toasts | `Toast.makeText` | `showToast()` posts to `platform.ToastBus` (`MutableSharedFlow<String>`), rendered by `ui.common.ToastHost` in `NavGraph`'s root `BoxWithConstraints` |
+| App version string | `AppBuildConfig.VERSION_NAME` (generated at build time) | `NSBundle.mainBundle`'s `CFBundleShortVersionString`, falling back to a hardcoded string only if that Info.plist key is missing |
+| Camera permission | Explicit permission-request flow with rationale UI | System prompt directly, no custom rationale |
 
 ---
 
 ## Known gaps on iOS
 
-1. **Deep links** — need iOS URL scheme (or universal link) registration in `Info.plist` plus parsing in `MainViewController`/`App.kt`.
-2. **Splash screen** — no iOS launch screen configured. Add via Xcode project settings (`LaunchScreen.storyboard` or the newer `UILaunchScreen` Info.plist key).
-3. **Dynamic colour** — forced `false` on iOS (Android 12+-only feature). Not a bug: the Appearance settings screen hides the dynamic-colour toggle entirely on platforms where `supportsDynamicColor()` returns false, so there's no dead control shown to iOS users.
+1. **Deep links** - need a URL scheme (or universal link) in `Info.plist` plus parsing in
+   `MainViewController`/`App.kt`.
+2. **Splash screen** - add via Xcode (`LaunchScreen.storyboard` or the `UILaunchScreen` Info.plist key).
 
-This app is currently submitted to app stores on Android only; the iOS gaps above do not block that submission and are tracked here for whenever iOS distribution becomes a priority.
-
----
-
-## UI consistency audit
-
-All screens use the same composables from `commonMain`. The theme (`CrucibleScannerTheme`) applies identically. Specific observations:
-
-- **Floating action button (scanner)** — visible on iOS; tapping it opens the shared QR scanner composable. Camera permission handling on iOS uses the system prompt directly (no custom rationale UI), simpler than Android's explicit permission-request flow.
-- **Pull-to-refresh** — uses `PullToRefreshBox` from Material 3 1.4+, works identically on both. Content deliberately does not shift during the pull gesture — the indicator overlays content instead, matching M3 and iOS `UIRefreshControl` convention (an earlier content-slide attempt via `distanceFraction` produced bounce artifacts, since that API conflates user gesture with internal refresh-state animation).
-- **Animations** — all `AnimatedVisibility`, `AnimatedContent`, spring animations work identically.
-- **HorizontalPager** (resource detail siblings) — works identically.
-- **Scrollbars** — `LazyColumnScrollbar` is a custom composable in `commonMain`, renders the same.
+The app currently ships on Android only. Neither gap blocks that; both are tracked here for whenever
+iOS distribution becomes a priority.
 
 ---
 
 ## Building for iOS
 
-### Prerequisites
+**Prerequisites**: macOS with Xcode 16+, Java 17+ on PATH.
 
-- macOS with Xcode 16+ installed
-- Java 17+ on PATH (for Gradle)
-
-Note: Kotlin/Native iOS targets cannot build on Linux. `compileKotlinIosArm64` etc. verify Kotlin correctness on Linux, but producing a runnable app requires macOS + Xcode.
-
-### Building the KMP framework
+Kotlin/Native iOS targets cannot build on Linux. `compileKotlinIosArm64` verifies Kotlin correctness
+there, but producing a runnable app requires macOS + Xcode.
 
 ```bash
-cd crucible-lens
-
-# Build the debug XCFramework (includes all iOS simulator + device slices)
+# 1. Build the debug XCFramework (all simulator + device slices)
+#    Output: app/build/XCFrameworks/debug/ComposeApp.xcframework
 ./gradlew :composeApp:assembleDebugXCFramework
 
-# The output is at:
-# app/build/XCFrameworks/debug/ComposeApp.xcframework
-```
+# 2. Generate the Xcode project from iosApp/project.yml (XcodeGen)
+xcodegen generate --spec iosApp/project.yml
 
-### Xcode project setup
-
-The `iosApp/` directory is generated via XcodeGen (`iosApp/project.yml`):
-
-```bash
-# On macOS:
-cd crucible-lens
-xcodegen generate --spec iosApp/project.yml   # generates the .xcodeproj
-```
-
-If setting up from scratch (no `project.yml` yet), create the Xcode project manually:
-
-1. Open Xcode → New Project → App (iOS)
-2. Product name: `Crucible Lens`, bundle ID: `crucible.lens`
-3. Save into `iosApp/`
-4. Delete the default `ContentView.swift` and replace with the existing one
-5. Add the built `ComposeApp.xcframework` to the project:
-   - Project settings → General → Frameworks, Libraries, Embedded Content → `+`
-   - Navigate to `app/build/XCFrameworks/debug/ComposeApp.xcframework`
-   - Set to **Embed & Sign**
-6. In `iOSApp.swift`, the `@main` entry point is already set up
-
-The Swift entry point is wired as:
-`iOSApp.swift` → `ContentView` → `ComposeView` → `MainViewControllerKt.MainViewController()` → `App()` (Kotlin, `iosMain/App.kt`, wires the full `NavGraph` with `IosAppPreferences`).
-
-### Running on simulator
-
-```bash
-# Or build directly via Gradle (requires Xcode command line tools)
+# 3. Open the .xcodeproj and press ▶, or build the simulator binaries directly
 ./gradlew :composeApp:iosSimulatorArm64Binaries
 ```
 
-Then open the `.xcodeproj` in Xcode and press ▶.
+The framework must be added to the Xcode target as **Embed & Sign** (Project settings → General →
+Frameworks, Libraries, Embedded Content). `project.yml` already handles this; only a hand-built
+project needs it set manually.
 
 ### Pointing at a local API
 
-In the app's Settings → API, set the API Base URL to your Mac's local network IP (not localhost — the simulator runs on the Mac but with a different network stack):
+In Settings → API, set the base URL to your Mac's LAN IP - or loopback, which works because the
+simulator shares the Mac's localhost:
 
 ```
 http://192.168.x.x:7778/testapi/
-```
-
-Or use the loopback directly if testing on the simulator (simulator shares the Mac's localhost):
-```
 http://127.0.0.1:7778/testapi/
 ```
 
-### Gradle properties to suppress iOS warnings
+### Gradle properties
 
-Already set in `gradle.properties`:
+Already set in `gradle.properties` to suppress iOS-on-Linux warnings:
 
 ```properties
 kotlin.native.ignoreDisabledTargets=true
@@ -172,12 +113,12 @@ android.suppressUnsupportedCompileSdk=36
 
 ## Files that differ between platforms
 
-### Android-only (`app/src/androidMain/`)
-- `MainActivity.kt` — Activity entry point, preference collection, splash screen
-- `data/preferences/PreferencesManager.kt` — DataStore implementation
+**Android-only** (`app/src/androidMain/`)
+- `MainActivity.kt` - Activity entry point, preference collection, splash screen
+- `data/preferences/PreferencesManager.kt` - DataStore implementation
 
-### iOS-only (`app/src/iosMain/`)
-- `App.kt` — Composable entry point (replaces Activity)
-- `MainViewController.kt` — bridges Compose to `UIViewController`
-- `data/preferences/IosAppPreferences.kt` — NSUserDefaults implementation
-- `platform/PlatformInfo.kt` — `AppLogo` (image resource) and `appVersionName()` (`NSBundle` read)
+**iOS-only** (`app/src/iosMain/`)
+- `App.kt` - composable entry point (replaces the Activity)
+- `MainViewController.kt` - bridges Compose to `UIViewController`
+- `data/preferences/IosAppPreferences.kt` - NSUserDefaults implementation
+- `platform/PlatformInfo.kt` - `AppLogo` (image resource) and `appVersionName()` (`NSBundle` read)

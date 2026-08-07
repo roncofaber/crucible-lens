@@ -111,7 +111,7 @@ Icons marked **FILLED** need to be downloaded twice:
 | visibility | 0 | `ic_visibility.xml` | `ShowContent` |
 | visibility_off | 0 | `ic_visibility_off.xml` | `HideContent` |
 
-## Stateful (download twice — fill=0 and fill=1)
+## Stateful (download twice - fill=0 and fill=1)
 
 | Search for | Fill | Save as | AppIcons name |
 |-----------|------|---------|---------------|
@@ -171,9 +171,9 @@ Icons marked **FILLED** need to be downloaded twice:
 
 ## Brand glyphs (NOT Material Symbols)
 
-These three don't come from fonts.google.com — they're hand-added brand marks, so the
+These three don't come from fonts.google.com - they're hand-added brand marks, so the
 style/weight/grade rules above don't apply. Match the existing files: a 24dp/24-viewport
-`<vector>` with a solid `android:fillColor` (the value is irrelevant — `AppIcon` tints it),
+`<vector>` with a solid `android:fillColor` (the value is irrelevant - `AppIcon` tints it),
 scaling the official artwork down rather than redrawing it.
 
 | Save as | AppIcons name | Used by |
@@ -184,17 +184,28 @@ scaling the official artwork down rather than redrawing it.
 
 ---
 
-## Notes
+## Intentional aliases
 
-- **`storage`** is shared by two tokens — `FileStorage` (file size field) and `Cache` (cache
-  settings) — both pointing at the same `ic_storage.xml`. There is no `ic_storage_cache.xml`;
-  one drawable, two semantic names, which is fine.
-- **`expand_more`** backs both `ExpandMore` and `ExpandLess` — one file, rotated. Prefer the
-  `ExpandChevron` composable (`AppAnimations.kt`); the two tokens exist only for edge cases
-  where a static, non-animated chevron is needed.
+Several tokens deliberately share one drawable - that's fine, and not a gap to "fix":
+
+- **`storage`** backs both `FileStorage` (file size field) and `Cache` (cache settings). There is no
+  `ic_storage_cache.xml`.
+- **`expand_more`** backs both `ExpandMore` and `ExpandLess` - one file, rotated. Prefer the
+  `ExpandChevron` composable (`AppAnimations.kt`); these two tokens exist only for the rare case
+  needing a static, non-animated chevron.
 - **`notes`** replaces both `Icons.AutoMirrored.Filled.Notes` and `Icons.Default.Notes`.
-- **`help`** replaces both `Icons.AutoMirrored.Filled.Help` and `Icons.AutoMirrored.Filled.HelpOutline` — download `help_outline` variant separately if needed.
-- The drawable folder also holds `crucible_text_{light,dark}.png` (wordmark) — not icons, not
-  counted below.
+- **`help`** replaces both `Icons.AutoMirrored.Filled.Help` and `.HelpOutline`. Download the
+  `help_outline` variant separately if a distinct outlined form is ever needed.
 
-## Total: 110 XML files backing 130 `AppIcons` tokens (several tokens intentionally alias the same drawable) — every file is referenced by at least one token, and every token resolves to a file on disk (no orphans in either direction).
+## Counts
+
+**110 XML files backing 130 `AppIcons` tokens.** Every file is referenced by at least one token and
+every token resolves to a file on disk - no orphans in either direction. The drawable folder also
+holds `crucible_text_{light,dark}.png` (the wordmark), which is not an icon and not counted here.
+
+Verify with:
+
+```bash
+ls app/src/commonMain/composeResources/drawable/ic_*.xml | wc -l              # 110
+grep -cE '^\s+val [A-Za-z]+' app/src/commonMain/kotlin/crucible/lens/ui/common/AppIcons.kt  # 130
+```

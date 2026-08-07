@@ -3,14 +3,9 @@ package crucible.lens.ui.common
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,18 +48,25 @@ fun ResourceCard(
     onClick: () -> Unit
 ) {
     val platformCtx = getPlatformContext()
-    var menuExpanded by remember { mutableStateOf(false) }
 
     val webUrl = if (projectId != null && graphExplorerUrl.isNotBlank()) {
         if (resourceType == "dataset") "$graphExplorerUrl/$projectId/datasets/$uniqueId"
         else "$graphExplorerUrl/$projectId/samples/$uniqueId"
     } else null
 
-    Box {
+    LongPressMenuBox(
+        menu = { dismiss ->
+            CopyIdMenuItem { dismiss(); copyToClipboard(platformCtx, uniqueId) }
+            if (webUrl != null) {
+                OpenInWebMenuItem { dismiss(); openUrl(platformCtx, webUrl) }
+                ShareMenuItem { dismiss(); shareText(platformCtx, webUrl, "") }
+            }
+        }
+    ) { onLongClick ->
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .combinedClickable(onClick = onClick, onLongClick = { menuExpanded = true })
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
                 .padding(start = 56.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -92,14 +94,6 @@ fun ResourceCard(
                 IdText(text = subtitle, monospace = subtitleMonospace)
             }
             AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-        }
-
-        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-            CopyIdMenuItem { menuExpanded = false; copyToClipboard(platformCtx, uniqueId) }
-            if (webUrl != null) {
-                OpenInWebMenuItem { menuExpanded = false; openUrl(platformCtx, webUrl) }
-                ShareMenuItem { menuExpanded = false; shareText(platformCtx, webUrl, "") }
-            }
         }
     }
 }

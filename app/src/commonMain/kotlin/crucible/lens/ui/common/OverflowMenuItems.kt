@@ -62,3 +62,21 @@ fun ManageSyncedProjectsMenuItem(onClick: () -> Unit) {
         onClick = onClick
     )
 }
+
+@Composable
+fun ManageProjectMenuItem(onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text("Manage project") },
+        leadingIcon = { AppIcon(AppIcons.ManageMembers) },
+        onClick = onClick
+    )
+}
+
+@Composable
+fun ToggleSyncMenuItem(isSynced: Boolean, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(if (isSynced) "Stop syncing" else "Sync this project") },
+        leadingIcon = { AppIcon(if (isSynced) AppIcons.SyncPaused else AppIcons.Syncing) },
+        onClick = onClick
+    )
+}

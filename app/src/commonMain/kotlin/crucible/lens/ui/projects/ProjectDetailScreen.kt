@@ -573,8 +573,12 @@ private fun JoinRequestDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { AppIcon(AppIcons.PersonAdd) },
-        title = { Text("Request to join") },
+        title = {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                AppIcon(AppIcons.PersonAdd)
+                Text("Request to join")
+            }
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(

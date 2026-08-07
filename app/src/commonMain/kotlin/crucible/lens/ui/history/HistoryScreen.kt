@@ -22,8 +22,10 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.platform.getPlatformContext
+import crucible.lens.ui.common.ConfirmationDialog
 import crucible.lens.ui.common.CopyIdMenuItem
 import crucible.lens.ui.common.IdText
+import crucible.lens.ui.common.LongPressMenuBox
 import crucible.lens.ui.common.OpenInWebMenuItem
 import crucible.lens.ui.common.ShareMenuItem
 import crucible.lens.platform.copyToClipboard
@@ -59,20 +61,14 @@ fun HistoryScreen(
     }
 
     if (showClearConfirm) {
-        AlertDialog(
-            onDismissRequest = { showClearConfirm = false },
-            icon = { AppIcon(AppIcons.ClearAll) },
-            title = { Text("Clear history") },
-            text = { Text("Remove all ${history.size} items from your browsing history?") },
-            confirmButton = {
-                Button(
-                    onClick = { showClearConfirm = false; onClearHistory() },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) { Text("Clear all") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearConfirm = false }) { Text("Cancel") }
-            }
+        ConfirmationDialog(
+            icon = AppIcons.ClearAll,
+            title = "Clear history?",
+            text = "Remove all ${history.size} items from your browsing history?",
+            confirmLabel = "Clear all",
+            isDestructive = true,
+            onConfirm = { showClearConfirm = false; onClearHistory() },
+            onDismiss = { showClearConfirm = false }
         )
     }
 
@@ -159,7 +155,6 @@ private fun HistoryCard(
 ) {
     val platformContext = getPlatformContext()
     val repository = koinInject<CrucibleRepository>()
-    var menuExpanded by remember { mutableStateOf(false) }
 
     // Best-effort cache lookups for display enrichment
     val cached = remember(item.uuid) { repository.getCachedResource(item.uuid) }
@@ -190,7 +185,15 @@ private fun HistoryCard(
         else "$graphExplorerUrl/$projectId/sample-graph/${item.uuid}"
     } else null
 
-    Box {
+    LongPressMenuBox(
+        menu = { dismiss ->
+            CopyIdMenuItem { dismiss(); copyToClipboard(platformContext, item.uuid, "ID") }
+            if (webUrl != null) {
+                OpenInWebMenuItem { dismiss(); openUrl(platformContext, webUrl) }
+                ShareMenuItem { dismiss(); shareText(platformContext, webUrl, item.name) }
+            }
+        }
+    ) { onLongClick ->
         ListItem(
             headlineContent = {
                 Text(
@@ -224,19 +227,8 @@ private fun HistoryCard(
                 }
             },
             trailingContent = { AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp)) },
-            modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = { menuExpanded = true })
+            modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
         )
-
-        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-            CopyIdMenuItem {
-                menuExpanded = false
-                copyToClipboard(platformContext, item.uuid, "ID")
-            }
-            if (webUrl != null) {
-                OpenInWebMenuItem { menuExpanded = false; openUrl(platformContext, webUrl) }
-                ShareMenuItem { menuExpanded = false; shareText(platformContext, webUrl, item.name) }
-            }
-        }
     }
 }
 

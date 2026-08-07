@@ -6,6 +6,7 @@ import crucible.lens.platform.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -39,6 +40,10 @@ import crucible.lens.data.util.matchesSearch
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.RefreshMenuItem
 import crucible.lens.ui.common.ManageSyncedProjectsMenuItem
+import crucible.lens.ui.common.ManageProjectMenuItem
+import crucible.lens.ui.common.ToggleSyncMenuItem
+import crucible.lens.ui.common.CopyIdMenuItem
+import crucible.lens.ui.common.LongPressMenuBox
 import crucible.lens.platform.showToast
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadingContent
@@ -67,6 +72,7 @@ fun ProjectsListScreen(
     onToggleSync: (String) -> Unit = {},
     onManageSyncedProjects: () -> Unit = {},
     onCreateProject: () -> Unit = {},
+    onManageProject: (String) -> Unit = {},
     currentUserOrcid: String? = null,
 ) {
     val platformContext = getPlatformContext()
@@ -157,6 +163,56 @@ fun ProjectsListScreen(
         }
 
     }
+
+    // Use real projects if available, otherwise convert persistent summaries
+    val allProjects = (loadState as? LoadState.Success)?.data ?: emptyList()
+
+    // Search does per-project cache lookups and scans dataset metadata - expensive for many
+    // synced projects, so memoize it instead of re-scanning on every recomposition (e.g. every
+    // keystroke). Computed here rather than inline inside the LazyColumn below because that
+    // builder's content lambda (`LazyListScope.() -> Unit`) isn't itself a composable scope, so
+    // `remember` can't be called from inside it - only from `item {}`/`stickyHeader {}` blocks.
+    // `projectCounts` doubles as a "the cache this reads from just got new project data" signal -
+    // it's updated the same moment fetchProjectData populates the sample/dataset cache in the
+    // preload effect above, so results still improve as background preload completes rather than
+    // going stale until searchQuery changes again.
+    val filteredProjects = remember(allProjects, searchQuery, projectCounts) {
+        if (searchQuery.isBlank()) {
+            allProjects
+        } else {
+            allProjects.filter { project ->
+                // Search in project properties
+                val matchesProject = project.title?.contains(searchQuery, ignoreCase = true) == true ||
+                    project.projectId.contains(searchQuery, ignoreCase = true) ||
+                    project.organization?.contains(searchQuery, ignoreCase = true) == true ||
+                    project.lead?.email?.contains(searchQuery, ignoreCase = true) == true
+
+                // Search in cached samples
+                val matchesSamples = repository.getCachedProjectSamples(project.projectId)
+                    ?.any { it.matchesSearch(searchQuery) } == true
+
+                // Search in cached datasets (including metadata)
+                val matchesDatasets = repository.getCachedProjectDatasets(project.projectId)
+                    ?.any { it.matchesSearch(searchQuery) } == true
+
+                matchesProject || matchesSamples || matchesDatasets
+            }
+        }
+    }
+    // Cheap bookkeeping (sort/pin/pending-unsync), unlike the search above - recomputed on every
+    // recomposition is fine since it's just comparisons over the already-filtered project list.
+    val syncedProjectsList = filteredProjects
+        .filter { it.projectId in syncedProjects && pendingUnsync[it.projectId] != true }
+        .applySortState(
+            sortState,
+            name = { title?.lowercase() ?: projectId.lowercase() },
+            mfid = { projectId },
+            date = { createdAt ?: "" }
+        )
+        // Pinned always float to top regardless of sort
+        .sortedByDescending { it.projectId in pinnedProjects }
+    val unsyncedProjectsList = filteredProjects
+        .filter { it.projectId !in syncedProjects }
 
     AppScaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -301,45 +357,6 @@ fun ProjectsListScreen(
                             }
                         }
                         else -> {
-                            // Use real projects if available, otherwise convert persistent summaries
-                            val allProjects = (loadState as? LoadState.Success)?.data ?: emptyList()
-
-                            // Filter projects based on search query (includes project, samples, and datasets with metadata)
-                            val filteredProjects = if (searchQuery.isBlank()) {
-                                allProjects
-                            } else {
-                                allProjects.filter { project ->
-                                    // Search in project properties
-                                    val matchesProject = project.title?.contains(searchQuery, ignoreCase = true) == true ||
-                                        project.projectId.contains(searchQuery, ignoreCase = true) ||
-                                        project.organization?.contains(searchQuery, ignoreCase = true) == true ||
-                                        project.lead?.email?.contains(searchQuery, ignoreCase = true) == true
-
-                                    // Search in cached samples
-                                    val matchesSamples = repository.getCachedProjectSamples(project.projectId)
-                                        ?.any { it.matchesSearch(searchQuery) } == true
-
-                                    // Search in cached datasets (including metadata)
-                                    val matchesDatasets = repository.getCachedProjectDatasets(project.projectId)
-                                        ?.any { it.matchesSearch(searchQuery) } == true
-
-                                    matchesProject || matchesSamples || matchesDatasets
-                                }
-                            }
-
-                            val syncedProjectsList = filteredProjects
-                                .filter { it.projectId in syncedProjects && pendingUnsync[it.projectId] != true }
-                                .applySortState(
-                                    sortState,
-                                    name = { title?.lowercase() ?: projectId.lowercase() },
-                                    mfid = { projectId },
-                                    date = { createdAt ?: "" }
-                                )
-                                // Pinned always float to top regardless of sort
-                                .sortedByDescending { it.projectId in pinnedProjects }
-                            val unsyncedProjectsList = filteredProjects
-                                .filter { it.projectId !in syncedProjects }
-
                             // Show message when search returns no results
                             if (searchQuery.isNotBlank() && filteredProjects.isEmpty()) {
                                 item(key = "__no_search_results__") {
@@ -419,7 +436,9 @@ fun ProjectsListScreen(
                                             onTogglePin = {
                                                 showToast(platformContext, if (project.projectId in pinnedProjects) "Project unpinned" else "Project pinned")
                                                 onTogglePin(project.projectId)
-                                            }
+                                            },
+                                            onManage = { onManageProject(project.projectId) },
+                                            onToggleSyncAction = { onToggleSync(project.projectId) }
                                         )
                                     }
                                     }
@@ -460,7 +479,9 @@ fun ProjectsListScreen(
                                                     onClick = { onProjectClick(project.projectId) },
                                                     isPinned = false,
                                                     onTogglePin = {},
-                                                    isSynced = false
+                                                    isSynced = false,
+                                                    onManage = { onManageProject(project.projectId) },
+                                                    onToggleSyncAction = { onToggleSync(project.projectId) }
                                                 )
                                             }
                                         }
@@ -508,6 +529,7 @@ fun ProjectsListScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ProjectCard(
     project: Project,
@@ -515,61 +537,72 @@ private fun ProjectCard(
     onClick: () -> Unit,
     isPinned: Boolean = false,
     onTogglePin: () -> Unit = {},
-    isSynced: Boolean = true
+    isSynced: Boolean = true,
+    onManage: () -> Unit = {},
+    onToggleSyncAction: () -> Unit = {}
 ) {
     // Only show ID when it differs from the display name
     val showId = project.title != null && project.title != project.projectId
     // Only ever non-null/non-zero for projects the caller leads — DataSyncManager's preload
     // scopes this fetch to led projects, so a non-lead's cache entry for this id is just absent.
     val repository = koinInject<CrucibleRepository>()
+    val platformCtx = getPlatformContext()
     val pendingRequestCount by repository.observePendingJoinRequestCount(project.projectId)
         .collectAsStateWithLifecycle(initialValue = repository.getCachedPendingJoinRequestCount(project.projectId))
-    ListItem(
-        headlineContent = {
-            Text(
-                text = project.title ?: project.projectId,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        },
-        supportingContent = if (showId) {
-            { IdText(project.projectId, modifier = Modifier.padding(start = 4.dp)) }
-        } else null,
-        leadingContent = {
-            NotificationDot(count = pendingRequestCount) {
-                AppIcon(AppIcons.Project,
-                    tint = MaterialTheme.colorScheme.primary
+    LongPressMenuBox(
+        menu = { dismiss ->
+            ManageProjectMenuItem { dismiss(); onManage() }
+            ToggleSyncMenuItem(isSynced) { dismiss(); onToggleSyncAction() }
+            CopyIdMenuItem { dismiss(); copyToClipboard(platformCtx, project.projectId) }
+        }
+    ) { onLongClick ->
+        ListItem(
+            headlineContent = {
+                Text(
+                    text = project.title ?: project.projectId,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-            }
-        },
-        trailingContent = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (isSynced) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
-                        CountChip(icon = AppIcons.Sample, count = counts?.first, loading = counts?.first == null)
-                        CountChip(icon = AppIcons.Dataset, count = counts?.second, loading = counts?.second == null)
+            },
+            supportingContent = if (showId) {
+                { IdText(project.projectId, modifier = Modifier.padding(start = 4.dp)) }
+            } else null,
+            leadingContent = {
+                NotificationDot(count = pendingRequestCount) {
+                    AppIcon(AppIcons.Project,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            },
+            trailingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (isSynced) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
+                            CountChip(icon = AppIcons.Sample, count = counts?.first, loading = counts?.first == null)
+                            CountChip(icon = AppIcons.Dataset, count = counts?.second, loading = counts?.second == null)
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
+                        IconButton(onClick = onTogglePin, modifier = Modifier.size(40.dp)) {
+                            AppIcon(AppIcons.Pinned, filled = isPinned,
+                                modifier = Modifier.size(20.dp),
+                                tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (!isSynced) {
+                            AppIcon(AppIcons.SyncPaused,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
-                    IconButton(onClick = onTogglePin, modifier = Modifier.size(40.dp)) {
-                        AppIcon(AppIcons.Pinned, filled = isPinned,
-                            modifier = Modifier.size(20.dp),
-                            tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (!isSynced) {
-                        AppIcon(AppIcons.SyncPaused,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                }
-            }
-        },
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
-    )
+            },
+            modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick)
+        )
+    }
 }
 
 @Composable

@@ -27,6 +27,7 @@ import crucible.lens.data.util.formatDateTime
 import crucible.lens.data.util.userDisplayName
 import crucible.lens.data.util.userSortKey
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.ConfirmationDialog
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.LoadingContent
@@ -62,32 +63,26 @@ fun ManageProjectScreen(
     if (pendingRemove != null) {
         val user = pendingRemove!!
         val displayName = userDisplayName(user)
-        AlertDialog(
-            onDismissRequest = { viewModel.cancelRemove() },
-            icon = { AppIcon(AppIcons.PersonRemove) },
-            title = { Text("Remove member?") },
-            text = { Text("Remove $displayName from the project?") },
-            confirmButton = {
-                TextButton(onClick = { viewModel.removeMember() }) {
-                    Text("Remove", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = { TextButton(onClick = { viewModel.cancelRemove() }) { Text("Cancel") } }
+        ConfirmationDialog(
+            icon = AppIcons.PersonRemove,
+            title = "Remove member?",
+            text = "Remove $displayName from the project?",
+            confirmLabel = "Remove",
+            isDestructive = true,
+            onConfirm = { viewModel.removeMember() },
+            onDismiss = { viewModel.cancelRemove() }
         )
     }
 
     if (showLeaveDialog) {
-        AlertDialog(
-            onDismissRequest = { showLeaveDialog = false },
-            icon = { AppIcon(AppIcons.SignOut) },
-            title = { Text("Leave project?") },
-            text = { Text("You'll lose access to this project's samples and datasets.") },
-            confirmButton = {
-                TextButton(onClick = { showLeaveDialog = false; viewModel.leaveProject(onLeft = onHome) }) {
-                    Text("Leave", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = { TextButton(onClick = { showLeaveDialog = false }) { Text("Cancel") } }
+        ConfirmationDialog(
+            icon = AppIcons.SignOut,
+            title = "Leave project?",
+            text = "You'll lose access to this project's samples and datasets.",
+            confirmLabel = "Leave",
+            isDestructive = true,
+            onConfirm = { showLeaveDialog = false; viewModel.leaveProject(onLeft = onHome) },
+            onDismiss = { showLeaveDialog = false }
         )
     }
 

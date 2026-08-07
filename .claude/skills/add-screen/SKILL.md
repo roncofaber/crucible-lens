@@ -1,6 +1,6 @@
 ---
 name: add-screen
-description: Add a new feature screen to Crucible Lens — route, NavGraph entry, ViewModel, Koin registration, and scaffold. Use this whenever adding a new screen, page, or destination to the app, or when wiring up navigation to something that doesn't have a route yet, even if the user only describes the UI they want. Getting the route encoding or the Koin registration wrong fails at runtime, not at compile time, so follow the wiring order here rather than pattern-matching from one existing screen.
+description: Add a new feature screen to Crucible Lens - route, NavGraph entry, ViewModel, Koin registration, and scaffold. Use this whenever adding a new screen, page, or destination to the app, or when wiring up navigation to something that doesn't have a route yet, even if the user only describes the UI they want. Getting the route encoding or the Koin registration wrong fails at runtime, not at compile time, so follow the wiring order here rather than pattern-matching from one existing screen.
 ---
 
 # Adding a screen
@@ -8,9 +8,9 @@ description: Add a new feature screen to Crucible Lens — route, NavGraph entry
 A new screen touches five files. The two failure modes that matter both compile cleanly and break at
 runtime, so they are called out where they occur.
 
-Work in this order — each step depends on the previous one existing.
+Work in this order - each step depends on the previous one existing.
 
-## 1. Route — `ui/navigation/Screen.kt`
+## 1. Route - `ui/navigation/Screen.kt`
 
 Add an `object` to the `Screen` sealed class. If the route takes arguments, add a `createRoute`
 helper alongside it:
@@ -26,7 +26,7 @@ and names routinely contain `/`, `?`, `&`, `=`, and spaces; an unencoded one sil
 route that matches nothing, and navigation just does nothing with no error. The handful of existing
 routes that skip it (`ProjectDetail`) predate the helper and are not the pattern to copy.
 
-## 2. NavGraph entry — `ui/navigation/NavGraph.kt`
+## 2. NavGraph entry - `ui/navigation/NavGraph.kt`
 
 ```kotlin
 composable(Screen.WidgetDetail.route) { backStackEntry ->
@@ -36,11 +36,11 @@ composable(Screen.WidgetDetail.route) { backStackEntry ->
 ```
 
 `NavGraph` takes 5 parameters (`navController`, `deepLinkUuid`, `openScanner`, `onScannerOpened`,
-`viewModel`). `AppPreferences` is **not** one of them — obtain it internally via
+`viewModel`). `AppPreferences` is **not** one of them - obtain it internally via
 `koinInject<AppPreferences>()`, collect preference flows with `collectAsStateWithLifecycle`, and call
 `prefs.saveXxx()` directly. Don't thread it through as a parameter.
 
-## 3. ViewModel — alongside the screen, in its feature package
+## 3. ViewModel - alongside the screen, in its feature package
 
 Data loading belongs in `viewModelScope`, never in a composable. Expose one
 `StateFlow<LoadState<T>>`. `ui/instruments/InstrumentListViewModel.kt` is the canonical shape:
@@ -71,7 +71,7 @@ class WidgetListViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                _loadState.value = LoadState.Error("Connection error — check your network")
+                _loadState.value = LoadState.Error("Connection error - check your network")
             }
         }
     }
@@ -82,7 +82,7 @@ Two details that are easy to drop: re-emit `Success(current, isRefreshing = true
 list stays on screen instead of flashing a spinner, and rethrow `CancellationException` before the
 generic catch so coroutine cancellation isn't swallowed into a fake error state.
 
-## 4. Koin registration — `di/AppModule.kt`
+## 4. Koin registration - `di/AppModule.kt`
 
 ```kotlin
 viewModelOf(::WidgetListViewModel)
@@ -93,7 +93,7 @@ add it in the same change as the ViewModel. `ApiClient`, `CrucibleRepository`, a
 are `single`s already in the graph; constructor-inject whichever you need.
 
 A few leaf composables (`InstrumentPickerField`, `FilterSheet`, `AssociatedFilesCard`) call
-`koinInject<T>()` directly instead of taking a ViewModel — that's a deliberate exception for
+`koinInject<T>()` directly instead of taking a ViewModel - that's a deliberate exception for
 self-contained widgets, not the default for a screen.
 
 ## 5. Screen composable
@@ -115,12 +115,12 @@ fun WidgetListScreen(onBack: () -> Unit) {
 }
 ```
 
-Use `LoadState.isRefreshingNow` for the pull-to-refresh flag — it is true only when data is already
+Use `LoadState.isRefreshingNow` for the pull-to-refresh flag - it is true only when data is already
 loaded *and* a refresh is in flight, which is what keeps the initial load from rendering as a
 refresh. Don't reintroduce separate `isLoading` / `isRefreshing` booleans.
 
 For a detail screen whose title is an entity name rather than a static label, use
-`CollapsingAppTopBar` instead of `AppTopBar` — see `dev/style.md`'s "Collapsing top bar" section for
+`CollapsingAppTopBar` instead of `AppTopBar` - see `dev/style.md`'s "Collapsing top bar" section for
 the required `scrollBehavior` and nested-scroll wiring, which is order-sensitive.
 
 ## Before you finish
@@ -128,7 +128,7 @@ the required `scrollBehavior` and nested-scroll wiring, which is order-sensitive
 - Icons via `AppIcon(AppIcons.X)`, never `Icon(Icons.Default.*)`
 - Shapes via `MaterialTheme.shapes.X`, never a hardcoded `RoundedCornerShape(N.dp)`
 - Animation specs from `ui/common/AppAnimations.kt`, never an inline tween
-- Add a `CHANGELOG.md` entry under `## [Unreleased]` — a new screen is user-visible
+- Add a `CHANGELOG.md` entry under `## [Unreleased]` - a new screen is user-visible
 - Compile: `JAVA_HOME="${JAVA_HOME:-$HOME/software/android-studio/jbr}" ./gradlew :composeApp:compileAndroidMain`
 
 Deeper reference: `dev/architecture.md` (navigation routes, DI, ViewModels) and `dev/style.md`

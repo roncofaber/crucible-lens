@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+- Long-press a project in the list to manage it, toggle sync, or copy its ID
+
+### Changed
+- New installs now default to the Cerulean accent color instead of Carmine
+- Confirmation dialogs are consistently phrased as questions, with the icon beside the title
+
+### Fixed
+- Typing in the Projects search field no longer lags with many synced projects
+
 ## [0.8.0] – 2026-08-06
 
 Create projects directly in the app, a redesigned collapsing header for project and instrument screens, search fields that confirm a match instead of staying plain text, and new accent color/contrast choices, plus a large batch of UI polish and bug fixes.

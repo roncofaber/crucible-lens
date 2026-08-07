@@ -5,6 +5,7 @@ import crucible.lens.ui.common.AppIcons
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.api.ApiResult
@@ -26,8 +27,12 @@ internal fun DeletionRequestDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { AppIcon(AppIcons.RequestDeletion) },
-        title = { Text("Request deletion") },
+        title = {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                AppIcon(AppIcons.RequestDeletion)
+                Text("Request deletion")
+            }
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(

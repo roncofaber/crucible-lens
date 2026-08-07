@@ -46,6 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import crucible.lens.data.model.Project
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.ConfirmationDialog
 import crucible.lens.ui.common.NotificationDot
 import crucible.lens.ui.common.TaglineEnterSpec
 import crucible.lens.ui.common.TaglineExitSpec
@@ -494,37 +495,29 @@ private fun HomePinnedProjects(
         pinnedInstrumentList.find { it.uniqueId == id }?.instrumentName ?: id
     }
     if (pendingProjectName != null) {
-        AlertDialog(
-            onDismissRequest = { pendingUnpinProjectId = null },
-            icon = { AppIcon(AppIcons.RemovePin) },
-            title = { Text("Unpin project?") },
-            text = { Text("Remove \"$pendingProjectName\" from pinned items?") },
-            confirmButton = {
-                Button(onClick = {
-                    onTogglePinnedProject(pendingUnpinProjectId!!)
-                    pendingUnpinProjectId = null
-                }) { Text("Unpin") }
+        ConfirmationDialog(
+            icon = AppIcons.RemovePin,
+            title = "Unpin project?",
+            text = "Remove \"$pendingProjectName\" from pinned items?",
+            confirmLabel = "Unpin",
+            onConfirm = {
+                onTogglePinnedProject(pendingUnpinProjectId!!)
+                pendingUnpinProjectId = null
             },
-            dismissButton = {
-                TextButton(onClick = { pendingUnpinProjectId = null }) { Text("Cancel") }
-            }
+            onDismiss = { pendingUnpinProjectId = null }
         )
     }
     if (pendingInstrumentName != null) {
-        AlertDialog(
-            onDismissRequest = { pendingUnpinInstrumentId = null },
-            icon = { AppIcon(AppIcons.RemovePin) },
-            title = { Text("Unpin instrument?") },
-            text = { Text("Remove \"$pendingInstrumentName\" from pinned items?") },
-            confirmButton = {
-                Button(onClick = {
-                    onTogglePinnedInstrument(pendingUnpinInstrumentId!!)
-                    pendingUnpinInstrumentId = null
-                }) { Text("Unpin") }
+        ConfirmationDialog(
+            icon = AppIcons.RemovePin,
+            title = "Unpin instrument?",
+            text = "Remove \"$pendingInstrumentName\" from pinned items?",
+            confirmLabel = "Unpin",
+            onConfirm = {
+                onTogglePinnedInstrument(pendingUnpinInstrumentId!!)
+                pendingUnpinInstrumentId = null
             },
-            dismissButton = {
-                TextButton(onClick = { pendingUnpinInstrumentId = null }) { Text("Cancel") }
-            }
+            onDismiss = { pendingUnpinInstrumentId = null }
         )
     }
 
@@ -738,8 +731,12 @@ private fun HelpSection(icon: AppIconToken, title: String, description: String) 
 private fun EasterEggDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { AppIcon(AppIcons.AiFeature, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp)) },
-        title = { Text("Loading Messages") },
+        title = {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                AppIcon(AppIcons.AiFeature, tint = MaterialTheme.colorScheme.primary)
+                Text("Loading Messages")
+            }
+        },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(

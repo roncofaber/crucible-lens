@@ -59,7 +59,7 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         const val THEME_MODE_SYSTEM = "system"
         const val THEME_MODE_LIGHT = "light"
         const val THEME_MODE_DARK = "dark"
-        const val DEFAULT_ACCENT_COLOR = "carmine"
+        const val DEFAULT_ACCENT_COLOR = "cerulean"
         const val DEFAULT_ACCENT_CONTRAST = "standard"
 
         private val profileJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true }

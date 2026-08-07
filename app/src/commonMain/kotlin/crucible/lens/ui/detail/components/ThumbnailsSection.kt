@@ -1,6 +1,7 @@
 package crucible.lens.ui.detail.components
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
+import crucible.lens.ui.common.ConfirmationDialog
 
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -26,19 +27,14 @@ internal fun ThumbnailsSection(
         var showDeleteDialog by remember { mutableStateOf(false) }
 
         if (showDeleteDialog && thumbnail.id >= 0) {
-            AlertDialog(
-                onDismissRequest = { showDeleteDialog = false },
-                icon = { AppIcon(AppIcons.RequestDeletion) },
-                title = { Text("Delete thumbnail?") },
-                text = { Text("This thumbnail will be permanently removed from the dataset.") },
-                confirmButton = {
-                    TextButton(onClick = { showDeleteDialog = false; onDelete(thumbnail.id) }) {
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
-                }
+            ConfirmationDialog(
+                icon = AppIcons.RequestDeletion,
+                title = "Delete thumbnail?",
+                text = "This thumbnail will be permanently removed from the dataset.",
+                confirmLabel = "Delete",
+                isDestructive = true,
+                onConfirm = { showDeleteDialog = false; onDelete(thumbnail.id) },
+                onDismiss = { showDeleteDialog = false }
             )
         }
 

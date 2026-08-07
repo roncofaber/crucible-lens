@@ -27,6 +27,7 @@ import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.ConfirmationDialog
 import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.StandardSizeAnim
 import crucible.lens.ui.common.UserAvatar
@@ -91,19 +92,14 @@ fun AccountScreen(
     LaunchedEffect(currentApiKey) { viewModel.loadProfile() }
 
     if (showSignOutDialog) {
-        AlertDialog(
-            onDismissRequest = { showSignOutDialog = false },
-            icon = { AppIcon(AppIcons.SignOut) },
-            title = { Text("Sign out?") },
-            text = { Text("You will need to sign in again to access Crucible.") },
-            confirmButton = {
-                TextButton(onClick = { showSignOutDialog = false; viewModel.signOut() }) {
-                    Text("Sign out", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSignOutDialog = false }) { Text("Cancel") }
-            }
+        ConfirmationDialog(
+            icon = AppIcons.SignOut,
+            title = "Sign out?",
+            text = "You will need to sign in again to access Crucible.",
+            confirmLabel = "Sign out",
+            isDestructive = true,
+            onConfirm = { showSignOutDialog = false; viewModel.signOut() },
+            onDismiss = { showSignOutDialog = false }
         )
     }
 
