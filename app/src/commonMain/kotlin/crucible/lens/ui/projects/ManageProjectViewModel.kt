@@ -120,7 +120,11 @@ class ManageProjectViewModel(
         _editState.value = ProjectEditState.Editing(
             title = loaded.project.title ?: "",
             organization = loaded.project.organization ?: "",
-            leadUsername = loaded.project.lead?.username ?: ""
+            leadUsername = loaded.project.lead?.username ?: "",
+            // Seeded with the current lead, not emptyList() - SearchPickerField derives "resolved"
+            // by matching leadUsername against leadSearch, so an empty list here would render the
+            // existing lead as an unresolved/not-found field the moment editing starts.
+            leadSearch = listOfNotNull(loaded.project.lead)
         )
     }
 
@@ -146,7 +150,10 @@ class ManageProjectViewModel(
 
     fun selectLeadUser(user: User) {
         leadSearchJob?.cancel()
-        updateEditDraft { it.copy(leadUsername = user.username ?: "", leadSearch = emptyList(), isLeadSearching = false) }
+        // Keeps the picked user as a singleton list, not emptyList() - SearchPickerField derives
+        // "resolved" by matching the current query against `results`, so clearing it would
+        // immediately un-resolve the field right after picking.
+        updateEditDraft { it.copy(leadUsername = user.username ?: "", leadSearch = listOf(user), isLeadSearching = false) }
     }
 
     fun saveProject() {

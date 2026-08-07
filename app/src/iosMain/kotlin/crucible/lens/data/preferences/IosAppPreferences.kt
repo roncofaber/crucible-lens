@@ -178,8 +178,8 @@ class IosAppPreferences : AppPreferences {
         settings.remove("user_profile"); _userProfile.value = null
     }
 
-    override suspend fun addToHistory(uuid: String, name: String, resourceType: String?) {
-        val updated = (listOf(HistoryItem(uuid, name, Clock.System.now().toEpochMilliseconds(), resourceType)) +
+    override suspend fun addToHistory(uuid: String, name: String, resourceType: String?, projectId: String?) {
+        val updated = (listOf(HistoryItem(uuid, name, Clock.System.now().toEpochMilliseconds(), resourceType, projectId)) +
             _resourceHistory.value.filter { it.uuid != uuid }).take(20)
         settings.putString("resource_history", updated.encodeHistory())
         _resourceHistory.value = updated
@@ -213,10 +213,15 @@ class IosAppPreferences : AppPreferences {
     private fun String.decodeHistory(): List<HistoryItem> =
         split(",").mapNotNull { entry ->
             val parts = entry.split("|||")
-            if (parts.size >= 3) HistoryItem(parts[0], parts[1], parts[2].toLongOrNull() ?: 0L, parts.getOrNull(3)?.ifBlank { null })
-            else null
+            if (parts.size >= 3) HistoryItem(
+                uuid = parts[0],
+                name = parts[1],
+                timestamp = parts[2].toLongOrNull() ?: 0L,
+                resourceType = parts.getOrNull(3)?.ifBlank { null },
+                projectId = parts.getOrNull(4)?.ifBlank { null }
+            ) else null
         }
 
     private fun List<HistoryItem>.encodeHistory(): String =
-        joinToString(",") { "${it.uuid}|||${it.name}|||${it.timestamp}|||${it.resourceType ?: ""}" }
+        joinToString(",") { "${it.uuid}|||${it.name}|||${it.timestamp}|||${it.resourceType ?: ""}|||${it.projectId ?: ""}" }
 }

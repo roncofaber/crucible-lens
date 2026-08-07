@@ -119,7 +119,7 @@ fun HistoryScreen(
             if (history.isEmpty()) {
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(32.dp).align(Alignment.Center),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(32.dp),
@@ -164,8 +164,12 @@ private fun HistoryCard(
     // Best-effort cache lookups for display enrichment
     val cached = remember(item.uuid) { repository.getCachedResource(item.uuid) }
     val resourceType = remember(item.uuid) { repository.getCachedResourceType(item.uuid) }
-    val projectId = remember(cached) {
-        when (cached) {
+    // item.projectId is recorded directly when a history entry is created (see onSaveToHistory in
+    // NavGraph.kt), so it's reliable regardless of whether the resource is still in the short-lived
+    // resource cache by the time History renders. Falls back to the old cache-derived lookup only
+    // for entries recorded before this field existed.
+    val projectId = remember(item.projectId, cached) {
+        item.projectId ?: when (cached) {
             is Sample -> cached.projectId
             is Dataset -> cached.projectId
             else -> null
@@ -203,14 +207,22 @@ private fun HistoryCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(formatRelativeTime(item.timestamp), style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        IdText(item.uuid, modifier = Modifier.padding(start = 8.dp))
-                    }
+                    IdText(item.uuid)
                 }
             },
-            leadingContent = { AppIcon(icon, tint = MaterialTheme.colorScheme.primary) },
+            // Time sits under the icon rather than sharing the ID's line - frees the supporting
+            // content to a single consistent line and keeps the relative time visible without
+            // competing with the ID for width.
+            leadingContent = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    AppIcon(icon, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        formatRelativeTime(item.timestamp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
             trailingContent = { AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp)) },
             modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = { menuExpanded = true })
         )

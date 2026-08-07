@@ -261,58 +261,60 @@ fun ProjectDetailScreen(
                     val lead = project?.lead
                     val org = project?.organization?.takeIf { it.isNotBlank() }
                     val memberCount = members?.size
-                    if (lead != null) {
-                        val leadIdentifier = lead.username ?: lead.uniqueId
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = if (leadIdentifier != null) Modifier.clickable { onUserClick(leadIdentifier) } else Modifier
-                        ) {
-                            // The lead outranks organization/member-count, so it takes bodyMedium
-                            // on onSurface while they stay bodySmall/onSurfaceVariant. The icon
-                            // keeps the primary tint: it is now the only thing marking this row as
-                            // tappable, since the name itself is no longer accent-coloured.
-                            AppIcon(AppIcons.Person, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                            Text(userDisplayName(lead), style = MaterialTheme.typography.bodyMedium)
+                    // Byline: lead + org on one line, matching GitHub's "by owner · org" pattern
+                    // rather than each getting its own centered row. The lead is the only tappable
+                    // part of this line, so it alone stays primary - org shares the block's plain
+                    // onSecondaryContainer, hierarchy between this and the line below is carried by
+                    // type scale (bodyMedium here, bodySmall below), not by introducing more colours.
+                    if (lead != null || org != null) {
+                        val leadIdentifier = lead?.let { it.username ?: it.uniqueId }
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (lead != null) {
+                                Text(
+                                    userDisplayName(lead),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = if (leadIdentifier != null) Modifier.clickable { onUserClick(leadIdentifier) } else Modifier
+                                )
+                            }
+                            if (lead != null && org != null) {
+                                Text("·", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            }
+                            if (org != null) {
+                                Text(org, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            }
                         }
                     }
-                    if (org != null || memberCount != null || !isSynced) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (org != null) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    AppIcon(AppIcons.Business, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(org, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                            if (org != null && memberCount != null) {
-                                Text("·", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+                    if (memberCount != null || !isSynced) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (memberCount != null) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    AppIcon(AppIcons.Team, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(if (memberCount == 1) "1 member" else "$memberCount members", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    AppIcon(AppIcons.Team, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                                    Text(if (memberCount == 1) "1 member" else "$memberCount members", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                                 }
                             }
                             if (!isSynced) {
-                                if (org != null || memberCount != null) {
-                                    Text("·", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (memberCount != null) {
+                                    Text("·", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    AppIcon(AppIcons.SyncPaused, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("Not syncing", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    AppIcon(AppIcons.SyncPaused, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                                    Text("Not syncing", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                                 }
                             }
                         }
                     }
                     // Least essential identity field, so it's last - the shared IdText style
-                    // (monospace, dimmed) used by every other machine ID in the app, not the
-                    // sans-serif prose used for org/members/sync-status above. Tap to copy,
-                    // matching InstrumentDetailScreen's overflow-menu Copy ID action for the same
-                    // purpose.
-                    IdText(text = projectId, modifier = Modifier.clickable { copyToClipboard(ctx, projectId) })
+                    // (monospace) used by every other machine ID in the app, not the sans-serif
+                    // prose used for the byline/member-count above. Coloured onSecondaryContainer
+                    // to match this header rather than IdText's default onSurfaceVariant, which
+                    // only pairs safely with the `surface` family. Tap to copy, matching
+                    // InstrumentDetailScreen's overflow-menu Copy ID action for the same purpose.
+                    IdText(
+                        text = projectId,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.clickable { copyToClipboard(ctx, projectId) }
+                    )
                 },
                 actions = {
                     IconButton(onClick = onTogglePin) {

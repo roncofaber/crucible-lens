@@ -47,9 +47,15 @@ val ListRowDividerInset = 72.dp
 data class GroupByOption(val label: String, val selected: Boolean, val onSelect: () -> Unit)
 
 /**
- * A [ResourceCard] plus its trailing divider — the pair that makes up one row in every
+ * A [ResourceCard] with an optional leading divider — the pair that makes up one row in every
  * sample/dataset list. Repeating the two separately is how the 72dp inset ended up copy-pasted
  * eight times.
+ *
+ * The divider is *leading*, not trailing: pass `showDivider = index > 0` from an `itemsIndexed`
+ * call so every row draws it except the first in its group. That leaves each group's own tonal
+ * boundary (its `SectionHeader`) as the only separator at either end — a trailing divider on the
+ * last row would collide with that boundary, and because the divider is inset while the header is
+ * full-bleed, the two together read as a broken, stepped double line instead of one clean edge.
  */
 @Composable
 fun ResourceRow(
@@ -62,8 +68,12 @@ fun ResourceRow(
     graphExplorerUrl: String = "",
     projectId: String? = null,
     resourceType: String = "sample",
+    showDivider: Boolean = true,
     onClick: () -> Unit
 ) {
+    if (showDivider) {
+        HorizontalDivider(modifier = Modifier.padding(start = ListRowDividerInset))
+    }
     ResourceCard(
         title = title,
         subtitle = subtitle,
@@ -76,7 +86,6 @@ fun ResourceRow(
         resourceType = resourceType,
         onClick = onClick
     )
-    HorizontalDivider(modifier = Modifier.padding(start = ListRowDividerInset))
 }
 
 /**

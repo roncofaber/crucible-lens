@@ -61,7 +61,7 @@ The iOS entry point is `iosMain/App.kt` (called via `MainViewController.kt` → 
 | Feature | Android | iOS |
 |---|---|---|
 | Preferences persistence | DataStore Preferences (reactive, file-backed) | NSUserDefaults via `multiplatform-settings` |
-| Connectivity monitoring | `ConnectivityManager.NetworkCallback` | `NWPathMonitor` |
+| Connectivity monitoring | `ConnectivityManager.NetworkCallback` | None — `ConnectivityObserver.isOnline` is hardcoded `true`, assuming iOS reconnects on its own |
 | Clipboard | `ClipboardManager` | `UIPasteboard` |
 | URL opening | `Intent.ACTION_VIEW` | `UIApplication.openURL` |
 | Share sheet | `Intent.ACTION_SEND` via chooser | `UIActivityViewController` |

@@ -44,6 +44,7 @@ sealed class Screen(val route: String) {
         fun createRoute(projectId: String? = null) =
             if (projectId != null) "create-dataset?projectId=${encodeRouteSegment(projectId)}" else "create-dataset?projectId="
     }
+    object CreateProject : Screen("create-project")
     object Instruments : Screen("instruments")
     object InstrumentDetail : Screen("instrument/{instrumentId}") {
         fun createRoute(id: String) = "instrument/${encodeRouteSegment(id)}"

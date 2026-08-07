@@ -508,6 +508,13 @@ class CrucibleApiService(
         ))
     }
 
+    // Any authenticated user can create a project naming any existing user as its lead - the
+    // server performs no authorization check here. 400 = no lead identifier resolved, 404 = the
+    // named lead doesn't exist as a user, 409 = project_id already taken.
+    suspend fun createProject(request: crucible.lens.data.model.ProjectCreateRequest): ApiResult<Project> = safeCall {
+        post("projects", request)
+    }
+
     suspend fun addProjectMember(projectId: String, username: String): ApiResult<Boolean> = safeCall {
         client.post("${baseUrl}projects/$projectId/users/0") {
             header("Authorization", "Bearer $apiKey")

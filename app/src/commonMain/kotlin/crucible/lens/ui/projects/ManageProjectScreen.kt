@@ -31,9 +31,11 @@ import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.StandardSizeAnim
+import crucible.lens.ui.common.ResolvedPicker
 import crucible.lens.ui.common.SearchPickerField
 import crucible.lens.ui.common.SearchPickerSheet
 import crucible.lens.ui.common.UserAvatar
+import crucible.lens.ui.common.UserChipLeading
 import crucible.lens.ui.common.UserIdentityRow
 import crucible.lens.ui.common.UserPickerItemContent
 import crucible.lens.ui.common.UserResultItem
@@ -283,8 +285,14 @@ private fun ProjectEditCard(
                 isSearching = draft.isLeadSearching,
                 results = draft.leadSearch,
                 onSelect = onSelectLead,
-                label = "Project lead username",
+                label = "Project lead",
                 enabled = !isSaving,
+                resolution = ResolvedPicker(
+                    keyOf = { it.username },
+                    resolvedLabel = { userDisplayName(it) },
+                    onClear = { onLeadUsernameChanged("") },
+                    resolvedLeading = { user -> UserChipLeading(user) }
+                ),
                 itemContent = { user -> UserPickerItemContent(user) }
             )
 
@@ -388,14 +396,20 @@ private fun MembersCard(
                 // participant" as the list's first row, not a separate button glued above it. Any
                 // member can add another (the API authorizes admins or project members, not just
                 // the lead — see POST /projects/{id}/users/{orcid}).
+                //
+                // Solid primary/onPrimary, not primaryContainer/primary: every real member avatar
+                // below gets a bold, per-ORCID-derived hue (see UserAvatar's orcidToColor), so a
+                // softer container/on-container pairing here read as just another muted avatar
+                // rather than a distinct action. primary/onPrimary is the same high-contrast
+                // pairing M3 uses for FABs, which is the right register for "add new."
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable(onClick = onAddMember),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(36.dp)) {
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp)) {
                         Box(contentAlignment = Alignment.Center) {
-                            AppIcon(AppIcons.PersonAdd, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                            AppIcon(AppIcons.PersonAdd, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimary)
                         }
                     }
                     Text("Add member", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)

@@ -33,7 +33,6 @@ import crucible.lens.ui.common.UserAvatar
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.theme.emphasizedTitleMedium
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun AccountScreen(
@@ -207,14 +206,14 @@ fun AccountScreen(
                                 ) {
                                     Text(
                                         "Advanced",
-                                        style = MaterialTheme.typography.emphasizedTitleMedium
+                                        style = MaterialTheme.typography.titleMedium
                                     )
                                     ExpandChevron(expanded = advancedExpanded)
                                 }
                                 if (advancedExpanded) {
                                     val apiKeyPlatformCtx = getPlatformContext()
                                     Text(
-                                        "Manually set API key (for service accounts)",
+                                        "Manually set API key",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(bottom = 8.dp)
@@ -270,7 +269,7 @@ fun AccountScreen(
                                     ) {
                                         Text(
                                             "My Join Requests (${joinRequests.size})",
-                                            style = MaterialTheme.typography.emphasizedTitleMedium
+                                            style = MaterialTheme.typography.titleMedium
                                         )
                                         ExpandChevron(expanded = joinRequestsExpanded)
                                     }

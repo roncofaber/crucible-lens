@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -157,20 +157,25 @@ fun InstrumentDetailScreen(
                     val type = instrument?.instrumentType?.takeIf { it.isNotBlank() }
                     val location = instrument?.location?.takeIf { it.isNotBlank() }
                     if (type != null || location != null) {
+                        // Type and location share one onSecondaryContainer foreground - hierarchy
+                        // with the name above is carried by type scale (bodySmall vs the header's
+                        // emphasizedTitleLarge), not a second colour, matching ProjectDetailScreen
+                        // and SectionHeader's convention. onSurfaceVariant only pairs safely with
+                        // the `surface` family, not this header's secondaryContainer.
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (type != null) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    AppIcon(AppIcons.Instrument, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(type, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    AppIcon(AppIcons.Instrument, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                                    Text(type, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                                 }
                             }
                             if (type != null && location != null) {
-                                Text("·", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("·", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                             }
                             if (location != null) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    AppIcon(AppIcons.LocationAlt, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(location, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    AppIcon(AppIcons.LocationAlt, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                                    Text(location, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                                 }
                             }
                         }
@@ -271,7 +276,7 @@ fun InstrumentDetailScreen(
                                     )
                                 }
                             } else if (groupBy == InstrumentDatasetGroupBy.NONE) {
-                                items(filteredDatasets, key = { it.uniqueId }) { dataset ->
+                                itemsIndexed(filteredDatasets, key = { _, it -> it.uniqueId }) { index, dataset ->
                                     ResourceRow(
                                         title = dataset.name,
                                         subtitle = dataset.projectId ?: "No project",
@@ -280,6 +285,7 @@ fun InstrumentDetailScreen(
                                         graphExplorerUrl = graphExplorerUrl,
                                         projectId = dataset.projectId,
                                         resourceType = "dataset",
+                                        showDivider = index > 0,
                                         onClick = { onDatasetClick(dataset.uniqueId) }
                                     )
                                 }
@@ -296,7 +302,7 @@ fun InstrumentDetailScreen(
                                         )
                                     }
                                     if (expanded) {
-                                        items(datasetsInGroup, key = { it.uniqueId }) { dataset ->
+                                        itemsIndexed(datasetsInGroup, key = { _, it -> it.uniqueId }) { index, dataset ->
                                             ResourceRow(
                                                 title = dataset.name,
                                                 subtitle = dataset.projectId ?: "No project",
@@ -305,6 +311,7 @@ fun InstrumentDetailScreen(
                                                 graphExplorerUrl = graphExplorerUrl,
                                                 projectId = dataset.projectId,
                                                 resourceType = "dataset",
+                                                showDivider = index > 0,
                                                 onClick = { onDatasetClick(dataset.uniqueId) }
                                             )
                                         }

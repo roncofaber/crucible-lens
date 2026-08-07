@@ -4,6 +4,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppTopBar
+import crucible.lens.ui.common.DiscardChangesDialog
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -35,7 +36,8 @@ fun CreateDatasetScreen(
     onBack: () -> Unit,
     onCreated: (uuid: String) -> Unit,
     onOpenMetadataEditor: () -> Unit = {},
-    onOpenFilesScreen: () -> Unit = {}
+    onOpenFilesScreen: () -> Unit = {},
+    onHome: () -> Unit = {}
 ) {
     val prefill = remember { DuplicateHolder.takeDataset() }
     var name by rememberSaveable { mutableStateOf(prefill?.name?.let { "$it (copy)" } ?: "") }
@@ -61,6 +63,13 @@ fun CreateDatasetScreen(
     val isSaving = saveState is SaveState.Saving
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Only the fields a user could have actually typed/toggled/attached - timestamp defaults to
+    // "now" on first composition, so it would always read as dirty if included here.
+    val hasUnsavedChanges = name.isNotBlank() || measurement.isNotBlank() || instrumentName.isNotBlank() ||
+        sessionName.isNotBlank() || dataType.isNotBlank() || !metadata.isNullOrEmpty() || isPublic ||
+        pendingFiles.isNotEmpty() || (initialProjectId == null && selectedProjectId != null)
+    var pendingNavigation by remember { mutableStateOf<(() -> Unit)?>(null) }
+
     LaunchedEffect(saveState) {
         when (val s = saveState) {
             is SaveState.Success -> {
@@ -80,12 +89,24 @@ fun CreateDatasetScreen(
         if (FilesHolder.isDirty) pendingFiles = FilesHolder.take()
     }
 
+    pendingNavigation?.let { action ->
+        DiscardChangesDialog(
+            onConfirm = { pendingNavigation = null; action() },
+            onDismiss = { pendingNavigation = null }
+        )
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             AppTopBar(
                 title = "New Dataset",
-                onBack = onBack
+                onBack = { if (hasUnsavedChanges) pendingNavigation = onBack else onBack() },
+                actions = {
+                    IconButton(onClick = { if (hasUnsavedChanges) pendingNavigation = onHome else onHome() }) {
+                        AppIcon(AppIcons.Home)
+                    }
+                }
             )
         }
     ) { padding ->

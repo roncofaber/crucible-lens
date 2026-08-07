@@ -17,6 +17,7 @@ import androidx.compose.ui.window.PopupProperties
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.User
+import crucible.lens.data.util.userDisplayName
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -184,38 +185,44 @@ private fun OwnerPickerField(
     onOwnerSelected: (User) -> Unit,
     onOwnerCleared: () -> Unit
 ) {
-    var query by remember { mutableStateOf("") }
+    // Seeded from ownerUsername (not "") so reopening the sheet with a previous pick starts the
+    // field already showing that value - the search this triggers on mount re-resolves it to the
+    // resolved field within one debounce window, rather than needing a separate "already
+    // resolved" branch.
+    var query by remember { mutableStateOf(ownerUsername) }
     val apiClient = koinInject<ApiClient>()
 
-    if (ownerOrcid.isNotBlank()) {
-        OutlinedTextField(
-            value = if (ownerUsername.isNotBlank()) "@$ownerUsername" else ownerOrcid,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Owner") },
-            modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { AppIcon(AppIcons.User) },
-            trailingIcon = {
-                IconButton(onClick = { query = ""; onOwnerCleared() }) {
-                    AppIcon(AppIcons.ClearInput)
-                }
-            }
-        )
-        return
-    }
-
-    val (results, isSearching) = rememberDebouncedSearchResults<User>(query = query) { q ->
+    val (liveResults, liveIsSearching) = rememberDebouncedSearchResults<User>(query = query) { q ->
         apiClient.service.searchUsers(q)
     }
+    // Selecting a user changes `query` to their own exact username, which would otherwise
+    // retrigger rememberDebouncedSearchResults' LaunchedEffect(query) and briefly flip the field
+    // back to searching before the redundant re-search confirms the same match again - visible as
+    // a flash between the resolved and editable renderings. Pinning the pick locally skips that
+    // pointless re-search entirely instead of just animating over the flash.
+    var pinned by remember { mutableStateOf<User?>(null) }
+    val isPinned = pinned?.username == query
+    val results = if (isPinned) listOf(pinned!!) else liveResults
+    val isSearching = if (isPinned) false else liveIsSearching
     SearchPickerField(
         query = query,
-        onQueryChange = { query = it },
+        onQueryChange = {
+            pinned = null
+            query = it
+            if (ownerOrcid.isNotBlank()) onOwnerCleared()
+        },
         isSearching = isSearching,
         results = results,
-        onSelect = { user -> query = ""; onOwnerSelected(user) },
+        onSelect = { user -> pinned = user; query = user.username ?: ""; onOwnerSelected(user) },
         label = "Owner",
         leadingIcon = AppIcons.Search,
         modifier = Modifier.fillMaxWidth(),
+        resolution = ResolvedPicker(
+            keyOf = { it.username },
+            resolvedLabel = { userDisplayName(it) },
+            onClear = { query = ""; onOwnerCleared() },
+            resolvedLeading = { user -> UserChipLeading(user) }
+        ),
         itemContent = { user -> UserPickerItemContent(user) }
     )
 }

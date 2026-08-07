@@ -65,6 +65,7 @@ import crucible.lens.data.model.Sample
 import crucible.lens.ui.create.DuplicateHolder
 import crucible.lens.ui.create.CreateSampleScreen
 import crucible.lens.ui.create.CreateDatasetScreen
+import crucible.lens.ui.create.CreateProjectScreen
 import crucible.lens.ui.create.AddFilesScreen
 import crucible.lens.ui.metadata.MetadataEditorScreen
 import crucible.lens.ui.metadata.MetadataHolder
@@ -539,9 +540,9 @@ fun NavGraph(
                         isRefreshing = state.isRefreshing,
                         graphExplorerUrl = graphExplorerUrl,
                         siblingGroupBy = siblingGroupBy,
-                        onSaveToHistory = { uuid, name, resourceType ->
+                        onSaveToHistory = { uuid, name, resourceType, projectId ->
                             scope.launch { prefs.saveLastVisitedResource(uuid, name) }
-                            scope.launch { prefs.addToHistory(uuid, name, resourceType) }
+                            scope.launch { prefs.addToHistory(uuid, name, resourceType, projectId) }
                         },
                         onBack = {
                             navController.popBackStack()
@@ -695,7 +696,8 @@ fun NavGraph(
                 uuid = mfid,
                 onBack = navigateBack,
                 onSaved = { navController.popBackStack() },
-                onOpenMetadataEditor = { navController.navigate(Screen.MetadataEditor.route) }
+                onOpenMetadataEditor = { navController.navigate(Screen.MetadataEditor.route) },
+                onHome = navigateHome
             )
         }
 
@@ -709,7 +711,6 @@ fun NavGraph(
             ProjectsListScreen(
                 onBack = navigateBack,
                 onHome = navigateHome,
-                onSearch = navigateSearch,
                 onProjectClick = { projectId ->
                     navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                 },
@@ -718,6 +719,7 @@ fun NavGraph(
                 syncedProjects = syncedProjects,
                 onToggleSync = { id -> scope.launch { prefs.toggleSyncedProject(id) } },
                 onManageSyncedProjects = { navController.navigate(Screen.SyncedProjects.createRoute(firstRun = false)) },
+                onCreateProject = { navController.navigate(Screen.CreateProject.route) },
                 currentUserOrcid = userOrcid
             )
         }
@@ -778,7 +780,6 @@ fun NavGraph(
             InstrumentListScreen(
                 onBack = navigateBack,
                 onHome = navigateHome,
-                onSearch = navigateSearch,
                 onInstrumentClick = { id ->
                     navController.navigate(Screen.InstrumentDetail.createRoute(id))
                 },
@@ -832,7 +833,8 @@ fun NavGraph(
                     navController.popBackStack()
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 },
-                onOpenMetadataEditor = { navController.navigate(Screen.MetadataEditor.route) }
+                onOpenMetadataEditor = { navController.navigate(Screen.MetadataEditor.route) },
+                onHome = navigateHome
             )
         }
 
@@ -849,7 +851,19 @@ fun NavGraph(
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 },
                 onOpenMetadataEditor = { navController.navigate(Screen.MetadataEditor.route) },
-                onOpenFilesScreen = { navController.navigate(Screen.AddFiles.createRoute()) }
+                onOpenFilesScreen = { navController.navigate(Screen.AddFiles.createRoute()) },
+                onHome = navigateHome
+            )
+        }
+
+        composable(Screen.CreateProject.route) {
+            CreateProjectScreen(
+                onBack = navigateBack,
+                onCreated = { projectId ->
+                    navController.popBackStack()
+                    navController.navigate(Screen.ProjectDetail.createRoute(projectId))
+                },
+                onHome = navigateHome
             )
         }
 

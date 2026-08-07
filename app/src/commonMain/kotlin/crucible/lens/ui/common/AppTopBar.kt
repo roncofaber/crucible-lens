@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -70,6 +71,11 @@ fun AppTopBar(
 // name twice at two sizes.
 private const val TITLE_HANDOVER = 0.6f
 
+// The hero icon badge's footprint - expandedContent is indented by exactly this much so its left
+// edge lines up with the title's, rather than the two reading as separately-aligned blocks.
+private val HeroIconBadgeSize = 44.dp
+private val HeroIconBadgeSpacing = 12.dp
+
 private fun expandedContentAlpha(collapsedFraction: Float): Float =
     (1f - collapsedFraction / TITLE_HANDOVER).coerceIn(0f, 1f)
 
@@ -82,6 +88,14 @@ private fun collapsedTitleAlpha(collapsedFraction: Float): Float =
  * up to 3 lines while expanded, single-line-ellipsized once collapsed; [icon] and
  * [expandedContent] (secondary metadata — lead/org/member-count for a project, type/location for
  * an instrument) render only while expanded.
+ *
+ * [expandedContainerColor]/[expandedContentColor] default to `secondaryContainer`/
+ * `onSecondaryContainer` — the shared expanded-state identity both `ProjectDetailScreen` and
+ * `InstrumentDetailScreen` use, so neither passes them explicitly. Both are still overridable
+ * together for a future screen that needs a different identity; [expandedContent]'s own text/icon
+ * colours would then need updating to pair with the new container too, since they aren't derived
+ * from it automatically — changing only the container leaves content paired with a container that
+ * never guaranteed contrast against it, only against whatever role the content colour actually is.
  *
  * **A custom implementation, not `MediumTopAppBar`/`TwoRowsTopAppBar` — deliberately.**
  * `MediumTopAppBar`'s public API exposes a single `title: @Composable () -> Unit` slot, but
@@ -131,6 +145,8 @@ fun CollapsingAppTopBar(
     navIcon: AppIconToken = AppIcons.Back,
     onTitleClick: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
+    expandedContainerColor: Color = MaterialTheme.colorScheme.secondaryContainer,
+    expandedContentColor: Color = MaterialTheme.colorScheme.onSecondaryContainer,
     expandedContent: @Composable ColumnScope.() -> Unit = {},
 ) {
     // MediumTopAppBar/TwoRowsTopAppBar normally set TopAppBarState.heightOffsetLimit themselves
@@ -153,16 +169,13 @@ fun CollapsingAppTopBar(
     // state it writes and cannot invalidate itself in a loop.
     val publishedHeightPx = remember { intArrayOf(-1) }
 
-    // Expanded = tinted `surfaceContainerHigh`, collapsed = plain `surface`, matching the page
-    // background exactly so the compact bar never reads as a differently-coloured panel once it
-    // settles. `surfaceContainerHigh` (5% primary blend) rather than the compact `surfaceContainer`
-    // (3.5%, what SectionHeader uses for in-list rows) - this hero block is the single largest,
-    // highest-emphasis container on the screen, so it earns a stronger tier of the same
-    // accent-derived family rather than an invented one-off value. The two are captured here and
-    // lerped by `collapsedFraction` inside `drawBehind` below - a deferred draw-phase read, not a
-    // composable-time one, so scrolling never recomposes this composable (same reasoning as every
-    // other collapsedFraction read in this function).
-    val expandedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    // Expanded = [expandedContainerColor] (default: `secondaryContainer`, shared by both
+    // ProjectDetailScreen and InstrumentDetailScreen), collapsed = plain `surface`, matching the
+    // page background exactly so the compact bar never reads as a differently-coloured panel once
+    // it settles. A future screen needing a different expanded identity can override this and
+    // [expandedContentColor] together so text/icons stay correctly paired. Read via `drawBehind`
+    // below - a deferred draw-phase read, not a composable-time one, so scrolling never recomposes
+    // this composable (same reasoning as every other collapsedFraction read in this function).
     val collapsedContainerColor = MaterialTheme.colorScheme.surface
     Surface(
         color = Color.Transparent,
@@ -234,26 +247,47 @@ fun CollapsingAppTopBar(
                         // breathing room belongs below the block, not shared evenly with the top.
                         .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.Start
                 ) {
+                    // The icon badge anchors the whole block the way an avatar would in a
+                    // GitHub/Linear-style header - a real focal point rather than another line of
+                    // text - while staying a static token today. A future per-project custom icon
+                    // would slot into the same badge without changing this layout.
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(HeroIconBadgeSpacing),
                         modifier = if (onTitleClick != null) Modifier.clickable(onClick = onTitleClick) else Modifier
                     ) {
-                        if (icon != null) AppIcon(icon, tint = MaterialTheme.colorScheme.primary)
+                        if (icon != null) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(HeroIconBadgeSize)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    AppIcon(icon, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(22.dp))
+                                }
+                            }
+                        }
                         Text(
                             text = name,
                             style = MaterialTheme.typography.emphasizedTitleLarge,
+                            color = expandedContentColor,
                             maxLines = 3,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.semantics { heading() }
                         )
                     }
+                    // Indented to align with the title, not the badge - the badge anchors the
+                    // title specifically, while this metadata reads as one continuous left-aligned
+                    // column beneath it (matching M3's own LargeTopAppBar, which start-aligns its
+                    // expanded title rather than centering it).
                     Column(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = if (icon != null) HeroIconBadgeSize + HeroIconBadgeSpacing else 0.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.Start
                     ) {
                         expandedContent()
                     }

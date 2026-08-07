@@ -76,8 +76,9 @@ Annotate the narrowest scope that needs it, not a blanket three-API line:
 | Info / section card (empty states, metadata blocks, error banners) | `containerColor = surfaceContainerLow`; no elevation |
 | Thumbnails block (`detail/components/ThumbnailsSection.kt`) | `cardElevation(2.dp)` |
 | Home screen's primary scan card (`HomeScreen.kt`) | `cardElevation(6.dp)` — deliberately the one prominent, "this is the main action" surface |
-| Section / group header (`SectionHeader`) | `Surface(color = surfaceContainer)` — see "Accent-derived surfaces" below |
-| Tinted accent surface (stat tiles, the count badge inside `SectionHeader`) | `Surface(color = primaryContainer)`, content `onPrimaryContainer` — no alpha; see "No custom alpha" below |
+| Section / group header (`SectionHeader`), expanded | `Surface(color = surfaceContainerHigh)`, animated — see "Accent-derived surfaces" below |
+| Section / group header (`SectionHeader`), collapsed | `Surface(color = surface)` + a leading `outlineVariant` divider — a collapsed header isn't pinning above anything, so it reads as a plain row instead of chrome |
+| Tinted accent surface (stat tiles, the count badge inside `SectionHeader`) | `Surface(color = secondaryContainer)`, content `onSecondaryContainer` — no alpha; see "No custom alpha" below |
 
 Those two elevations are the *only* `cardElevation` calls in the app — a new elevated card
 needs a reason, not a default.
@@ -371,7 +372,7 @@ Two separate mechanisms, often confused — they don't nest:
    a single `HorizontalPager(pageCount = { 2 })`. There is no `ScrollableTabRow` and no per-group
    tab anywhere in the app; the tab count never varies with the data.
 2. **Groups = sticky sections inside one `LazyColumn`.** `groupedResourceItems` (a `LazyListScope`
-   extension in `ProjectResourceLists.kt`) emits a `stickyHeader` per group (via the shared `SectionHeader` — tapping expands/collapses, state in a `rememberSaveable` `SnapshotStateMap` keyed by `groupBy`), then that group's `ResourceRow`s, capped at 50 rows with a "load more" item that bumps the cap by 50.
+   extension in `ProjectResourceLists.kt`) emits a `stickyHeader` per group (via the shared `SectionHeader` — tapping expands/collapses, state in a `rememberSaveable` `SnapshotStateMap` keyed by `groupBy`), then that group's `ResourceRow`s in full — no row cap, no "load more" item (see the pagination note below).
    Ungrouped (`GroupBy.NONE`) skips the headers and emits a flat `items(...)`.
 
 Each pager page (`SamplesList`/`DatasetsList`, both in `ProjectResourceLists.kt`) owns its own `rememberLazyListState`,
@@ -407,19 +408,22 @@ after several other approaches:
   desync from, content decisions here are unconditionally safe, *including ones that change
   height* — no thresholds to tune, no residual risk, unlike every attempt built on top of
   `MediumTopAppBar`. Structure: a fixed-height top row (nav icon + `actions`, always present,
-  matching Material3's own Medium/Large bar convention) with the collapsed single-line `name`
-  fading in via `AnimatedVisibility` inside it; below that, an `AnimatedVisibility` block holding
-  the expanded `icon` + `name` (up to 3 lines) + `expandedContent` (lead/org/member-count, or
-  type/location), which collapses away entirely once past the fraction threshold. Both
-  `AnimatedVisibility`s share the same `EffectsDefaultSpring` fade spec (per `AppAnimations.kt`
-  convention, not a bare default) so the compact name's fade-in and the expanded block's fade-out
-  animate on the same curve at the same instant — an actual crossfade, not two independently-timed
-  transitions. The expanded block's `expandVertically`/`shrinkVertically` use
-  `SpatialDefaultSizeSpring` with `expandFrom`/`shrinkTowards = Alignment.Top`, so it visually
-  retracts up into the fixed row above it instead of `expandVertically`'s bottom-anchored default.
-  `TopAppBarDefaults.MediumAppBarCollapsedHeight`/`.windowInsets` are still reused from Material3
-  for the fixed row height and status-bar insets — only the row-duplicating title mechanism was
-  the problem, not the rest of the M3 toolkit.
+  matching Material3's own Medium/Large bar convention) holding the collapsed single-line `name`;
+  below that, the expanded block (icon badge + `name`, up to 3 lines, + `expandedContent` —
+  lead/org/member-count, or type/location). **There is deliberately no `AnimatedVisibility` and no
+  animation spec anywhere in this component.** An earlier version flipped content at a
+  `collapsedFraction > 0.5f` threshold and let `AnimatedVisibility` run its own spring, which (a)
+  made the bar ignore the finger until it suddenly jumped at the halfway point, (b) ran a second
+  animation on top of the snap `exitUntilCollapsedScrollBehavior` already performs on release, and
+  (c) fed the *animating* height back into `heightOffsetLimit`, so the limit moved mid-animation and
+  could re-cross its own threshold. Every scroll-varying value (bar height, both title alphas,
+  container colour) is instead a pure function of `collapsedFraction`, read inside a
+  `layout`/`graphicsLayer`/`drawBehind` lambda so it resolves in the layout/draw phase and never
+  recomposes while scrolling — an actual continuous crossfade driven only by the finger, not two
+  independently-timed transitions. `TopAppBarDefaults.MediumAppBarCollapsedHeight`/`.windowInsets`
+  are still reused from Material3 for the fixed row height and status-bar insets — only the
+  row-duplicating title mechanism and `AnimatedVisibility` were the problem, not the rest of the M3
+  toolkit.
 - **Must manually set `scrollBehavior.state.heightOffsetLimit`** — this is the one piece of
   bookkeeping `MediumTopAppBar`/`TwoRowsTopAppBar` normally do for you during their own measure
   pass, and skipping it silently breaks scrolling entirely (not just the header — the whole list
@@ -428,22 +432,30 @@ after several other approaches:
   `exitUntilCollapsedScrollBehavior()`'s `nestedScrollConnection.onPreScroll` consumes the *entire*
   upward scroll delta itself for as long as `heightOffset` hasn't hit that limit — with an
   unbounded limit, that's forever, so the list never sees a scroll event. `CollapsingAppTopBar`
-  fixes this by measuring the expanded block's real height via `Modifier.onGloballyPositioned` on
-  its content (not the `AnimatedVisibility` wrapper — per the animation library's own
-  `EnterExitTransition.kt`, the wrapped child is always measured with the true incoming
-  constraints, so this reports a stable value throughout the collapse/expand animation, not a
-  shrinking one) and feeding it into `heightOffsetLimit` via a `SideEffect`. Any future rewrite of
-  this composable that stops calling a real M3 app bar composable needs to keep doing this.
-- **Container colour lerps `surfaceContainerHigh` (expanded) -> `surface` (collapsed)**, read via
+  fixes this by measuring the expanded block's real height in a `Modifier.layout` on its content,
+  comparing against a plain (non-snapshot) `remember`ed box holding the last published height so it
+  never reads back the same snapshot state it just wrote, and publishing straight into
+  `heightOffsetLimit` from that layout pass — **not** from a `SideEffect`, which would only run once
+  at first composition, before the block has been measured, leaving the limit at `-Float.MAX_VALUE`
+  forever. Any future rewrite of this composable that stops calling a real M3 app bar composable
+  needs to keep doing this.
+- **Container colour lerps `expandedContainerColor` (expanded) -> `surface` (collapsed)**, read via
   `drawBehind` on the wrapping `Surface` (itself `color = Color.Transparent`) so the blend is a
   draw-phase read of `collapsedFraction`, not a composable-time one - consistent with every other
-  scroll-driven value in this composable. Expanded uses a stronger tier of the same accent-derived
-  container family `SectionHeader` uses (`surfaceContainerHigh`'s 5% primary blend, vs.
-  `SectionHeader`'s compact `surfaceContainer` at 3.5%) - this hero block is the single largest,
-  highest-emphasis container on the screen, so a plain `surfaceContainer` read as too subtle to
-  register as a distinct panel. Fully collapsed always matches `surface` exactly (the same tone as
-  the page background), which is what the earlier "collapsed bar looks like a different colour than
-  the page" bug required.
+  scroll-driven value in this composable. `expandedContainerColor`/`expandedContentColor` default to
+  `secondaryContainer`/`onSecondaryContainer`, and neither `ProjectDetailScreen` nor
+  `InstrumentDetailScreen` overrides them - both detail screens share one expanded-state identity
+  rather than each inventing its own tier, matching the earlier fix that made every `SectionHeader`
+  identical across screens. Every `expandedContent` colour inside both screens' blocks (lead/org/
+  member-count/ID for a project, type/location for an instrument) is `onSecondaryContainer`
+  throughout rather than mixing in `onSurfaceVariant`, which only pairs safely with the `surface`
+  family - hierarchy between a project's lead (`bodyMedium`) and everything else (`bodySmall`) is
+  carried by type scale alone, not colour, matching `SectionHeader`'s convention. Fully collapsed
+  always matches `surface` exactly (the same tone as the page background), which is what the earlier
+  "collapsed bar looks like a different colour than the page" bug required. The two params remain
+  overridable together for a future screen that needs a different expanded identity - changing only
+  the container would leave `expandedContent`'s colours paired with a container that never
+  guaranteed contrast against them.
 - **The pin toggle moved into the top bar's `actions`** (before home/overflow — the search icon was
   dropped from this row entirely, since the inline filter field in `ResourceControlsBar` already
   covers in-screen search and the top bar was crowded), so it's
@@ -501,9 +513,23 @@ after several other approaches:
   in the header (opens the profile), same as it was in the old meta row.
 - Small inline icons in `expandedContent` (lead/org/member-count/type/location) are `14.dp`,
   matching this file's documented 14–18dp floor.
+- **Expanded layout is left-aligned with an icon badge as the anchor**, not centered — matching
+  M3's own `LargeTopAppBar`, which start-aligns its expanded title rather than centering it. The
+  `icon` renders as a circular `primary`/`onPrimary` badge (`HeroIconBadgeSize` = 44dp, same
+  container/content pairing as `ManageProjectScreen`'s "Add member" badge) beside the title, and
+  `expandedContent` is indented by the badge's footprint (`HeroIconBadgeSize + HeroIconBadgeSpacing`)
+  so its left edge lines up with the title's rather than the two reading as separately-aligned
+  blocks. This replaced an earlier centered, plain-icon layout that read as four lines of
+  same-weight centered text with no focal point. `ProjectDetailScreen` uses `AppIcons.Project` as a
+  static badge today (a future per-project custom icon would slot into the same badge unchanged);
+  `InstrumentDetailScreen` uses `AppIcons.Instrument`.
+- **`ProjectDetailScreen`'s byline consolidates lead + organization onto one line** ("Tim Kodalle ·
+  LBNL") rather than each getting its own row — the lead is the only tappable part, so it alone
+  stays `primary`; organization shares the block's plain `onSecondaryContainer`. Member count (and
+  sync status) demotes to a second, smaller line below — hierarchy between the two is carried by
+  type scale (`bodyMedium` vs `bodySmall`), not by introducing another colour.
 - Row titles and group-header titles are both 16sp and neither overrides `fontWeight` — see
-  [Typography](#typography). The separation comes from the header's `surfaceContainer` container
-  and `primary` title against the row's `surface`/`onSurface`, not from size or weight.
+  [Typography](#typography).
 - **Group headers**: both screens call the shared `SectionHeader` (`ui/common/SectionHeader.kt`)
   directly. The per-screen `GroupStickyHeader` wrappers that used to sit in front of it were
   pass-throughs and have been deleted. Don't hand-roll a group header inline, and don't
@@ -554,6 +580,44 @@ interaction, don't invent a third without a second real use case:
   it's a workflow that *contains* a picker-like fragment, not a picker itself. It stays bespoke
   (already correctly scrollable, no bug) until a second "search mixed with other controls in a
   sheet" case exists to justify generalizing that shape too.
+
+### Resolve-to-field (`SearchPickerField`'s `resolution` param)
+
+All four `SearchPickerField<T>` callers (`OwnerPickerField`/`InstrumentPickerField` in
+`FilterSheet.kt`/`InstrumentPickerField.kt`, `ManageProjectScreen.kt`'s and
+`CreateProjectScreen.kt`'s project-lead fields) resolve free-typed text to a real record — modeled
+on Gmail's recipient resolution, so a confirmed match reads as confirmed rather than as plain,
+unvalidated text that only fails at submit time.
+
+- **`ResolutionState<T>`** (`Idle`/`Resolving`/`Resolved`/`NotFound`) is derived *purely* from the
+  same `(query, results, isSearching)` triple the field already receives (`resolveSearchMatch`,
+  private to `SearchPicker.kt`) — no caller carries a dedicated "resolved" field in its own state.
+  `Resolved` fires either from tapping a dropdown suggestion or from typing the exact
+  name/username and having the debounced search confirm it.
+- **Callers must keep a just-picked item in `results` as a singleton list, not clear it to
+  `emptyList()`** — clearing would make the freshly-selected value immediately re-derive as
+  `NotFound` (empty results, no exact match) the instant it's picked. See
+  `ManageProjectViewModel`/`CreateProjectViewModel`'s `selectLeadUser`. The two
+  `rememberDebouncedSearchResults`-driven callers (`OwnerPickerField`, `InstrumentPickerField`) hit
+  the same problem from a different angle: selecting an item changes `query` to its exact value,
+  which retriggers a fresh debounced search of that same value and briefly flips the field back to
+  its searching/editable state before the redundant re-search confirms the same match again. Both
+  pin the just-picked item in a local `remember`ed var, overriding the live hook's
+  `results`/`isSearching` while `query` still matches the pin, so the field stays resolved
+  continuously instead of flashing — released the moment the user types again.
+- **Opt in via `resolution: ResolvedPicker<T>?`** (`keyOf`, `resolvedLabel`, `resolvedLeading`,
+  `onClear`). When resolved, `SearchPickerField` renders a private `ResolvedField` — a **read-only
+  `OutlinedTextField`**, not a colored pill: same `label`, same transparent background/outline as
+  every other field, `resolvedLeading` as the leading content and `resolvedLabel` as the value, with
+  a clear "×" trailing icon — instead of the editable text field entirely, not an overlay on top of
+  it. An earlier version rendered a solid `secondaryContainer` pill instead; that dropped the
+  field's label entirely (no indication of what a resolved field was) and read as an
+  error/warning banner rather than a confirmed value on any accent whose `secondaryContainer` leans
+  orange/red, so it was replaced with the plain-field approach, which has no theme-dependent fill
+  color to get wrong. `NotFound` (still editable) tints the field via `isError` (M3's own error
+  styling) and swaps the trailing icon to `AppIcons.SearchOff` (already used for "no results" empty
+  states elsewhere — no new icon needed). Every current `User`-resolving caller reuses
+  `UserChipLeading`/`userDisplayName()` for `resolvedLeading`/`resolvedLabel`.
 
 ---
 

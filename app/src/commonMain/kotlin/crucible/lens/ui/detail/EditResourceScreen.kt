@@ -4,6 +4,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppTopBar
+import crucible.lens.ui.common.DiscardChangesDialog
 import crucible.lens.platform.*
 
 import androidx.compose.foundation.layout.*
@@ -137,7 +138,8 @@ fun EditResourceScreen(
     uuid: String,
     onBack: () -> Unit,
     onSaved: () -> Unit,
-    onOpenMetadataEditor: () -> Unit = {}
+    onOpenMetadataEditor: () -> Unit = {},
+    onHome: () -> Unit = {}
 ) {
     val repository = koinInject<CrucibleRepository>()
     val resource: CrucibleResource? by repository.observeResource(uuid)
@@ -157,19 +159,37 @@ fun EditResourceScreen(
         }
     }
 
+    // Reported by SampleEditFields/DatasetEditFields (whichever is showing) by comparing their
+    // current field values against the original resource - unlike Create screens, every field
+    // here starts pre-filled, so "dirty" has to mean "differs from the original," not "non-blank."
+    var hasUnsavedChanges by remember { mutableStateOf(false) }
+    var pendingNavigation by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    pendingNavigation?.let { action ->
+        DiscardChangesDialog(
+            onConfirm = { pendingNavigation = null; action() },
+            onDismiss = { pendingNavigation = null }
+        )
+    }
+
     AppScaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             AppTopBar(
                 title = "Edit ${if (resource is Dataset) "Dataset" else "Sample"}",
-                onBack = onBack
+                onBack = { if (hasUnsavedChanges) pendingNavigation = onBack else onBack() },
+                actions = {
+                    IconButton(onClick = { if (hasUnsavedChanges) pendingNavigation = onHome else onHome() }) {
+                        AppIcon(AppIcons.Home)
+                    }
+                }
             )
         }
     ) { padding ->
         when (val r = resource) {
             null -> LoadingContent(title = "Loading", modifier = Modifier.padding(padding))
-            is Sample -> SampleEditFields(r, isSaving, editViewModel, onOpenMetadataEditor, padding)
-            is Dataset -> DatasetEditFields(r, isSaving, editViewModel, onOpenMetadataEditor, padding)
+            is Sample -> SampleEditFields(r, isSaving, editViewModel, onOpenMetadataEditor, padding, onDirtyChanged = { hasUnsavedChanges = it })
+            is Dataset -> DatasetEditFields(r, isSaving, editViewModel, onOpenMetadataEditor, padding, onDirtyChanged = { hasUnsavedChanges = it })
         }
     }
 }
@@ -182,7 +202,8 @@ private fun SampleEditFields(
     isSaving: Boolean,
     viewModel: EditResourceViewModel,
     onOpenMetadataEditor: () -> Unit,
-    padding: PaddingValues
+    padding: PaddingValues,
+    onDirtyChanged: (Boolean) -> Unit = {}
 ) {
     val repository = koinInject<CrucibleRepository>()
     val projects = remember { repository.getCachedProjects() ?: emptyList() }
@@ -193,13 +214,26 @@ private fun SampleEditFields(
     var isPublic by rememberSaveable { mutableStateOf(resource.isPublic ?: false) }
     var selectedProjectId by rememberSaveable { mutableStateOf(resource.projectId) }
     val originalMetadata = remember { resource.scientificMetadata ?: JsonObject(emptyMap()) }
+    val initialMetadata = remember { if (originalMetadata.isEmpty()) null else originalMetadata }
     // Not rememberSaveable — JsonObject has no default Saver — but this is safe: MetadataHolder
     // itself (a plain singleton, same pattern CreateSampleScreen already uses) is what survives
     // navigating to MetadataEditorScreen and back, not this local var.
-    var metadata by remember { mutableStateOf<JsonObject?>(if (originalMetadata.isEmpty()) null else originalMetadata) }
+    var metadata by remember { mutableStateOf<JsonObject?>(initialMetadata) }
 
     LaunchedEffect(MetadataHolder.isDirty) {
         if (MetadataHolder.isDirty) metadata = MetadataHolder.take()
+    }
+
+    SideEffect {
+        onDirtyChanged(
+            name != resource.name ||
+                type != (resource.sampleType ?: "") ||
+                description != (resource.description ?: "") ||
+                timestamp != (resource.timestamp ?: "") ||
+                isPublic != (resource.isPublic ?: false) ||
+                selectedProjectId != resource.projectId ||
+                metadata != initialMetadata
+        )
     }
 
     Column(
@@ -254,7 +288,8 @@ private fun DatasetEditFields(
     isSaving: Boolean,
     viewModel: EditResourceViewModel,
     onOpenMetadataEditor: () -> Unit,
-    padding: PaddingValues
+    padding: PaddingValues,
+    onDirtyChanged: (Boolean) -> Unit = {}
 ) {
     val repository = koinInject<CrucibleRepository>()
     val projects = remember { repository.getCachedProjects() ?: emptyList() }
@@ -268,10 +303,26 @@ private fun DatasetEditFields(
     var timestamp by rememberSaveable { mutableStateOf(resource.timestamp ?: "") }
     var selectedProjectId by rememberSaveable { mutableStateOf(resource.projectId) }
     val originalMetadata = remember { resource.scientificMetadata ?: JsonObject(emptyMap()) }
-    var metadata by remember { mutableStateOf<JsonObject?>(if (originalMetadata.isEmpty()) null else originalMetadata) }
+    val initialMetadata = remember { if (originalMetadata.isEmpty()) null else originalMetadata }
+    var metadata by remember { mutableStateOf<JsonObject?>(initialMetadata) }
 
     LaunchedEffect(MetadataHolder.isDirty) {
         if (MetadataHolder.isDirty) metadata = MetadataHolder.take()
+    }
+
+    SideEffect {
+        onDirtyChanged(
+            name != resource.name ||
+                measurement != (resource.measurement ?: "") ||
+                instrumentName != (resource.instrumentName ?: "") ||
+                sessionName != (resource.sessionName ?: "") ||
+                dataType != (resource.dataType ?: "") ||
+                dataFormat != (resource.dataFormat ?: "") ||
+                isPublic != (resource.isPublic ?: false) ||
+                timestamp != (resource.timestamp ?: "") ||
+                selectedProjectId != resource.projectId ||
+                metadata != initialMetadata
+        )
     }
 
     Column(

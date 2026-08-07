@@ -49,7 +49,6 @@ fun InstrumentListScreen(
     onHome: () -> Unit,
     onInstrumentClick: (String) -> Unit,
     modifier: Modifier = Modifier,
-    onSearch: () -> Unit = {},
     pinnedInstruments: Set<String> = emptySet(),
     onTogglePin: (String) -> Unit = {},
     hiddenInstruments: Set<String> = emptySet(),
@@ -111,9 +110,6 @@ fun InstrumentListScreen(
                 onBack = onBack,
                 actions = {
                     var menuExpanded by remember { mutableStateOf(false) }
-                    IconButton(onClick = onSearch) {
-                        AppIcon(AppIcons.Search)
-                    }
                     IconButton(onClick = onHome) {
                         AppIcon(AppIcons.Home)
                     }

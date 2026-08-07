@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntSize
 
 // Screen-level navigation transitions use tween (M3 spec: easing curves for screen-to-screen
@@ -58,7 +59,8 @@ val TaglineExitSpec: FiniteAnimationSpec<Float> = tween(300)
 fun ExpandChevron(
     expanded: Boolean,
     modifier: Modifier = Modifier,
-    fast: Boolean = false
+    fast: Boolean = false,
+    tint: Color = MaterialTheme.colorScheme.primary
 ) {
     val rotation by animateFloatAsState(
         targetValue = if (expanded) 0f else -90f,
@@ -68,6 +70,6 @@ fun ExpandChevron(
     AppIcon(
         AppIcons.ExpandMore,
         modifier = modifier.rotate(rotation),
-        tint = MaterialTheme.colorScheme.primary
+        tint = tint
     )
 }

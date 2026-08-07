@@ -78,7 +78,7 @@ fun ResourceDetailScreen(
     onRefresh: (uuid: String) -> Unit,
     onDuplicate: (CrucibleResource) -> Unit = {},
     recentHistory: List<crucible.lens.data.preferences.HistoryItem> = emptyList(),
-    onSaveToHistory: (uuid: String, name: String, resourceType: String?) -> Unit = { _, _, _ -> },
+    onSaveToHistory: (uuid: String, name: String, resourceType: String?, projectId: String?) -> Unit = { _, _, _, _ -> },
     getCardState: (key: String) -> Boolean = { false },
     onCardStateChange: (key: String, value: Boolean) -> Unit = { _, _ -> },
     onNavigateToAddFiles: (datasetUuid: String) -> Unit = {},
@@ -183,7 +183,11 @@ fun ResourceDetailScreen(
         val targetResource = sortedSiblingList.getOrNull(targetPage)
         if (targetResource != null) {
             val rtype = if (targetResource is Sample) "sample" else "dataset"
-            onSaveToHistory(targetResource.uniqueId, targetResource.name, rtype)
+            val projectId = when (targetResource) {
+                is Sample -> targetResource.projectId
+                is Dataset -> targetResource.projectId
+            }
+            onSaveToHistory(targetResource.uniqueId, targetResource.name, rtype, projectId)
         }
     }
 

@@ -173,10 +173,7 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         .stateIn(scope, SharingStarted.Eagerly, null)
 
     override val resourceHistory: StateFlow<List<HistoryItem>> = context.dataStore.data.map { prefs ->
-        prefs[RESOURCE_HISTORY]?.split(",")?.mapNotNull { entry ->
-            val parts = entry.split("|||")
-            if (parts.size >= 3) HistoryItem(parts[0], parts[1], parts[2].toLongOrNull() ?: 0L, parts.getOrNull(3)?.ifBlank { null }) else null
-        } ?: emptyList()
+        prefs[RESOURCE_HISTORY]?.split(",")?.mapNotNull { it.toHistoryItem() } ?: emptyList()
     }
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
@@ -327,15 +324,26 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         context.dataStore.edit { prefs -> prefs.remove(RESOURCE_HISTORY) }
     }
 
-    override suspend fun addToHistory(uuid: String, name: String, resourceType: String?) {
+    override suspend fun addToHistory(uuid: String, name: String, resourceType: String?, projectId: String?) {
         context.dataStore.edit { prefs ->
-            val existing = prefs[RESOURCE_HISTORY]?.split(",")?.mapNotNull { entry ->
-                val parts = entry.split("|||")
-                if (parts.size >= 3) HistoryItem(parts[0], parts[1], parts[2].toLongOrNull() ?: 0L, parts.getOrNull(3)?.ifBlank { null }) else null
-            } ?: emptyList()
-            val updated = listOf(HistoryItem(uuid, name, System.currentTimeMillis(), resourceType)) +
+            val existing = prefs[RESOURCE_HISTORY]?.split(",")?.mapNotNull { it.toHistoryItem() } ?: emptyList()
+            val updated = listOf(HistoryItem(uuid, name, System.currentTimeMillis(), resourceType, projectId)) +
                 existing.filter { it.uuid != uuid }
-            prefs[RESOURCE_HISTORY] = updated.take(20).joinToString(",") { "${it.uuid}|||${it.name}|||${it.timestamp}|||${it.resourceType ?: ""}" }
+            prefs[RESOURCE_HISTORY] = updated.take(20).joinToString(",") { it.toHistoryEntry() }
         }
     }
+
+    private fun String.toHistoryItem(): HistoryItem? {
+        val parts = split("|||")
+        return if (parts.size >= 3) HistoryItem(
+            uuid = parts[0],
+            name = parts[1],
+            timestamp = parts[2].toLongOrNull() ?: 0L,
+            resourceType = parts.getOrNull(3)?.ifBlank { null },
+            projectId = parts.getOrNull(4)?.ifBlank { null }
+        ) else null
+    }
+
+    private fun HistoryItem.toHistoryEntry(): String =
+        "$uuid|||$name|||$timestamp|||${resourceType ?: ""}|||${projectId ?: ""}"
 }

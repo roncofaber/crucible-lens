@@ -446,7 +446,7 @@ private fun HomeLastVisited(name: String, onClick: () -> Unit, onHistory: () -> 
         Card(
             onClick = onClick,
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
@@ -558,7 +558,7 @@ private fun HomePinnedProjects(
                         onClick = { onProjectClick(project.projectId) },
                         onLongClick = { pendingUnpinProjectId = project.projectId }
                     ),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -566,7 +566,7 @@ private fun HomePinnedProjects(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         NotificationDot(count = pendingRequestCount) {
-                            AppIcon(AppIcons.Project, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                            AppIcon(AppIcons.Project, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
                         }
                         Text(
                             text = project.title ?: project.projectId,
@@ -575,7 +575,7 @@ private fun HomePinnedProjects(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
-                        AppIcon(AppIcons.NavigateNext, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        AppIcon(AppIcons.NavigateNext, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
                     }
                 }
             }
@@ -585,14 +585,14 @@ private fun HomePinnedProjects(
                         onClick = { onInstrumentClick(instrument.uniqueId) },
                         onLongClick = { pendingUnpinInstrumentId = instrument.uniqueId }
                     ),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        AppIcon(AppIcons.Instrument, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                        AppIcon(AppIcons.Instrument, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
                         Text(
                             text = instrument.instrumentName ?: instrument.uniqueId,
                             style = MaterialTheme.typography.bodyMedium,
@@ -600,7 +600,7 @@ private fun HomePinnedProjects(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
-                        AppIcon(AppIcons.NavigateNext, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        AppIcon(AppIcons.NavigateNext, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
                     }
                 }
             }
@@ -647,9 +647,12 @@ private fun HomeFooter(graphExplorerUrl: String) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        OutlinedButton(onClick = {
-            openUrl(ctx, graphExplorerUrl)
-        }) {
+        OutlinedButton(
+            onClick = { openUrl(ctx, graphExplorerUrl) },
+            shape = MaterialTheme.shapes.medium,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+        ) {
             AppIcon(AppIcons.WebUrl, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
             Text("Open Crucible Web")

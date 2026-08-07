@@ -172,3 +172,13 @@ fun UserPickerItemContent(user: User) {
     if (user.username == null) return
     UserNameBlock(user)
 }
+
+/**
+ * Leading content for a [SearchPickerField]'s resolved-chip state ([ResolvedPicker.chipLeading])
+ * once a search resolves to a real user — a small [UserAvatar], same per-ORCID colour as every
+ * other avatar in the app rather than the picker's own one-off treatment.
+ */
+@Composable
+fun UserChipLeading(user: User) {
+    UserAvatar(firstName = user.firstName, lastName = user.lastName, size = 24.dp, orcid = user.uniqueId)
+}

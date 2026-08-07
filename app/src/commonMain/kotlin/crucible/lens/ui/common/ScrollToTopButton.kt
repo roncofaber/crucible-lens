@@ -18,6 +18,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 /**
+ * Bottom list padding a [ScrollToTopButton] caller needs (as `LazyColumn`'s `contentPadding`) so
+ * the button never sits on top of the last row — the button is 42dp with a 16dp margin, plus a
+ * little buffer. Every list that shows this FAB should use this instead of a one-off literal, so
+ * the value can't drift between screens.
+ */
+val ScrollToTopButtonClearance = 80.dp
+
+/**
  * A floating action button that appears when scrolled down and scrolls back to top when clicked.
  * Round 42dp button with accent-colored icon on surface background.
  *

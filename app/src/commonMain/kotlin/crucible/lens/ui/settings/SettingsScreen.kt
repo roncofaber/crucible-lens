@@ -129,8 +129,8 @@ private fun SettingsRow(
             ) {
                 AppIcon(icon, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                 Column {
-                    Text(title, style = MaterialTheme.typography.bodyMedium)
-                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = subtitleColor)
+                    Text(title, style = MaterialTheme.typography.titleMedium)
+                    Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = subtitleColor)
                 }
             }
             AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -6,7 +6,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class HistoryItem(val uuid: String, val name: String, val timestamp: Long, val resourceType: String? = null)
+data class HistoryItem(
+    val uuid: String,
+    val name: String,
+    val timestamp: Long,
+    val resourceType: String? = null,
+    val projectId: String? = null
+)
 
 interface AppPreferences {
     // StateFlows — always have a current value, no initial value needed at collection sites
@@ -53,7 +59,7 @@ interface AppPreferences {
     suspend fun saveUserOrcid(orcid: String?)
     suspend fun saveUserProfile(user: User?)
     suspend fun clearUserProfile()
-    suspend fun addToHistory(uuid: String, name: String, resourceType: String? = null)
+    suspend fun addToHistory(uuid: String, name: String, resourceType: String? = null, projectId: String? = null)
     suspend fun clearHistory()
     suspend fun saveSampleGroupBy(value: String)
     suspend fun saveDatasetGroupBy(value: String)

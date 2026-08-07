@@ -150,11 +150,12 @@ Key endpoints:
 - `GET /datasets/{uuid}?include_links=true&include_metadata=true` — dataset + scientific metadata inline
 - `GET/POST/PATCH /resources/{unique_id}/metadata` — generic across sample/dataset/instrument, require write access (not just read); all return `{unique_id, scientific_metadata}`, unwrapped to a bare `JsonObject` by `CrucibleApiService`. `POST` creates/replaces (409 if non-empty metadata already exists, unless `?overwrite=true`); `PATCH` shallow-merges `{**existing, **updates}` — new keys added, existing keys overwritten, nested dict values replaced wholesale (not deep-merged), and never 409s. See `CLAUDE.md`'s API rules for how the app decides POST vs PATCH on edit.
 - `GET /projects`, `GET /projects/{id}/users` — `GET /projects` (unlike `/projects/search`, below) only ever returns projects the caller is a member of
+- `POST /projects` — creates a project; **no authorization check server-side**, any authenticated user can create a project naming any existing user as its lead (deliberate — ad-hoc personal projects). Exactly one of `project_lead_orcid`/`_email`/`_username` is required (this app only ever sends `_username`, resolved via the same `SearchPickerField` user search as Manage Project's lead field); `project_id` becomes the project's permanent handle (also the access group name) — there is no rename route. `400` no lead identifier, `404` lead username doesn't resolve to a user, `409` `project_id` already taken. Unlike samples/datasets/instruments, no `Resource`/`idtype` row is created, so `creation_time`/`modification_time` stay `null` and the project can't carry scientific metadata.
 - `DELETE /projects/{id}/users/{orcid}` — admin, the project lead, or the member themselves (self-removal); the lead cannot remove themselves (409) — must transfer leadership first (`PATCH /projects/{id}` with a new `project_lead_username`)
 - `GET /projects/search`, `GET /projects/{id}` — readable by any authenticated user, not just members. `lead` is full `UserRead` (with email) and `scientific_metadata` populated only for members/admins; non-members get `lead` as `UserPublicRead` (no email) and `scientific_metadata` always null, regardless of `?include_metadata=`. This is what makes discover-search (`SearchScreen`'s "Discover" chip) and the non-member view in `ProjectDetailScreen` possible.
 - `GET /instruments`, `GET /instruments/{id}`
 - `GET /datasets?instrument_name=X&limit=N` — datasets by instrument
-- `GET /idtype/{uuid}` — resolve resource type before fetching
+- `GET /resources/{uuid}` — unified fetch that resolves and returns the resource in one call, replacing an earlier two-step `/idtype` + typed-fetch flow
 - `POST /deletion_requests` — soft-delete request
 - `POST /access_groups/{group_name}/join` — request to join a project (`group_name` is always a `project_id` for now); 409 if already a member or already has a pending request
 - `GET /join_requests?group_name=&status=&requester_id=` — list join requests. Passing `group_name` requires being that project's lead or an admin (403 otherwise). Omitting `group_name`: admins see everything; a non-admin lead gets auto-scoped to every project they lead in one call (returns an empty list, not a 403, if they lead nothing) — this auto-scoping is what makes the bulk pending-count preload below possible with a single request
@@ -216,7 +217,7 @@ Every list/detail/manage/create screen has its own `ViewModel` (commonMain, plat
 constructor-injected via Koin (see "Dependency injection (Koin)" below): `ResourceDetailViewModel`,
 `ProjectsListViewModel`, `ProjectDetailViewModel`, `ManageProjectViewModel`, `InstrumentListViewModel`,
 `InstrumentDetailViewModel`, `ManageInstrumentViewModel`, `AccountViewModel`, `CreateSampleViewModel`,
-`CreateDatasetViewModel`, `EditResourceViewModel`, `HomeViewModel`.
+`CreateDatasetViewModel`, `CreateProjectViewModel`, `EditResourceViewModel`, `HomeViewModel`.
 
 Most ViewModels expose a single `StateFlow<LoadState<T>>` (`ui/common/LoadState.kt`) rather than
 separate loading/error/data/refreshing flags — see `CLAUDE.md`'s "Key architecture decisions".
@@ -265,10 +266,11 @@ Content does **not** move during pull-to-refresh — the M3 `PullToRefreshBox` i
 `Screen` sealed class with `route` strings. Optional args use query params `?argName={argName}`.  
 Special characters in route segments encoded via `encodeRouteSegment()`.
 
-All 25 routes (see `Screen.kt` for the exact list): `Home`, `Scanner`, `Detail`, `EditResource`,
+All 27 routes (see `Screen.kt` for the exact list): `Home`, `Scanner`, `Detail`, `EditResource`,
 `History`, `Search`, `Projects`, `ProjectDetail`, `ManageProject`, `Instruments`, `InstrumentDetail`,
 `ManageInstrument`, `Settings`, `SettingsApi`, `SettingsAppearance`, `SettingsCache`, `SettingsAbout`,
-`SettingsAccount`, `OrcidLogin`, `CreateSample`, `CreateDataset`, `AddFiles`, `MetadataEditor`, `UserProfile`, `SyncedProjects`
+`SettingsAccount`, `SettingsTypography`, `OrcidLogin`, `CreateSample`, `CreateDataset`, `CreateProject`,
+`AddFiles`, `MetadataEditor`, `UserProfile`, `SyncedProjects`
 
 ---
 
@@ -304,11 +306,13 @@ See `dev/platform-parity.md` for Xcode project setup instructions.
 | `SortUtils.kt` | `SortField` enum, `SortState`, `List<T>.applySortState()` |
 | `FormatUtils.kt` | File size / date formatting helpers |
 | `CryptoUtils.kt` | `PlatformCrypto.sha256Hex()` (expect/actual) for upload dedup |
-| `DuplicateHolder.kt` | In-memory clipboard for sample/dataset duplication flow |
 
 `fetchProjectData(projectId)` (parallel sample+dataset fetch with a per-project mutex) used to live in
 a standalone `ProjectFetcher.kt`; it is now a method on `CrucibleRepository` — see
 "Dependency injection (Koin)" below.
+
+`DuplicateHolder.kt` (`ui/create/`, not `data/util/`) is an in-memory clipboard for the sample/dataset
+duplication flow — kept next to the create screens it serves rather than in shared utilities.
 
 ---
 
@@ -322,7 +326,8 @@ All app configuration is persisted in `AppPreferences` — a platform-agnostic i
 | API base URL | `StateFlow<String>` | `api_base_url` | Defaults to `https://crucible.lbl.gov/api/v2/` |
 | Graph Explorer URL | `StateFlow<String>` | `graph_explorer_url` | Defaults to `https://crucible.lbl.gov/explore/` |
 | Theme mode | `StateFlow<String>` | `theme_mode` | `system` / `light` / `dark` |
-| Accent colour | `StateFlow<String>` | `accent_color` | Named palette (blue, purple, green, etc.) or custom hex |
+| Accent colour | `StateFlow<String>` | `accent_color` | One of the 12 named accents (see `CLAUDE.md`'s Theming section) |
+| Accent contrast | `StateFlow<String>` | `accent_contrast` | `standard` / `medium` / `high` — paired with accent colour to pick one of each accent's 6 static schemes |
 | Dynamic colour | `StateFlow<Boolean>` | `use_dynamic_color` | Android 12+ only; forced false on iOS |
 | Last visited resource | `StateFlow<String?>` | `last_visited_resource` / `last_visited_resource_name` | |
 | Floating scan button | `StateFlow<Boolean>` | `floating_scan_button` | |
@@ -332,7 +337,7 @@ All app configuration is persisted in `AppPreferences` — a platform-agnostic i
 | Pinned/hidden instruments | `StateFlow<Set<String>>` | `pinned_instruments` / `hidden_instruments` | |
 | User ORCID | `StateFlow<String?>` | `user_orcid` | |
 | User profile | `StateFlow<User?>` | `user_profile` | JSON-serialized |
-| Resource history | `StateFlow<List<HistoryItem>>` | `resource_history` | |
+| Resource history | `StateFlow<List<HistoryItem>>` | `resource_history` | `HistoryItem`: `uuid`, `name`, `timestamp`, `resourceType: String?`, `projectId: String?` — `projectId` is recorded directly at view time (`ResourceDetailScreen`'s save-to-history call), not derived from a cache lookup at render time |
 | Sample group-by | `StateFlow<String>` | `sample_group_by` | Default: `TYPE` — persists ProjectDetailScreen's Samples tab grouping choice |
 | Dataset group-by | `StateFlow<String>` | `dataset_group_by` | Default: `MEASUREMENT` — persists ProjectDetailScreen's Datasets tab grouping choice |
 | Instrument group-by | `StateFlow<String>` | `instrument_group_by` | Default: `MEASUREMENT` — persists InstrumentDetailScreen's grouping choice |

@@ -19,7 +19,6 @@ import crucible.lens.platform.getPlatformContext
 import crucible.lens.ui.common.AppScaffold
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun CacheSettingsScreen(
@@ -77,7 +76,7 @@ fun CacheSettingsScreen(
                         )
                         Text(
                             "Cached data",
-                            style = MaterialTheme.typography.emphasizedTitleMedium
+                            style = MaterialTheme.typography.titleMedium
                         )
                     }
                     val stats = cacheStats

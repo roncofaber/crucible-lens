@@ -197,4 +197,4 @@ scaling the official artwork down rather than redrawing it.
 - The drawable folder also holds `crucible_text_{light,dark}.png` (wordmark) — not icons, not
   counted below.
 
-## Total: 108 XML files — every one is referenced by an `AppIcons` token, and every token resolves to a file on disk (no orphans in either direction).
+## Total: 110 XML files backing 130 `AppIcons` tokens (several tokens intentionally alias the same drawable) — every file is referenced by at least one token, and every token resolves to a file on disk (no orphans in either direction).

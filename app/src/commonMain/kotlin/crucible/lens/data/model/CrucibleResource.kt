@@ -171,6 +171,18 @@ data class ProjectUpdateRequest(
     @SerialName("project_lead_username") val projectLeadUsername: String? = null
 )
 
+// project_id is required and, unlike every other field here, effectively immutable afterward —
+// there is no rename route server-side, since the access group, Dataset.project_id and
+// Sample.project_id all point at this exact string.
+@Serializable
+data class ProjectCreateRequest(
+    @SerialName("project_id") val projectId: String,
+    @SerialName("title") val title: String,
+    @SerialName("organization") val organization: String,
+    @SerialName("project_lead_username") val projectLeadUsername: String? = null,
+    @SerialName("status") val status: String = "active"
+)
+
 @Serializable
 data class JoinRequest(
     @SerialName("id") val id: Int,

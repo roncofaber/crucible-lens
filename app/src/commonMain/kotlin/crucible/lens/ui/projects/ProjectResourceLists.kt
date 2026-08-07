@@ -2,6 +2,7 @@ package crucible.lens.ui.projects
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,7 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +50,7 @@ import crucible.lens.ui.common.LoadState
 import crucible.lens.ui.common.LoadingItem
 import crucible.lens.ui.common.ResourceRow
 import crucible.lens.ui.common.ScrollToTopButton
+import crucible.lens.ui.common.ScrollToTopButtonClearance
 import crucible.lens.ui.common.SectionHeader
 import crucible.lens.ui.common.stateMapSaver
 import kotlinx.coroutines.CancellationException
@@ -128,7 +130,7 @@ private fun <T : CrucibleResource> LazyListScope.groupedResourceItems(
     cacheAgeMinutes: Long?
 ) {
     if (!isGrouped) {
-        items(flatItems, key = { it.uniqueId }) { resource ->
+        itemsIndexed(flatItems, key = { _, it -> it.uniqueId }) { index, resource ->
             ResourceRow(
                 title = resource.name,
                 subtitle = resource.uniqueId,
@@ -136,6 +138,7 @@ private fun <T : CrucibleResource> LazyListScope.groupedResourceItems(
                 graphExplorerUrl = graphExplorerUrl,
                 projectId = projectId,
                 resourceType = resourceType,
+                showDivider = index > 0,
                 onClick = { onItemClick(resource.uniqueId) }
             )
         }
@@ -153,7 +156,7 @@ private fun <T : CrucibleResource> LazyListScope.groupedResourceItems(
         }
 
         if (expanded) {
-            items(sortedItems, key = { it.uniqueId }) { resource ->
+            itemsIndexed(sortedItems, key = { _, it -> it.uniqueId }) { index, resource ->
                 ResourceRow(
                     title = resource.name,
                     subtitle = resource.uniqueId,
@@ -161,6 +164,7 @@ private fun <T : CrucibleResource> LazyListScope.groupedResourceItems(
                     graphExplorerUrl = graphExplorerUrl,
                     projectId = projectId,
                     resourceType = resourceType,
+                    showDivider = index > 0,
                     onClick = { onItemClick(resource.uniqueId) }
                 )
             }
@@ -221,7 +225,12 @@ internal fun SamplesList(
     val expandedGroups = rememberSaveable(groupBy, saver = stateMapSaver()) { mutableStateMapOf<String, Boolean>() }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            // Clears the ScrollToTopButton FAB so the last item is never obscured.
+            contentPadding = PaddingValues(bottom = ScrollToTopButtonClearance)
+        ) {
             when {
                 loadState is LoadState.Loading -> item(key = "loading") { LoadingItem(label = "Loading samples…") }
                 loadState is LoadState.Error -> item(key = "error") {
@@ -309,7 +318,12 @@ internal fun DatasetsList(
     val expandedGroups = rememberSaveable(groupBy, saver = stateMapSaver()) { mutableStateMapOf<String, Boolean>() }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            // Clears the ScrollToTopButton FAB so the last item is never obscured.
+            contentPadding = PaddingValues(bottom = ScrollToTopButtonClearance)
+        ) {
             when {
                 loadState is LoadState.Loading -> item(key = "loading") { LoadingItem(label = "Loading datasets…") }
                 loadState is LoadState.Error -> item(key = "error") {

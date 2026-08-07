@@ -9,7 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.EffectsFastSpring
@@ -379,7 +379,7 @@ fun SearchScreen(
                                 if (projectResults.isNotEmpty()) {
                                     item(key = "header_projects") { SectionHeader(title = "Projects", count = projectResults.size, icon = AppIcons.Project,
                                             expanded = projectsExpanded, onToggle = { projectsExpanded = !projectsExpanded }) }
-                                    if (projectsExpanded) items(projectResults, key = { it.uniqueId }) { result ->
+                                    if (projectsExpanded) itemsIndexed(projectResults, key = { _, it -> it.uniqueId }) { index, result ->
                                         // The muted text alone doesn't say *why* the row is
                                         // greyed, so the snippet line carries the reason.
                                         val isNonMember = memberProjectIds != null &&
@@ -389,7 +389,8 @@ fun SearchScreen(
                                             subtitle = result.uniqueId,
                                             uniqueId = result.uniqueId,
                                             snippet = if (isNonMember) "Not a member" else null,
-                                            muted = isNonMember
+                                            muted = isNonMember,
+                                            showDivider = index > 0
                                         ) { onProjectClick(result.uniqueId) }
                                     }
                                 }
@@ -400,7 +401,7 @@ fun SearchScreen(
                                         SectionHeader(title = "Samples", count = sampleResults.size, icon = AppIcons.Sample,
                                             expanded = samplesExpanded, onToggle = { samplesExpanded = !samplesExpanded })
                                     }
-                                    if (samplesExpanded) items(sampleResults, key = { it.uniqueId }) { result ->
+                                    if (samplesExpanded) itemsIndexed(sampleResults, key = { _, it -> it.uniqueId }) { index, result ->
                                         val snippet = result.scientificMetadata
                                             ?.entries?.take(2)
                                             ?.joinToString(" · ") { (k, v) -> "$k: $v" }
@@ -416,7 +417,8 @@ fun SearchScreen(
                                             snippet = snippet,
                                             graphExplorerUrl = graphExplorerUrl,
                                             projectId = result.projectId,
-                                            resourceType = result.resourceType ?: "sample"
+                                            resourceType = result.resourceType ?: "sample",
+                                            showDivider = index > 0
                                         ) { onResourceClick(result.uniqueId) }
                                     }
                                 }
@@ -427,7 +429,7 @@ fun SearchScreen(
                                         SectionHeader(title = "Datasets", count = datasetResults.size, icon = AppIcons.Dataset,
                                             expanded = datasetsExpanded, onToggle = { datasetsExpanded = !datasetsExpanded })
                                     }
-                                    if (datasetsExpanded) items(datasetResults, key = { it.uniqueId }) { result ->
+                                    if (datasetsExpanded) itemsIndexed(datasetResults, key = { _, it -> it.uniqueId }) { index, result ->
                                         val snippet = result.scientificMetadata
                                             ?.entries?.take(2)
                                             ?.joinToString(" · ") { (k, v) -> "$k: $v" }
@@ -443,7 +445,8 @@ fun SearchScreen(
                                             snippet = snippet,
                                             graphExplorerUrl = graphExplorerUrl,
                                             projectId = result.projectId,
-                                            resourceType = result.resourceType ?: "sample"
+                                            resourceType = result.resourceType ?: "sample",
+                                            showDivider = index > 0
                                         ) { onResourceClick(result.uniqueId) }
                                     }
                                 }

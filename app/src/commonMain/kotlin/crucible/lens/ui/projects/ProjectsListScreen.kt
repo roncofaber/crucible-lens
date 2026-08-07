@@ -3,11 +3,12 @@ package crucible.lens.ui.projects
 import androidx.compose.material3.ExperimentalMaterial3Api
 import crucible.lens.platform.*
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIconToken
@@ -47,6 +48,7 @@ import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.LoadState
 import crucible.lens.ui.common.ScrollToTopButton
+import crucible.lens.ui.common.ScrollToTopButtonClearance
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -58,13 +60,13 @@ fun ProjectsListScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit,
     onHome: () -> Unit,
-    onSearch: () -> Unit,
     onProjectClick: (String) -> Unit,
     pinnedProjects: Set<String> = emptySet(),
     onTogglePin: (String) -> Unit = {},
     syncedProjects: Set<String> = emptySet(),
     onToggleSync: (String) -> Unit = {},
     onManageSyncedProjects: () -> Unit = {},
+    onCreateProject: () -> Unit = {},
     currentUserOrcid: String? = null,
 ) {
     val platformContext = getPlatformContext()
@@ -163,9 +165,6 @@ fun ProjectsListScreen(
                 title = "Projects",
                 onBack = onBack,
                 actions = {
-                    IconButton(onClick = onSearch) {
-                        AppIcon(AppIcons.Search)
-                    }
                     IconButton(onClick = onHome) {
                         AppIcon(AppIcons.Home)
                     }
@@ -175,6 +174,11 @@ fun ProjectsListScreen(
                             AppIcon(AppIcons.MoreVert)
                         }
                         DropdownMenu(expanded = listMenuExpanded, onDismissRequest = { listMenuExpanded = false }) {
+                            DropdownMenuItem(
+                                text = { Text("New project") },
+                                leadingIcon = { AppIcon(AppIcons.Add) },
+                                onClick = { listMenuExpanded = false; onCreateProject() }
+                            )
                             ManageSyncedProjectsMenuItem { listMenuExpanded = false; onManageSyncedProjects() }
                             RefreshMenuItem { listMenuExpanded = false; refreshProjects() }
                         }
@@ -244,9 +248,9 @@ fun ProjectsListScreen(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        // Bottom padding clears the ScrollToTopButton FAB (42dp + 16dp margin) so the
-                        // last item — including the Hidden section header/rows — is never obscured.
-                        contentPadding = PaddingValues(bottom = 80.dp)
+                        // Clears the ScrollToTopButton FAB so the last item — including the Hidden
+                        // section header/rows — is never obscured.
+                        contentPadding = PaddingValues(bottom = ScrollToTopButtonClearance)
                     ) {
 
                     when {
@@ -377,7 +381,10 @@ fun ProjectsListScreen(
                                 }
 
                                 if (syncedExpanded) {
-                                    items(syncedProjectsList, key = { "${it.projectId}:${undoGenerations[it.projectId] ?: 0}" }) { project ->
+                                    itemsIndexed(syncedProjectsList, key = { _, it -> "${it.projectId}:${undoGenerations[it.projectId] ?: 0}" }) { index, project ->
+                                    if (index > 0) {
+                                        HorizontalDivider(modifier = Modifier.padding(start = ResourceListDividerInset))
+                                    }
                                     SwipeToHideItem(
                                         direction = SwipeToDismissBoxValue.EndToStart,
                                         action = SwipeAction(
@@ -415,7 +422,6 @@ fun ProjectsListScreen(
                                             }
                                         )
                                     }
-                                    HorizontalDivider(modifier = Modifier.padding(start = ResourceListDividerInset))
                                     }
                                 }
 
@@ -431,7 +437,10 @@ fun ProjectsListScreen(
                                     }
 
                                     if (unsyncedExpanded) {
-                                        items(unsyncedProjectsList, key = { "unsynced_${it.projectId}" }) { project ->
+                                        itemsIndexed(unsyncedProjectsList, key = { _, it -> "unsynced_${it.projectId}" }) { index, project ->
+                                            if (index > 0) {
+                                                HorizontalDivider(modifier = Modifier.padding(start = ResourceListDividerInset))
+                                            }
                                             SwipeToHideItem(
                                                 direction = SwipeToDismissBoxValue.StartToEnd,
                                                 action = SwipeAction(
@@ -454,8 +463,29 @@ fun ProjectsListScreen(
                                                     isSynced = false
                                                 )
                                             }
-                                            HorizontalDivider(modifier = Modifier.padding(start = ResourceListDividerInset))
                                         }
+                                    }
+                                }
+
+                                // A proper call-to-action button, not a compact tappable row like
+                                // "Add member" — this is the one primary action on the whole
+                                // screen (create a brand new project), so it earns the same
+                                // treatment as Home's "New Sample"/"New Dataset" buttons rather
+                                // than blending in as just another list row.
+                                item(key = "__create_project__") {
+                                    OutlinedButton(
+                                        onClick = onCreateProject,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 16.dp)
+                                            .height(52.dp),
+                                        shape = MaterialTheme.shapes.medium,
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                                    ) {
+                                        AppIcon(AppIcons.Add, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Create Project")
                                     }
                                 }
                             }
@@ -504,7 +534,7 @@ private fun ProjectCard(
             )
         },
         supportingContent = if (showId) {
-            { IdText("#${project.projectId}") }
+            { IdText(project.projectId, modifier = Modifier.padding(start = 4.dp)) }
         } else null,
         leadingContent = {
             NotificationDot(count = pendingRequestCount) {
@@ -549,7 +579,7 @@ private fun CountChip(
     loading: Boolean
 ) {
     Surface(
-        color = MaterialTheme.colorScheme.primaryContainer,
+        color = MaterialTheme.colorScheme.secondaryContainer,
         shape = MaterialTheme.shapes.small
     ) {
         Row(
@@ -561,19 +591,19 @@ private fun CountChip(
             AppIcon(
                 icon,
                 modifier = Modifier.size(11.dp),
-                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                tint = MaterialTheme.colorScheme.onSecondaryContainer
             )
             if (loading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(10.dp),
                     strokeWidth = 1.5.dp,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             } else {
                 Text(
                     text = count?.toString() ?: "?",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             }
         }

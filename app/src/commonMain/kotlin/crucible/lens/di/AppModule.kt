@@ -4,6 +4,7 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.sync.DataSyncManager
 import crucible.lens.ui.create.CreateDatasetViewModel
+import crucible.lens.ui.create.CreateProjectViewModel
 import crucible.lens.ui.create.CreateSampleViewModel
 import crucible.lens.ui.create.EditResourceViewModel
 import crucible.lens.ui.detail.ResourceDetailViewModel
@@ -40,5 +41,6 @@ val appModule = module {
     viewModelOf(::ManageInstrumentViewModel)
     viewModelOf(::CreateSampleViewModel)
     viewModelOf(::CreateDatasetViewModel)
+    viewModelOf(::CreateProjectViewModel)
     viewModelOf(::EditResourceViewModel)
 }

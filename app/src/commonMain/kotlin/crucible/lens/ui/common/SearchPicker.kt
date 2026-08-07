@@ -65,6 +65,10 @@ fun <T> rememberDebouncedSearchResults(
 /**
  * Shared look for a search-as-you-type field: search icon, clear button, loading spinner.
  * Caller owns query state and debouncing (e.g. via [rememberDebouncedSearchResults]).
+ *
+ * [isError] is for the "typed something that doesn't resolve to a real record" case (see
+ * [ResolutionState.NotFound]) — tints the outline/label via M3's own error styling and swaps the
+ * trailing icon to [AppIcons.SearchOff], the same icon already used for "no results" empty states.
  */
 @Composable
 private fun SearchTextField(
@@ -74,7 +78,8 @@ private fun SearchTextField(
     label: String,
     modifier: Modifier = Modifier,
     leadingIcon: AppIconToken = AppIcons.Search,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    isError: Boolean = false
 ) {
     OutlinedTextField(
         value = query,
@@ -83,13 +88,89 @@ private fun SearchTextField(
         modifier = modifier.fillMaxWidth(),
         singleLine = true,
         enabled = enabled,
+        isError = isError,
         leadingIcon = { AppIcon(leadingIcon, modifier = Modifier.size(20.dp)) },
         trailingIcon = {
             when {
                 isSearching -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                isError -> AppIcon(AppIcons.SearchOff, tint = MaterialTheme.colorScheme.error)
                 query.isNotEmpty() -> IconButton(onClick = { onQueryChange("") }) {
                     AppIcon(AppIcons.ClearInput)
                 }
+            }
+        }
+    )
+}
+
+/**
+ * Whether the current query in a [SearchPickerField] resolved to a real record — derived purely
+ * from the same `(query, results, isSearching)` triple the field already receives, so no caller
+ * needs a dedicated "resolved" field in its own state. [Resolved] fires either from tapping a
+ * dropdown suggestion (callers keep the picked item as a singleton `results` list rather than
+ * clearing it — see [ResolvedPicker]'s callers) or from typing the exact name/username and having
+ * the debounced search confirm it, matching Gmail's recipient-resolution behavior.
+ */
+sealed class ResolutionState<out T> {
+    data object Idle : ResolutionState<Nothing>()
+    data object Resolving : ResolutionState<Nothing>()
+    data class Resolved<T>(val item: T) : ResolutionState<T>()
+    data object NotFound : ResolutionState<Nothing>()
+}
+
+private fun <T> resolveSearchMatch(
+    query: String,
+    results: List<T>,
+    isSearching: Boolean,
+    keyOf: (T) -> String?
+): ResolutionState<T> {
+    val exact = results.firstOrNull { keyOf(it)?.equals(query, ignoreCase = true) == true }
+    return when {
+        query.isBlank() -> ResolutionState.Idle
+        isSearching -> ResolutionState.Resolving
+        exact != null -> ResolutionState.Resolved(exact)
+        query.length >= SEARCH_MIN_QUERY_LENGTH -> ResolutionState.NotFound
+        else -> ResolutionState.Idle
+    }
+}
+
+/**
+ * Bundles everything a [SearchPickerField] needs to opt into resolve-to-field behavior: how to
+ * find an exact match in its `results` ([keyOf]), how to label and render the resolved value
+ * ([resolvedLabel]/[resolvedLeading]), and what happens when its clear "×" is tapped ([onClear] —
+ * typically the same change handler the field already uses, called with an empty string).
+ */
+data class ResolvedPicker<T>(
+    val keyOf: (T) -> String?,
+    val resolvedLabel: (T) -> String,
+    val onClear: () -> Unit,
+    val resolvedLeading: @Composable (T) -> Unit
+)
+
+/**
+ * Replaces an editable [SearchPickerField] once its query has resolved to a real record — a
+ * *read-only* `OutlinedTextField`, not a colored pill: same [label], same transparent background
+ * and outline as every other field on the form, avatar/icon as the leading content and the
+ * resolved name as the value. Deliberately not a filled/tinted chip — an early version used a
+ * solid `secondaryContainer` bar, which (a) dropped the field's label entirely, so a resolved
+ * field carried no indication of what it was, and (b) reads as an error/warning banner rather
+ * than a confirmed value on any accent whose `secondaryContainer` leans orange/red. Reusing
+ * `OutlinedTextField` sidesteps both: the label float behavior is free, and there is no
+ * theme-dependent fill color to get wrong.
+ */
+@Composable
+private fun <T> ResolvedField(picker: ResolvedPicker<T>, item: T, label: String, modifier: Modifier, enabled: Boolean) {
+    OutlinedTextField(
+        value = picker.resolvedLabel(item),
+        onValueChange = {},
+        readOnly = true,
+        label = { Text(label) },
+        modifier = modifier.fillMaxWidth(),
+        singleLine = true,
+        enabled = enabled,
+        leadingIcon = { picker.resolvedLeading(item) },
+        trailingIcon = {
+            IconButton(onClick = picker.onClear, enabled = enabled) {
+                AppIcon(AppIcons.ClearInput)
             }
         }
     )
@@ -100,7 +181,10 @@ private fun SearchTextField(
  * at 240dp so a long result list scrolls within the popup instead of pushing the surrounding
  * layout around (the bug this replaces: a plain Column of results below a field shifts every
  * sibling below it as results appear/change). Selecting a result calls [onSelect] and closes the
- * dropdown; what the field displays afterward is the caller's concern.
+ * dropdown; what the field displays afterward is the caller's concern, unless [resolution] is
+ * supplied — then a confirmed match (see [ResolutionState]) renders as a [ResolvedField] instead
+ * of the editable field, and an unresolved one tints the field red via [SearchTextField]'s
+ * `isError`.
  */
 @Composable
 fun <T> SearchPickerField(
@@ -114,8 +198,14 @@ fun <T> SearchPickerField(
     leadingIcon: AppIconToken = AppIcons.Search,
     enabled: Boolean = true,
     reopenOnFocus: Boolean = false,
+    resolution: ResolvedPicker<T>? = null,
     itemContent: @Composable (T) -> Unit
 ) {
+    val resolutionState = resolution?.let { resolveSearchMatch(query, results, isSearching, it.keyOf) }
+    if (resolution != null && resolutionState is ResolutionState.Resolved) {
+        ResolvedField(picker = resolution, item = resolutionState.item, label = label, modifier = modifier, enabled = enabled)
+        return
+    }
     var expanded by remember { mutableStateOf(false) }
     Box(modifier = modifier) {
         SearchTextField(
@@ -125,6 +215,7 @@ fun <T> SearchPickerField(
             label = label,
             leadingIcon = leadingIcon,
             enabled = enabled,
+            isError = resolutionState is ResolutionState.NotFound,
             modifier = if (reopenOnFocus) {
                 Modifier.onFocusChanged { if (it.isFocused && results.isNotEmpty()) expanded = true }
             } else Modifier

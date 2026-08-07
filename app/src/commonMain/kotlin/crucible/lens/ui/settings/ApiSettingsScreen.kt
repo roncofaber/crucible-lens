@@ -20,7 +20,6 @@ import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.HealthStatus
 import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.ui.common.AppScaffold
-import crucible.lens.ui.theme.emphasizedTitleMedium
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -115,7 +114,7 @@ fun ApiSettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         AppIcon(AppIcons.ApiEndpoint, tint = MaterialTheme.colorScheme.primary)
-                        Text("Endpoints", style = MaterialTheme.typography.emphasizedTitleMedium)
+                        Text("Endpoints", style = MaterialTheme.typography.titleMedium)
                     }
                     Text(
                         "Leave as default unless you're using a custom deployment.",
@@ -172,7 +171,7 @@ fun ApiSettingsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             AppIcon(AppIcons.TestConnection, tint = MaterialTheme.colorScheme.primary)
-                            Text("Connection", style = MaterialTheme.typography.emphasizedTitleMedium)
+                            Text("Connection", style = MaterialTheme.typography.titleMedium)
                         }
                         OutlinedButton(
                             onClick = { healthManualTrigger++ },

@@ -2,67 +2,73 @@
 
 ## [Unreleased]
 
+## [0.8.0] – 2026-08-06
+
+Create projects directly in the app, a redesigned collapsing header for project and instrument screens, search fields that confirm a match instead of staying plain text, and new accent color/contrast choices, plus a large batch of UI polish and bug fixes.
+
 ### Added
 - Manage Project: leave a project from the overflow menu
+- Create a project from the Projects screen (bottom of the list, or the overflow menu)
+- New Sample/Dataset/Project screens, and editing a sample or dataset, have a Home button
+- Create and edit screens now warn before discarding unsaved changes
 
 ### Changed
+- Project and instrument screens' expanded header is left-aligned with an icon badge, not centered
+- Project and instrument headers are tinted while expanded, fading to the page background as you collapse
+- Project and instrument headers now collapse smoothly as you scroll, instead of jumping at the halfway point
+- Project screen's lead and organization now share one line, with member count on its own line below
+- Instrument screen's header shows the type and location while expanded
+- Pin button on project/instrument screens stays visible while scrolled
+- Project and instrument titles open the manage screen when tapped
+- Removed redundant search icons from screens that already have their own search field
+- Group headers are larger, with an icon, tinted while expanded and matching the page when collapsed
+- Group header counts now line up along the right edge and no longer shift width
+- List rows no longer repeat the section header's icon
+- Search results can now be collapsed by section
+- Search results show which project they belong to
+- Search result rows gained the tap-and-hold menu and chevron used elsewhere
+- Manage Project: Add Member sheet supports adding multiple people without closing
+- Manage Project: any member, not just the lead, can add a new member
+- Manage Project: Add member button sits above the member list, styled like a row
+- Manage Project: members are sorted alphabetically by last name
+- Manage Project: Add Member search field says "Search user" and matches by name too
+- Refined card, status, and tinted-surface colors to follow your accent color
+- Avatar initials and accent swatches stay legible on light colors
+- Normalized shadow and elevation depth on cards and bars to Material 3 levels
+- Refined text sizing, weight, and hierarchy across lists, headers, and settings rows
+- Names show in full instead of `@username` throughout the app
+- Search results lead with name and avatar, username smaller below
+- Instrument dataset rows now show the project instead of the dataset ID
+- Instrument dataset rows can now open in web or be shared
+- History rows show the time under the icon instead of a separate line
+- Username and instrument fields now confirm the match with a chip instead of staying plain text
 - New accent color choices, each with its own light/dark theme, plus a contrast level picker in Appearance settings
-- Refined a few card and status colors for better consistency with the app's accent
+- Pinned cards on Home now stand out more than the Last Visited card
 - Choose which projects sync in the background; others still open normally
-- Resource detail field labels are now larger and medium-weight to stand out from their values
 - Linked/parent/child sample and dataset rows show their type icon again
-- Project/instrument headers are tinted while expanded, fading to plain background as they collapse
-- Removed the search icon from the resource detail screen
-- Normalized shadow/tint depth on cards, banners, and bottom action bars to Material 3 levels
-- Project/instrument header's expanded tint is more noticeable
 - Resource row IDs are fainter so the name stands out more
 - Sample/dataset groups now scroll through everything directly instead of a "Load more" button
-- Project and instrument headers now collapse smoothly as you scroll, instead of jumping at the halfway point
-- Collapsed headers now match the page background instead of taking on a tint
-- Project and instrument titles open the manage screen when tapped
-- List rows no longer repeat the section header's icon
-- Refined text sizing and hierarchy across lists, headers, and buttons
-- Names now show in full instead of `@username`
 - Cache settings shows instrument and file counts too
 - Avatars now get a unique color per person
-- Manage Project: Add member now sits above the member list, styled like a member row
-- Manage Project: members are sorted alphabetically by last name
-- Manage Project: any member can add a new member, not just the lead
-- Manage Project: Add Member sheet now supports adding multiple people without closing
-- Manage Project: Add Member search field now says "Search user" (also matches by name)
-- User search results now show name and avatar first, username smaller below
 - Debug builds show "dev" instead of a version number wherever the app version appears
 - Editing a sample or dataset now opens a full screen instead of a bottom sheet
-- Group section titles now stand apart from the rows beneath them
-- Project and instrument screens now show the name in the top bar, collapsing as you scroll
-- Project screen's top bar now shows the lead, organization, and member count while expanded
-- Instrument screen's top bar now shows the type and location while expanded
-- Pin button on project/instrument screens stays visible while scrolled
-- Removed the search icon from project/instrument screens (use the search field on screen instead)
 - Search bar and tabs no longer slide with the page when switching between samples and datasets
-- Instrument dataset rows now match the project screen's style, showing the project instead of the dataset ID
-- Instrument dataset rows can now open in web or be shared, matching sample/dataset rows elsewhere
-- Group headers are larger, on a tinted background, with an icon matching the rows below
 - Icon-only buttons are easier to tap
-- Avatar initials and the selected accent swatch stay legible on light colours
-- Text weights across the app now come from Material's own emphasis styles
-- Counts in group headers no longer shift width as they change
-- Tinted surfaces now follow your accent colour instead of always looking purple-grey
-- Search results show which project they belong to
-- Search result sections can be collapsed
-- Search results now look and behave like lists elsewhere, with the same rows and section headers
-- Search result rows gained the tap-and-hold menu and chevron used everywhere else
 
 ### Fixed
+- History rows now consistently show which project a resource belongs to
+- Fixed a doubled divider line next to group headers in lists
+- Fixed the add-member icon blending into its background in Manage Project
 - Swiping to sync/unsync a project felt laggy and added a haptic tick at the commit point
 - Dataset file download/share icons no longer shift position when tapped or when a file is pending
 - Project screen's header shows the project ID, tap to copy
-- API settings screen restyled to match the rest of Settings; connection test now sits below the fields it tests
+- API settings screen restyled to match the rest of Settings
+- Connection test now sits below the fields it tests
 - Account screen: added a button to copy your API key
 - Home screen footer no longer wraps or gets clipped on narrow screens
 - IDs (mfid, project/instrument ID) now look consistent everywhere they appear
 - Link Resource sheet no longer shows the project name in monospace next to the ID
-- Project list rows show "#id" instead of "ID: id" beneath the project name
+- Project list rows show the project ID beneath the name
 - Linked/parent/child resource rows use a proper tinted background instead of a flat grey overlay
 - Removed an unexplained shadow on dataset thumbnail cards
 - Status/navigation bar icons were invisible (white on white) in light theme
