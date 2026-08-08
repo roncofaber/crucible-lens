@@ -19,7 +19,6 @@ import crucible.lens.data.util.formatDecimal
 import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.FastSizeAnim
 import crucible.lens.ui.common.StandardSizeAnim
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 internal fun ScientificMetadataCard(
@@ -56,7 +55,7 @@ internal fun ScientificMetadataCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Scientific Metadata",
-                        style = MaterialTheme.typography.emphasizedTitleMedium
+                        style = MaterialTheme.typography.titleMedium
                     )
                 }
             }

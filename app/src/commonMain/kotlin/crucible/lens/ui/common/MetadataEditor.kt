@@ -21,7 +21,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 /**
  * Structured key-value metadata editor.
@@ -59,7 +58,7 @@ fun MetadataEditor(
                     )
                     Text(
                         "Metadata",
-                        style = MaterialTheme.typography.emphasizedTitleMedium,
+                        style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
                     if (entries.isNotEmpty()) {

@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import crucible.lens.ui.common.AppIcon
@@ -18,6 +19,7 @@ import crucible.lens.ui.common.AppTopBar
 import crucible.lens.ui.common.IdText
 import crucible.lens.ui.common.ResourceListDividerInset
 import crucible.lens.ui.common.SectionHeader
+import crucible.lens.ui.common.SkeletonRow
 import crucible.lens.ui.common.SwipeAction
 import crucible.lens.ui.common.SwipeToHideItem
 import crucible.lens.ui.common.hideWithUndo
@@ -46,7 +48,6 @@ import crucible.lens.ui.common.CopyIdMenuItem
 import crucible.lens.ui.common.LongPressMenuBox
 import crucible.lens.platform.showToast
 import crucible.lens.ui.common.LazyColumnScrollbar
-import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.NotificationDot
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import crucible.lens.data.repository.CrucibleRepository
@@ -57,7 +58,6 @@ import crucible.lens.ui.common.ScrollToTopButtonClearance
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -310,13 +310,8 @@ fun ProjectsListScreen(
                     ) {
 
                     when {
-                        loadState is LoadState.Loading -> item(key = "__loading__") {
-                            Box(
-                                modifier = Modifier.fillParentMaxWidth().fillParentMaxHeight(0.85f),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                LoadingContent(title = "Loading Projects")
-                            }
+                        loadState is LoadState.Loading -> items(count = 6, key = { "__skeleton_${it}__" }) {
+                            SkeletonRow(hasSupportingLine = true, hasTrailing = true)
                         }
                         loadState is LoadState.Error -> item(key = "__error__") {
                             Box(modifier = Modifier.fillParentMaxWidth(), contentAlignment = Alignment.Center) {
@@ -344,7 +339,7 @@ fun ProjectsListScreen(
                                             )
                                             Text(
                                                 text = "No Projects Found",
-                                                style = MaterialTheme.typography.emphasizedTitleMedium
+                                                style = MaterialTheme.typography.titleMedium
                                             )
                                         }
                                         Text(
@@ -372,7 +367,7 @@ fun ProjectsListScreen(
                                                     )
                                                     Text(
                                                         text = "No Results Found",
-                                                        style = MaterialTheme.typography.emphasizedTitleMedium
+                                                        style = MaterialTheme.typography.titleMedium
                                                     )
                                                 }
                                                 Text(
@@ -571,7 +566,7 @@ private fun ProjectCard(
             leadingContent = {
                 NotificationDot(count = pendingRequestCount) {
                     AppIcon(AppIcons.Project,
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = if (isSynced) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             },
@@ -588,12 +583,6 @@ private fun ProjectCard(
                             AppIcon(AppIcons.Pinned, filled = isPinned,
                                 modifier = Modifier.size(20.dp),
                                 tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        if (!isSynced) {
-                            AppIcon(AppIcons.SyncPaused,
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         AppIcon(AppIcons.NavigateNext, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))

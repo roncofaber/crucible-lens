@@ -8,7 +8,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun ErrorCard(
@@ -34,7 +33,7 @@ fun ErrorCard(
                 )
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.emphasizedTitleMedium,
+                    style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     modifier = Modifier.weight(1f)
                 )

@@ -86,8 +86,10 @@ Every surface role therefore shifts with both the accent and the contrast level
 There is no runtime colour generation anywhere: adding an accent means exporting a new Theme Builder
 bundle and dropping in one more file, not writing a formula.
 
-Container roles are sized for compact chrome. **A full-screen surface should use plain `surface`** -
-which is why `SearchScreen` overrides `SearchBarDefaults.colors(containerColor = surface)`.
+Container roles are sized for compact chrome, but `SearchScreen`'s expanded `SearchBar` is a
+deliberate exception - it keeps M3's stock `SearchBarDefaults.colors()` (container defaults to
+`surfaceContainerHigh`) rather than overriding it, since the search bar is standard M3 chrome, not
+a full-bleed page background.
 
 ### No custom alpha
 
@@ -227,10 +229,13 @@ Compose 1.4.0 ships the emphasized tokens but every accessor is `internal`, so `
   members; only the `emphasizedX` extensions are imported. Rewriting an `emphasizedX` call site
   without dropping its import fails to compile in a way that points at the wrong file.
 
-Only two of the 15 are sanctioned: `emphasizedTitleMedium` (card/dialog heading) and
-`emphasizedTitleLarge` (expanded collapsing-bar hero). Emphasising a `body*` or `label*` role means
-the element wants a *different* role, not a heavier one. When CMP ships a stable M3 with the official
-accessors, delete the block in `Type.kt` and rename these two to `titleMediumEmphasized`/
+Only one of the 15 is sanctioned: `emphasizedTitleLarge`, for the expanded collapsing-bar hero -
+the single prominent title on a screen. Card and dialog headings use plain `titleMedium` instead
+(previously `emphasizedTitleMedium`, converted app-wide) - a card's own heading doesn't need
+heavier weight than every other `titleMedium` in the app just because it sits inside a `Card`; the
+icon, position, and a divider already separate it from the body content beneath it. Emphasising a
+`body*` or `label*` role means the element wants a *different* role, not a heavier one. When CMP
+ships a stable M3 with the official accessors, delete the block in `Type.kt` and rename this one to
 `titleLargeEmphasized`.
 
 ### `IdText` and `autoSize`
@@ -274,6 +279,43 @@ item(key = "my_card") {
 ```
 
 `ExitTransition.None` avoids a shrink animation that fights the `LazyColumn`'s own layout.
+
+---
+
+## Skeleton loading placeholders
+
+Use `SkeletonRow`/`SkeletonBlock` (`ui/common/SkeletonLoading.kt`) for a list's initial
+`LoadState.Loading` — row-shaped placeholders instead of a spinner, so the loading state previews
+what's about to appear and swapping to real content doesn't jump (the skeleton row occupies the
+same footprint as the row it becomes):
+
+```kotlin
+loadState is LoadState.Loading -> items(count = 6, key = { "__skeleton_${it}__" }) {
+    SkeletonRow(hasSupportingLine = true, hasTrailing = true)
+}
+```
+
+- **Only for a known, row-shaped list** — `LoadingContent` (full-screen spinner) and `LoadingItem`
+  (inline spinner) are still correct, and still used, for loads with no fixed shape to preview yet
+  (`ResourceDetailScreen`'s pre-siblings-resolved case has no pager/cards to lay out at all) and
+  for small, individually-loading pieces (`CountChip`'s inline spinner, a submit button's loading
+  state) — turning every micro-spinner into a skeleton would be overkill for something that small.
+- **`SkeletonRow` mirrors this app's two real row shapes** via `hasLeadingIcon` (default `true`,
+  for `ListItem`-based rows like `ProjectCard`/`InstrumentCard`; pass `false` for icon-less
+  `ResourceRow` rows — search results, dataset lists — reusing `ResourceCard.kt`'s own `56.dp`
+  start inset so the skeleton's text column lines up with the real row that replaces it),
+  `hasSupportingLine` (a second, shorter bar under the title), and `hasTrailing` (a chip-shaped
+  block, for rows like `ProjectCard` that show trailing count chips).
+- **Pulses between `surfaceContainerHigh` and `surfaceContainerHighest`** via
+  `InfiniteTransition.animateColor` — both real M3 roles crossfaded, not alpha animated on one
+  color, per "No custom alpha" above. Same technique `SectionHeader`'s expand/collapse container
+  crossfade uses, just looped (`RepeatMode.Reverse`) instead of one-shot. Each `SkeletonRow` runs
+  its own independent `rememberInfiniteTransition` rather than sharing one hoisted clock across a
+  screen — visually indistinguishable during actual use, and avoids threading a pulse color through
+  every call site for it.
+- **No section headers above skeleton rows** — matches today's behavior, where a `SectionHeader`
+  only ever appears once grouped `Success` data exists. A loading list just shows a flat run of
+  skeleton rows.
 
 ---
 

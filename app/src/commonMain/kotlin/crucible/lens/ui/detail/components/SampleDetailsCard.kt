@@ -25,7 +25,6 @@ import crucible.lens.platform.openUrl
 import crucible.lens.ui.common.IdText
 import crucible.lens.ui.common.StandardSizeAnim
 import kotlinx.serialization.json.JsonPrimitive
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 internal fun SampleDetailsCard(
@@ -50,7 +49,7 @@ internal fun SampleDetailsCard(
             ) {
                 Text(
                     text = "Sample Information",
-                    style = MaterialTheme.typography.emphasizedTitleMedium
+                    style = MaterialTheme.typography.titleMedium
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(

@@ -44,7 +44,11 @@ copy both artifacts to the synced Drive folder as
 Signing reads `KEYSTORE_PATH` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` from the
 environment, or `keystore.path` / `keystore.password` / `key.alias` / `key.password` from
 `local.properties` (gitignored). This is the same `signingConfigs.release` Gradle already reads -
-the script does not sign anything itself.
+the script does not sign anything itself. `scripts/release.sh` prompts interactively (hidden
+input) for `KEYSTORE_PASSWORD`/`KEY_PASSWORD` if they aren't already set as env vars, so the two
+passwords never need to sit in `local.properties` - keep them in a password manager instead and
+paste them in each run. `keystore.path`/`key.alias` (not secrets) can still live in
+`local.properties`.
 
 The script deliberately does **not** bump the version, touch `CHANGELOG.md`, commit, tag, or push.
 Those stay manual.

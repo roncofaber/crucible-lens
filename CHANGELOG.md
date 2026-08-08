@@ -2,15 +2,24 @@
 
 ## [Unreleased]
 
+## [0.8.1] – 2026-08-07
+
+Long-press a project for quick actions, loading placeholders instead of spinners, and a batch of consistency fixes to dialogs, colors, and typography.
+
 ### Added
 - Long-press a project in the list to manage it, toggle sync, or copy its ID
 
 ### Changed
 - New installs now default to the Cerulean accent color instead of Carmine
 - Confirmation dialogs are consistently phrased as questions, with the icon beside the title
+- Project, instrument, and search lists show placeholder rows while loading instead of a spinner
+- Search bar and the direct-ID-lookup card now match the rest of the app's colors more closely
+- Not-syncing projects now show a dimmed icon instead of a cramped icon next to the pin button
+- Card and dialog headings are lighter weight, consistent with the rest of the app's text
 
 ### Fixed
 - Typing in the Projects search field no longer lags with many synced projects
+- Clearing the cache now asks for confirmation first
 
 ## [0.8.0] – 2026-08-06
 

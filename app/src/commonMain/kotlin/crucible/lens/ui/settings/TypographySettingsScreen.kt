@@ -19,7 +19,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.theme.emphasizedTitleLarge
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun TypographySettingsScreen(
@@ -59,13 +58,6 @@ fun TypographySettingsScreen(
                 text = "App bars and sheet titles",
                 style = MaterialTheme.typography.titleLarge,
                 caption = "titleLarge · 22sp Regular"
-            )
-
-            RampSample(
-                title = "Card / dialog heading",
-                text = "Card title or heading",
-                style = MaterialTheme.typography.emphasizedTitleMedium,
-                caption = "emphasizedTitleMedium · 16sp Bold"
             )
 
             RampSample(
@@ -199,7 +191,7 @@ private fun CardExample() {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Dataset Details", style = MaterialTheme.typography.emphasizedTitleMedium)
+            Text("Dataset Details", style = MaterialTheme.typography.titleMedium)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 InfoRowExample(label = "Type", value = "X-ray Absorption Spectroscopy")
                 InfoRowExample(label = "Created", value = "2024-08-15")

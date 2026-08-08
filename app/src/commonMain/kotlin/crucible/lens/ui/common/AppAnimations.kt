@@ -51,6 +51,9 @@ val ScrollbarHideSpec: FiniteAnimationSpec<Float> = tween(600)
 val TaglineEnterSpec: FiniteAnimationSpec<Float> = tween(500, delayMillis = 200)
 val TaglineExitSpec: FiniteAnimationSpec<Float> = tween(300)
 
+// Skeleton loading placeholder pulse - see ui/common/SkeletonLoading.kt
+const val SkeletonPulseDurationMillis = 800
+
 /**
  * Rotating chevron used consistently for all expand/collapse affordances.
  * `fast = true` uses a stiffer spring for nested elements inside already-animating containers.

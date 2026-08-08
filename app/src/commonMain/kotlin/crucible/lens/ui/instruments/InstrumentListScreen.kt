@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppTopBar
+import crucible.lens.ui.common.SkeletonRow
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -28,7 +29,6 @@ import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.RefreshMenuItem
 import crucible.lens.ui.common.ToggleHiddenMenuItem
 import crucible.lens.ui.common.ErrorCard
-import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.LoadState
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.ScrollToTopButton
@@ -41,7 +41,6 @@ import crucible.lens.ui.common.hideWithUndo
 import crucible.lens.platform.showToast
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun InstrumentListScreen(
@@ -189,11 +188,8 @@ fun InstrumentListScreen(
                     }
 
                     when (val state = loadState) {
-                        is LoadState.Loading -> item(key = "__loading__") {
-                            Box(
-                                modifier = Modifier.fillParentMaxWidth().fillParentMaxHeight(0.85f),
-                                contentAlignment = Alignment.Center
-                            ) { LoadingContent(title = "Loading Instruments") }
+                        is LoadState.Loading -> items(count = 6, key = { "__skeleton_${it}__" }) {
+                            SkeletonRow(hasSupportingLine = true)
                         }
                         is LoadState.Error -> item(key = "__error__") {
                             Box(modifier = Modifier.fillParentMaxWidth(), contentAlignment = Alignment.Center) {
@@ -222,7 +218,7 @@ fun InstrumentListScreen(
                                             )
                                             Text(
                                                 if (searchQuery.isNotBlank()) "No matching instruments" else "No instruments",
-                                                style = MaterialTheme.typography.emphasizedTitleMedium
+                                                style = MaterialTheme.typography.titleMedium
                                             )
                                         }
                                         Text(

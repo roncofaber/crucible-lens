@@ -17,6 +17,7 @@ import crucible.lens.data.cache.PersistentProjectCache
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.ConfirmationDialog
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -31,6 +32,31 @@ fun CacheSettingsScreen(
     val platformContext = getPlatformContext()
     var cacheAge by remember { mutableStateOf<Long?>(null) }
     var cacheStats by remember { mutableStateOf<CrucibleRepository.CacheStats?>(null) }
+    var showClearCacheDialog by remember { mutableStateOf(false) }
+
+    if (showClearCacheDialog) {
+        ConfirmationDialog(
+            icon = AppIcons.Delete,
+            title = "Clear all cache?",
+            text = "Cached data will be re-downloaded the next time you need it.",
+            confirmLabel = "Clear",
+            isDestructive = true,
+            onConfirm = {
+                showClearCacheDialog = false
+                repository.invalidateAll()
+                scope.launch { PersistentProjectCache.clear(platformContext) }
+                cacheAge = null
+                cacheStats = repository.getCacheStats()
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = "Cache cleared",
+                        duration = SnackbarDuration.Short
+                    )
+                }
+            },
+            onDismiss = { showClearCacheDialog = false }
+        )
+    }
 
     LaunchedEffect(Unit) {
         cacheAge = repository.projectsAgeMinutes()
@@ -107,18 +133,7 @@ fun CacheSettingsScreen(
             }
 
             OutlinedButton(
-                onClick = {
-                    repository.invalidateAll()
-                    scope.launch { PersistentProjectCache.clear(platformContext) }
-                    cacheAge = null
-                    cacheStats = repository.getCacheStats()
-                    scope.launch {
-                        snackbarHostState.showSnackbar(
-                            message = "Cache cleared",
-                            duration = SnackbarDuration.Short
-                        )
-                    }
-                },
+                onClick = { showClearCacheDialog = true },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 AppIcon(AppIcons.Delete, modifier = Modifier.size(18.dp))

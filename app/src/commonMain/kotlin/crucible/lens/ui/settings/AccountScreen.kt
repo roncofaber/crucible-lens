@@ -33,7 +33,6 @@ import crucible.lens.ui.common.StandardSizeAnim
 import crucible.lens.ui.common.UserAvatar
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun AccountScreen(
@@ -353,7 +352,7 @@ private fun ProfileCard(
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             displayName ?: "No name set",
-                            style = MaterialTheme.typography.emphasizedTitleMedium,
+                            style = MaterialTheme.typography.titleMedium,
                             color = if (displayName != null) MaterialTheme.colorScheme.onSurface
                             else MaterialTheme.colorScheme.onSurfaceVariant
                         )

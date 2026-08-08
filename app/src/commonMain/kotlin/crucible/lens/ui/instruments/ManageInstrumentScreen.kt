@@ -19,7 +19,6 @@ import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.detail.components.InfoRow
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun ManageInstrumentScreen(
@@ -148,7 +147,7 @@ private fun InstrumentEditCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Edit Instrument", style = MaterialTheme.typography.emphasizedTitleMedium)
+            Text("Edit Instrument", style = MaterialTheme.typography.titleMedium)
 
             if (saveError != null) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {

@@ -29,7 +29,6 @@ import crucible.lens.ui.common.StandardSizeAnim
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
 import org.koin.compose.koinInject
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 internal fun DatasetDetailsCard(
@@ -56,7 +55,7 @@ internal fun DatasetDetailsCard(
             ) {
                 Text(
                     text = "Dataset Information",
-                    style = MaterialTheme.typography.emphasizedTitleMedium
+                    style = MaterialTheme.typography.titleMedium
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(

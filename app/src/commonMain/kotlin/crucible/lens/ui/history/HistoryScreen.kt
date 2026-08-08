@@ -35,7 +35,6 @@ import crucible.lens.platform.shareText
 import crucible.lens.ui.common.AppScaffold
 import kotlin.math.abs
 import kotlin.time.Clock
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 private enum class HistorySortOrder { NEWEST, OLDEST }
 
@@ -123,7 +122,7 @@ fun HistoryScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         AppIcon(AppIcons.HistoryEmpty, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("No history yet", style = MaterialTheme.typography.emphasizedTitleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("No history yet", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("Resources you view will appear here", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }

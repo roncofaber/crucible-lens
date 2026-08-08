@@ -23,7 +23,6 @@ import crucible.lens.platform.openUrl
 import crucible.lens.platform.shareText
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 internal sealed class AssociatedFilesState {
     object Idle    : AssociatedFilesState()
@@ -142,7 +141,7 @@ internal fun AssociatedFilesCard(
                     Spacer(Modifier.width(8.dp))
                     Text(
                         "Files (${filesState.files.size})",
-                        style = MaterialTheme.typography.emphasizedTitleMedium,
+                        style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.weight(1f)
                     )
                 }

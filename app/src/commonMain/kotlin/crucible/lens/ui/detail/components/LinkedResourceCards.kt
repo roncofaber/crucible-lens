@@ -19,7 +19,6 @@ import crucible.lens.ui.common.AppIconToken
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.ExpandChevron
 import crucible.lens.ui.common.StandardSizeAnim
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 private fun LinkedResourceCard(
@@ -47,7 +46,7 @@ private fun LinkedResourceCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "$title (${links.size})",
-                    style = MaterialTheme.typography.emphasizedTitleMedium
+                    style = MaterialTheme.typography.titleMedium
                 )
             }
 

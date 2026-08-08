@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.EffectsFastSpring
+import crucible.lens.ui.common.SkeletonRow
 import crucible.lens.ui.common.EffectsDefaultSpring
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,7 +32,6 @@ import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.FilterSheet
 import crucible.lens.ui.common.SearchFilters
 import crucible.lens.ui.common.SectionHeader
-import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.EmptyListCard
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.ResourceRow
@@ -224,12 +224,6 @@ fun SearchScreen(
 
     Box(modifier = modifier.fillMaxSize().semantics { isTraversalGroup = true }) {
         SearchBar(
-            // M3 defaults this to surfaceContainerHigh. That role is meant for compact chrome; an
-            // expanded SearchBar is effectively the whole screen, so any tint on it reads as a
-            // coloured page rather than a raised surface — and it would fight the tinted section
-            // headers inside it. Plain surface keeps the results on the same ground as every other
-            // list in the app.
-            colors = SearchBarDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
@@ -344,7 +338,9 @@ fun SearchScreen(
                                 isFiltered = false,
                                 emptyMessage = "Type at least 3 characters to search samples, datasets and projects"
                             )
-                            isSearchLoading -> LoadingContent(title = "Searching")
+                            isSearchLoading -> Column(modifier = Modifier.fillMaxSize()) {
+                                repeat(6) { SkeletonRow(hasLeadingIcon = false, hasSupportingLine = true) }
+                            }
                             metadataMode && metadataSearchError != null -> ErrorCard(
                                 title = "Metadata search failed",
                                 message = metadataSearchError ?: "",
@@ -484,25 +480,25 @@ private fun FilterLoadingBar(visible: Boolean) {
 private fun DirectLookupCard(mfid: String, onClick: (String) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(16.dp).clickable { onClick(mfid) },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AppIcon(AppIcons.OpenInNew, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            AppIcon(AppIcons.OpenInNew, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     "Open resource directly",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
                 Text(
                     mfid,
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             }
         }

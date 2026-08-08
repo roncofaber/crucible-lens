@@ -22,7 +22,6 @@ import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.UserAvatar
 import org.koin.compose.koinInject
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun UserProfileScreen(
@@ -104,7 +103,7 @@ fun UserProfileScreen(
                                     if (displayName != null) {
                                         Text(
                                             displayName,
-                                            style = MaterialTheme.typography.emphasizedTitleMedium
+                                            style = MaterialTheme.typography.titleMedium
                                         )
                                     }
                                     if (u.username != null) {

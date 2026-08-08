@@ -34,7 +34,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.util.SortField
 import crucible.lens.data.util.SortState
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 /**
  * Left inset for the divider under an icon-leading list row, aligning it with the row's text
@@ -250,7 +249,7 @@ fun EmptyListCard(
                     )
                     Text(
                         text = if (isFiltered) "No Matching $resourceName" else "No $resourceName",
-                        style = MaterialTheme.typography.emphasizedTitleMedium
+                        style = MaterialTheme.typography.titleMedium
                     )
                 }
                 Text(

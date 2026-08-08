@@ -56,8 +56,6 @@ import kotlinx.coroutines.delay
 import kotlin.time.Clock
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import crucible.lens.ui.theme.emphasizedTitleMedium
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -721,7 +719,7 @@ private fun HelpSection(icon: AppIconToken, title: String, description: String) 
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
         AppIcon(icon, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.emphasizedTitleMedium)
+            Text(title, style = MaterialTheme.typography.titleMedium)
             Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

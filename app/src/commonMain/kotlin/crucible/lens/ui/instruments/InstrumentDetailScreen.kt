@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.DropdownMenu
@@ -54,6 +55,7 @@ import crucible.lens.platform.showToast
 import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.SkeletonRow
 import crucible.lens.ui.common.CollapsingAppTopBar
 import crucible.lens.ui.common.CopyIdMenuItem
 import crucible.lens.ui.common.EmptyListCard
@@ -61,7 +63,6 @@ import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.GroupByOption
 import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.LoadState
-import crucible.lens.ui.common.LoadingItem
 import crucible.lens.ui.common.RefreshMenuItem
 import crucible.lens.ui.common.ResourceControlsBar
 import crucible.lens.ui.common.ResourceRow
@@ -251,8 +252,8 @@ fun InstrumentDetailScreen(
                     }
 
                     when (val state = datasetsState) {
-                        is LoadState.Loading -> item(key = "loading") {
-                            LoadingItem(label = "Loading datasets…")
+                        is LoadState.Loading -> items(count = 6, key = { "__skeleton_${it}__" }) {
+                            SkeletonRow(hasLeadingIcon = false, hasSupportingLine = true)
                         }
 
                         is LoadState.Error -> item(key = "error") {

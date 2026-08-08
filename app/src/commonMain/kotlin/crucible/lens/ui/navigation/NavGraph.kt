@@ -2,7 +2,6 @@
 package crucible.lens.ui.navigation
 import androidx.compose.material3.ExperimentalMaterial3Api
 import crucible.lens.platform.*
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -627,7 +626,7 @@ fun NavGraph(
                                 )
                                 Text(
                                     text = "Unable to Load Resource",
-                                    style = MaterialTheme.typography.emphasizedTitleMedium,
+                                    style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     textAlign = TextAlign.Center
                                 )

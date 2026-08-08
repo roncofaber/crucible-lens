@@ -43,7 +43,6 @@ import crucible.lens.ui.common.UserResultItem
 import crucible.lens.ui.common.rememberDebouncedSearchResults
 import crucible.lens.ui.detail.components.ClickableInfoRow
 import crucible.lens.ui.detail.components.InfoRow
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 @Composable
 fun ManageProjectScreen(
@@ -248,7 +247,7 @@ private fun ProjectEditCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Edit Project", style = MaterialTheme.typography.emphasizedTitleMedium)
+            Text("Edit Project", style = MaterialTheme.typography.titleMedium)
 
             if (saveError != null) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
@@ -315,7 +314,7 @@ private fun PendingRequestsCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Pending Requests (${requests.size})", style = MaterialTheme.typography.emphasizedTitleMedium)
+            Text("Pending Requests (${requests.size})", style = MaterialTheme.typography.titleMedium)
             requests.forEach { request ->
                 val requester = requesterInfo[request.requesterId]
                 val requesterIdentifier = requester?.username ?: request.requesterId
@@ -382,7 +381,7 @@ private fun MembersCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Members (${members.size})", style = MaterialTheme.typography.emphasizedTitleMedium)
+                Text("Members (${members.size})", style = MaterialTheme.typography.titleMedium)
                 ExpandChevron(expanded = expanded)
             }
             if (expanded) {

@@ -13,6 +13,12 @@
 # local.properties' keystore.path/keystore.password/key.alias/key.password (gitignored).
 # No separate zipalign/sign step is needed — Gradle's assembleRelease/bundleRelease already
 # produce a signed artifact when signingConfigs.release.storeFile is set.
+#
+# The two passwords are prompted for interactively below (hidden input) rather than read from
+# local.properties, so nothing sensitive needs to sit on disk — pull them from a password
+# manager each run. Export KEYSTORE_PASSWORD/KEY_PASSWORD yourself beforehand to skip a prompt
+# (e.g. scripting/CI use), otherwise leave keystore.password/key.password out of
+# local.properties entirely.
 
 set -euo pipefail
 
@@ -25,6 +31,16 @@ export PATH="$JAVA_HOME/bin:$PATH"
 
 VERSION="$(grep '^app.versionName=' gradle.properties | cut -d'=' -f2)"
 echo "=== Releasing crucible-lens v$VERSION ==="
+
+if [[ -z "${KEYSTORE_PASSWORD:-}" ]]; then
+  read -rs -p "Keystore password: " KEYSTORE_PASSWORD
+  echo
+fi
+if [[ -z "${KEY_PASSWORD:-}" ]]; then
+  read -rs -p "Key password: " KEY_PASSWORD
+  echo
+fi
+export KEYSTORE_PASSWORD KEY_PASSWORD
 
 echo ""
 echo "=== Verify ==="

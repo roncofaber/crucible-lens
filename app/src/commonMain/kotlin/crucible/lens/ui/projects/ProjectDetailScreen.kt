@@ -87,7 +87,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import crucible.lens.ui.theme.emphasizedTitleMedium
 
 // ProjectContent is defined in ProjectDetailViewModel.kt; the resource lists, their group-by enums
 // and grouping logic live in ProjectResourceLists.kt.
@@ -534,7 +533,7 @@ private fun NonMemberContent(
             )
             Text(
                 text = "You're not a member of this project",
-                style = MaterialTheme.typography.emphasizedTitleMedium,
+                style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center
             )
             Text(
