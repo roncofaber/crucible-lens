@@ -29,6 +29,7 @@ fun SettingsScreen(
     onNavigateToApi: () -> Unit,
     onNavigateToAppearance: () -> Unit,
     onNavigateToCache: () -> Unit,
+    onNavigateToSearch: () -> Unit,
     onNavigateToSyncedProjects: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onNavigateToTypography: () -> Unit,
@@ -75,6 +76,12 @@ fun SettingsScreen(
                 title = "Appearance",
                 subtitle = "Theme, accent color, animations",
                 onClick = onNavigateToAppearance
+            )
+            SettingsRow(
+                icon = AppIcons.Search,
+                title = "Search",
+                subtitle = "Result limits",
+                onClick = onNavigateToSearch
             )
             SettingsRow(
                 icon = AppIcons.FileStorage,

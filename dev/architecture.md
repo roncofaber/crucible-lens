@@ -242,7 +242,20 @@ Every list/detail/manage/create screen has a ViewModel in commonMain, constructo
 `ResourceDetailViewModel`, `ProjectsListViewModel`, `ProjectDetailViewModel`, `ManageProjectViewModel`,
 `InstrumentListViewModel`, `InstrumentDetailViewModel`, `ManageInstrumentViewModel`, `AccountViewModel`,
 `CreateSampleViewModel`, `CreateDatasetViewModel`, `CreateProjectViewModel`, `EditResourceViewModel`,
-`HomeViewModel`.
+`HomeViewModel`, `UserProfileViewModel`.
+
+`UserProfileViewModel` (added when "Add to Project" landed on `UserProfileScreen`) holds the
+viewed user (`UserProfileState`), the current user's own project list (`myProjects`, sourced from
+`CrucibleRepository.observeProjects()` - already scoped server-side to member projects, so no new
+fetch), and `addToProjectState` for the add-in-progress/result feedback the screen turns into a
+toast. `checkProjectMembership()` - triggered when the "Add to Project" sheet opens, not on
+screen load - fetches each of `myProjects`' member lists in parallel via
+`CrucibleRepository.fetchProjectMembers()` (cache-backed, so free if already loaded elsewhere) and
+matches the viewed user by ORCID/username into `memberProjectIds`, with `isCheckingMembership`
+covering the gap so the sheet shows a pending state instead of flashing "Add" for projects that
+turn out to already include them. `addToProject()` mirrors `ManageProjectViewModel.addMember()`'s
+call shape (`addProjectMember`, invalidate that project's member cache on success) and additionally
+folds the newly-added project into `memberProjectIds` on success.
 
 Most expose a single `StateFlow<LoadState<T>>` (`ui/common/LoadState.kt`) rather than separate
 loading/error/data/refreshing flags. Two exceptions:
@@ -395,6 +408,7 @@ A platform-agnostic interface (DataStore on Android, NSUserDefaults on iOS). Eve
 | Resource history | `resource_history` | `HistoryItem`: `uuid`, `name`, `timestamp`, `resourceType?`, `projectId?` - `projectId` is recorded at view time, not derived from a cache lookup at render time |
 | Sample / dataset / instrument group-by | `sample_group_by`, `dataset_group_by`, `instrument_group_by` | Defaults `TYPE` / `MEASUREMENT` / `MEASUREMENT` |
 | Default project tab | `default_project_tab` | `SAMPLES` / `DATASETS` |
+| People / Project result limit | `people_result_limit`, `project_result_limit` | Caps each category's results per search independently; default 5 |
 
 ---
 

@@ -21,6 +21,25 @@ internal fun dirtyFieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedLabelColor = MaterialTheme.colorScheme.tertiary
 )
 
+// Shared by every settings screen's single-select preference picker (a Row of FilterChips saving
+// immediately on tap) - Appearance's theme/contrast/default-tab pickers and Search's result limit.
+@Composable
+internal fun settingsChipColors() = FilterChipDefaults.filterChipColors(
+    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
+)
+
+@Composable
+internal fun settingsChipBorder(selected: Boolean) = FilterChipDefaults.filterChipBorder(
+    borderColor = MaterialTheme.colorScheme.outline,
+    selectedBorderColor = MaterialTheme.colorScheme.primary,
+    borderWidth = 1.dp,
+    selectedBorderWidth = 1.5.dp,
+    enabled = true,
+    selected = selected
+)
+
 @Composable
 internal fun SettingsSaveBar(
     hasChanges: Boolean,

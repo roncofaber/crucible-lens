@@ -27,6 +27,7 @@ import crucible.lens.data.util.formatDateTime
 import crucible.lens.data.util.userDisplayName
 import crucible.lens.data.util.userSortKey
 import crucible.lens.ui.common.AppScaffold
+import crucible.lens.ui.common.AddOrAddedAction
 import crucible.lens.ui.common.ConfirmationDialog
 import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.ExpandChevron
@@ -442,7 +443,7 @@ private fun AddMemberSheet(
     var query by remember { mutableStateOf("") }
     val searchResults by viewModel.memberSearchResults.collectAsState()
     val isSearching by viewModel.isMemberSearching.collectAsState()
-    val isAdding by viewModel.isAddingMember.collectAsState()
+    val addingMemberUsername by viewModel.addingMemberUsername.collectAsState()
 
     SearchPickerSheet(
         title = "Add Member",
@@ -463,14 +464,16 @@ private fun AddMemberSheet(
             UserResultItem(
                 user = user,
                 trailingContent = {
-                    if (alreadyMember) {
-                        Text("Added", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } else {
-                        Button(
-                            onClick = { viewModel.addMember(user) },
-                            enabled = !isAdding,
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
-                        ) { Text("Add") }
+                    // addProjectMember requires a username - a user without one (shown here now
+                    // that UserResultItem renders username-less accounts too, falling back to
+                    // their ORCID) simply can't be added via this API, so there's no action to
+                    // offer rather than a button that would silently do nothing when tapped.
+                    if (user.username != null) {
+                        AddOrAddedAction(
+                            added = alreadyMember,
+                            isAdding = user.username == addingMemberUsername,
+                            onAdd = { viewModel.addMember(user) }
+                        )
                     }
                 }
             )

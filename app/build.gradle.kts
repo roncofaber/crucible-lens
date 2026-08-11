@@ -12,7 +12,15 @@ plugins {
 
 val versionNameProp = project.findProperty("app.versionName") as? String ?: "0.0.0"
 
-// Generate AppBuildConfig.kt for build-time constants unavailable in the new KMP plugin
+// Generate AppBuildConfig.kt for build-time constants unavailable in the new KMP plugin.
+//
+// isDebug is inferred from whether ANY task name requested in this Gradle invocation contains
+// "debug" — not from which variant is actually consuming this file. That's only correct because
+// composeApp's androidMain compilation is shared, unsplit by variant, so there is exactly one
+// AppBuildConfig.kt per invocation. Requesting a debug task (e.g. assembleDebug) and a release
+// task (bundleRelease/assembleRelease) in the SAME invocation makes this true for both, silently
+// baking DEBUG=true into the release build too. Callers (scripts/release.sh, CI) must build debug
+// and release in separate `./gradlew` invocations, never combined.
 val generateAppBuildConfig by tasks.registering {
     val isDebug = gradle.startParameter.taskNames.any { it.contains("debug", ignoreCase = true) }
     val outputDir = layout.buildDirectory.dir("generated/appBuildConfig/kotlin")

@@ -121,12 +121,19 @@ fun UserIdentityRow(
 @Composable
 private fun UserNameBlock(user: User, modifier: Modifier = Modifier) {
     val fullName = listOfNotNull(user.firstName, user.lastName).joinToString(" ")
+    // Username-less accounts exist (e.g. not yet completed onboarding) - fall back to the ORCID
+    // as the handle line rather than the literal string "@null" a raw template would produce.
+    val handle = user.username?.let { "@$it" } ?: user.uniqueId
     Column(modifier = modifier) {
         if (fullName.isNotBlank()) {
             Text(fullName, style = MaterialTheme.typography.bodyMedium)
-            Text("@${user.username}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (handle != null) {
+                Text(handle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else if (handle != null) {
+            Text(handle, style = MaterialTheme.typography.bodyMedium)
         } else {
-            Text("@${user.username}", style = MaterialTheme.typography.bodyMedium)
+            Text("Unknown user", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -134,7 +141,8 @@ private fun UserNameBlock(user: User, modifier: Modifier = Modifier) {
 /**
  * Single row for a user search result — avatar, name-first [UserNameBlock], optional
  * [trailingContent] slot for action buttons (e.g. "Add"). Used for full-sheet/standalone browsing
- * lists (e.g. Add Member); only renders if the user has a username.
+ * lists (e.g. Add Member, People search). Renders as long as the user has *some* identifier
+ * (username or ORCID) - only bails when there's truly nothing to show or act on.
  */
 @Composable
 fun UserResultItem(
@@ -143,7 +151,7 @@ fun UserResultItem(
     onClick: (() -> Unit)? = null,
     trailingContent: (@Composable () -> Unit)? = null
 ) {
-    if (user.username == null) return
+    if (user.username == null && user.uniqueId == null) return
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         shape = MaterialTheme.shapes.small,

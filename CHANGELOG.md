@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+### Added
+- Search for people; add them to one of your projects from their profile
+- Search results can be filtered to just People, Projects, Samples, or Datasets
+- New Settings > Search screen to customize how many People and Projects show per search, independently
+
+### Changed
+- Search fields use a neutral color instead of the accent color, matching most other apps
+- "Create Project" and "Add to Project" buttons are no longer full-width
+- Search now always includes projects you're not a member of, instead of needing a "Discover" toggle
+- Search filter chips are now a single row
+- Project search results are now capped like people results, instead of showing up to 20
+- Home screen's QR scan icon uses the accent color
+
+### Fixed
+- Cached project data is no longer included in device backups or transfers
+- Adding to a project now shows whether someone is already a member before you try
+- Adding a member now shows a smooth confirmation instead of an abrupt swap, with a checkmark instead of wrapped text
+- User search results now include accounts without a username instead of hiding them
+- Not-syncing projects group remembers whether it's expanded after opening a project and going back
+- Group headers no longer shift by a couple of pixels when expanding or collapsing
+- Group headers no longer blend into the background in some themes when expanded
+- A failed search now shows a retryable error instead of silently looking like no results
+
 ## [0.8.1] – 2026-08-07
 
 Long-press a project for quick actions, loading placeholders instead of spinners, and a batch of consistency fixes to dialogs, colors, and typography.

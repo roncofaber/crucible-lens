@@ -26,6 +26,7 @@ import crucible.lens.ui.common.hideWithUndo
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -98,8 +99,9 @@ fun ProjectsListScreen(
     }
     val projectCounts by viewModel.projectCounts.collectAsState()
     // Persistent cache summaries - loaded immediately for instant display
-    var syncedExpanded by remember { mutableStateOf(true) }
-    var unsyncedExpanded by remember { mutableStateOf(false) }
+    // Saveable so a group's collapsed/expanded state survives opening a project and coming back.
+    var syncedExpanded by rememberSaveable { mutableStateOf(true) }
+    var unsyncedExpanded by rememberSaveable { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var sortState by remember { mutableStateOf(SortState(SortField.NAME, true)) }
@@ -489,19 +491,17 @@ fun ProjectsListScreen(
                                 // treatment as Home's "New Sample"/"New Dataset" buttons rather
                                 // than blending in as just another list row.
                                 item(key = "__create_project__") {
-                                    OutlinedButton(
-                                        onClick = onCreateProject,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 16.dp)
-                                            .height(52.dp),
-                                        shape = MaterialTheme.shapes.medium,
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                                    ) {
-                                        AppIcon(AppIcons.Add, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Create Project")
+                                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                        OutlinedButton(
+                                            onClick = onCreateProject,
+                                            shape = MaterialTheme.shapes.medium,
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                                        ) {
+                                            AppIcon(AppIcons.Add, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Create Project")
+                                        }
                                     }
                                 }
                             }

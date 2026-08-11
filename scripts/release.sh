@@ -48,11 +48,30 @@ echo "=== Verify ==="
 
 echo ""
 echo "=== Build debug APK + release bundle/APK ==="
-./gradlew :androidApp:assembleDebug :androidApp:bundleRelease :androidApp:assembleRelease
+# Two separate invocations, not one combined command: app/build.gradle.kts's
+# generateAppBuildConfig task infers isDebug from whether ANY requested task name in the
+# invocation contains "debug" (composeApp's androidMain compilation isn't variant-split, so
+# there's only one shared AppBuildConfig.kt per invocation). Requesting assembleDebug and
+# bundleRelease/assembleRelease together made that check see "debug" and bake DEBUG=true into
+# the release build too — shipping a "release" AAB that showed the dev version string and the
+# debug-only Typography settings screen. Keeping debug and release in separate invocations
+# means each one's task list unambiguously reflects a single variant.
+./gradlew :androidApp:assembleDebug
+./gradlew :androidApp:bundleRelease :androidApp:assembleRelease
 
 DEBUG_APK="$REPO_ROOT/androidApp/build/outputs/apk/debug/androidApp-debug.apk"
 RELEASE_APK="$REPO_ROOT/androidApp/build/outputs/apk/release/androidApp-release.apk"
 RELEASE_AAB="$REPO_ROOT/androidApp/build/outputs/bundle/release/androidApp-release.aab"
+
+echo ""
+echo "=== Verify the release build isn't flagged as debug ==="
+GENERATED_BUILD_CONFIG="$REPO_ROOT/app/build/generated/appBuildConfig/kotlin/crucible/lens/AppBuildConfig.kt"
+if ! grep -q "DEBUG: Boolean = false" "$GENERATED_BUILD_CONFIG"; then
+  echo "ERROR: AppBuildConfig.DEBUG is not false after the release build — refusing to publish a debug-flagged release." >&2
+  echo "This generated file is shared across variants; see the comment above the build step." >&2
+  exit 1
+fi
+echo "DEBUG = false, OK."
 
 echo ""
 echo "=== Verify the release build is actually signed ==="

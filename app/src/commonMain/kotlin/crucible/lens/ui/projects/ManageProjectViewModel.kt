@@ -68,8 +68,10 @@ class ManageProjectViewModel(
     private val _isMemberSearching = MutableStateFlow(false)
     val isMemberSearching: StateFlow<Boolean> = _isMemberSearching.asStateFlow()
 
-    private val _isAddingMember = MutableStateFlow(false)
-    val isAddingMember: StateFlow<Boolean> = _isAddingMember.asStateFlow()
+    // The specific user (by username) currently being added, not just a global flag - lets only
+    // that one row show a spinner instead of disabling the whole list on any single tap.
+    private val _addingMemberUsername = MutableStateFlow<String?>(null)
+    val addingMemberUsername: StateFlow<String?> = _addingMemberUsername.asStateFlow()
 
     private var projectId: String = ""
     private var currentUserOrcid: String? = null
@@ -211,7 +213,7 @@ class ManageProjectViewModel(
     fun addMember(user: User) {
         val username = user.username ?: return
         viewModelScope.launch {
-            _isAddingMember.value = true
+            _addingMemberUsername.value = username
             val result = apiClient.service.addProjectMember(projectId, username)
             if (result is ApiResult.Success && result.data) {
                 repository.invalidateProjectMembers(projectId)
@@ -220,7 +222,7 @@ class ManageProjectViewModel(
                     _state.value = loaded.copy(members = loaded.members + user)
                 }
             }
-            _isAddingMember.value = false
+            _addingMemberUsername.value = null
         }
     }
 

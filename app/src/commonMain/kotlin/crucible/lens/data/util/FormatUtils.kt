@@ -85,3 +85,14 @@ fun userDisplayName(user: User?): String =
  */
 fun userSortKey(user: User?): String =
     (user?.lastName?.takeIf { it.isNotBlank() } ?: user?.username ?: user?.uniqueId ?: "").lowercase()
+
+/**
+ * True if [a] and [b] identify the same account, matched on username or ORCID (either is
+ * enough — a mismatched other field never overrides a match). Two users with no identifier in
+ * common are never considered the same, even if both are null.
+ */
+fun isSameUser(a: User?, b: User?): Boolean {
+    if (a == null || b == null) return false
+    return (a.username != null && a.username == b.username) ||
+        (a.uniqueId != null && a.uniqueId == b.uniqueId)
+}

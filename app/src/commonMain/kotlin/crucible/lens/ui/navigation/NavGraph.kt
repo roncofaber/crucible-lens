@@ -35,11 +35,13 @@ import crucible.lens.ui.settings.ApiSettingsScreen
 import crucible.lens.ui.settings.OrcidLoginScreen
 import crucible.lens.ui.settings.AppearanceSettingsScreen
 import crucible.lens.ui.settings.CacheSettingsScreen
+import crucible.lens.ui.settings.SearchSettingsScreen
 import crucible.lens.ui.settings.AboutSettingsScreen
 import crucible.lens.ui.settings.TypographySettingsScreen
 import crucible.lens.ui.settings.AccountScreen
 import crucible.lens.ui.settings.AccountViewModel
 import crucible.lens.ui.settings.UserProfileScreen
+import crucible.lens.ui.settings.UserProfileViewModel
 import crucible.lens.ui.detail.ResourceDetailViewModel
 import crucible.lens.ui.detail.UiState
 import crucible.lens.ui.detail.ResourceDetailScreen
@@ -129,6 +131,8 @@ fun NavGraph(
     val hiddenInstruments by prefs.hiddenInstruments.collectAsStateWithLifecycle()
     val resourceHistory by prefs.resourceHistory.collectAsStateWithLifecycle()
     val defaultProjectTab by prefs.defaultProjectTab.collectAsStateWithLifecycle()
+    val peopleResultLimit by prefs.peopleResultLimit.collectAsStateWithLifecycle()
+    val projectResultLimit by prefs.projectResultLimit.collectAsStateWithLifecycle()
     val userProfile by prefs.userProfile.collectAsStateWithLifecycle()
     val userOrcid = userProfile?.uniqueId
 
@@ -354,6 +358,7 @@ fun NavGraph(
                 onNavigateToApi = { navController.navigate(Screen.SettingsApi.route) },
                 onNavigateToAppearance = { navController.navigate(Screen.SettingsAppearance.route) },
                 onNavigateToCache = { navController.navigate(Screen.SettingsCache.route) },
+                onNavigateToSearch = { navController.navigate(Screen.SettingsSearch.route) },
                 onNavigateToSyncedProjects = { navController.navigate(Screen.SyncedProjects.createRoute(firstRun = false)) },
                 onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },
                 onNavigateToTypography = { navController.navigate(Screen.SettingsTypography.route) },
@@ -404,6 +409,17 @@ fun NavGraph(
                 onUseDynamicColorSave = { enabled -> scope.launch { prefs.saveUseDynamicColor(enabled) } },
                 onFloatingScanButtonSave = { enabled -> scope.launch { prefs.saveFloatingScanButton(enabled) } },
                 onDefaultProjectTabSave = { tab -> scope.launch { prefs.saveDefaultProjectTab(tab) } },
+                onBack = navigateBack,
+                onHome = navigateHome
+            )
+        }
+
+        composable(Screen.SettingsSearch.route) {
+            SearchSettingsScreen(
+                currentPeopleResultLimit = peopleResultLimit,
+                currentProjectResultLimit = projectResultLimit,
+                onPeopleResultLimitSave = { limit -> scope.launch { prefs.savePeopleResultLimit(limit) } },
+                onProjectResultLimitSave = { limit -> scope.launch { prefs.saveProjectResultLimit(limit) } },
                 onBack = navigateBack,
                 onHome = navigateHome
             )
@@ -901,7 +917,9 @@ fun NavGraph(
 
         composable(Screen.UserProfile.route) { backStackEntry ->
             val identifier = backStackEntry.savedStateHandle.get<String>("identifier") ?: return@composable
+            val userProfileViewModel: UserProfileViewModel = koinViewModel()
             UserProfileScreen(
+                viewModel = userProfileViewModel,
                 identifier = identifier,
                 onBack = navigateBack,
                 onHome = navigateHome
@@ -940,6 +958,9 @@ fun NavGraph(
                 },
                 onProjectClick = { projectId ->
                     navController.navigate(Screen.ProjectDetail.createRoute(projectId))
+                },
+                onUserClick = { identifier ->
+                    navController.navigate(Screen.UserProfile.createRoute(identifier))
                 }
             )
         }

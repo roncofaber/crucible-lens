@@ -317,23 +317,6 @@ fun AppearanceSettingsScreen(
 }
 
 @Composable
-private fun settingsChipColors() = FilterChipDefaults.filterChipColors(
-    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-    selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
-)
-
-@Composable
-private fun settingsChipBorder(selected: Boolean) = FilterChipDefaults.filterChipBorder(
-    borderColor = MaterialTheme.colorScheme.outline,
-    selectedBorderColor = MaterialTheme.colorScheme.primary,
-    borderWidth = 1.dp,
-    selectedBorderWidth = 1.5.dp,
-    enabled = true,
-    selected = selected
-)
-
-@Composable
 private fun ColorPickerDialog(
     currentColor: String,
     onColorSelected: (String) -> Unit,

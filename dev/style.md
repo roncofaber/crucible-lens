@@ -54,7 +54,8 @@ including zero-height `AnimatedVisibility` items, producing phantom gaps.
 | M3 `ListItem` | Project/instrument/search/history rows, for consistent row height and leading/trailing slots |
 | `ListRowDividerInset` (72.dp) | Left inset for a divider under an icon-leading row, aligning it with the row's text. Shared by `ResourceRow` and the hand-rolled Search/History rows so they line up on one grid |
 | `EmptyListCard` | Shared empty state; takes a caller-supplied `emptyMessage` since the reason a list is empty is screen-specific |
-| `ResourceControlsBar` | Shared search + group-by + sort bar (`ProjectDetailScreen`, `InstrumentDetailScreen`). Callers supply the group options; `containerColor` exists because Project renders it on a `surface`-painted column while Instrument renders it as a `stickyHeader` that must be opaque against `background` |
+| `SearchBar` | The one search field look, `surfaceContainerHigh`/`onSurfaceVariant` - neutral, not accent-tinted, matching M3's own default and most other apps' search UI. Used standalone (Projects/Instruments list search, Home's search entry point) and via `ResourceControlsBar`. `shape`/`contentPadding` are the only customizable properties, since `ResourceControlsBar` sits it next to icon buttons in a tighter row - every visual property that could drift (color, icon, text, cursor) is fixed in one place |
+| `ResourceControlsBar` | Shared search + group-by + sort bar (`ProjectDetailScreen`, `InstrumentDetailScreen`). Callers supply the group options; `containerColor` exists because Project renders it on a `surface`-painted column while Instrument renders it as a `stickyHeader` that must be opaque against `background`. Its search field is a `SearchBar` call (tighter `shape`/`contentPadding`), not a second hand-rolled copy - see `SearchBar` below |
 | `LongPressMenuBox` | Owns the `expanded` state, anchoring `Box`, and `DropdownMenu` for a row's long-press context menu. Callers supply the row and its items; `content` receives the `onLongClick` lambda to wire into their own `combinedClickable`, since the click target varies (`ResourceCard`, `ProjectCard`). Menu items come from `OverflowMenuItems.kt` so the same action reads identically in a long-press menu and a top-bar overflow |
 
 `Card` is reserved for things that genuinely are contained blocks:
@@ -154,7 +155,7 @@ clears it, document why the way `QrCodeDialog`'s `tonalElevation = 0` carve-out 
 **Nested surfaces recede, they don't share a tier.** `LinkedResourceCards.kt`'s `ResourceRow` uses
 `surface` because it nests inside a `Card` that is already `surfaceContainerHighest`. This is
 deliberately different from the standalone "flat tinted row / info card" convention, which is
-`surfaceContainerLow` (~10 call sites: `AddFilesScreen`, `MetadataEditor`, `SearchBar`,
+`surfaceContainerLow` (~10 call sites: `AddFilesScreen`, `MetadataEditor`,
 `ResourceListComponents`, `InstrumentListScreen`, `ProjectsListScreen`, `UserComponents`,
 `SampleDetailsCard`, `DatasetDetailsCard`). The legacy `surfaceVariant` role is retired - it isn't
 one of M3's current canonical roles. Two call sites in `LinkResourceSheet.kt` still use it and should
@@ -169,7 +170,7 @@ legitimately still *assign* the role, since M3's `ColorScheme` still declares it
 |---|---|---|---|
 | Expanded collapsing-bar hero | `emphasizedTitleLarge` | 22 Medium | `onSurface` |
 | **Surface title** - every top bar (static + collapsed) and every sheet title | `titleLarge` | 22 Regular | `onSurface` |
-| Card / dialog heading | `emphasizedTitleMedium` | 16 Bold | `onSurface` |
+| Card / dialog heading | `titleMedium` | 16 Medium | `onSurface` |
 | **Group header** - in-list, has a container | `titleMedium` | 16 Medium | `onSurface` on `surfaceContainer` |
 | Text input | `bodyLarge` | 16 Regular | M3's text-field default; never set it |
 | **Row title / body copy / paragraphs** | `bodyMedium` | 14 Regular | `onSurface` |
@@ -200,8 +201,9 @@ Three more rules:
 
 - **Never set a style on a button label or `textStyle` on a text field** - M3 supplies `labelLarge`
   and `bodyLarge`. Carve-outs: `BasicTextField` has no `color` parameter, so `.copy(color = …)` is
-  unavoidable (`SearchBar.kt`, `ResourceListComponents.kt`), and `MetadataEditor`'s dense key-value
-  fields stay at `bodySmall` because they reflow badly larger.
+  unavoidable (`SearchBar.kt` - the one search field composable, reused by `ResourceControlsBar`
+  rather than each caller hand-rolling its own), and `MetadataEditor`'s dense key-value fields stay
+  at `bodySmall` because they reflow badly larger.
 - **List row titles are 14 sp**, deliberately below M3's `ListItem` spec of 16 - density matters in a
   data-heavy scientific app. Subtitles stay 12 sp to distinguish.
 - **Tabular figures** (`fontFeatureSettings = "tnum"`) on any number that changes in place, so digits

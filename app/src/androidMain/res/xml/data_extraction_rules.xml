@@ -2,8 +2,10 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="file" path="datastore"/>
+        <exclude domain="file" path="projects_cache.json"/>
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="datastore"/>
+        <exclude domain="file" path="projects_cache.json"/>
     </device-transfer>
 </data-extraction-rules>

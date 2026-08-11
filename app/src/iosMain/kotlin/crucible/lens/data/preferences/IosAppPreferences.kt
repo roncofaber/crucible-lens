@@ -85,6 +85,12 @@ class IosAppPreferences : AppPreferences {
     private val _defaultProjectTab = MutableStateFlow(settings.getString("default_project_tab", AppPreferences.PROJECT_TAB_SAMPLES))
     override val defaultProjectTab: StateFlow<String> = _defaultProjectTab.asStateFlow()
 
+    private val _peopleResultLimit = MutableStateFlow(settings.getInt("people_result_limit", AppPreferences.DEFAULT_SEARCH_RESULT_LIMIT))
+    override val peopleResultLimit: StateFlow<Int> = _peopleResultLimit.asStateFlow()
+
+    private val _projectResultLimit = MutableStateFlow(settings.getInt("project_result_limit", AppPreferences.DEFAULT_SEARCH_RESULT_LIMIT))
+    override val projectResultLimit: StateFlow<Int> = _projectResultLimit.asStateFlow()
+
     // ── Save operations ───────────────────────────────────────────────────────
 
     override suspend fun saveApiKey(key: String) {
@@ -203,6 +209,14 @@ class IosAppPreferences : AppPreferences {
 
     override suspend fun saveDefaultProjectTab(tab: String) {
         settings.putString("default_project_tab", tab); _defaultProjectTab.value = tab
+    }
+
+    override suspend fun savePeopleResultLimit(limit: Int) {
+        settings.putInt("people_result_limit", limit); _peopleResultLimit.value = limit
+    }
+
+    override suspend fun saveProjectResultLimit(limit: Int) {
+        settings.putInt("project_result_limit", limit); _projectResultLimit.value = limit
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

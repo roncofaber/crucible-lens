@@ -38,6 +38,8 @@ interface AppPreferences {
     val datasetGroupBy: StateFlow<String>
     val instrumentGroupBy: StateFlow<String>
     val defaultProjectTab: StateFlow<String>
+    val peopleResultLimit: StateFlow<Int>
+    val projectResultLimit: StateFlow<Int>
 
     // Saves
     suspend fun saveApiKey(key: String)
@@ -65,6 +67,8 @@ interface AppPreferences {
     suspend fun saveDatasetGroupBy(value: String)
     suspend fun saveInstrumentGroupBy(value: String)
     suspend fun saveDefaultProjectTab(tab: String)
+    suspend fun savePeopleResultLimit(limit: Int)
+    suspend fun saveProjectResultLimit(limit: Int)
 
     companion object {
         const val PROJECT_TAB_SAMPLES = "SAMPLES"
@@ -76,5 +80,6 @@ interface AppPreferences {
         const val THEME_MODE_DARK = "dark"
         const val DEFAULT_ACCENT_COLOR = "cerulean"
         const val DEFAULT_ACCENT_CONTRAST = "standard"
+        const val DEFAULT_SEARCH_RESULT_LIMIT = 5
     }
 }

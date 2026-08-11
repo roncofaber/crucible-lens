@@ -36,9 +36,15 @@ notes from it and **fails the release if it is missing**.
 ```
 
 One step, doing all of: verify (`:composeApp:compileAndroidMain`, `:composeApp:testAndroidHostTest`,
-`:composeApp:compileKotlinIosArm64`), build the debug APK plus release AAB/APK, verify the release
-build is actually signed (`apksigner verify` on the APK, `META-INF/*.RSA` present in the AAB), and
-copy both artifacts to the synced Drive folder as
+`:composeApp:compileKotlinIosArm64`), build the debug APK and the release AAB/APK **in two
+separate `./gradlew` invocations** (not one combined command — `app/build.gradle.kts`'s
+`generateAppBuildConfig` infers `DEBUG` from whether any *requested task name in the invocation*
+contains "debug", and `composeApp`'s `androidMain` compilation isn't variant-split, so a combined
+invocation bakes `DEBUG=true` into the release build too — this is exactly how an earlier ad-hoc
+build shipped a "release" AAB that showed the dev version string and exposed the debug-only
+Typography screen), verify the generated `AppBuildConfig.kt` actually has `DEBUG = false`, verify
+the release build is actually signed (`apksigner verify` on the APK, `META-INF/*.RSA` present in
+the AAB), and copy both artifacts to the synced Drive folder as
 `~/WORK/Crucible/App/apk/crucible-lens-v{version}-{debug.apk,release.aab}`.
 
 Signing reads `KEYSTORE_PATH` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` from the

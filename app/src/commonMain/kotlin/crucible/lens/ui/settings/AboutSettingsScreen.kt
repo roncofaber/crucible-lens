@@ -202,7 +202,7 @@ fun AboutSettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        openUrl(context, "https://github.com/roncofaber/crucible-lens/blob/main/PRIVACY.md")
+                        openUrl(context, "https://roncofaber.github.io/crucible-lens/privacy")
                     },
                 textAlign = TextAlign.Center
             )

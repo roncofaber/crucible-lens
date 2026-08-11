@@ -331,23 +331,26 @@ private fun HomeLogo(isDarkTheme: Boolean) {
 private fun HomeSearchPill(onClick: () -> Unit, onScan: () -> Unit) {
     // tonalElevation has no effect once `color` is set to anything other than the default
     // `colorScheme.surface` - Compose's auto tonal-elevation blend only applies to that one role.
-    // Containment here comes from the explicit `secondaryContainer` role instead, per M3's current
-    // guidance that surface roles aren't tied to elevation (see AppElevation's KDoc) - matches the
-    // same treatment as every other search field in the app (`ui/common/SearchBar.kt`).
+    // Containment here comes from the explicit `surfaceContainerHigh` role instead, per M3's
+    // current guidance that surface roles aren't tied to elevation (see AppElevation's KDoc).
+    // Neutral, not accent-tinted - matches M3's own SearchBar default and every other search
+    // field in the app (`ui/common/SearchBar.kt`, `SearchScreen`'s expanded SearchBar); search is
+    // passive input chrome, not a confirmed selection, so it stays off the secondaryContainer
+    // role reserved for badges/chips.
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().height(52.dp),
         shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.secondaryContainer
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
         Row(
             modifier = Modifier.fillMaxSize().padding(start = 16.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppIcon(AppIcons.Search, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(20.dp))
-            Text("Search samples, datasets...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.weight(1f).padding(start = 12.dp))
+            AppIcon(AppIcons.Search, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            Text("Search samples, datasets...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f).padding(start = 12.dp))
             IconButton(onClick = onScan) {
-                AppIcon(AppIcons.ScanQr, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(20.dp))
+                AppIcon(AppIcons.ScanQr, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
             }
         }
     }

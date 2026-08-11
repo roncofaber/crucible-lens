@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import crucible.lens.data.model.User
@@ -50,6 +51,8 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         private val USER_PROFILE = stringPreferencesKey("user_profile")
         private val PINNED_INSTRUMENTS = stringPreferencesKey("pinned_instruments")
         private val USE_DYNAMIC_COLOR = stringPreferencesKey("use_dynamic_color")
+        private val PEOPLE_RESULT_LIMIT = intPreferencesKey("people_result_limit")
+        private val PROJECT_RESULT_LIMIT = intPreferencesKey("project_result_limit")
 
         const val PROJECT_TAB_SAMPLES = "SAMPLES"
         const val PROJECT_TAB_DATASETS = "DATASETS"
@@ -154,6 +157,16 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         prefs[USE_DYNAMIC_COLOR]?.toBoolean() ?: false
     }
         .stateIn(scope, SharingStarted.Eagerly, false)
+
+    override val peopleResultLimit: StateFlow<Int> = context.dataStore.data.map { prefs ->
+        prefs[PEOPLE_RESULT_LIMIT] ?: AppPreferences.DEFAULT_SEARCH_RESULT_LIMIT
+    }
+        .stateIn(scope, SharingStarted.Eagerly, AppPreferences.DEFAULT_SEARCH_RESULT_LIMIT)
+
+    override val projectResultLimit: StateFlow<Int> = context.dataStore.data.map { prefs ->
+        prefs[PROJECT_RESULT_LIMIT] ?: AppPreferences.DEFAULT_SEARCH_RESULT_LIMIT
+    }
+        .stateIn(scope, SharingStarted.Eagerly, AppPreferences.DEFAULT_SEARCH_RESULT_LIMIT)
 
     override val pinnedInstruments: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
         prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
@@ -288,6 +301,14 @@ class PreferencesManager(private val context: Context) : AppPreferences {
 
     override suspend fun saveUseDynamicColor(enabled: Boolean) {
         context.dataStore.edit { prefs -> prefs[USE_DYNAMIC_COLOR] = enabled.toString() }
+    }
+
+    override suspend fun savePeopleResultLimit(limit: Int) {
+        context.dataStore.edit { prefs -> prefs[PEOPLE_RESULT_LIMIT] = limit }
+    }
+
+    override suspend fun saveProjectResultLimit(limit: Int) {
+        context.dataStore.edit { prefs -> prefs[PROJECT_RESULT_LIMIT] = limit }
     }
 
     override suspend fun togglePinnedInstrument(id: String) {

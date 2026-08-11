@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Row
 
@@ -62,22 +63,31 @@ fun SectionHeader(
     expanded: Boolean = true,
     onToggle: (() -> Unit)? = null
 ) {
+    // Same tuning as AppAnimations.kt's EffectsDefaultSpring - animateColorAsState needs an
+    // AnimationSpec<Color>, so that Float-typed instance can't be reused directly, but the
+    // spec itself (a no-bounce spring for opacity/colour transitions) is the same one.
+    val colorSpec = spring<Color>(Spring.DampingRatioNoBouncy, Spring.StiffnessMedium)
     val containerColor by animateColorAsState(
         targetValue = if (expanded) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface,
-        // Same tuning as AppAnimations.kt's EffectsDefaultSpring - animateColorAsState needs an
-        // AnimationSpec<Color>, so that Float-typed instance can't be reused directly, but the
-        // spec itself (a no-bounce spring for opacity/colour transitions) is the same one.
-        animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMedium),
+        animationSpec = colorSpec,
         label = "section_header_container"
+    )
+    // Always present, never conditionally added/removed - a hard on/off toggle would change the
+    // header's total height by the divider's thickness right as it collapses/expands, shifting
+    // the row's content by a couple of px. Crossfading its colour to transparent instead keeps
+    // the reserved space constant, matching the "keep the slot present" principle used for
+    // lazy-list item visibility elsewhere in the app.
+    val dividerColor by animateColorAsState(
+        targetValue = if (expanded) Color.Transparent else MaterialTheme.colorScheme.outlineVariant,
+        animationSpec = colorSpec,
+        label = "section_header_divider"
     )
     Surface(
         color = containerColor,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column {
-            if (!expanded) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            }
+            HorizontalDivider(color = dividerColor)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
