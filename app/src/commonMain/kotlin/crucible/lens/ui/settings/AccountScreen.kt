@@ -8,14 +8,11 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -44,10 +41,12 @@ fun AccountScreen(
 ) {
     val profileState by viewModel.profileState.collectAsState()
     val editState by viewModel.editState.collectAsState()
+    // Plain val (not `by`), so the compiler can smart-cast it below - a delegated property's
+    // getter isn't guaranteed to return the same value on repeated reads.
+    val activeDraft: EditUiState.Editing? = viewModel.activeDraft.collectAsState().value
     val joinRequests by viewModel.joinRequests.collectAsState()
     val reviewerInfo by viewModel.reviewerInfo.collectAsState()
     var showSignOutDialog by remember { mutableStateOf(false) }
-    var lastDraft by remember { mutableStateOf<EditUiState.Editing?>(null) }
     var advancedExpanded by remember { mutableStateOf(false) }
     var joinRequestsExpanded by remember { mutableStateOf(false) }
     val currentApiKey by viewModel.currentApiKey.collectAsState()
@@ -56,18 +55,9 @@ fun AccountScreen(
 
     val isEditing = editState !is EditUiState.Idle
     val isSaving = editState is EditUiState.Saving
-    val activeDraft: EditUiState.Editing? = when (val es = editState) {
-        is EditUiState.Editing -> es
-        is EditUiState.Saving -> lastDraft
-        is EditUiState.SaveError -> es.draft
-        else -> null
-    }
     val saveError: SaveErrorReason? = (editState as? EditUiState.SaveError)?.reason
 
-    val usernamePattern = Regex("^[a-z][a-z0-9_-]{2,31}$")
-    val usernameFormatValid = activeDraft == null ||
-        activeDraft.username.isBlank() ||
-        usernamePattern.matches(activeDraft.username.lowercase())
+    val usernameFormatValid = activeDraft?.usernameFormatValid ?: true
     val canSave = !isSaving && activeDraft != null &&
         activeDraft.firstName.isNotBlank() &&
         activeDraft.lastName.isNotBlank() &&
@@ -79,10 +69,6 @@ fun AccountScreen(
         if (apiKeyInput.isEmpty() && !currentApiKey.isNullOrBlank()) {
             apiKeyInput = currentApiKey!!
         }
-    }
-    LaunchedEffect(editState) {
-        val es = editState
-        if (es is EditUiState.Editing) lastDraft = es
     }
     // Keyed on currentApiKey (not Unit) so a key set outside this screen's own save flow —
     // e.g. OrcidLoginScreen writes the key straight to prefs/ApiClient without going through
@@ -302,53 +288,34 @@ private fun ProfileCard(
 ) {
     val platformCtx = getPlatformContext()
     val displayName = listOfNotNull(user.firstName, user.lastName).joinToString(" ").ifBlank { null }
-    val usernamePattern = Regex("^[a-z][a-z0-9_-]{2,31}$")
-    val usernameFormatValid = draft == null ||
-        draft.username.isBlank() ||
-        usernamePattern.matches(draft.username.lowercase())
 
     Card(modifier = Modifier.fillMaxWidth().animateContentSize(StandardSizeAnim)) {
         Column {
-            // Header: avatar + composite name (view) or avatar + first/last fields (edit)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = if (isEditing) Alignment.Top else Alignment.CenterVertically
-            ) {
-                UserAvatar(
-                    firstName = if (isEditing) draft?.firstName else user.firstName,
-                    lastName = if (isEditing) draft?.lastName else user.lastName,
-                    size = 48.dp,
+            if (isEditing && draft != null) {
+                ProfileEditFields(
+                    draft = draft,
                     orcid = user.uniqueId,
-                    modifier = if (isEditing) Modifier.padding(top = 8.dp) else Modifier
+                    isSaving = isSaving,
+                    saveError = saveError,
+                    onFirstNameChanged = onFirstNameChanged,
+                    onLastNameChanged = onLastNameChanged,
+                    onEmailChanged = onEmailChanged,
+                    onUsernameChanged = onUsernameChanged
                 )
-                if (isEditing && draft != null) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = draft.firstName,
-                            onValueChange = onFirstNameChanged,
-                            label = { Text("First name") },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !isSaving,
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
-                        )
-                        OutlinedTextField(
-                            value = draft.lastName,
-                            onValueChange = onLastNameChanged,
-                            label = { Text("Last name") },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !isSaving,
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
-                        )
-                    }
-                } else {
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    UserAvatar(
+                        firstName = user.firstName,
+                        lastName = user.lastName,
+                        size = 48.dp,
+                        orcid = user.uniqueId
+                    )
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             displayName ?: "No name set",
@@ -365,115 +332,24 @@ private fun ProfileCard(
                         }
                     }
                 }
-            }
 
-            HorizontalDivider()
+                HorizontalDivider()
 
-            // Body: email row (view) or email + username fields (edit)
-            if (isEditing && draft != null) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (saveError != null) {
-                        val msg = when (saveError) {
-                            SaveErrorReason.UsernameTaken -> "That username is already taken."
-                            SaveErrorReason.Generic -> "Failed to save — check your connection."
-                        }
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
-                        ) {
-                            Text(
-                                msg,
-                                modifier = Modifier.padding(12.dp),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                    }
-                    OutlinedTextField(
-                        value = draft.email,
-                        onValueChange = onEmailChanged,
-                        label = { Text("Email") },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isSaving,
-                        singleLine = true,
-                        leadingIcon = {
-                            AppIcon(AppIcons.Email, modifier = Modifier.size(20.dp))
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Email,
-                            imeAction = ImeAction.Next
+                if (!user.email.isNullOrBlank()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AppIcon(
+                            AppIcons.Email,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
                         )
-                    )
-                    OutlinedTextField(
-                        value = draft.username,
-                        onValueChange = { onUsernameChanged(it.lowercase()) },
-                        label = { Text("Username") },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isSaving,
-                        singleLine = true,
-                        leadingIcon = {
-                            Text(
-                                "@",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(start = 12.dp)
-                            )
-                        },
-                        trailingIcon = {
-                            when (draft.usernameCheck) {
-                                is UsernameCheckState.Checking -> CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp
-                                )
-                                is UsernameCheckState.Available -> AppIcon(
-                                    AppIcons.Success,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                is UsernameCheckState.Taken -> AppIcon(
-                                    AppIcons.UsernameTaken,
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                                else -> {}
-                            }
-                        },
-                        supportingText = {
-                            when (draft.usernameCheck) {
-                                is UsernameCheckState.Available -> Text(
-                                    "Available",
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                is UsernameCheckState.Taken -> Text(
-                                    "Already taken",
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                                else -> if (!usernameFormatValid && draft.username.isNotBlank()) {
-                                    Text(
-                                        "3–32 chars: lowercase letters, digits, hyphens, underscores",
-                                        color = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                            }
-                        },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
-                    )
-                }
-            } else if (!user.email.isNullOrBlank()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AppIcon(
-                        AppIcons.Email,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(user.email, style = MaterialTheme.typography.bodyMedium)
+                        Text(user.email, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
 

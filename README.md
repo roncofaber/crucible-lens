@@ -56,7 +56,7 @@ Kotlin Multiplatform · Compose Multiplatform · Material 3 · Ktor · kotlinx.s
 
 ## Privacy
 
-See the [privacy policy](https://roncofaber.github.io/crucible-lens/privacy) ([source](PRIVACY.md)) for what data the app accesses and how it's used.
+See the [privacy policy](https://roncofaber.github.io/crucible-lens/privacy/) ([source](PRIVACY.md)) for what data the app accesses and how it's used.
 
 ## License
 

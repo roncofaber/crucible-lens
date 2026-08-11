@@ -103,7 +103,7 @@ If you are unsure where to send such a request, the Crucible project can point y
 
 ## Changes to this policy
 
-This policy is published at <https://roncofaber.github.io/crucible-lens/privacy>. If it changes, an updated version will be posted at that URL with a revised "Last updated" date, and material changes will also be noted in the app's release notes. Because the app is open source, the full revision history of this policy is public at <https://github.com/roncofaber/crucible-lens/commits/main/PRIVACY.md>.
+This policy is published at <https://roncofaber.github.io/crucible-lens/privacy/>. If it changes, an updated version will be posted at that URL with a revised "Last updated" date, and material changes will also be noted in the app's release notes. Because the app is open source, the full revision history of this policy is public at <https://github.com/roncofaber/crucible-lens/commits/main/PRIVACY.md>.
 
 ## Contact
 

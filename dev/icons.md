@@ -171,10 +171,10 @@ Icons marked **FILLED** need to be downloaded twice:
 
 ## Brand glyphs (NOT Material Symbols)
 
-These three don't come from fonts.google.com - they're hand-added brand marks, so the
-style/weight/grade rules above don't apply. Match the existing files: a 24dp/24-viewport
-`<vector>` with a solid `android:fillColor` (the value is irrelevant - `AppIcon` tints it),
-scaling the official artwork down rather than redrawing it.
+Hand-added brand marks, not from fonts.google.com, so the style/weight/grade rules above don't
+apply. Match the existing files: a 24dp/24-viewport `<vector>` with a solid `android:fillColor`
+(the value is irrelevant - `AppIcon` tints it), scaling the official artwork down rather than
+redrawing it.
 
 | Save as | AppIcons name | Used by |
 |---------|---------------|---------|
@@ -186,7 +186,7 @@ scaling the official artwork down rather than redrawing it.
 
 ## Intentional aliases
 
-Several tokens deliberately share one drawable - that's fine, and not a gap to "fix":
+Several tokens deliberately share one drawable. Not a gap to "fix":
 
 - **`storage`** backs both `FileStorage` (file size field) and `Cache` (cache settings). There is no
   `ic_storage_cache.xml`.

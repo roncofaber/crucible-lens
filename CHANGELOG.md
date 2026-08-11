@@ -2,10 +2,15 @@
 
 ## [Unreleased]
 
+## [0.8.2] – 2026-08-11
+
+Search for people and add them to your projects, customizable per-category search result limits, and a profile-completion step that asks for a username and email if either is missing.
+
 ### Added
 - Search for people; add them to one of your projects from their profile
 - Search results can be filtered to just People, Projects, Samples, or Datasets
 - New Settings > Search screen to customize how many People and Projects show per search, independently
+- Sign-in now asks you to add a username (and email, if missing) before continuing
 
 ### Changed
 - Search fields use a neutral color instead of the accent color, matching most other apps

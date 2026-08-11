@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -39,6 +40,10 @@ sealed class UsernameCheckState {
     object CheckError : UsernameCheckState()
 }
 
+// Shared by AccountScreen, ProfileEditFields, and CompleteProfileScreen - lowercase, must start
+// with a letter, 3-24 chars of letters/digits/hyphens/underscores.
+val USERNAME_PATTERN = Regex("^[a-z][a-z0-9_-]{2,23}$")
+
 sealed class EditUiState {
     object Idle : EditUiState()
     data class Editing(
@@ -51,6 +56,11 @@ sealed class EditUiState {
     object Saving : EditUiState()
     data class SaveError(val draft: Editing, val reason: SaveErrorReason) : EditUiState()
 }
+
+// Shared by AccountScreen and CompleteProfileScreen - true for a blank draft too, since "not
+// filled in yet" isn't a format error to surface.
+val EditUiState.Editing.usernameFormatValid: Boolean
+    get() = username.isBlank() || USERNAME_PATTERN.matches(username.lowercase())
 
 // ── ViewModel ─────────────────────────────────────────────────────────────────
 
@@ -65,6 +75,22 @@ class AccountViewModel(
 
     private val _editState = MutableStateFlow<EditUiState>(EditUiState.Idle)
     val editState: StateFlow<EditUiState> = _editState.asStateFlow()
+
+    // The most recent Editing draft, kept alive through the brief Saving state so callers don't
+    // lose the fields being submitted while a save is in flight - Saving itself carries no draft.
+    private val _lastDraft = MutableStateFlow<EditUiState.Editing?>(null)
+
+    // Editing -> itself; Saving -> the draft that's mid-submit; SaveError -> its draft; else null.
+    // Single source of truth for both AccountScreen and CompleteProfileScreen, which otherwise
+    // each re-derived this identically from editState.
+    val activeDraft: StateFlow<EditUiState.Editing?> = editState.map { state ->
+        when (state) {
+            is EditUiState.Editing -> state
+            is EditUiState.Saving -> _lastDraft.value
+            is EditUiState.SaveError -> state.draft
+            else -> null
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val currentApiKey: StateFlow<String?> = prefs.apiKey
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -134,17 +160,20 @@ class AccountViewModel(
 
     fun startEdit() {
         val user = (_profileState.value as? ProfileUiState.Loaded)?.user ?: return
-        _editState.value = EditUiState.Editing(
+        val draft = EditUiState.Editing(
             firstName = user.firstName ?: "",
             lastName = user.lastName ?: "",
             email = user.email ?: "",
             username = user.username ?: ""
         )
+        _lastDraft.value = draft
+        _editState.value = draft
     }
 
     fun cancelEdit() {
         usernameCheckJob?.cancel()
         _editState.value = EditUiState.Idle
+        _lastDraft.value = null
     }
 
     fun onFirstNameChanged(value: String) = updateDraft { it.copy(firstName = value) }
@@ -162,8 +191,7 @@ class AccountViewModel(
             return
         }
         // Validate format client-side before hitting the API
-        val pattern = Regex("^[a-z][a-z0-9_-]{2,31}$")
-        if (!pattern.matches(value.lowercase())) return
+        if (!USERNAME_PATTERN.matches(value.lowercase())) return
         updateDraft { it.copy(usernameCheck = UsernameCheckState.Checking) }
         usernameCheckJob = viewModelScope.launch {
             delay(500)
@@ -227,6 +255,7 @@ class AccountViewModel(
             repository.invalidateAll()
             _profileState.value = ProfileUiState.NotLoggedIn
             _editState.value = EditUiState.Idle
+            _lastDraft.value = null
             _joinRequests.value = emptyList()
             _reviewerInfo.value = emptyMap()
         }
@@ -240,6 +269,8 @@ class AccountViewModel(
 
     private fun updateDraft(update: (EditUiState.Editing) -> EditUiState.Editing) {
         val draft = currentDraft() ?: return
-        _editState.value = update(draft)
+        val updated = update(draft)
+        _lastDraft.value = updated
+        _editState.value = updated
     }
 }

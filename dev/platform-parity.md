@@ -26,7 +26,7 @@ The iOS entry point is `iosMain/App.kt`, reached via `MainViewController.kt` →
 | Preferences reactivity | Both expose `StateFlow` - DataStore on Android, NSUserDefaults on iOS |
 | App logo | Both render the real image resource (`crucible_text_dark`/`_light`) - no text fallback |
 | Animations, `HorizontalPager`, `LazyColumnScrollbar` | Identical behaviour |
-| Pull-to-refresh | `PullToRefreshBox`; the indicator overlays content rather than shifting it, matching M3 and iOS `UIRefreshControl`. An earlier content-slide attempt via `distanceFraction` produced bounce artifacts, since that API conflates the user gesture with the internal refresh animation |
+| Pull-to-refresh | `PullToRefreshBox`; the indicator overlays content rather than shifting it, matching M3 and iOS `UIRefreshControl`. Don't slide content via `distanceFraction` - it conflates the user gesture with the refresh animation and bounces |
 
 ---
 
@@ -38,7 +38,7 @@ The iOS entry point is `iosMain/App.kt`, reached via `MainViewController.kt` →
 |---|---|---|
 | **Splash screen** | `androidx.core:core-splashscreen` | None - needs an Xcode launch screen |
 | **Deep links** | `intent.data` parsed in `MainActivity` | `deepLinkUuid = null`; needs URL-scheme registration |
-| **Dynamic colour** | Android 12+ | Forced `false`. Not a bug - Appearance settings hides the toggle where `supportsDynamicColor()` is false, so there's no dead control |
+| **Dynamic colour** | Android 12+ | Forced `false`. Not a bug - Appearance settings hides the toggle where `supportsDynamicColor()` is false, so no dead control |
 
 ### Same feature, different implementation
 
@@ -62,17 +62,15 @@ The iOS entry point is `iosMain/App.kt`, reached via `MainViewController.kt` →
    `MainViewController`/`App.kt`.
 2. **Splash screen** - add via Xcode (`LaunchScreen.storyboard` or the `UILaunchScreen` Info.plist key).
 
-The app currently ships on Android only. Neither gap blocks that; both are tracked here for whenever
-iOS distribution becomes a priority.
+The app ships on Android only today; neither gap blocks that. Both are tracked here for whenever iOS
+distribution becomes a priority.
 
 ---
 
 ## Building for iOS
 
-**Prerequisites**: macOS with Xcode 16+, Java 17+ on PATH.
-
-Kotlin/Native iOS targets cannot build on Linux. `compileKotlinIosArm64` verifies Kotlin correctness
-there, but producing a runnable app requires macOS + Xcode.
+**Prerequisites**: macOS with Xcode 16+, Java 17+ on PATH. Kotlin/Native iOS targets cannot build on
+Linux - `compileKotlinIosArm64` verifies Kotlin correctness there, but a runnable app needs macOS.
 
 ```bash
 # 1. Build the debug XCFramework (all simulator + device slices)
@@ -87,13 +85,13 @@ xcodegen generate --spec iosApp/project.yml
 ```
 
 The framework must be added to the Xcode target as **Embed & Sign** (Project settings → General →
-Frameworks, Libraries, Embedded Content). `project.yml` already handles this; only a hand-built
-project needs it set manually.
+Frameworks, Libraries, Embedded Content). `project.yml` handles this; only a hand-built project needs
+it set manually.
 
 ### Pointing at a local API
 
-In Settings → API, set the base URL to your Mac's LAN IP - or loopback, which works because the
-simulator shares the Mac's localhost:
+In Settings → API, set the base URL to your Mac's LAN IP, or loopback - the simulator shares the
+Mac's localhost:
 
 ```
 http://192.168.x.x:7778/testapi/

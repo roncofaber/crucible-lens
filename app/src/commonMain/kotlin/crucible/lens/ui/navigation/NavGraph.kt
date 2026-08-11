@@ -40,6 +40,8 @@ import crucible.lens.ui.settings.AboutSettingsScreen
 import crucible.lens.ui.settings.TypographySettingsScreen
 import crucible.lens.ui.settings.AccountScreen
 import crucible.lens.ui.settings.AccountViewModel
+import crucible.lens.ui.settings.CompleteProfileScreen
+import crucible.lens.ui.settings.ProfileCompletionGate
 import crucible.lens.ui.settings.UserProfileScreen
 import crucible.lens.ui.settings.UserProfileViewModel
 import crucible.lens.ui.detail.ResourceDetailViewModel
@@ -163,6 +165,21 @@ fun NavGraph(
                 launchSingleTop = true
             }
             onScannerOpened()
+        }
+    }
+
+    // Applies regardless of which screen is currently showing (deep links included) and
+    // regardless of sign-in path (ORCID webview or a pasted API key) - both funnel into this
+    // same userProfile flow. Re-fires only when apiKey/userProfile actually change, so "Skip for
+    // now" (which sets the flag before popping back) doesn't get immediately re-triggered by
+    // recomposition; it's only re-evaluated on the next real profile change, e.g. next launch.
+    LaunchedEffect(apiKey, userProfile) {
+        val profile = userProfile
+        val incomplete = profile != null && (profile.username.isNullOrBlank() || profile.email.isNullOrBlank())
+        if (apiKey != null && incomplete && !ProfileCompletionGate.skippedThisLaunch) {
+            navController.navigate(Screen.CompleteProfile.route) {
+                launchSingleTop = true
+            }
         }
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -437,6 +454,14 @@ fun NavGraph(
             TypographySettingsScreen(
                 onBack = navigateBack,
                 onHome = navigateHome
+            )
+        }
+
+        composable(Screen.CompleteProfile.route) {
+            val accountViewModel: AccountViewModel = koinViewModel()
+            CompleteProfileScreen(
+                viewModel = accountViewModel,
+                onDone = { navController.popBackStack() }
             )
         }
 

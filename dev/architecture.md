@@ -89,8 +89,8 @@ All JSON models use `@Serializable` + `@SerialName("snake_case")`. The decoder s
 - **`ResourceSearchResult`** - the unified row type both search modes produce. Its `projectId` is
   **not** returned by `/resources/metadata/search`; it's populated client-side in name-search mode,
   where `searchSamples`/`searchDatasets` already return full objects carrying it. Metadata-mode
-  results therefore have a null `projectId` and fall back to showing the mfid. Preserve that
-  asymmetry rather than papering over it with per-result lookups.
+  results therefore have a null `projectId` and fall back to the mfid. Preserve that asymmetry rather
+  than papering over it with per-result lookups.
 - Also: `Instrument`, `Project`, `UserLead`, `AccountResponse`, `MetadataSearchResult`, and the
   request DTOs (`SampleCreateRequest`, `DatasetCreateRequest`, `ThumbnailCreateRequest`,
   `SampleUpdateRequest`, `DatasetUpdateRequest`).
@@ -147,23 +147,23 @@ the payload once made a 409 or 500 from the metadata call completely invisible.
 
 The routes are generic across sample/dataset/instrument and require **write** access, not just read.
 `POST` creates or replaces (409 if non-empty metadata exists, unless `?overwrite=true`); `PATCH`
-shallow-merges (new keys added, existing overwritten, nested dicts replaced wholesale - not
+shallow-merges (new keys added, existing overwritten, nested dicts replaced wholesale, not
 deep-merged) and never 409s. The `add-api-endpoint` skill has the PATCH-vs-POST decision rules.
 
 ### Access model
 
 `GET /projects/search` and `GET /projects/{id}` are readable by **any** authenticated user, not just
 members. Non-members get `lead` as `UserPublicRead` (no email) and a null `scientific_metadata`
-regardless of `?include_metadata=`; members and admins get the full `UserRead` and the metadata. This
+regardless of `?include_metadata=`; members and admins get the full `UserRead` and the metadata. That
 asymmetry is what makes discover-search and the non-member view in `ProjectDetailScreen` work - don't
 "fix" a null `lead` by gating the endpoint.
 
 ### Project creation
 
 `POST /projects` has **no server-side authorization check**: any authenticated user can create a
-project naming any existing user as its lead. This is deliberate, for ad-hoc personal projects.
+project naming any existing user as its lead. Deliberate, for ad-hoc personal projects.
 
-Exactly one of `project_lead_orcid`/`_email`/`_username` is required (this app only ever sends
+Exactly one of `project_lead_orcid`/`_email`/`_username` is required (this app only sends
 `_username`, resolved through the same `SearchPickerField` user search as Manage Project's lead
 field). `project_id` becomes the project's permanent handle and its access-group name; there is no
 rename route. Errors: `400` no lead identifier, `404` lead username doesn't resolve, `409`
@@ -184,8 +184,8 @@ project they lead in one call** (empty list, not 403, if they lead none). `DataS
 therefore issues one `getJoinRequests(status = "pending")` and buckets by `groupName` client-side,
 writing `0` for projects with none so a resolved request clears its badge next sync.
 
-`syncAll()` runs once per session (plus a resume after an interrupted refresh) - it forces the whole
-preload and is far too heavy for a pull-to-refresh. `ProjectsListScreen`/`ProjectDetailScreen` call
+`syncAll()` runs once per session (plus a resume after an interrupted refresh); it forces the whole
+preload and is far too heavy for pull-to-refresh. `ProjectsListScreen`/`ProjectDetailScreen` call
 `fetchPendingJoinRequestCounts()` directly from their own refresh actions instead.
 
 ---
@@ -194,7 +194,7 @@ preload and is far too heavy for a pull-to-refresh. `ProjectsListScreen`/`Projec
 
 `CrucibleRepository` (`data/repository/CrucibleRepository.kt`) is the **single source of truth for
 all in-memory caching**. Every cacheable read goes through it, backed by one `ObservableCache<K, V>`
-per data type (in-memory, 10-min TTL, LRU eviction), each exposing `observeX()` (reactive `Flow`),
+per data type (10-min TTL, LRU eviction), each exposing `observeX()` (reactive `Flow`),
 `fetchX(forceRefresh)` (cache-first), and `getCachedX()` (synchronous).
 
 ```
@@ -223,12 +223,11 @@ owner-groupby resolution, so `GET /projects/{id}/users` runs once per project.
 
 `PersistentProjectCache` needs a `PlatformContext`, so it stays outside `CrucibleRepository`.
 `HomeViewModel` reads it on cold start and calls `repository.seedProjects()` to warm the in-memory
-cache; `HomeScreen` supplies the context, since `getPlatformContext()` is `@Composable`-only and the
-ViewModel can't call it.
+cache; `HomeScreen` supplies the context, since `getPlatformContext()` is `@Composable`-only.
 
 **`fetchFileUrl(mfid)` is the one deliberate non-cache.** Signed download URLs are always fetched
 fresh - it's only called on a share/download tap, never from a preload, so there's no repeated read a
-cache would help, and reusing a stale-but-unexpired signed URL has no upside.
+cache would help.
 
 `invalidateAll()` clears every cache above in one call (logout, API key change, Cache settings'
 "Clear All Cache" - which also clears `PersistentProjectCache` separately, since that tier isn't
@@ -244,26 +243,36 @@ Every list/detail/manage/create screen has a ViewModel in commonMain, constructo
 `CreateSampleViewModel`, `CreateDatasetViewModel`, `CreateProjectViewModel`, `EditResourceViewModel`,
 `HomeViewModel`, `UserProfileViewModel`.
 
-`UserProfileViewModel` (added when "Add to Project" landed on `UserProfileScreen`) holds the
-viewed user (`UserProfileState`), the current user's own project list (`myProjects`, sourced from
-`CrucibleRepository.observeProjects()` - already scoped server-side to member projects, so no new
-fetch), and `addToProjectState` for the add-in-progress/result feedback the screen turns into a
-toast. `checkProjectMembership()` - triggered when the "Add to Project" sheet opens, not on
-screen load - fetches each of `myProjects`' member lists in parallel via
-`CrucibleRepository.fetchProjectMembers()` (cache-backed, so free if already loaded elsewhere) and
-matches the viewed user by ORCID/username into `memberProjectIds`, with `isCheckingMembership`
-covering the gap so the sheet shows a pending state instead of flashing "Add" for projects that
-turn out to already include them. `addToProject()` mirrors `ManageProjectViewModel.addMember()`'s
-call shape (`addProjectMember`, invalidate that project's member cache on success) and additionally
-folds the newly-added project into `memberProjectIds` on success.
+`UserProfileViewModel` backs `UserProfileScreen`'s "Add to Project" flow. It holds the viewed user
+(`UserProfileState`), the current user's own project list (`myProjects`, from `CrucibleRepository.observeProjects()` - already scoped server-side to
+member projects, so no new fetch), and `addToProjectState` for the add-in-progress/result feedback
+the screen turns into a toast. `checkProjectMembership()` - triggered when the "Add to Project" sheet
+opens, not on screen load - fetches each of `myProjects`' member lists in parallel via
+`CrucibleRepository.fetchProjectMembers()` (cache-backed, so free if already loaded) and matches the
+viewed user by ORCID/username into `memberProjectIds`; `isCheckingMembership` covers the gap so the
+sheet shows a pending state instead of flashing "Add" for projects that already include them.
+`addToProject()` mirrors `ManageProjectViewModel.addMember()`'s call shape (`addProjectMember`,
+invalidate that project's member cache on success) and folds the new project into `memberProjectIds`.
+
+**`AccountViewModel` is reused as-is by `CompleteProfileScreen`** (`ui/settings/CompleteProfileScreen.kt`),
+not duplicated into a second profile-editing ViewModel - `startEdit()`/`editState`/`saveProfile()`
+are exactly `AccountScreen`'s own edit mode, entered automatically and rendered full-screen. Both
+screens share the field UI (`ProfileEditFields`) and the username format regex (`USERNAME_PATTERN`,
+in `AccountViewModel.kt`). `NavGraph.kt` gates every screen (deep links included) with a top-level
+`LaunchedEffect(apiKey, userProfile)`: if the signed-in user's profile has no username or email, it
+navigates to `Screen.CompleteProfile`, whether the sign-in was ORCID or a pasted API key (both funnel
+into the same `userProfile` flow this effect watches). "Skip for now" sets
+`ProfileCompletionGate.skippedThisLaunch` (a plain in-memory object, same convention as
+`DuplicateHolder`/`MetadataHolder` - never persisted, so the prompt reappears every launch until a
+username is saved).
 
 Most expose a single `StateFlow<LoadState<T>>` (`ui/common/LoadState.kt`) rather than separate
 loading/error/data/refreshing flags. Two exceptions:
 
 **`HomeViewModel`** exposes three flows (`projects`, `fetchError`, `isPreloading`) plus a background
-`preload()` with failure-tolerant batching (stops after 5 consecutive project-fetch failures). The
-screen has three genuinely independent concerns - the list, a foreground error, and a background
-prefetch that fails silently by design - so forcing them into one `LoadState` would lose information.
+`preload()` with failure-tolerant batching (stops after 5 consecutive project-fetch failures). Three
+genuinely independent concerns - the list, a foreground error, and a background prefetch that fails
+silently by design - so one `LoadState` would lose information.
 
 **`ResourceDetailViewModel`** drives the detail pager:
 
@@ -272,7 +281,7 @@ prefetch that fails silently by design - so forcing them into one `LoadState` wo
   thumbnails from `CrucibleRepository.observeResource(uuid)`/`.observeThumbnails(uuid)` directly, so
   there is no second copy of resource state to keep in sync.
 - `isSyncing: StateFlow<Boolean>` - true while `DataSyncManager.syncAll()` runs (drives the home spinner).
-- `fetchResource(uuid)` shows the cached version immediately, then always fetches fresh for detail.
+- `fetchResource(uuid)` shows the cached version immediately, then always fetches fresh.
 - `refreshResource(uuid)` / `refreshThumbnails(uuid)` force-refresh through the repository; observers
   pick up the fresh value.
 - `getCardState`/`setCardState` persist expand/collapse across pager pages (LRU-capped at
@@ -289,13 +298,11 @@ off the state via `LoadState<T>.isRefreshingNow` rather than keeping a screen-lo
 
 `ResourceDetailScreen` is the one exception, with a `localRefreshState` flag: pulling on a *sibling*
 page fetches that sibling inline through the repository without involving the ViewModel (whose
-`isRefreshing` tracks only the navigated-to resource), so that case needs its own flag.
+`isRefreshing` tracks only the navigated-to resource).
 
 Either way, set the flag before the coroutine's work and clear it in a `finally` block, so the
-spinner appears immediately and always clears - including on error.
-
-Content does **not** move during the pull; the indicator overlays it, matching M3 and iOS
-`UIRefreshControl` behavior.
+spinner appears immediately and always clears, including on error. Content does **not** move during
+the pull; the indicator overlays it, matching M3 and iOS `UIRefreshControl`.
 
 ---
 
@@ -313,8 +320,8 @@ Siblings are all resources of the same type within the same project, drawn from 
 (`sameTypeSamples`/`sameTypeDatasets` params).
 
 - Plain bounded pager: `pageCount = siblingList.size`, `initialPage = siblingIndex`, so it opens at
-  the right position immediately. No virtual `Int.MAX_VALUE` count, no wrap-around. A `LaunchedEffect`
-  scroll only covers the cold-start case where the sibling list wasn't resolved yet.
+  the right position. No virtual `Int.MAX_VALUE` count, no wrap-around. A `LaunchedEffect` scroll only
+  covers the cold-start case where the sibling list wasn't resolved yet.
 - **No manual preload or eviction windows.** Each page is `key(pageUuid)`'d and self-contained: it
   observes `observeResource(pageUuid)`/`.observeThumbnails(pageUuid)` and runs its own
   `LaunchedEffect(pageUuid) { repository.fetchResourceByUuid(pageUuid) }`. `HorizontalPager` decides
@@ -322,8 +329,7 @@ Siblings are all resources of the same type within the same project, drawn from 
   `loadedResources`/`enrichedUuids`/`failedEnrichmentUuids` maps and ±N distance math, which caused
   repeated stale- and flashing-content bugs - don't reintroduce them.
 - A page renders its lightweight sibling-list stub immediately and swaps in the enriched resource in
-  place, so there's no per-page spinner or flash. Only a page-local `enrichmentFailed` flag marks a
-  failed enrichment.
+  place, so there's no per-page spinner or flash. A page-local `enrichmentFailed` flag marks a failure.
 - Swiping is a pure UI gesture - the ViewModel isn't updated, and `UiState.Success.uuid` stays the
   navigated-to resource. Pull-to-refresh on a sibling calls `fetchResourceByUuid(uuid, forceRefresh =
   true)` (not invalidate-then-fetch, so observers keep the existing value until the fresh one lands).
@@ -352,8 +358,8 @@ ViewModel (`AssociatedFilesCard` injects `CrucibleRepository` for its cached fil
 reads; the other two `ApiClient`). Each is reused from multiple unrelated parents with no single
 owning ViewModel - `InstrumentPickerField` appears in both `CreateDatasetScreen` and
 `EditResourceScreen` - so a per-use-site ViewModel or threaded callbacks would add wiring for no
-benefit. `koinInject` still gives them a real, swappable dependency, which was the actual problem
-being solved. Don't half-thread callbacks through call sites to "fix" this.
+benefit, and `koinInject` still gives them a real, swappable dependency. Don't half-thread callbacks
+through call sites to "fix" this.
 
 ---
 
@@ -418,16 +424,14 @@ A platform-agnostic interface (DataStore on Android, NSUserDefaults on iOS). Eve
 JAVA_HOME="${JAVA_HOME:-$HOME/software/android-studio/jbr}" ./gradlew :composeApp:testAndroidHostTest
 ```
 
-Runs in ~2s. Two gates gate on it: `.claude/hooks/pre-commit-check.sh` blocks any `git commit` made
-through Claude Code's Bash tool whose tests fail, and `scripts/release.sh` runs them again in its
-verify step.
+Runs in ~2s. Two gates: `.claude/hooks/pre-commit-check.sh` blocks any `git commit` made through
+Claude Code's Bash tool whose tests fail, and `scripts/release.sh` runs them again in its verify step.
 
 **CI on tag only is deliberate, not a gap.** `.github/workflows/release.yml` fires on a `v*.*.*` tag
 (or `workflow_dispatch`) and nothing else, because that workflow takes up to 20 minutes on GitHub -
-far too slow to sit in front of every push or PR. Don't propose adding a push/PR trigger; the
-trade-off has been made. The commit hook is the compensating control: it's the earliest automated
-signal a broken test gets, which is why tests are gated there rather than left advisory. Commits made
-by hand in another terminal bypass it, so run the suite yourself in that case.
+far too slow for every push or PR. Don't propose adding a push/PR trigger. The commit hook is the
+compensating control, and the earliest automated signal a broken test gets. Commits made by hand in
+another terminal bypass it, so run the suite yourself in that case.
 
 **Layout**: `app/src/commonTest/kotlin/`, mirroring the production package path
 (`data/cache/ObservableCacheTest.kt` tests `data/cache/ObservableCache.kt`). Platform-agnostic, so
@@ -455,19 +459,18 @@ ViewModel tests.
   delay to cross an expiry boundary.
 - **`runTest` for anything `Flow`-shaped**, which is every `observe*` test.
 - **Assert against recomputed values, not hardcoded output**, wherever the environment can vary.
-  `FormatUtilsTest` derives the expected local hour the same way production code does, so it passes
-  in any timezone. A hardcoded `"2:32 PM"` would pass only on the machine that wrote it.
-- **No fakes or mocks.** Everything tested so far is either pure or exercised on a path that never
-  touches the network, which is why `CrucibleRepositoryTest` covers only cache misses and fallbacks.
-  Testing a hit path means introducing a fake `ApiClient`; that's a reasonable thing to add, just not
-  something the suite currently does.
+  `FormatUtilsTest` derives the expected local hour the way production code does, so it passes in any
+  timezone. A hardcoded `"2:32 PM"` would pass only on the machine that wrote it.
+- **No fakes or mocks.** Everything tested is either pure or on a path that never touches the network,
+  which is why `CrucibleRepositoryTest` covers only cache misses and fallbacks. Testing a hit path
+  means introducing a fake `ApiClient` - reasonable to add, just not there yet.
 
 ### When to add one
 
 Add a test when you add or change **pure logic in `data/`** - cache and TTL behaviour, formatting,
-sorting, grouping, search matching, or any pure function with branches. These are cheap to test, and
-three of the four existing suites exist because the logic they cover broke once
-(`FormatUtilsTest`'s first case documents a timezone bug it guards against).
+sorting, grouping, search matching, or any pure function with branches. Cheap to test, and three of
+the four existing suites exist because the logic they cover broke once (`FormatUtilsTest`'s first
+case documents a timezone bug it guards against).
 
 Don't add one for a screen, a ViewModel, or an API call. There's no harness for the first two, and
 the third would test Ktor rather than this app.
@@ -478,8 +481,8 @@ the third would test Ktor rather than this app.
 
 **Plain `remember` doesn't survive navigating away and back.** Navigation-Compose only composes the
 top of the back stack, so pushing a destination fully disposes the composable underneath it; on
-`popBackStack()` it recomposes from scratch and any plain `remember`ed value silently resets. Any
-screen-level state that must survive a push-and-pop round trip needs `rememberSaveable` - scroll
+`popBackStack()` it recomposes from scratch and any plain `remember`ed value silently resets.
+Screen-level state that must survive a push-and-pop round trip needs `rememberSaveable` - scroll
 position is the exception, since `rememberLazyListState()` already saves itself. Two consequences:
 
 - `ProjectDetailScreen`'s per-group expand state uses `rememberSaveable` + `stateMapSaver()`
