@@ -1,0 +1,43 @@
+name: Publish Privacy Policy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "PRIVACY.md"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          path: main
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Sync PRIVACY.md into the published site
+        run: |
+          mkdir -p gh-pages/privacy
+          cp main/PRIVACY.md gh-pages/privacy/index.md
+
+      - name: Commit and push if changed
+        run: |
+          cd gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add privacy/index.md
+          if git diff --cached --quiet; then
+            echo "No changes to the published privacy policy."
+          else
+            git commit -m "Sync privacy policy from PRIVACY.md"
+            git push origin gh-pages
+          fi
