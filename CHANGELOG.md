@@ -7,63 +7,25 @@
 Crucible Lens 0.9.0-alpha.1 moves the app to Crucible API V3 with durable project synchronization, expanded project and instrument management, and sample and dataset access controls. It also strengthens uploads, deep links, caching, permissions, and cross-platform reliability ahead of the final 0.9.0 release.
 
 ### Added
-- Authenticated users can register self-owned instruments from the Instruments screen and continue directly to instrument management
-- Authorized instrument administrators can bind and remove existing service accounts as instrument operators
-- Authorized instrument administrators can move instruments between active, maintenance, and decommissioned states, and project management now displays the project's current status
+- Authorized users can register instruments, manage service-account operators and lifecycle status, rename instrument IDs, and transfer ownership
 - Synced projects remain available after restarting while offline
-- iOS Universal Links open Crucible Web project and resource URLs in the corresponding app screen
-- Project member lists show each member's role, and eligible editors, admins, and leads can assign or change roles within their API-defined grant limit
-- Eligible project editors, admins, and leads can rename a project's ID with local validation and explicit URL-change guidance
-- Instrument owners can transfer ownership through a preview and confirmation workflow
+- Project management now shows authority-ordered role badges and lets eligible editors, admins, and leads assign roles or rename the project ID within their API-defined permissions
 - Authorized sample and dataset managers can review direct access, grant or revoke user and project access, change grant levels, and control public visibility
 
 ### Changed
-- Project members and resource access grants are ordered by authority, use theme-aware role badges and role dropdowns, and identify project owners as leads
-- Project member management now permits assignments and changes only below the acting member's role, while generic resource grants retain their existing limits
-- Instrument details now load datasets in pages of 100 with an explicit Load more action and keep associations stable when instrument names change
-- The Instruments screen can browse active, maintenance, and decommissioned instruments, while dataset pickers request active instruments only and inactive pins remain available on Home
-- Project and instrument management actions now follow the permissions returned by the V3 API, including project member grant limits
-- Search opens the keyboard automatically instead of needing an extra tap
-- Dataset details no longer show the removed source-folder field or an aggregate dataset size; file locations and sizes remain available on associated files
-- Moving a sample or dataset to another project now uses an explicit preview and confirmation step
-- Project leadership transfer now previews both owners and requires explicit confirmation
-- Synced project data is now isolated by account and API server and can migrate safely to future incremental synchronization
-- Project navigation, pins, sync selections, and offline replicas now use stable project MFIDs, so changing a project slug does not disconnect those app states
-- Instrument navigation and detail caching now use stable MFIDs after resolving human-readable instrument IDs through V3
-- Instrument names remain display labels while instrument IDs can be renamed independently with V3 validation
-- Dataset creation now submits the selected instrument ID while continuing to display its human-readable name
+- Instrument browsing now covers every lifecycle status, loads datasets in explicit pages, and retains associations when instrument names change
+- Project, instrument, sample, and dataset management actions now follow the permissions returned by the V3 API
+- Dataset creation and details now use V3 instrument identifiers and omit the removed source-folder and aggregate-size fields
+- Project leadership transfers and sample or dataset moves now show a preview and require explicit confirmation
+- Project and instrument navigation, pins, sync selections, and offline data now remain associated when a project slug or instrument ID changes
 
 ### Fixed
-- Inline role dropdowns now open at a readable width instead of collapsing to the badge width
-- The Members heading no longer shifts vertically when its section expands or collapses
-- Project web links and project fields on resource details now resolve slugs through V3 and navigate with the stable project MFID
-- Dataset instrument links now use the V3 instrument ID and open the canonical instrument detail route
-- Resource and instrument views now request and display expanded owner profiles consistently
-- Instrument edits no longer submit ownership fields rejected by V3
-- Back navigation while editing a project now closes the editor before leaving Manage Project
-- Sample and dataset edits no longer send project or instrument fields rejected by the V3 API
-- Project title and organization edits no longer send leadership fields rejected by the V3 API
-- A partially failed project sync can no longer mix newly loaded samples with stale datasets, or the reverse
-- Requests started before an account, credential, or API server change can no longer repopulate the active cache
-- Background project sync no longer causes linked resources and other resource details to disappear
-- Fixed a rare crash when scrolling a project or instrument's collapsing header
-- Fixed offline status never appearing on iOS
-- Open in web actions now reliably open valid Crucible Web routes in the browser
-- Android App Links now work while the app is already running
-- Denied camera access now shows recovery actions instead of a blank QR scanner
-- File uploads now report partial failures accurately and retain failed files for retry
-- Failed resource unlink and thumbnail deletion actions now remain visible and can be retried
-- Camera attachment failures now provide permission recovery, retry guidance, and unavailable-device feedback
-- Image selection now reports read failures, preserves filenames, and is labeled accurately
-- Project management now distinguishes empty data from loading failures and reports failed member and join-request actions
-- Join-request status now remains consistent across Project Detail and Account and no longer treats lookup failures as no request
-- Deletion requests now preserve their reason after failures and prevent dismissal while submitting
-- Resource linking now distinguishes empty results from lookup failures and preserves resolved targets for retry
-- Search now identifies unavailable result categories instead of silently presenting them as empty
-- User and instrument pickers now distinguish lookup failures from missing results and offer retry
-- Instrument details now distinguish missing instruments from request failures and retain visible datasets when refresh fails
-- Adding a user to a project now blocks unverified membership actions and keeps failed checks and submissions retryable
-- Dataset file download and share failures now remain independent, explain the failure, and can be retried
+- Project member controls no longer shift or collapse to an unreadable width, and Back closes the project editor before leaving Manage Project
+- Crucible Web links, Android App Links, and iOS Universal Links now resolve the intended browser or in-app destination
+- Resource owners now display consistently, and edit requests no longer include ownership, leadership, project, or instrument fields rejected by V3
+- Project synchronization, refreshes, and offline detection no longer mix stale and current data, restore data from another account or server, hide linked resources, or miss offline status on iOS
+- Camera, image, upload, download, sharing, unlink, and thumbnail failures now remain visible, report partial results accurately, and provide appropriate recovery or retry actions
+- Management, linking, search, picker, deletion, and instrument workflows now distinguish empty results from failures, preserve retryable state, and avoid a rare collapsing-header crash
 
 ## [0.8.2] – 2026-08-11
 

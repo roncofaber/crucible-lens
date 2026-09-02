@@ -71,7 +71,15 @@ Common tests live under `app/src/commonTest/kotlin/` and mirror production packa
 
 For a user-visible change, add one short sentence under the applicable `### Added`, `### Changed`, or `### Fixed` subsection of `## [Unreleased]`. State what changed for the user, not the implementation or root cause. Create the `Unreleased` heading if it is absent.
 
-Use the `release` skill for every release. The ordering, separate debug and release Gradle invocations, generated build-config check, and signature verification are required safeguards.
+Treat the changelog as public release notes, not an engineering ledger:
+
+- Use one bullet per user-visible outcome. Merge changes to the same workflow or behavior instead of listing each screen, route, cache, model, or failure branch separately.
+- Do not repeat the same outcome across categories. Choose `Added`, `Changed`, or `Fixed` according to its primary effect.
+- Keep security, privacy, compatibility, migration, access-control, and breaking changes explicit even when related entries are consolidated.
+- Omit internal refactors and implementation details such as identifier resolution, request fields, cache epochs, or serialization unless users or integrators must act on them.
+- During release preparation, review the complete section for overlap and aim for roughly 5 to 15 meaningful bullets. Larger sections require deliberate consolidation or a clear reason to retain additional entries.
+
+Use the `release` skill for every release. The ordering, changelog consolidation pass, separate debug and release Gradle invocations, generated build-config check, and signature verification are required safeguards.
 
 ## Architecture
 

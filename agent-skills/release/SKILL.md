@@ -16,11 +16,13 @@ app.versionName=X.Y.Z
 app.versionCode=N
 ```
 
-Promote the current changelog content:
+Review and promote the current changelog content:
 
-1. Rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`.
-2. Add a one- or two-sentence summary paragraph before its `###` subsections. CI requires this paragraph for release notes.
-3. Add a new empty `## [Unreleased]` section above the release.
+1. Read the complete `Unreleased` section and consolidate entries that describe the same user-visible workflow or outcome. Remove implementation-only entries and avoid repeating an outcome across `Added`, `Changed`, and `Fixed`.
+2. Preserve explicit entries for security, privacy, compatibility, migration, access-control, and breaking changes. Aim for roughly 5 to 15 meaningful bullets unless the release genuinely contains more distinct user-facing changes.
+3. Rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`.
+4. Add a one- or two-sentence summary paragraph before its `###` subsections. CI requires this paragraph for release notes.
+5. Add a new empty `## [Unreleased]` section above the release.
 
 Do not reconstruct missing entries from git history during release. User-visible entries belong in the changelog when their changes land.
 
