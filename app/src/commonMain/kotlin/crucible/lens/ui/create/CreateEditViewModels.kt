@@ -8,13 +8,19 @@ import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.DatasetUpdateRequest
+import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.ProjectCreateRequest
+import crucible.lens.data.model.ReassignProjectResponse
+import crucible.lens.data.model.Sample
 import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.User
 import crucible.lens.ui.common.MetadataWrite
 import kotlinx.serialization.json.JsonObject
-import crucible.lens.data.model.ThumbnailCreateRequest
+import crucible.lens.data.upload.DatasetFileUploadRequest
+import crucible.lens.data.upload.DatasetFileUploadResult
+import crucible.lens.data.upload.DatasetFileUploader
+import crucible.lens.data.upload.DatasetFileAttachment
 import crucible.lens.data.util.PlatformCrypto
 import crucible.lens.data.util.SEARCH_DEBOUNCE_MS
 import crucible.lens.data.util.SEARCH_MIN_QUERY_LENGTH
@@ -49,19 +55,20 @@ class CreateSampleViewModel(
     fun create(request: SampleCreateRequest, projectId: String?, metadata: JsonObject? = null) {
         if (_saveState.value is SaveState.Saving) return
         _saveState.value = SaveState.Saving
+        val writeEpoch = repository.captureCacheEpoch()
         viewModelScope.launch {
             try {
                 when (val resp = apiClient.service.createSample(request)) {
                     is ApiResult.Success -> {
                         var sample = resp.data
-                        repository.cacheResource(sample.uniqueId, sample)
-                        projectId?.let { repository.invalidateProjectData(it) }
+                        repository.cacheResource(sample.uniqueId, sample, writeEpoch)
+                        projectId?.let { repository.invalidateProjectData(it, writeEpoch) }
                         var metadataWarning: String? = null
                         if (!metadata.isNullOrEmpty()) {
                             when (val metaResp = apiClient.service.postResourceMetadata(sample.uniqueId, metadata)) {
                                 is ApiResult.Success -> {
                                     sample = sample.copy(scientificMetadata = metaResp.data)
-                                    repository.cacheResource(sample.uniqueId, sample)
+                                    repository.cacheResource(sample.uniqueId, sample, writeEpoch)
                                 }
                                 is ApiResult.Error -> metadataWarning = "Sample created, but metadata failed to save (${metaResp.code})"
                             }
@@ -88,12 +95,15 @@ class CreateDatasetViewModel(
     private val repository: CrucibleRepository
 ) : ViewModel() {
 
+    private val fileUploader = DatasetFileUploader(apiClient)
+
     private val _saveState = MutableStateFlow<SaveState>(SaveState.Idle)
     val saveState: StateFlow<SaveState> = _saveState.asStateFlow()
 
-    fun create(request: DatasetCreateRequest, files: List<Pair<ByteArray, Boolean>> = emptyList(), metadata: JsonObject? = null) {
+    fun create(request: DatasetCreateRequest, files: List<DatasetFileAttachment> = emptyList(), metadata: JsonObject? = null) {
         if (_saveState.value is SaveState.Saving) return
         _saveState.value = SaveState.Saving
+        val writeEpoch = repository.captureCacheEpoch()
         viewModelScope.launch {
             try {
                 val createResp = apiClient.service.createDataset(request)
@@ -104,53 +114,24 @@ class CreateDatasetViewModel(
                 }
                 var newDataset = createResp.data
                 val newUuid = newDataset.uniqueId
-                repository.cacheResource(newUuid, newDataset)
-                request.projectId?.let { repository.invalidateProjectData(it) }
+                repository.cacheResource(newUuid, newDataset, writeEpoch)
+                request.projectId?.let { repository.invalidateProjectData(it, writeEpoch) }
 
-                var uploadFailures = 0
-                var thumbnailFailures = 0
-                files.forEachIndexed { index, (bytes, asThumbnail) ->
-                    val filename = "file_${newUuid}_$index.jpg"
-                    val sha256 = PlatformCrypto.sha256Hex(bytes)
-                    // Step 1: initiate GCS resumable session (sha256 enables server-side deduplication)
-                    val initiateResp = apiClient.service.initiateUpload(newUuid, filename, bytes.size.toLong(), sha256)
-                    if (initiateResp is ApiResult.Success) {
-                        val session = initiateResp.data
-                        val fileMfid: String?
-                        if (session.existingFile != null) {
-                            // Server detected duplicate — skip upload and completion
-                            fileMfid = session.existingFile.mfid
-                        } else {
-                            // Step 2: upload chunks directly to GCS
-                            val chunkResp = apiClient.service.uploadChunksToGCS(
-                                resumableUri = session.resumableUri ?: error("Missing resumable URI"),
-                                bytes = bytes,
-                                chunkSizeHint = session.chunkSizeHint
-                            )
-                            if (chunkResp is ApiResult.Success) {
-                                // Step 3: finalize — server registers as AssociatedFile
-                                val completeResp = apiClient.service.completeUpload(newUuid, session.uploadId ?: error("Missing upload ID"), sha256)
-                                fileMfid = if (completeResp is ApiResult.Success) completeResp.data.mfid else null
-                                if (fileMfid == null) uploadFailures++
-                            } else {
-                                fileMfid = null
-                                uploadFailures++
-                            }
-                        }
-                        if (fileMfid != null) {
-                            // Step 4: trigger ingestion worker
-                            apiClient.service.requestIngestion(fileMfid)
-                            // Step 5: optional thumbnail — only if file is available
-                            if (asThumbnail) {
-                                val thumbResp = apiClient.service.addThumbnail(
-                                    newUuid,
-                                    ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
-                                )
-                                if (thumbResp is ApiResult.Error) thumbnailFailures++
-                            }
-                        }
-                    } else {
-                        uploadFailures++
+                val fileFailures = mutableListOf<DatasetFileUploadResult.Failure>()
+                files.forEach { file ->
+                    val sha256 = PlatformCrypto.sha256Hex(file.bytes)
+                    val result = fileUploader.upload(
+                        DatasetFileUploadRequest(
+                            datasetUuid = newUuid,
+                            filename = file.filename,
+                            bytes = file.bytes,
+                            sha256 = sha256,
+                            asThumbnail = file.asThumbnail,
+                            thumbnailBase64 = if (file.asThumbnail) PlatformBase64.encode(file.bytes) else ""
+                        )
+                    )
+                    if (result is DatasetFileUploadResult.Failure) {
+                        fileFailures += result
                     }
                 }
 
@@ -159,15 +140,17 @@ class CreateDatasetViewModel(
                     when (val metaResp = apiClient.service.postResourceMetadata(newUuid, metadata)) {
                         is ApiResult.Success -> {
                             newDataset = newDataset.copy(scientificMetadata = metaResp.data)
-                            repository.cacheResource(newUuid, newDataset)
+                            repository.cacheResource(newUuid, newDataset, writeEpoch)
                         }
                         is ApiResult.Error -> metadataFailed = true
                     }
                 }
 
                 val problems = buildList {
-                    if (uploadFailures > 0) add("$uploadFailures file upload(s) failed")
-                    if (thumbnailFailures > 0) add("$thumbnailFailures thumbnail(s) failed to upload")
+                    if (fileFailures.isNotEmpty()) {
+                        val stages = fileFailures.map { it.stage.displayName }.distinct().joinToString()
+                        add("${fileFailures.size} file operation(s) failed during $stages")
+                    }
                     if (metadataFailed) add("metadata failed to save")
                 }
                 val warning = if (problems.isEmpty()) null else "Dataset created, but " + problems.joinToString(" and ")
@@ -195,7 +178,8 @@ data class CreateProjectFormState(
     val organization: String = "",
     val leadUsername: String = "",
     val leadSearch: List<User> = emptyList(),
-    val isLeadSearching: Boolean = false
+    val isLeadSearching: Boolean = false,
+    val leadSearchError: String? = null
 )
 
 // GitHub-repo-name convention: lowercase, runs of anything non-alphanumeric collapse to a single
@@ -239,13 +223,49 @@ class CreateProjectViewModel(
 
     fun onLeadUsernameChanged(value: String) {
         leadSearchJob?.cancel()
-        _formState.value = _formState.value.copy(leadUsername = value, leadSearch = emptyList(), isLeadSearching = false)
+        _formState.value = _formState.value.copy(
+            leadUsername = value,
+            leadSearch = emptyList(),
+            isLeadSearching = false,
+            leadSearchError = null
+        )
         if (value.length < SEARCH_MIN_QUERY_LENGTH) return
+        searchLead(value)
+    }
+
+    fun retryLeadSearch() {
+        val value = _formState.value.leadUsername
+        if (value.length < SEARCH_MIN_QUERY_LENGTH) return
+        leadSearchJob?.cancel()
+        searchLead(value)
+    }
+
+    private fun searchLead(value: String) {
         _formState.value = _formState.value.copy(isLeadSearching = true)
         leadSearchJob = viewModelScope.launch {
             delay(SEARCH_DEBOUNCE_MS)
-            val results = (apiClient.service.searchUsers(value) as? ApiResult.Success)?.data ?: emptyList()
-            _formState.value = _formState.value.copy(leadSearch = results, isLeadSearching = false)
+            try {
+                when (val result = apiClient.service.searchUsers(value)) {
+                    is ApiResult.Success -> _formState.value = _formState.value.copy(
+                        leadSearch = result.data,
+                        isLeadSearching = false,
+                        leadSearchError = null
+                    )
+                    is ApiResult.Error -> _formState.value = _formState.value.copy(
+                        leadSearch = emptyList(),
+                        isLeadSearching = false,
+                        leadSearchError = "Search failed (${result.code})"
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _formState.value = _formState.value.copy(
+                    leadSearch = emptyList(),
+                    isLeadSearching = false,
+                    leadSearchError = "Connection error. Check your network and try again"
+                )
+            }
         }
     }
 
@@ -254,7 +274,12 @@ class CreateProjectViewModel(
         // Keeps the picked user as a singleton list, not emptyList() - SearchPickerField derives
         // "resolved" by matching the current query against `results`, so clearing it would
         // immediately un-resolve the field right after picking.
-        _formState.value = _formState.value.copy(leadUsername = user.username ?: "", leadSearch = listOf(user), isLeadSearching = false)
+        _formState.value = _formState.value.copy(
+            leadUsername = user.username ?: "",
+            leadSearch = listOf(user),
+            isLeadSearching = false,
+            leadSearchError = null
+        )
     }
 
     fun create() {
@@ -273,7 +298,7 @@ class CreateProjectViewModel(
                 )) {
                     is ApiResult.Success -> {
                         repository.invalidateProjects()
-                        _saveState.value = SaveState.Success(resp.data.projectId)
+                        _saveState.value = SaveState.Success(resp.data.uniqueId)
                     }
                     is ApiResult.Error -> _saveState.value = SaveState.Error(
                         when (resp.code) {
@@ -297,6 +322,15 @@ class CreateProjectViewModel(
 
 // ── EditResourceViewModel ─────────────────────────────────────────────────────
 
+sealed class ProjectMoveState {
+    data object Idle : ProjectMoveState()
+    data class Previewing(val projectId: String) : ProjectMoveState()
+    data class PreviewReady(val preview: ReassignProjectResponse) : ProjectMoveState()
+    data class Moving(val preview: ReassignProjectResponse) : ProjectMoveState()
+    data class Success(val result: ReassignProjectResponse) : ProjectMoveState()
+    data class Error(val message: String) : ProjectMoveState()
+}
+
 class EditResourceViewModel(
     private val apiClient: ApiClient,
     private val repository: CrucibleRepository
@@ -304,6 +338,8 @@ class EditResourceViewModel(
 
     private val _saveState = MutableStateFlow<SaveState>(SaveState.Idle)
     val saveState: StateFlow<SaveState> = _saveState.asStateFlow()
+    private val _projectMoveState = MutableStateFlow<ProjectMoveState>(ProjectMoveState.Idle)
+    val projectMoveState: StateFlow<ProjectMoveState> = _projectMoveState.asStateFlow()
 
     // metadataWrite: null = unchanged or blank, skip the API call. Merge -> PATCH (only the
     // changed keys, so a concurrent edit to any other key survives). Replace -> POST ?overwrite=true
@@ -311,6 +347,7 @@ class EditResourceViewModel(
     fun updateSample(uuid: String, request: SampleUpdateRequest, metadataWrite: MetadataWrite? = null) {
         if (_saveState.value is SaveState.Saving) return
         _saveState.value = SaveState.Saving
+        val writeEpoch = repository.captureCacheEpoch()
         viewModelScope.launch {
             try {
                 when (val resp = apiClient.service.updateSample(uuid, request)) {
@@ -324,13 +361,13 @@ class EditResourceViewModel(
                             when (metaResp) {
                                 is ApiResult.Success -> sample = sample.copy(scientificMetadata = metaResp.data)
                                 is ApiResult.Error -> {
-                                    repository.cacheResource(uuid, sample)
+                                    repository.cacheResource(uuid, sample, writeEpoch)
                                     _saveState.value = SaveState.Error("Saved, but metadata failed to save (${metaResp.code})")
                                     return@launch
                                 }
                             }
                         }
-                        repository.cacheResource(uuid, sample)
+                        repository.cacheResource(uuid, sample, writeEpoch)
                         _saveState.value = SaveState.Success(uuid)
                     }
                     is ApiResult.Error -> _saveState.value = SaveState.Error("Save failed (${resp.code})")
@@ -346,6 +383,7 @@ class EditResourceViewModel(
     fun updateDataset(uuid: String, request: DatasetUpdateRequest, metadataWrite: MetadataWrite? = null) {
         if (_saveState.value is SaveState.Saving) return
         _saveState.value = SaveState.Saving
+        val writeEpoch = repository.captureCacheEpoch()
         viewModelScope.launch {
             try {
                 when (val resp = apiClient.service.updateDataset(uuid, request)) {
@@ -359,13 +397,13 @@ class EditResourceViewModel(
                             when (metaResp) {
                                 is ApiResult.Success -> dataset = dataset.copy(scientificMetadata = metaResp.data)
                                 is ApiResult.Error -> {
-                                    repository.cacheResource(uuid, dataset)
+                                    repository.cacheResource(uuid, dataset, writeEpoch)
                                     _saveState.value = SaveState.Error("Saved, but metadata failed to save (${metaResp.code})")
                                     return@launch
                                 }
                             }
                         }
-                        repository.cacheResource(uuid, dataset)
+                        repository.cacheResource(uuid, dataset, writeEpoch)
                         _saveState.value = SaveState.Success(uuid)
                     }
                     is ApiResult.Error -> _saveState.value = SaveState.Error("Save failed (${resp.code})")
@@ -378,5 +416,64 @@ class EditResourceViewModel(
         }
     }
 
+    fun previewProjectMove(uuid: String, projectId: String) {
+        if (_projectMoveState.value !is ProjectMoveState.Idle) return
+        _projectMoveState.value = ProjectMoveState.Previewing(projectId)
+        viewModelScope.launch {
+            try {
+                when (val result = apiClient.service.reassignResourceProject(uuid, projectId)) {
+                    is ApiResult.Success -> _projectMoveState.value = ProjectMoveState.PreviewReady(result.data)
+                    is ApiResult.Error -> _projectMoveState.value = ProjectMoveState.Error(projectMoveError(result.code))
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _projectMoveState.value = ProjectMoveState.Error("Connection error, check your network")
+            }
+        }
+    }
+
+    fun confirmProjectMove(uuid: String) {
+        val preview = (_projectMoveState.value as? ProjectMoveState.PreviewReady)?.preview ?: return
+        _projectMoveState.value = ProjectMoveState.Moving(preview)
+        val writeEpoch = repository.captureCacheEpoch()
+        viewModelScope.launch {
+            try {
+                when (val result = apiClient.service.reassignResourceProject(uuid, preview.newProjectId, confirm = true)) {
+                    is ApiResult.Success -> {
+                        val moved = when (val resource = repository.getCachedResource(uuid)) {
+                            is Sample -> resource.copy(projectId = result.data.newProjectId)
+                            is Dataset -> resource.copy(projectId = result.data.newProjectId)
+                            else -> null
+                        }
+                        if (moved != null) repository.cacheResource(uuid, moved, writeEpoch)
+                        result.data.previousProjectId?.let { repository.invalidateProjectData(it, writeEpoch) }
+                        repository.invalidateProjectData(result.data.newProjectId, writeEpoch)
+                        _projectMoveState.value = ProjectMoveState.Success(result.data)
+                    }
+                    is ApiResult.Error -> _projectMoveState.value = ProjectMoveState.Error(projectMoveError(result.code))
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _projectMoveState.value = ProjectMoveState.Error("Connection error, check your network")
+            }
+        }
+    }
+
+    fun resetProjectMoveState() {
+        if (_projectMoveState.value !is ProjectMoveState.Moving) {
+            _projectMoveState.value = ProjectMoveState.Idle
+        }
+    }
+
     fun resetState() { _saveState.value = SaveState.Idle }
+
+    private fun projectMoveError(code: Int): String = when (code) {
+        403 -> "You do not have permission to move this resource"
+        404 -> "The selected project is no longer available"
+        409 -> "The project cannot accept this resource"
+        422 -> "The selected project is invalid"
+        else -> "Could not move the resource ($code)"
+    }
 }

@@ -37,7 +37,6 @@ fun Dataset.matchesSearch(query: String): Boolean {
         (timestamp?.lowercase()?.contains(q) == true) ||
         (dataFormat?.lowercase()?.contains(q) == true) ||
         (ownerOrcid?.lowercase()?.contains(q) == true) ||
-        (sourceFolder?.lowercase()?.contains(q) == true) ||
         (scientificMetadata?.matchesSearch(q) == true)
 }
 
@@ -48,7 +47,8 @@ fun Instrument.matchesSearch(query: String): Boolean {
         (manufacturer?.lowercase()?.contains(q) == true) ||
         (model?.lowercase()?.contains(q) == true) ||
         (location?.lowercase()?.contains(q) == true) ||
-        (owner?.lowercase()?.contains(q) == true) ||
+        (ownerOrcid?.lowercase()?.contains(q) == true) ||
+        (owner?.username?.lowercase()?.contains(q) == true) ||
         uniqueId.lowercase().contains(q)
 }
 

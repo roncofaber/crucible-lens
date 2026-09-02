@@ -4,10 +4,13 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.sync.DataSyncManager
 import crucible.lens.ui.create.CreateDatasetViewModel
+import crucible.lens.ui.create.CreateInstrumentViewModel
 import crucible.lens.ui.create.CreateProjectViewModel
 import crucible.lens.ui.create.CreateSampleViewModel
 import crucible.lens.ui.create.EditResourceViewModel
+import crucible.lens.ui.access.ManageResourceAccessViewModel
 import crucible.lens.ui.detail.ResourceDetailViewModel
+import crucible.lens.ui.detail.LinkResourceViewModel
 import crucible.lens.ui.home.HomeViewModel
 import crucible.lens.ui.instruments.InstrumentDetailViewModel
 import crucible.lens.ui.instruments.InstrumentListViewModel
@@ -17,6 +20,7 @@ import crucible.lens.ui.projects.ProjectDetailViewModel
 import crucible.lens.ui.projects.ProjectsListViewModel
 import crucible.lens.ui.settings.AccountViewModel
 import crucible.lens.ui.settings.UserProfileViewModel
+import crucible.lens.ui.search.SearchViewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
@@ -32,9 +36,11 @@ val appModule = module {
     single { DataSyncManager(get()) }
 
     viewModelOf(::ResourceDetailViewModel)
+    viewModelOf(::LinkResourceViewModel)
     viewModelOf(::HomeViewModel)
     viewModelOf(::AccountViewModel)
     viewModelOf(::UserProfileViewModel)
+    viewModelOf(::SearchViewModel)
     viewModelOf(::ProjectsListViewModel)
     viewModelOf(::ProjectDetailViewModel)
     viewModelOf(::ManageProjectViewModel)
@@ -43,6 +49,8 @@ val appModule = module {
     viewModelOf(::ManageInstrumentViewModel)
     viewModelOf(::CreateSampleViewModel)
     viewModelOf(::CreateDatasetViewModel)
+    viewModelOf(::CreateInstrumentViewModel)
     viewModelOf(::CreateProjectViewModel)
     viewModelOf(::EditResourceViewModel)
+    viewModelOf(::ManageResourceAccessViewModel)
 }

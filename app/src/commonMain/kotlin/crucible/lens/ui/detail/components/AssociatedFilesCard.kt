@@ -21,6 +21,9 @@ import crucible.lens.data.util.formatFileSize
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
 import crucible.lens.platform.shareText
+import crucible.lens.ui.detail.AssociatedFileAction
+import crucible.lens.ui.detail.AssociatedFileActionKey
+import crucible.lens.ui.detail.AssociatedFileActionState
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -75,16 +78,14 @@ private fun FileActionSlot(icon: AppIconToken, visual: FileActionVisual, onClick
 @Composable
 internal fun AssociatedFilesCard(
     datasetUuid: String,
+    actionStates: Map<AssociatedFileActionKey, AssociatedFileActionState>,
+    onResolveAction: (AssociatedFileActionKey) -> Unit,
+    onClearAction: (AssociatedFileActionKey) -> Unit,
     initialExpanded: Boolean = false,
     onExpandedChange: (Boolean) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(initialExpanded) }
     var state by remember { mutableStateOf<AssociatedFilesState>(AssociatedFilesState.Idle) }
-    // Separate per-action maps (not one per-file flag) so tapping Share shows its spinner only in
-    // the share slot, leaving the download slot's icon undisturbed, and vice versa.
-    val downloadingFiles = remember { mutableStateMapOf<String, Boolean>() }
-    val sharingFiles = remember { mutableStateMapOf<String, Boolean>() }
-    val errorFiles = remember { mutableStateMapOf<String, Boolean>() }
     val scope = rememberCoroutineScope()
     val platformCtx = getPlatformContext()
     val repository = koinInject<CrucibleRepository>()
@@ -92,8 +93,6 @@ internal fun AssociatedFilesCard(
     fun fetch() {
         scope.launch {
             state = AssociatedFilesState.Loading
-            downloadingFiles.clear()
-            sharingFiles.clear()
             val newState = when (val result = repository.fetchDatasetFiles(datasetUuid)) {
                 is ApiResult.Success -> if (result.data.isEmpty()) AssociatedFilesState.Empty
                                         else AssociatedFilesState.Success(result.data)
@@ -101,25 +100,6 @@ internal fun AssociatedFilesCard(
                                      else AssociatedFilesState.Err(result.message)
             }
             state = newState
-        }
-    }
-
-    fun openFile(file: crucible.lens.data.model.AssociatedFile, share: Boolean) {
-        scope.launch {
-            val loadingMap = if (share) sharingFiles else downloadingFiles
-            loadingMap[file.mfid] = true
-            errorFiles.remove(file.mfid)
-            try {
-                val url = (repository.fetchFileUrl(file.mfid) as? ApiResult.Success)?.data
-                if (url != null) {
-                    val name = displayName(file.filename)
-                    if (share) shareText(platformCtx, url, name) else openUrl(platformCtx, url)
-                } else {
-                    errorFiles[file.mfid] = true
-                }
-            } finally {
-                loadingMap.remove(file.mfid)
-            }
         }
     }
 
@@ -152,10 +132,28 @@ internal fun AssociatedFilesCard(
                         filesState.files.sortedBy { it.filename }.forEach { file ->
                             val name = displayName(file.filename)
                             val ingested = file.storagePath != null
-                            val isDownloading = downloadingFiles[file.mfid] == true
-                            val isSharing = sharingFiles[file.mfid] == true
-                            val hasError = errorFiles[file.mfid] == true
-                            val actionsEnabled = ingested && !hasError
+                            val downloadKey = AssociatedFileActionKey(datasetUuid, file.mfid, AssociatedFileAction.DOWNLOAD)
+                            val shareKey = AssociatedFileActionKey(datasetUuid, file.mfid, AssociatedFileAction.SHARE)
+                            val downloadState = actionStates[downloadKey]
+                            val shareState = actionStates[shareKey]
+
+                            LaunchedEffect(downloadState) {
+                                val ready = downloadState as? AssociatedFileActionState.Ready ?: return@LaunchedEffect
+                                try {
+                                    openUrl(platformCtx, ready.url)
+                                } finally {
+                                    onClearAction(downloadKey)
+                                }
+                            }
+                            LaunchedEffect(shareState) {
+                                val ready = shareState as? AssociatedFileActionState.Ready ?: return@LaunchedEffect
+                                try {
+                                    shareText(platformCtx, ready.url, name)
+                                } finally {
+                                    onClearAction(shareKey)
+                                }
+                            }
+
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -164,11 +162,7 @@ internal fun AssociatedFilesCard(
                                 AppIcon(fileIcon(name), modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(name, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    // One status line beneath the (possibly 2-line) name — error takes
-                                    // priority over pending, which takes priority over the plain size,
-                                    // so there's always at most one line here regardless of state.
                                     val statusText = when {
-                                        hasError -> "Unavailable"
                                         !ingested -> "Pending"
                                         file.size != null -> formatFileSize(file.size)
                                         else -> null
@@ -177,27 +171,33 @@ internal fun AssociatedFilesCard(
                                         Text(
                                             statusText,
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = if (hasError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                    }
+                                    (downloadState as? AssociatedFileActionState.Error)?.let { error ->
+                                        FileActionErrorRow("Download", error.message) { onResolveAction(downloadKey) }
+                                    }
+                                    (shareState as? AssociatedFileActionState.Error)?.let { error ->
+                                        FileActionErrorRow("Share", error.message) { onResolveAction(shareKey) }
                                     }
                                 }
                                 FileActionSlot(
                                     icon = AppIcons.Download,
                                     visual = when {
-                                        isDownloading -> FileActionVisual.Loading
-                                        !actionsEnabled -> FileActionVisual.Disabled
+                                        downloadState is AssociatedFileActionState.Resolving -> FileActionVisual.Loading
+                                        !ingested -> FileActionVisual.Disabled
                                         else -> FileActionVisual.Enabled
                                     },
-                                    onClick = { openFile(file, share = false) }
+                                    onClick = { onResolveAction(downloadKey) }
                                 )
                                 FileActionSlot(
                                     icon = AppIcons.Share,
                                     visual = when {
-                                        isSharing -> FileActionVisual.Loading
-                                        !actionsEnabled -> FileActionVisual.Disabled
+                                        shareState is AssociatedFileActionState.Resolving -> FileActionVisual.Loading
+                                        !ingested -> FileActionVisual.Disabled
                                         else -> FileActionVisual.Enabled
                                     },
-                                    onClick = { openFile(file, share = true) }
+                                    onClick = { onResolveAction(shareKey) }
                                 )
                             }
                         }
@@ -205,5 +205,18 @@ internal fun AssociatedFilesCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun FileActionErrorRow(label: String, message: String, onRetry: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            "$label: $message",
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error
+        )
+        TextButton(onClick = onRetry) { Text("Retry") }
     }
 }

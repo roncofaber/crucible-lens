@@ -4,6 +4,7 @@
     "allow": [
       "Bash(./gradlew :*)",
       "Bash(JAVA_HOME=* ./gradlew :*)",
+      "Bash(./scripts/verify-change.sh)",
       "Bash(git status)",
       "Bash(git status:*)",
       "Bash(git diff:*)",

@@ -11,8 +11,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.platform.copyToClipboard
+import crucible.lens.platform.buildCrucibleWebUrl
 import crucible.lens.platform.getPlatformContext
-import crucible.lens.platform.openUrl
+import crucible.lens.platform.openInBrowser
 import crucible.lens.platform.shareText
 
 /**
@@ -50,15 +51,15 @@ fun ResourceCard(
     val platformCtx = getPlatformContext()
 
     val webUrl = if (projectId != null && graphExplorerUrl.isNotBlank()) {
-        if (resourceType == "dataset") "$graphExplorerUrl/$projectId/datasets/$uniqueId"
-        else "$graphExplorerUrl/$projectId/samples/$uniqueId"
+        val resourcePath = if (resourceType == "dataset") "datasets" else "samples"
+        buildCrucibleWebUrl(graphExplorerUrl, projectId, resourcePath, uniqueId)
     } else null
 
     LongPressMenuBox(
         menu = { dismiss ->
             CopyIdMenuItem { dismiss(); copyToClipboard(platformCtx, uniqueId) }
             if (webUrl != null) {
-                OpenInWebMenuItem { dismiss(); openUrl(platformCtx, webUrl) }
+                OpenInWebMenuItem { dismiss(); openInBrowser(platformCtx, webUrl) }
                 ShareMenuItem { dismiss(); shareText(platformCtx, webUrl, "") }
             }
         }

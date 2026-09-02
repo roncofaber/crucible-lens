@@ -1,11 +1,16 @@
 package crucible.lens.data.api
 
 import crucible.lens.data.model.AccountResponse
+import crucible.lens.data.model.AccessGrant
+import crucible.lens.data.model.AccessGrantWrite
+import crucible.lens.data.model.AccessPrincipalKind
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.DatasetCreateRequest
 import crucible.lens.data.model.DatasetUpdateRequest
 import crucible.lens.data.model.Instrument
+import crucible.lens.data.model.InstrumentCreateRequest
+import crucible.lens.data.model.InstrumentStatus
 import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.model.JoinRequestCreate
 import crucible.lens.data.model.JoinRequestReview
@@ -20,11 +25,16 @@ import crucible.lens.data.model.AssociatedFile
 import crucible.lens.data.model.UploadCompleteRequest
 import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.model.ThumbnailCreateRequest
+import crucible.lens.data.model.TransferOwnershipRequest
+import crucible.lens.data.model.TransferOwnershipResponse
 import crucible.lens.data.model.HealthStatus
 import crucible.lens.data.model.PaginatedResponse
 import crucible.lens.data.model.User
 import crucible.lens.data.model.UserSearchResult
 import crucible.lens.data.model.ProfileUpdateRequest
+import crucible.lens.data.model.ReassignProjectRequest
+import crucible.lens.data.model.ReassignProjectResponse
+import crucible.lens.data.util.isMfidReference
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.CancellationException
@@ -90,6 +100,17 @@ class CrucibleApiService(
         }
     }.body()
 
+    private suspend inline fun <reified T> put(
+        endpoint: String,
+        body: Any? = null
+    ): T = client.put("$baseUrl$endpoint") {
+        header("Authorization", "Bearer $apiKey")
+        if (body != null) {
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+    }.body()
+
     private suspend fun delete(endpoint: String): Boolean =
         client.delete("$baseUrl$endpoint") {
             header("Authorization", "Bearer $apiKey")
@@ -119,10 +140,28 @@ class CrucibleApiService(
         ))
     }
 
-    suspend fun getUserByUsername(username: String): ApiResult<User> = safeCall {
-        client.get("${baseUrl}users/by-username/$username") {
-            header("Authorization", "Bearer $apiKey")
-        }.body()
+    suspend fun getUserByUsername(username: String): ApiResult<User> {
+        val result: ApiResult<PaginatedResponse<User>> = safeCall {
+            client.get("${baseUrl}users") {
+                header("Authorization", "Bearer $apiKey")
+                url.parameters.append("username", username)
+                url.parameters.append("limit", "2")
+                url.parameters.append("offset", "0")
+            }.body()
+        }
+        return when (result) {
+            is ApiResult.Success -> exactLookupResult(result.data, "User")
+            is ApiResult.Error -> result
+        }
+    }
+
+    private fun <T> exactLookupResult(page: PaginatedResponse<T>, entityName: String): ApiResult<T> {
+        val total = page.total ?: page.items.size
+        return when {
+            total == 0 && page.items.isEmpty() -> ApiResult.Error(404, "$entityName not found")
+            total == 1 && page.items.size == 1 -> ApiResult.Success(page.items.single())
+            else -> ApiResult.Error(500, "Expected exactly one $entityName but received total=$total and items=${page.items.size}")
+        }
     }
 
     suspend fun resolveUsers(
@@ -247,31 +286,101 @@ class CrucibleApiService(
         get("datasets/$uuid/thumbnails")
     }
 
-    suspend fun getInstruments(): ApiResult<List<Instrument>> = fetchAllPages { limit, offset ->
+    suspend fun getInstruments(status: InstrumentStatus = InstrumentStatus.Active): ApiResult<List<Instrument>> = fetchAllPages { limit, offset ->
         client.get("${baseUrl}instruments") {
             header("Authorization", "Bearer $apiKey")
+            url.parameters.append("include_owner", "true")
+            url.parameters.append("status", status.apiValue)
             url.parameters.append("limit", limit.toString())
             url.parameters.append("offset", offset.toString())
         }.body<PaginatedResponse<Instrument>>()
     }
 
-    suspend fun getInstrument(id: String): ApiResult<Instrument> = safeCall {
-        get("instruments/$id")
+    suspend fun getInstrument(instrumentReference: String): ApiResult<Instrument> {
+        if (isMfidReference(instrumentReference)) {
+            return safeCall {
+                client.get("${baseUrl}instruments/$instrumentReference") {
+                    header("Authorization", "Bearer $apiKey")
+                    url.parameters.append("include_owner", "true")
+                }.body()
+            }
+        }
+        val result: ApiResult<PaginatedResponse<Instrument>> = safeCall {
+            client.get("${baseUrl}instruments") {
+                header("Authorization", "Bearer $apiKey")
+                url.parameters.append("instrument_id", instrumentReference)
+                url.parameters.append("include_owner", "true")
+                url.parameters.append("limit", "2")
+                url.parameters.append("offset", "0")
+            }.body()
+        }
+        return when (result) {
+            is ApiResult.Success -> exactLookupResult(result.data, "Instrument")
+            is ApiResult.Error -> result
+        }
     }
 
     suspend fun updateInstrument(id: String, request: crucible.lens.data.model.InstrumentUpdateRequest): ApiResult<Instrument> = safeCall {
         patch("instruments/$id", request)
     }
 
-    suspend fun getDatasetsByInstrument(
-        instrumentName: String
-    ): ApiResult<List<Dataset>> = fetchAllPagesCursor { limit, cursor ->
+    suspend fun createInstrument(request: InstrumentCreateRequest): ApiResult<Instrument> = safeCall {
+        post("instruments", request)
+    }
+
+    suspend fun updateInstrumentStatus(instrumentMfid: String, status: InstrumentStatus): ApiResult<Instrument> = safeCall {
+        client.post("${baseUrl}instruments/$instrumentMfid/status") {
+            header("Authorization", "Bearer $apiKey")
+            url.parameters.append("status", status.apiValue)
+        }.body()
+    }
+
+    suspend fun getInstrumentServiceAccounts(instrumentMfid: String): ApiResult<List<User>> = safeCall {
+        get("instruments/$instrumentMfid/service_accounts")
+    }
+
+    suspend fun getServiceAccount(reference: String): ApiResult<User> {
+        val result: ApiResult<PaginatedResponse<User>> = safeCall {
+            client.get("${baseUrl}users") {
+                header("Authorization", "Bearer $apiKey")
+                val parameter = if (isMfidReference(reference)) "unique_id" else "username"
+                url.parameters.append(parameter, reference)
+                url.parameters.append("is_service_account", "true")
+                url.parameters.append("limit", "2")
+                url.parameters.append("offset", "0")
+            }.body()
+        }
+        return when (result) {
+            is ApiResult.Success -> when (val exact = exactLookupResult(result.data, "Service account")) {
+                is ApiResult.Success -> ApiResult.Success(exact.data.copy(isServiceAccount = true))
+                is ApiResult.Error -> exact
+            }
+            is ApiResult.Error -> result
+        }
+    }
+
+    suspend fun addInstrumentServiceAccount(instrumentMfid: String, serviceAccountMfid: String): ApiResult<List<User>> = safeCall {
+        post("instruments/$instrumentMfid/service_accounts/$serviceAccountMfid")
+    }
+
+    suspend fun removeInstrumentServiceAccount(instrumentMfid: String, serviceAccountMfid: String): ApiResult<List<User>> = safeCall {
+        client.delete("${baseUrl}instruments/$instrumentMfid/service_accounts/$serviceAccountMfid") {
+            header("Authorization", "Bearer $apiKey")
+        }.body()
+    }
+
+    suspend fun getInstrumentDatasetsPage(
+        instrumentMfid: String,
+        limit: Int,
+        cursor: String? = null
+    ): ApiResult<PaginatedResponse<Dataset>> = safeCall {
         client.get("${baseUrl}datasets") {
             header("Authorization", "Bearer $apiKey")
-            url.parameters.append("instrument_name", instrumentName)
+            url.parameters.append("instrument_mfid", instrumentMfid)
+            url.parameters.append("include_owner", "true")
             url.parameters.append("limit", limit.toString())
             if (cursor != null) url.parameters.append("cursor", cursor)
-        }.body<PaginatedResponse<Dataset>>()
+        }.body()
     }
 
     suspend fun getProjects(): ApiResult<List<Project>> = fetchAllPages { limit, offset ->
@@ -282,8 +391,22 @@ class CrucibleApiService(
         }.body<PaginatedResponse<Project>>()
     }
 
-    suspend fun getProject(projectId: String): ApiResult<Project> = safeCall {
-        get("projects/$projectId")
+    suspend fun getProject(projectReference: String): ApiResult<Project> {
+        if (isMfidReference(projectReference)) {
+            return safeCall { get("projects/$projectReference") }
+        }
+        val result: ApiResult<PaginatedResponse<Project>> = safeCall {
+            client.get("${baseUrl}projects") {
+                header("Authorization", "Bearer $apiKey")
+                url.parameters.append("project_id", projectReference)
+                url.parameters.append("limit", "2")
+                url.parameters.append("offset", "0")
+            }.body()
+        }
+        return when (result) {
+            is ApiResult.Success -> exactLookupResult(result.data, "Project")
+            is ApiResult.Error -> result
+        }
     }
 
     suspend fun getSamplesByProject(
@@ -293,6 +416,7 @@ class CrucibleApiService(
         client.get("${baseUrl}samples") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("project_id", projectId)
+            url.parameters.append("include_owner", "true")
             url.parameters.append("limit", limit.toString())
             if (cursor != null) url.parameters.append("cursor", cursor)
         }.body<PaginatedResponse<Sample>>()
@@ -305,6 +429,7 @@ class CrucibleApiService(
         client.get("${baseUrl}datasets") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("project_id", projectId)
+            url.parameters.append("include_owner", "true")
             url.parameters.append("limit", limit.toString())
             if (cursor != null) url.parameters.append("cursor", cursor)
         }.body<PaginatedResponse<Dataset>>()
@@ -330,6 +455,7 @@ class CrucibleApiService(
             if (ownerOrcid != null) url.parameters.append("owner_orcid", ownerOrcid)
             if (creationTimeGte != null) url.parameters.append("creation_time_gte", creationTimeGte)
             if (creationTimeLte != null) url.parameters.append("creation_time_lte", creationTimeLte)
+            url.parameters.append("include_owner", "true")
             url.parameters.append("limit", limit.toString())
             if (cursor != null) url.parameters.append("cursor", cursor)
         }.body<PaginatedResponse<Dataset>>()
@@ -349,6 +475,7 @@ class CrucibleApiService(
             if (ownerOrcid != null) url.parameters.append("owner_orcid", ownerOrcid)
             if (creationTimeGte != null) url.parameters.append("creation_time_gte", creationTimeGte)
             if (creationTimeLte != null) url.parameters.append("creation_time_lte", creationTimeLte)
+            url.parameters.append("include_owner", "true")
             url.parameters.append("limit", limit.toString())
             if (cursor != null) url.parameters.append("cursor", cursor)
         }.body<PaginatedResponse<Sample>>()
@@ -487,6 +614,19 @@ class CrucibleApiService(
         }
     }
 
+    suspend fun reassignResourceProject(
+        resourceId: String,
+        projectId: String,
+        confirm: Boolean = false
+    ): ApiResult<ReassignProjectResponse> = safeCall {
+        client.post("${baseUrl}resources/$resourceId/project") {
+            header("Authorization", "Bearer $apiKey")
+            if (confirm) url.parameters.append("confirm", "true")
+            contentType(ContentType.Application.Json)
+            setBody(ReassignProjectRequest(projectId))
+        }.body()
+    }
+
     suspend fun getProjectUsers(projectId: String): ApiResult<List<User>> = fetchAllPages { limit, offset ->
         client.get("${baseUrl}projects/$projectId/users") {
             header("Authorization", "Bearer $apiKey")
@@ -496,16 +636,58 @@ class CrucibleApiService(
     }
 
     suspend fun updateProject(
-        projectId: String,
+        projectReference: String,
+        projectSlug: String? = null,
         title: String? = null,
-        organization: String? = null,
-        projectLeadUsername: String? = null
+        organization: String? = null
     ): ApiResult<Project> = safeCall {
-        patch("projects/$projectId", crucible.lens.data.model.ProjectUpdateRequest(
+        patch("projects/$projectReference", crucible.lens.data.model.ProjectUpdateRequest(
+            projectId = projectSlug,
             title = title,
-            organization = organization,
-            projectLeadUsername = projectLeadUsername
+            organization = organization
         ))
+    }
+
+    suspend fun transferResourceOwnership(
+        resourceId: String,
+        newOwner: String,
+        confirm: Boolean = false
+    ): ApiResult<TransferOwnershipResponse> = safeCall {
+        client.post("${baseUrl}resources/$resourceId/transfer_ownership") {
+            header("Authorization", "Bearer $apiKey")
+            if (confirm) url.parameters.append("confirm", "true")
+            contentType(ContentType.Application.Json)
+            setBody(TransferOwnershipRequest(newOwner))
+        }.body()
+    }
+
+    suspend fun getResourceAccess(resourceMfid: String): ApiResult<List<AccessGrant>> = safeCall {
+        get("resources/$resourceMfid/access")
+    }
+
+    suspend fun setResourceAccess(
+        resourceMfid: String,
+        kind: AccessPrincipalKind,
+        principal: String,
+        permission: crucible.lens.data.model.ResourceGrantRole
+    ): ApiResult<AccessGrant> = safeCall {
+        put("resources/$resourceMfid/access/${kind.pathValue}/$principal", AccessGrantWrite(permission))
+    }
+
+    suspend fun revokeResourceAccess(
+        resourceMfid: String,
+        kind: AccessPrincipalKind,
+        principal: String
+    ): ApiResult<Boolean> = safeCall {
+        delete("resources/$resourceMfid/access/${kind.pathValue}/$principal")
+    }
+
+    suspend fun publishResource(resourceMfid: String): ApiResult<AccessGrant> = safeCall {
+        put("resources/$resourceMfid/access/public")
+    }
+
+    suspend fun unpublishResource(resourceMfid: String): ApiResult<Boolean> = safeCall {
+        delete("resources/$resourceMfid/access/public")
     }
 
     // Any authenticated user can create a project naming any existing user as its lead - the
@@ -515,17 +697,32 @@ class CrucibleApiService(
         post("projects", request)
     }
 
-    suspend fun addProjectMember(projectId: String, username: String): ApiResult<Boolean> = safeCall {
-        client.post("${baseUrl}projects/$projectId/users/0") {
+    suspend fun addProjectMember(
+        projectReference: String,
+        userId: String,
+        role: String = "contributor"
+    ): ApiResult<List<User>> = safeCall {
+        client.post("${baseUrl}projects/$projectReference/users/$userId") {
             header("Authorization", "Bearer $apiKey")
-            url.parameters.append("username", username)
-        }.status.value in 200..299
+            url.parameters.append("role", role)
+        }.body()
     }
 
-    suspend fun removeProjectMember(projectId: String, userOrcid: String): ApiResult<Boolean> = safeCall {
-        client.delete("${baseUrl}projects/$projectId/users/$userOrcid") {
+    suspend fun updateProjectMemberRole(
+        projectReference: String,
+        userId: String,
+        role: String
+    ): ApiResult<List<User>> = safeCall {
+        client.patch("${baseUrl}projects/$projectReference/users/$userId") {
             header("Authorization", "Bearer $apiKey")
-        }.status.value in 200..299
+            url.parameters.append("role", role)
+        }.body()
+    }
+
+    suspend fun removeProjectMember(projectReference: String, userId: String): ApiResult<List<User>> = safeCall {
+        client.delete("${baseUrl}projects/$projectReference/users/$userId") {
+            header("Authorization", "Bearer $apiKey")
+        }.body()
     }
 
     suspend fun requestToJoinProject(projectId: String, reason: String? = null): ApiResult<JoinRequest> = safeCall {
@@ -588,11 +785,17 @@ class CrucibleApiService(
         }.body<PaginatedResponse<Project>>().items
     }
 
-    suspend fun searchInstruments(q: String, limit: Int = 20): ApiResult<List<Instrument>> = safeCall {
+    suspend fun searchInstruments(
+        q: String,
+        limit: Int = 20,
+        status: InstrumentStatus? = null
+    ): ApiResult<List<Instrument>> = safeCall {
         client.get("${baseUrl}instruments/search") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("q", q)
+            url.parameters.append("include_owner", "true")
             url.parameters.append("limit", limit.toString())
+            if (status != null) url.parameters.append("status", status.apiValue)
         }.body<PaginatedResponse<Instrument>>().items
     }
 

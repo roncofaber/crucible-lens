@@ -22,6 +22,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -98,6 +99,8 @@ fun InstrumentDetailScreen(
     val prefs = koinInject<AppPreferences>()
     val instrument by viewModel.instrument.collectAsStateWithLifecycle()
     val datasetsState by viewModel.datasetsState.collectAsStateWithLifecycle()
+    val paginationState by viewModel.paginationState.collectAsStateWithLifecycle()
+    val loadMoreError = paginationState.loadMoreError
     // Saveable, like ProjectDetailScreen's, so a typed filter survives opening a dataset and
     // coming back — the same reason expandedGroups below is saveable.
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -266,6 +269,16 @@ fun InstrumentDetailScreen(
                         }
 
                         is LoadState.Success -> {
+                            if (state.refreshError != null) {
+                                item(key = "refresh_error") {
+                                    ErrorCard(
+                                        title = "Could Not Refresh",
+                                        message = state.refreshError,
+                                        modifier = Modifier.padding(16.dp),
+                                        onRetry = { viewModel.load(instrumentId, forceRefresh = true) }
+                                    )
+                                }
+                            }
                             if (filteredDatasets.isEmpty()) {
                                 item(key = "empty") {
                                     EmptyListCard(
@@ -314,6 +327,34 @@ fun InstrumentDetailScreen(
                                                 resourceType = "dataset",
                                                 showDivider = index > 0,
                                                 onClick = { onDatasetClick(dataset.uniqueId) }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (loadMoreError != null) {
+                                item(key = "load_more_error") {
+                                    ErrorCard(
+                                        title = "Could Not Load More",
+                                        message = loadMoreError,
+                                        modifier = Modifier.padding(16.dp),
+                                        onRetry = viewModel::loadMore
+                                    )
+                                }
+                            } else if (paginationState.nextCursor != null) {
+                                item(key = "load_more") {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = viewModel::loadMore,
+                                            enabled = paginationState.canLoadMore
+                                        ) {
+                                            Text(
+                                                if (paginationState.isLoadingMore) "Loading…"
+                                                else "Load more datasets"
                                             )
                                         }
                                     }

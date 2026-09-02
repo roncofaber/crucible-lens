@@ -10,6 +10,7 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.repository.ResourceResult
 import crucible.lens.data.sync.DataSyncManager
+import crucible.lens.platform.PlatformContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,27 @@ sealed class UiState {
     data class Error(val message: String) : UiState()
 }
 
+sealed class DeletionRequestSubmissionState {
+    object Idle : DeletionRequestSubmissionState()
+    object Submitting : DeletionRequestSubmissionState()
+    data class Submitted(val resourceId: String) : DeletionRequestSubmissionState()
+    data class Error(val message: String) : DeletionRequestSubmissionState()
+}
+
+enum class AssociatedFileAction { DOWNLOAD, SHARE }
+
+data class AssociatedFileActionKey(
+    val datasetUuid: String,
+    val mfid: String,
+    val action: AssociatedFileAction
+)
+
+sealed class AssociatedFileActionState {
+    data object Resolving : AssociatedFileActionState()
+    data class Ready(val url: String) : AssociatedFileActionState()
+    data class Error(val message: String) : AssociatedFileActionState()
+}
+
 private const val MAX_CARD_STATE_ENTRIES = 50
 
 class ResourceDetailViewModel(
@@ -36,9 +58,18 @@ class ResourceDetailViewModel(
     // Tracks the active fetch/refresh so navigating to a new resource
     // cancels any in-flight request for the previous one.
     private var activeFetchJob: Job? = null
+    private var deletionRequestSubmissionJob: Job? = null
+    private val associatedFileActionJobs = mutableMapOf<AssociatedFileActionKey, Job>()
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    private val _deletionRequestSubmissionState = MutableStateFlow<DeletionRequestSubmissionState>(DeletionRequestSubmissionState.Idle)
+    val deletionRequestSubmissionState: StateFlow<DeletionRequestSubmissionState> = _deletionRequestSubmissionState.asStateFlow()
+
+    private val _associatedFileActionStates = MutableStateFlow<Map<AssociatedFileActionKey, AssociatedFileActionState>>(emptyMap())
+    val associatedFileActionStates: StateFlow<Map<AssociatedFileActionKey, AssociatedFileActionState>> =
+        _associatedFileActionStates.asStateFlow()
 
     /** Persists expanded/collapsed state of detail screen cards across navigation. */
     private val resourceCardState = mutableStateMapOf<String, SnapshotStateMap<String, Boolean>>()
@@ -80,7 +111,9 @@ class ResourceDetailViewModel(
                 is ResourceResult.Success -> {
                     _uiState.value = UiState.Success(trimmedUuid)
                 }
-                is ResourceResult.Error -> _uiState.value = UiState.Error(result.message)
+                is ResourceResult.Error -> {
+                    _uiState.value = if (hasCached) UiState.Success(trimmedUuid) else UiState.Error(result.message)
+                }
                 is ResourceResult.Loading -> {}
             }
         }
@@ -91,6 +124,8 @@ class ResourceDetailViewModel(
     // synced-project filter, without needing NavGraph to call startBackgroundSync() again.
     private var lastSyncedProjectIds: Set<String> = emptySet()
     private var lastCurrentUserOrcid: String? = null
+    private var lastSyncContext: PlatformContext? = null
+    private var lastAccountId: String? = null
 
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
@@ -100,26 +135,121 @@ class ResourceDetailViewModel(
      * [currentUserOrcid] scopes the pending-join-request-count preload to projects the caller
      * leads — see [DataSyncManager.syncAll].
      */
-    fun startBackgroundSync(syncedProjectIds: Set<String> = emptySet(), currentUserOrcid: String? = null) {
+    fun startBackgroundSync(
+        context: PlatformContext,
+        accountId: String,
+        syncedProjectIds: Set<String> = emptySet(),
+        currentUserOrcid: String? = null
+    ) {
+        syncJob?.cancel()
+        lastSyncContext = context
+        lastAccountId = accountId
         lastSyncedProjectIds = syncedProjectIds
         lastCurrentUserOrcid = currentUserOrcid
         _isSyncing.value = true
         syncJob = viewModelScope.launch {
-            try { dataSyncManager.syncAll(syncedProjectIds, currentUserOrcid) }
+            try { dataSyncManager.syncAll(context, accountId, syncedProjectIds, currentUserOrcid) }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) { }
             finally { _isSyncing.value = false }
         }
     }
 
+    fun stopBackgroundSync() {
+        syncJob?.cancel()
+        syncJob = null
+        lastSyncedProjectIds = emptySet()
+        lastCurrentUserOrcid = null
+        lastSyncContext = null
+        lastAccountId = null
+        _isSyncing.value = false
+    }
+
     fun reset() {
+        deletionRequestSubmissionJob?.cancel()
+        deletionRequestSubmissionJob = null
+        associatedFileActionJobs.values.forEach { it.cancel() }
+        associatedFileActionJobs.clear()
+        _associatedFileActionStates.value = emptyMap()
+        _deletionRequestSubmissionState.value = DeletionRequestSubmissionState.Idle
         _uiState.value = UiState.Idle
     }
 
-    // No repository wrapper - a deletion request is a one-off write with nothing to cache,
-    // same precedent as the join-request calls (called directly via apiClient.service.*).
-    suspend fun requestDeletion(resourceId: String, reason: String?): ApiResult<Unit> =
-        apiClient.service.requestDeletion(resourceId = resourceId, reason = reason?.trim()?.ifBlank { null })
+    fun resolveAssociatedFileAction(key: AssociatedFileActionKey) {
+        if (_associatedFileActionStates.value[key] is AssociatedFileActionState.Resolving) return
+        associatedFileActionJobs[key]?.cancel()
+        _associatedFileActionStates.update {
+            updateAssociatedFileActionState(it, key, AssociatedFileActionState.Resolving)
+        }
+        associatedFileActionJobs[key] = viewModelScope.launch {
+            try {
+                when (val result = repository.fetchFileUrl(key.mfid)) {
+                    is ApiResult.Success -> _associatedFileActionStates.update {
+                        updateAssociatedFileActionState(it, key, AssociatedFileActionState.Ready(result.data))
+                    }
+                    is ApiResult.Error -> _associatedFileActionStates.update {
+                        updateAssociatedFileActionState(
+                            it,
+                            key,
+                            AssociatedFileActionState.Error(associatedFileUrlError(result.code))
+                        )
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _associatedFileActionStates.update {
+                    updateAssociatedFileActionState(
+                        it,
+                        key,
+                        AssociatedFileActionState.Error("Connection error. Check your network and try again")
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearAssociatedFileAction(key: AssociatedFileActionKey) {
+        associatedFileActionJobs.remove(key)?.cancel()
+        _associatedFileActionStates.update { updateAssociatedFileActionState(it, key, null) }
+    }
+
+    fun submitDeletionRequest(resourceId: String, reason: String) {
+        if (_deletionRequestSubmissionState.value is DeletionRequestSubmissionState.Submitting) return
+        _deletionRequestSubmissionState.value = DeletionRequestSubmissionState.Submitting
+        deletionRequestSubmissionJob = viewModelScope.launch {
+            try {
+                when (val result = apiClient.service.requestDeletion(
+                    resourceId = resourceId,
+                    reason = reason.trim().ifBlank { null }
+                )) {
+                    is ApiResult.Success -> {
+                        _deletionRequestSubmissionState.value = DeletionRequestSubmissionState.Submitted(resourceId)
+                    }
+                    is ApiResult.Error -> {
+                        _deletionRequestSubmissionState.value = DeletionRequestSubmissionState.Error(
+                            if (result.code == 409) {
+                                "A deletion request may already exist"
+                            } else {
+                                "Could not submit deletion request (${result.code})"
+                            }
+                        )
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _deletionRequestSubmissionState.value = DeletionRequestSubmissionState.Error(
+                    "Connection error. Check your network and try again"
+                )
+            }
+        }
+    }
+
+    fun clearDeletionRequestSubmission() {
+        if (_deletionRequestSubmissionState.value is DeletionRequestSubmissionState.Submitting) return
+        _deletionRequestSubmissionState.value = DeletionRequestSubmissionState.Idle
+    }
 
     fun refreshResource(uuid: String) {
         activeFetchJob?.cancel()
@@ -159,8 +289,26 @@ class ResourceDetailViewModel(
                 // Timeout or network failure — error state (if primary) was set above
             } finally {
                 _uiState.update { if (it is UiState.Success) it.copy(isRefreshing = false) else it }
-                if (syncWasActive) startBackgroundSync(lastSyncedProjectIds, lastCurrentUserOrcid)
+                val context = lastSyncContext
+                val accountId = lastAccountId
+                if (syncWasActive && context != null && accountId != null) {
+                    startBackgroundSync(context, accountId, lastSyncedProjectIds, lastCurrentUserOrcid)
+                }
             }
         }
     }
+}
+
+internal fun updateAssociatedFileActionState(
+    states: Map<AssociatedFileActionKey, AssociatedFileActionState>,
+    key: AssociatedFileActionKey,
+    state: AssociatedFileActionState?
+): Map<AssociatedFileActionKey, AssociatedFileActionState> = if (state == null) states - key else states + (key to state)
+
+internal fun associatedFileUrlError(code: Int): String = when (code) {
+    401 -> "Sign in again to access this file"
+    403 -> "You do not have permission to access this file"
+    404 -> "File link not found"
+    in 500..599 -> "Crucible service error ($code)"
+    else -> "Could not get file link ($code)"
 }

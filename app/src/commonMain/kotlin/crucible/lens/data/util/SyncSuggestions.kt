@@ -12,12 +12,12 @@ fun suggestedProjectIds(
     currentUserOrcid: String?,
     pinnedProjects: Set<String>
 ): Set<String> = projects
-    .filter { it.projectId in pinnedProjects || (currentUserOrcid != null && it.projectLeadOrcid == currentUserOrcid) }
-    .map { it.projectId }
+    .filter { it.uniqueId in pinnedProjects || (currentUserOrcid != null && it.projectLeadOrcid == currentUserOrcid) }
+    .map { it.uniqueId }
     .toSet()
 
 fun sortForPicker(projects: List<Project>, suggested: Set<String>): List<Project> =
     projects.sortedWith(
-        compareByDescending<Project> { it.projectId in suggested }
+        compareByDescending<Project> { it.uniqueId in suggested }
             .thenBy { (it.title ?: it.projectId).lowercase() }
     )

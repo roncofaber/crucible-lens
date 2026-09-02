@@ -1,24 +1,5 @@
 #!/usr/bin/env bash
-# Local release build for Crucible Lens — runs the documented steps from CLAUDE.md's
-# "Release process" end to end (verify -> build -> verify signed -> copy to Drive).
-#
-# This does NOT bump the version or touch CHANGELOG.md, tag, commit, or push — those stay
-# manual/deliberate steps. Run this after gradle.properties and CHANGELOG.md are already
-# updated for the release you're cutting.
-#
 # Usage: ./scripts/release.sh
-#
-# Signing: androidApp/build.gradle.kts's signingConfigs.release reads KEYSTORE_PATH/
-# KEYSTORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD from the environment, falling back to
-# local.properties' keystore.path/keystore.password/key.alias/key.password (gitignored).
-# No separate zipalign/sign step is needed — Gradle's assembleRelease/bundleRelease already
-# produce a signed artifact when signingConfigs.release.storeFile is set.
-#
-# The two passwords are prompted for interactively below (hidden input) rather than read from
-# local.properties, so nothing sensitive needs to sit on disk — pull them from a password
-# manager each run. Export KEYSTORE_PASSWORD/KEY_PASSWORD yourself beforehand to skip a prompt
-# (e.g. scripting/CI use), otherwise leave keystore.password/key.password out of
-# local.properties entirely.
 
 set -euo pipefail
 
@@ -32,30 +13,29 @@ export PATH="$JAVA_HOME/bin:$PATH"
 VERSION="$(grep '^app.versionName=' gradle.properties | cut -d'=' -f2)"
 echo "=== Releasing crucible-lens v$VERSION ==="
 
-if [[ -z "${KEYSTORE_PASSWORD:-}" ]]; then
+has_local_property() {
+  [[ -f local.properties ]] && grep -q "^$1=." local.properties
+}
+
+if [[ -z "${KEYSTORE_PASSWORD:-}" ]] && ! has_local_property "keystore.password"; then
   read -rs -p "Keystore password: " KEYSTORE_PASSWORD
   echo
+  export KEYSTORE_PASSWORD
 fi
-if [[ -z "${KEY_PASSWORD:-}" ]]; then
+if [[ -z "${KEY_PASSWORD:-}" ]] && ! has_local_property "key.password"; then
   read -rs -p "Key password: " KEY_PASSWORD
   echo
+  export KEY_PASSWORD
 fi
-export KEYSTORE_PASSWORD KEY_PASSWORD
 
 echo ""
 echo "=== Verify ==="
-./gradlew :composeApp:compileAndroidMain :composeApp:testAndroidHostTest :composeApp:compileKotlinIosArm64
+./scripts/verify-change.sh
+./gradlew :composeApp:compileKotlinIosArm64
 
 echo ""
 echo "=== Build debug APK + release bundle/APK ==="
-# Two separate invocations, not one combined command: app/build.gradle.kts's
-# generateAppBuildConfig task infers isDebug from whether ANY requested task name in the
-# invocation contains "debug" (composeApp's androidMain compilation isn't variant-split, so
-# there's only one shared AppBuildConfig.kt per invocation). Requesting assembleDebug and
-# bundleRelease/assembleRelease together made that check see "debug" and bake DEBUG=true into
-# the release build too — shipping a "release" AAB that showed the dev version string and the
-# debug-only Typography settings screen. Keeping debug and release in separate invocations
-# means each one's task list unambiguously reflects a single variant.
+# Keep debug and release in separate invocations because generateAppBuildConfig inspects requested task names.
 ./gradlew :androidApp:assembleDebug
 ./gradlew :androidApp:bundleRelease :androidApp:assembleRelease
 
@@ -67,7 +47,7 @@ echo ""
 echo "=== Verify the release build isn't flagged as debug ==="
 GENERATED_BUILD_CONFIG="$REPO_ROOT/app/build/generated/appBuildConfig/kotlin/crucible/lens/AppBuildConfig.kt"
 if ! grep -q "DEBUG: Boolean = false" "$GENERATED_BUILD_CONFIG"; then
-  echo "ERROR: AppBuildConfig.DEBUG is not false after the release build — refusing to publish a debug-flagged release." >&2
+  echo "ERROR: AppBuildConfig.DEBUG is not false after the release build - refusing to publish a debug-flagged release." >&2
   echo "This generated file is shared across variants; see the comment above the build step." >&2
   exit 1
 fi
@@ -77,12 +57,12 @@ echo ""
 echo "=== Verify the release build is actually signed ==="
 BUILD_TOOLS="${BUILD_TOOLS:-$HOME/Android/Sdk/build-tools/$(ls "$HOME/Android/Sdk/build-tools" | sort -V | tail -1)}"
 if ! "$BUILD_TOOLS/apksigner" verify --print-certs "$RELEASE_APK"; then
-  echo "ERROR: $RELEASE_APK failed apksigner verification — refusing to publish an unsigned APK." >&2
+  echo "ERROR: $RELEASE_APK failed apksigner verification - refusing to publish an unsigned APK." >&2
   echo "Check KEYSTORE_PATH/KEYSTORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD or local.properties' keystore.* keys." >&2
   exit 1
 fi
 if ! unzip -l "$RELEASE_AAB" | grep -qE "META-INF/.*\.(RSA|EC|DSA)$"; then
-  echo "ERROR: $RELEASE_AAB has no signature block (META-INF/*.RSA|EC|DSA) — refusing to publish an unsigned bundle." >&2
+  echo "ERROR: $RELEASE_AAB has no signature block (META-INF/*.RSA|EC|DSA) - refusing to publish an unsigned bundle." >&2
   exit 1
 fi
 echo "Signed OK."

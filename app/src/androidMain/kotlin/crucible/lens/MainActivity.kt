@@ -17,7 +17,9 @@ import crucible.lens.data.network.ConnectivityObserver
 import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.data.preferences.PreferencesManager
 import crucible.lens.di.initKoin
+import crucible.lens.ui.navigation.DeepLinkTarget
 import crucible.lens.ui.navigation.NavGraph
+import crucible.lens.ui.navigation.parseDeepLink
 import crucible.lens.ui.theme.CrucibleScannerTheme
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import org.koin.dsl.module
@@ -26,10 +28,18 @@ import org.koin.mp.KoinPlatformTools
 class MainActivity : ComponentActivity() {
     private lateinit var preferencesManager: PreferencesManager
     private var openScanner by mutableStateOf(false)
+    private var deepLinkTarget by mutableStateOf<DeepLinkTarget?>(null)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.action == "crucible.lens.OPEN_SCANNER") openScanner = true
+        setIntent(intent)
+        if (intent.action == "crucible.lens.OPEN_SCANNER") {
+            deepLinkTarget = null
+            openScanner = true
+        } else {
+            openScanner = false
+            deepLinkTarget = intent.dataString?.let(::parseDeepLink)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,7 +57,7 @@ class MainActivity : ComponentActivity() {
         // all StateFlows will have their real values by then, no flash possible.
         splashScreen.setKeepOnScreenCondition { !preferencesManager.isLoaded.value }
 
-        val deepLinkUuid: String? = intent?.data?.pathSegments?.lastOrNull()?.takeIf { it.length > 8 }
+        deepLinkTarget = intent?.dataString?.let(::parseDeepLink)
         openScanner = intent?.action == "crucible.lens.OPEN_SCANNER"
 
         setContent {
@@ -83,7 +93,8 @@ class MainActivity : ComponentActivity() {
             ) {
                 NavGraph(
                     navController = navController,
-                    deepLinkUuid = deepLinkUuid,
+                    deepLinkTarget = deepLinkTarget,
+                    onDeepLinkOpened = { deepLinkTarget = null },
                     openScanner = openScanner,
                     onScannerOpened = { openScanner = false }
                 )

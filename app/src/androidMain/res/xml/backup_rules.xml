@@ -2,4 +2,6 @@
 <full-backup-content>
     <exclude domain="file" path="datastore"/>
     <exclude domain="file" path="projects_cache.json"/>
+    <exclude domain="file" path="project_contents_cache.json"/>
+    <exclude domain="file" path="project_cache"/>
 </full-backup-content>

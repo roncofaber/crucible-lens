@@ -5,26 +5,26 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 private fun project(id: String, title: String? = null, lead: String? = null) =
-    Project(projectId = id, title = title, projectLeadOrcid = lead)
+    Project(uniqueId = "mfid-$id", projectId = id, title = title, projectLeadOrcid = lead)
 
 class SyncSuggestionsTest {
 
     @Test
     fun suggestsProjectsTheUserLeads() {
         val projects = listOf(project("a", lead = "orcid-1"), project("b", lead = "orcid-2"))
-        assertEquals(setOf("a"), suggestedProjectIds(projects, "orcid-1", emptySet()))
+        assertEquals(setOf("mfid-a"), suggestedProjectIds(projects, "orcid-1", emptySet()))
     }
 
     @Test
     fun suggestsPinnedProjects() {
         val projects = listOf(project("a"), project("b"))
-        assertEquals(setOf("b"), suggestedProjectIds(projects, null, setOf("b")))
+        assertEquals(setOf("mfid-b"), suggestedProjectIds(projects, null, setOf("mfid-b")))
     }
 
     @Test
     fun suggestsUnionOfLedAndPinnedWithoutDuplicates() {
         val projects = listOf(project("a", lead = "orcid-1"), project("b"), project("c"))
-        assertEquals(setOf("a", "b"), suggestedProjectIds(projects, "orcid-1", setOf("a", "b")))
+        assertEquals(setOf("mfid-a", "mfid-b"), suggestedProjectIds(projects, "orcid-1", setOf("mfid-a", "mfid-b")))
     }
 
     @Test
@@ -46,7 +46,7 @@ class SyncSuggestionsTest {
             project("a", title = "Alpha"),
             project("b", title = "Bravo")
         )
-        val sorted = sortForPicker(projects, setOf("c"))
+        val sorted = sortForPicker(projects, setOf("mfid-c"))
         assertEquals(listOf("c", "a", "b"), sorted.map { it.projectId })
     }
 

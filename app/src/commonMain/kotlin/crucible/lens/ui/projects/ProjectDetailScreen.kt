@@ -53,17 +53,16 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import crucible.lens.data.api.ApiClient
-import crucible.lens.data.api.ApiResult
-import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.preferences.AppPreferences
+import crucible.lens.data.sync.ProjectSyncTarget
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.util.SortState
 import crucible.lens.data.util.matchesSearch
 import crucible.lens.data.util.userDisplayName
 import crucible.lens.platform.copyToClipboard
+import crucible.lens.platform.buildCrucibleWebUrl
 import crucible.lens.platform.getPlatformContext
-import crucible.lens.platform.openUrl
+import crucible.lens.platform.openInBrowser
 import crucible.lens.platform.shareText
 import crucible.lens.platform.showToast
 import crucible.lens.ui.common.AppIcon
@@ -73,6 +72,7 @@ import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.CollapsingAppTopBar
 import crucible.lens.ui.common.ContentFastCrossfadeSpec
 import crucible.lens.ui.common.CopyIdMenuItem
+import crucible.lens.ui.common.ErrorCard
 import crucible.lens.ui.common.IdText
 import crucible.lens.ui.common.GroupByOption
 import crucible.lens.ui.common.LoadState
@@ -94,7 +94,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @OptIn(ExperimentalAnimationApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun ProjectDetailScreen(
-    projectId: String,
+    projectReference: String,
     graphExplorerUrl: String,
     onBack: () -> Unit,
     onHome: () -> Unit,
@@ -107,35 +107,29 @@ fun ProjectDetailScreen(
     onCreateDataset: () -> Unit = {},
     onManageProject: () -> Unit = {},
     onUserClick: (String) -> Unit = {},
-    currentUserOrcid: String? = null
+    currentUserOrcid: String? = null,
+    accountId: String? = null
 ) {
     val repository = koinInject<CrucibleRepository>()
-    // The projects-list cache (warm by the time a project can be opened at all, from Home/Projects
-    // list) and the per-project cache (populated by DataSyncManager's background sync or this
-    // screen's own fetchProject() call below) are the same CrucibleRepository cache, but a project
-    // reached here right after the list fetch — before fetchProject() below has run — may only be
-    // in the list cache yet. Falling back to it restores an instant header render for that case
-    // instead of a blank header + an avoidable network round-trip.
-    val cachedFallback = remember(projectId) { repository.getCachedProjects()?.find { it.projectId == projectId } }
-    // Observed reactively so the header updates in place once fetched — covers both member
-    // projects (usually warm already from the Projects list fetch) and non-member projects
-    // reached via discover-search (never in that list, so this is a cold single fetch).
-    val project by repository.observeProject(projectId)
-        .collectAsStateWithLifecycle(initialValue = repository.getCachedProject(projectId) ?: cachedFallback)
-    LaunchedEffect(projectId) {
-        if (repository.getCachedProject(projectId) == null) {
-            repository.fetchProject(projectId)
-        }
+    val viewModel: ProjectDetailViewModel = koinViewModel()
+    val joinRequestLookup by viewModel.joinRequestState.collectAsStateWithLifecycle()
+    val joinRequestSubmission by viewModel.joinRequestSubmissionState.collectAsStateWithLifecycle()
+    val project by repository.observeProject(projectReference)
+        .collectAsStateWithLifecycle(initialValue = repository.getCachedProject(projectReference))
+    val projectSlug = project?.projectId
+    val syncTarget = project?.let { ProjectSyncTarget(it.uniqueId, it.projectId) }
+    LaunchedEffect(projectReference) {
+        repository.fetchProject(projectReference)
     }
 
     // Member list — fetched alongside the project so the collapsing header's member count is
     // ready without a dedicated round trip; also the shared cache rememberOwnerNames reads from
     // when grouping by owner, so opening this screen once warms that path too.
-    val members by repository.observeProjectMembers(projectId)
-        .collectAsStateWithLifecycle(initialValue = repository.getCachedProjectMembers(projectId))
-    LaunchedEffect(projectId) {
-        if (repository.getCachedProjectMembers(projectId) == null) {
-            repository.fetchProjectMembers(projectId)
+    val members by repository.observeProjectMembers(projectReference)
+        .collectAsStateWithLifecycle(initialValue = repository.getCachedProjectMembers(projectReference))
+    LaunchedEffect(projectReference) {
+        if (repository.getCachedProjectMembers(projectReference) == null) {
+            repository.fetchProjectMembers(projectReference)
         }
     }
 
@@ -148,18 +142,21 @@ fun ProjectDetailScreen(
     // content load below be skipped outright for non-members. A stale cache can only mislabel
     // someone added to the project since the last list fetch, and the observe corrects that as
     // soon as fresh data lands.
-    val apiClient = koinInject<ApiClient>()
     val memberProjects by repository.observeProjects()
         .collectAsStateWithLifecycle(initialValue = repository.getCachedProjects())
-    val isConfidentlyNonMember = memberProjects != null && memberProjects!!.none { it.projectId == projectId }
-    var joinRequestState by remember(projectId) { mutableStateOf<JoinRequest?>(null) }
-    var joinRequestChecked by remember(projectId) { mutableStateOf(false) }
-    var showJoinDialog by remember { mutableStateOf(false) }
-    LaunchedEffect(projectId, isConfidentlyNonMember) {
-        if (!isConfidentlyNonMember) { joinRequestChecked = false; return@LaunchedEffect }
-        joinRequestState = (apiClient.service.getMyJoinRequests(status = "pending") as? ApiResult.Success)?.data
-            ?.find { it.groupName == projectId }
-        joinRequestChecked = true
+    val isConfidentlyNonMember = memberProjects != null && memberProjects!!.none {
+        it.uniqueId == projectReference || it.projectId == projectReference
+    }
+    var showJoinDialog by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(joinRequestSubmission) {
+        if (joinRequestSubmission is JoinRequestSubmissionState.Submitted) {
+            showJoinDialog = false
+            viewModel.clearJoinRequestSubmission()
+        }
+    }
+    LaunchedEffect(projectSlug, accountId, isSynced, isConfidentlyNonMember) {
+        if (isConfidentlyNonMember && projectSlug != null) viewModel.loadJoinRequestStatus(projectSlug)
+        else viewModel.clearJoinRequestStatus()
     }
 
     // Pending-request dot on the overflow menu, for the project's lead only — same
@@ -169,14 +166,15 @@ fun ProjectDetailScreen(
     // triggered from here, this only renders whatever's already known.
     val isCurrentUserLead = currentUserOrcid != null &&
         (project?.projectLeadOrcid == currentUserOrcid || project?.lead?.uniqueId == currentUserOrcid)
-    val pendingRequestCount by repository.observePendingJoinRequestCount(projectId)
-        .collectAsStateWithLifecycle(initialValue = repository.getCachedPendingJoinRequestCount(projectId))
+    val pendingCountKey = projectSlug ?: projectReference
+    val pendingRequestCount by repository.observePendingJoinRequestCount(pendingCountKey)
+        .collectAsStateWithLifecycle(initialValue = repository.getCachedPendingJoinRequestCount(pendingCountKey))
     val leadPendingRequestCount = if (isCurrentUserLead) pendingRequestCount else null
 
     val ctx = getPlatformContext()
+    val projectWebUrl = buildCrucibleWebUrl(graphExplorerUrl, projectSlug ?: projectReference)
     val prefs = koinInject<AppPreferences>()
 
-    val viewModel: ProjectDetailViewModel = koinViewModel()
     val loadState by viewModel.loadState.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { 2 })
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -189,23 +187,27 @@ fun ProjectDetailScreen(
     // user leads, not just this one — so this is as cheap as ProjectsListScreen's refresh, just
     // scoped here to write/zero this project's cache entry.
     fun refreshProjectDetail() {
-        viewModel.load(projectId, forceRefresh = true)
+        syncTarget?.let { target ->
+            viewModel.load(target, ctx, accountId, isSynced, forceRefresh = true)
+            val slug = target.projectSlug
+            if (isConfidentlyNonMember) viewModel.loadJoinRequestStatus(slug, forceRefresh = true)
+        }
         // load() only force-refreshes samples/datasets. The collapsing header reads the project
         // and its member list from two other caches, so without these a pull-to-refresh left the
         // title, organization, lead and member count stale until their TTL lapsed.
         scope.launch {
-            try { repository.fetchProject(projectId, forceRefresh = true) }
+            try { repository.fetchProject(projectReference, forceRefresh = true) }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) { }
         }
         scope.launch {
-            try { repository.fetchProjectMembers(projectId, forceRefresh = true) }
+            try { repository.fetchProjectMembers(projectReference, forceRefresh = true) }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) { }
         }
-        if (isCurrentUserLead) {
+        if (isCurrentUserLead && projectSlug != null) {
             scope.launch {
-                try { repository.fetchPendingJoinRequestCounts(listOf(projectId)) }
+                try { repository.fetchPendingJoinRequestCounts(listOf(projectSlug)) }
                 catch (e: CancellationException) { throw e }
                 catch (_: Exception) { }
             }
@@ -242,8 +244,8 @@ fun ProjectDetailScreen(
     // content area is replaced by NonMemberContent. Guarded rather than unconditional so a warm
     // member-list cache (the usual case, per the seed above) avoids the round trip entirely; on a
     // cold cache isConfidentlyNonMember is false on the first frame, so members never wait.
-    LaunchedEffect(projectId, isConfidentlyNonMember) {
-        if (!isConfidentlyNonMember) viewModel.load(projectId)
+    LaunchedEffect(syncTarget, accountId, isSynced, isConfidentlyNonMember) {
+        if (!isConfidentlyNonMember && syncTarget != null) viewModel.load(syncTarget, ctx, accountId, isSynced)
     }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -251,7 +253,7 @@ fun ProjectDetailScreen(
     AppScaffold(
         topBar = {
             CollapsingAppTopBar(
-                name = project?.title ?: projectId,
+                name = project?.title ?: projectSlug ?: projectReference,
                 icon = AppIcons.Project,
                 scrollBehavior = scrollBehavior,
                 onBack = onBack,
@@ -310,9 +312,9 @@ fun ProjectDetailScreen(
                     // only pairs safely with the `surface` family. Tap to copy, matching
                     // InstrumentDetailScreen's overflow-menu Copy ID action for the same purpose.
                     IdText(
-                        text = projectId,
+                        text = projectSlug ?: projectReference,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.clickable { copyToClipboard(ctx, projectId) }
+                        modifier = Modifier.clickable { copyToClipboard(ctx, projectSlug ?: projectReference) }
                     )
                 },
                 actions = {
@@ -333,11 +335,13 @@ fun ProjectDetailScreen(
                             DropdownMenuItem(
                                 text = { Text("New Sample") },
                                 leadingIcon = { AppIcon(AppIcons.Add) },
+                                enabled = projectSlug != null,
                                 onClick = { topBarMenuExpanded = false; onCreateSample() }
                             )
                             DropdownMenuItem(
                                 text = { Text("New Dataset") },
                                 leadingIcon = { AppIcon(AppIcons.Dataset) },
+                                enabled = projectSlug != null,
                                 onClick = { topBarMenuExpanded = false; onCreateDataset() }
                             )
                             HorizontalDivider()
@@ -353,11 +357,12 @@ fun ProjectDetailScreen(
                             DropdownMenuItem(
                                 text = { Text(if (isSynced) "Stop syncing" else "Sync this project") },
                                 leadingIcon = { AppIcon(if (isSynced) AppIcons.SyncPaused else AppIcons.Syncing) },
+                                enabled = projectSlug != null,
                                 onClick = { topBarMenuExpanded = false; onToggleSync() }
                             )
-                            CopyIdMenuItem { topBarMenuExpanded = false; copyToClipboard(ctx, projectId) }
-                            OpenInWebMenuItem { topBarMenuExpanded = false; openUrl(ctx, "$graphExplorerUrl/$projectId") }
-                            ShareMenuItem { topBarMenuExpanded = false; shareText(ctx, "$graphExplorerUrl/$projectId", project?.title ?: projectId) }
+                            CopyIdMenuItem { topBarMenuExpanded = false; copyToClipboard(ctx, projectSlug ?: projectReference) }
+                            OpenInWebMenuItem { topBarMenuExpanded = false; openInBrowser(ctx, projectWebUrl) }
+                            ShareMenuItem { topBarMenuExpanded = false; shareText(ctx, projectWebUrl, project?.title ?: projectSlug ?: projectReference) }
                             HorizontalDivider()
                             RefreshMenuItem { topBarMenuExpanded = false; refreshProjectDetail() }
                         }
@@ -379,9 +384,15 @@ fun ProjectDetailScreen(
                 // show a misleading "No Samples"/"No Datasets" empty state. Replace the whole
                 // content area with an explicit not-a-member message and the join action instead.
                 NonMemberContent(
-                    isPending = joinRequestState != null,
-                    isChecking = !joinRequestChecked,
-                    onRequestJoin = { showJoinDialog = true },
+                    isPending = (joinRequestLookup as? ProjectJoinRequestState.Ready)?.request != null,
+                    isChecking = joinRequestLookup is ProjectJoinRequestState.Idle || joinRequestLookup is ProjectJoinRequestState.Loading,
+                    errorMessage = (joinRequestLookup as? ProjectJoinRequestState.Error)?.message,
+                    refreshError = (joinRequestLookup as? ProjectJoinRequestState.Ready)?.refreshError,
+                    onRetry = { projectSlug?.let { viewModel.loadJoinRequestStatus(it, forceRefresh = true) } },
+                    onRequestJoin = {
+                        viewModel.clearJoinRequestSubmission()
+                        showJoinDialog = true
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
@@ -447,7 +458,7 @@ fun ProjectDetailScreen(
                                 samples = filteredSamples,
                                 isFiltered = searchQuery.isNotBlank(),
                                 fromCache = (loadState as? LoadState.Success)?.fromCache ?: false,
-                                projectId = projectId,
+                                projectId = projectSlug ?: projectReference,
                                 graphExplorerUrl = graphExplorerUrl,
                                 groupBy = sampleGroupBy,
                                 sortState = sortState,
@@ -459,7 +470,7 @@ fun ProjectDetailScreen(
                                 datasets = filteredDatasets,
                                 isFiltered = searchQuery.isNotBlank(),
                                 fromCache = (loadState as? LoadState.Success)?.fromCache ?: false,
-                                projectId = projectId,
+                                projectId = projectSlug ?: projectReference,
                                 graphExplorerUrl = graphExplorerUrl,
                                 groupBy = datasetGroupBy,
                                 sortState = sortState,
@@ -476,9 +487,12 @@ fun ProjectDetailScreen(
 
     if (showJoinDialog) {
         JoinRequestDialog(
-            projectId = projectId,
-            onDismiss = { showJoinDialog = false },
-            onSubmitted = { request -> showJoinDialog = false; joinRequestState = request }
+            submissionState = joinRequestSubmission,
+            onDismiss = {
+                viewModel.clearJoinRequestSubmission()
+                showJoinDialog = false
+            },
+            onSubmit = { reason -> projectSlug?.let { viewModel.submitJoinRequest(it, reason) } }
         )
     }
 }
@@ -513,12 +527,24 @@ private fun ResourceTab(
 private fun NonMemberContent(
     isPending: Boolean,
     isChecking: Boolean,
+    errorMessage: String?,
+    refreshError: String?,
+    onRetry: () -> Unit,
     onRequestJoin: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         if (isChecking) {
             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(32.dp))
+            return@Box
+        }
+        if (errorMessage != null) {
+            ErrorCard(
+                title = "Could not check join request status",
+                message = errorMessage,
+                onRetry = onRetry,
+                modifier = Modifier.padding(32.dp)
+            )
             return@Box
         }
         Column(
@@ -554,24 +580,31 @@ private fun NonMemberContent(
                     Text("Request to join")
                 }
             }
+            if (refreshError != null) {
+                Text(
+                    refreshError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center
+                )
+                TextButton(onClick = onRetry) { Text("Retry") }
+            }
         }
     }
 }
 
 @Composable
 private fun JoinRequestDialog(
-    projectId: String,
+    submissionState: JoinRequestSubmissionState,
     onDismiss: () -> Unit,
-    onSubmitted: (JoinRequest) -> Unit
+    onSubmit: (String) -> Unit
 ) {
-    var reason by remember { mutableStateOf("") }
-    var isSubmitting by remember { mutableStateOf(false) }
-    var errorMsg by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-    val apiClient = koinInject<ApiClient>()
+    var reason by rememberSaveable { mutableStateOf("") }
+    val isSubmitting = submissionState is JoinRequestSubmissionState.Submitting
+    val errorMessage = (submissionState as? JoinRequestSubmissionState.Error)?.message
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isSubmitting) onDismiss() },
         title = {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 AppIcon(AppIcons.PersonAdd)
@@ -592,9 +625,9 @@ private fun JoinRequestDialog(
                     minLines = 2,
                     maxLines = 4,
                 )
-                if (errorMsg != null) {
+                if (errorMessage != null) {
                     Text(
-                        errorMsg!!,
+                        errorMessage,
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -603,31 +636,7 @@ private fun JoinRequestDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = {
-                    scope.launch {
-                        isSubmitting = true
-                        errorMsg = null
-                        try {
-                            val resp = apiClient.service.requestToJoinProject(
-                                projectId = projectId,
-                                reason = reason.trim().ifBlank { null }
-                            )
-                            when (resp) {
-                                is ApiResult.Success -> onSubmitted(resp.data)
-                                is ApiResult.Error -> errorMsg = when (resp.code) {
-                                    409 -> "You already have a pending request, or are already a member"
-                                    else -> "Failed (${resp.code})"
-                                }
-                            }
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            errorMsg = "Network error: ${e.message}"
-                        } finally {
-                            isSubmitting = false
-                        }
-                    }
-                },
+                onClick = { onSubmit(reason) },
                 enabled = !isSubmitting
             ) {
                 if (isSubmitting) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -635,7 +644,7 @@ private fun JoinRequestDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss, enabled = !isSubmitting) { Text("Cancel") }
         }
     )
 }

@@ -8,10 +8,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.User
-import crucible.lens.data.util.userDisplayName
+import crucible.lens.data.util.compactUserDisplayName
+import crucible.lens.data.util.userHandle
 import crucible.lens.ui.theme.readableOn
 
 /**
@@ -75,12 +77,6 @@ private fun orcidToColor(input: String): Color {
     return Color.hsl(hue, saturation, lightness)
 }
 
-/**
- * Standard "name, tap for profile" row: avatar + name ([userDisplayName] — full name, no
- * username by default) + optional trailing content (e.g. an action `IconButton`). This is the
- * app-wide default for showing a person already in context (project members, join requesters) —
- * not for identity-lookup contexts like [UserResultItem], which stay username-primary.
- */
 @Composable
 fun UserIdentityRow(
     user: User?,
@@ -102,11 +98,25 @@ fun UserIdentityRow(
             orcid = user?.uniqueId ?: fallbackId,
             containerColor = avatarContainerColor, contentColor = avatarContentColor
         )
-        Text(
-            userDisplayName(user?.firstName, user?.lastName, user?.username, user?.uniqueId ?: fallbackId),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f)
-        )
+        val compactName = compactUserDisplayName(user?.firstName, user?.lastName, user?.username, user?.uniqueId ?: fallbackId)
+        val handle = userHandle(user)?.takeUnless { it == compactName }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                compactName,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            handle?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
         trailingContent?.invoke()
     }
 }

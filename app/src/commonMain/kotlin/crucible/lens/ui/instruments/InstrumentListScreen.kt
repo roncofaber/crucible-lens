@@ -4,6 +4,8 @@ package crucible.lens.ui.instruments
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -15,11 +17,13 @@ import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.Instrument
+import crucible.lens.data.model.InstrumentStatus
 import crucible.lens.data.util.SortField
 import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
@@ -47,6 +51,9 @@ fun InstrumentListScreen(
     onBack: () -> Unit,
     onHome: () -> Unit,
     onInstrumentClick: (String) -> Unit,
+    onCreateInstrument: () -> Unit = {},
+    canRegisterInstrument: Boolean = true,
+    refreshKey: Int = 0,
     modifier: Modifier = Modifier,
     pinnedInstruments: Set<String> = emptySet(),
     onTogglePin: (String) -> Unit = {},
@@ -55,7 +62,8 @@ fun InstrumentListScreen(
 ) {
     val platformContext = getPlatformContext()
     val viewModel: InstrumentListViewModel = koinViewModel()
-    val loadState by viewModel.loadState.collectAsState()
+    val loadState by viewModel.loadState.collectAsStateWithLifecycle()
+    val selectedStatus by viewModel.status.collectAsStateWithLifecycle()
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var hiddenExpanded by remember { mutableStateOf(false) }
     var sortMenuExpanded by remember { mutableStateOf(false) }
@@ -99,7 +107,9 @@ fun InstrumentListScreen(
 
 
 
-    LaunchedEffect(Unit) { /* ViewModel loads on init */ }
+    LaunchedEffect(refreshKey) {
+        if (refreshKey > 0) viewModel.load(forceRefresh = true)
+    }
 
     AppScaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -117,6 +127,13 @@ fun InstrumentListScreen(
                             AppIcon(AppIcons.MoreVert)
                         }
                         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                            if (canRegisterInstrument) {
+                                DropdownMenuItem(
+                                    text = { Text("Register instrument") },
+                                    leadingIcon = { AppIcon(AppIcons.Add) },
+                                    onClick = { menuExpanded = false; onCreateInstrument() }
+                                )
+                            }
                             ToggleHiddenMenuItem(hiddenExpanded) { hiddenExpanded = !hiddenExpanded; menuExpanded = false }
                             RefreshMenuItem { menuExpanded = false; viewModel.load(forceRefresh = true) }
                         }
@@ -142,45 +159,58 @@ fun InstrumentListScreen(
                 ) {
                     stickyHeader(key = "search_bar") {
                         Surface(color = MaterialTheme.colorScheme.background) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                SearchBar(
-                                    query = searchQuery,
-                                    onQueryChange = { searchQuery = it },
-                                    placeholder = "Search by name, type, manufacturer…",
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Box {
-                                    IconButton(onClick = { sortMenuExpanded = true }) {
-                                        AppIcon(AppIcons.Sort,
-                                            modifier = Modifier.size(20.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
-                                        // Name and Type (mapped to mfid slot) are the two meaningful instrument sort axes
-                                        listOf(SortField.NAME to "Name", SortField.MFID to "Type").forEach { (field, label) ->
-                                            DropdownMenuItem(
-                                                text = { Text(label) },
-                                                leadingIcon = {
-                                                    if (sortState.field == field)
-                                                        AppIcon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource,
-                                                            modifier = Modifier.size(14.dp),
-                                                            tint = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    else Spacer(Modifier.size(14.dp))
-                                                },
-                                                onClick = {
-                                                    sortState = if (sortState.field == field)
-                                                        sortState.copy(ascending = !sortState.ascending)
-                                                    else SortState(field, true)
-                                                    sortMenuExpanded = false
-                                                }
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    SearchBar(
+                                        query = searchQuery,
+                                        onQueryChange = { searchQuery = it },
+                                        placeholder = "Search by name, type, manufacturer…",
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Box {
+                                        IconButton(onClick = { sortMenuExpanded = true }) {
+                                            AppIcon(AppIcons.Sort,
+                                                modifier = Modifier.size(20.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
+                                        DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
+                                            listOf(SortField.NAME to "Name", SortField.MFID to "Type").forEach { (field, label) ->
+                                                DropdownMenuItem(
+                                                    text = { Text(label) },
+                                                    leadingIcon = {
+                                                        if (sortState.field == field)
+                                                            AppIcon(if (sortState.ascending) AppIcons.ParentResource else AppIcons.ChildResource,
+                                                                modifier = Modifier.size(14.dp),
+                                                                tint = MaterialTheme.colorScheme.primary
+                                                            )
+                                                        else Spacer(Modifier.size(14.dp))
+                                                    },
+                                                    onClick = {
+                                                        sortState = if (sortState.field == field)
+                                                            sortState.copy(ascending = !sortState.ascending)
+                                                        else SortState(field, true)
+                                                        sortMenuExpanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    InstrumentStatus.entries.forEach { status ->
+                                        FilterChip(
+                                            selected = selectedStatus == status,
+                                            onClick = { viewModel.selectStatus(status) },
+                                            label = { Text(status.label) }
+                                        )
                                     }
                                 }
                             }
@@ -217,15 +247,22 @@ fun InstrumentListScreen(
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                             Text(
-                                                if (searchQuery.isNotBlank()) "No matching instruments" else "No instruments",
+                                                if (searchQuery.isNotBlank()) "No matching instruments" else "No ${selectedStatus.label.lowercase()} instruments",
                                                 style = MaterialTheme.typography.titleMedium
                                             )
                                         }
                                         Text(
-                                            if (searchQuery.isNotBlank()) "No instruments match your search." else "No instruments found.",
+                                            if (searchQuery.isNotBlank()) "No instruments match your search." else "No instruments have ${selectedStatus.label.lowercase()} status.",
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                        if (canRegisterInstrument && searchQuery.isBlank() && selectedStatus == InstrumentStatus.Active) {
+                                            OutlinedButton(onClick = onCreateInstrument) {
+                                                AppIcon(AppIcons.Add, modifier = Modifier.size(18.dp))
+                                                Spacer(Modifier.width(8.dp))
+                                                Text("Register Instrument")
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -332,6 +369,8 @@ private fun InstrumentCard(
     onTogglePin: () -> Unit = {},
     onClick: () -> Unit
 ) {
+    val status = InstrumentStatus.fromApi(instrument.status)
+    val showStatus = status != null && status != InstrumentStatus.Active
     ListItem(
         headlineContent = {
             Text(
@@ -341,10 +380,30 @@ private fun InstrumentCard(
                 overflow = TextOverflow.Ellipsis
             )
         },
-        supportingContent = if (!instrument.location.isNullOrBlank()) {
+        supportingContent = if (!instrument.location.isNullOrBlank() || showStatus) {
             {
-                Text(instrument.location, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (!instrument.location.isNullOrBlank()) {
+                        Text(
+                            instrument.location,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (showStatus) {
+                        Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.tertiaryContainer) {
+                            Text(
+                                status.label,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                    }
+                }
             }
         } else null,
         leadingContent = {

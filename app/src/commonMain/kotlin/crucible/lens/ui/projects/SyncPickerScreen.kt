@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.data.repository.CrucibleRepository
+import crucible.lens.data.sync.DataSyncManager
+import crucible.lens.platform.getPlatformContext
 import crucible.lens.data.util.sortForPicker
 import crucible.lens.data.util.suggestedProjectIds
 import crucible.lens.ui.common.AppScaffold
@@ -31,8 +33,11 @@ fun SyncPickerScreen(
 ) {
     val prefs: AppPreferences = koinInject()
     val repository: CrucibleRepository = koinInject()
+    val dataSyncManager: DataSyncManager = koinInject()
+    val platformContext = getPlatformContext()
 
     val syncedProjects by prefs.syncedProjects.collectAsStateWithLifecycle()
+    val accountId by prefs.activeAccountId.collectAsStateWithLifecycle()
     val userOrcid by prefs.userOrcid.collectAsStateWithLifecycle()
     val pinnedProjects by prefs.pinnedProjects.collectAsStateWithLifecycle()
     val projectsFlow = repository.observeProjects()
@@ -57,6 +62,7 @@ fun SyncPickerScreen(
     fun saveAndClose() {
         scope.launch {
             prefs.setSyncedProjects(localSelection)
+            accountId?.let { dataSyncManager.retainProjects(platformContext, it, localSelection) }
             onDone()
         }
     }
@@ -135,12 +141,12 @@ fun SyncPickerScreen(
                 sortedProjects.forEach { project ->
                     ProjectSyncRow(
                         project = project,
-                        isSelected = project.projectId in localSelection,
+                        isSelected = project.uniqueId in localSelection,
                         onToggle = { isSelected ->
                             localSelection = if (isSelected) {
-                                localSelection + project.projectId
+                                localSelection + project.uniqueId
                             } else {
-                                localSelection - project.projectId
+                                localSelection - project.uniqueId
                             }
                             if (!isFirstRun) {
                                 scope.launch {

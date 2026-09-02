@@ -118,6 +118,8 @@ fun CreateProjectScreen(
                 results = form.leadSearch,
                 onSelect = createViewModel::selectLeadUser,
                 label = "Project lead *",
+                searchError = form.leadSearchError,
+                onRetrySearch = createViewModel::retryLeadSearch,
                 enabled = !isSaving,
                 modifier = Modifier.fillMaxWidth(),
                 resolution = ResolvedPicker(

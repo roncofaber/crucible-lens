@@ -84,6 +84,7 @@ kotlin {
                 implementation(libs.androidx.core.ktx)
                 implementation(libs.androidx.lifecycle.runtime.ktx)
                 implementation(libs.androidx.activity.compose)
+                implementation(libs.androidx.browser)
                 implementation(libs.kotlinx.coroutines.android)
 
                 // Ktor Android engine
@@ -122,6 +123,7 @@ kotlin {
                 implementation(compose.runtime)
                 implementation(compose.foundation)
                 implementation(compose.material3)
+                implementation(libs.compose.ui.backhandler)
                 implementation(compose.components.resources)
                 implementation(compose.components.uiToolingPreview)
 
@@ -183,6 +185,7 @@ kotlin {
             dependencies {
                 implementation(kotlin("test"))
                 implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.ktor.client.mock)
             }
         }
     }

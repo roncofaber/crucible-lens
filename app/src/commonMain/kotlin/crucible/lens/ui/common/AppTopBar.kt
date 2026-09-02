@@ -229,7 +229,13 @@ fun CollapsingAppTopBar(
                                 scrollBehavior.state.heightOffsetLimit = -placeable.height.toFloat()
                             }
                             val fraction = scrollBehavior.state.collapsedFraction
+                            // collapsedFraction can transiently land outside [0, 1] - heightOffset
+                            // isn't necessarily re-clamped to heightOffsetLimit the instant this
+                            // block's measured height (and therefore the limit, set just above)
+                            // changes. An out-of-range fraction would otherwise make visibleHeight
+                            // negative and crash layout(), which requires non-negative dimensions.
                             val visibleHeight = (placeable.height * (1f - fraction)).roundToInt()
+                                .coerceIn(0, placeable.height)
                             // Skipping placement once the content has faded out is what keeps it
                             // from staying tappable while invisible. alpha alone does not affect
                             // hit testing, and the block's bottom edge (the lead/organization row)

@@ -7,6 +7,7 @@ import kotlinx.datetime.toLocalDateTime
 import platform.Foundation.NSURL
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
+import platform.UIKit.UIApplicationOpenSettingsURLString
 import platform.UIKit.UIPasteboard
 
 actual fun copyToClipboard(context: PlatformContext, text: String, label: String) {
@@ -17,6 +18,10 @@ actual fun openUrl(context: PlatformContext, url: String) {
     val nsUrl = NSURL.URLWithString(url) ?: return
     UIApplication.sharedApplication.openURL(nsUrl, emptyMap<Any?, Any?>(), null)
 }
+
+actual fun openInBrowser(context: PlatformContext, url: String) = openUrl(context, url)
+
+actual fun openAppSettings(context: PlatformContext) = openUrl(context, UIApplicationOpenSettingsURLString)
 
 actual fun shareText(context: PlatformContext, text: String, subject: String) {
     val items = listOf(text)

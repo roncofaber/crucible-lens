@@ -66,6 +66,7 @@ fun HomeScreen(
     lastVisitedResource: String?,
     lastVisitedResourceName: String?,
     apiKey: String?,
+    accountId: String?,
     modifier: Modifier = Modifier,
     onScanClick: () -> Unit,
     onManualEntry: (String) -> Unit,
@@ -90,7 +91,6 @@ fun HomeScreen(
     var showEasterEggDialog by remember { mutableStateOf(false) }
     var clickCount by remember { mutableIntStateOf(0) }
     val platformContext = getPlatformContext()
-    val repository = koinInject<CrucibleRepository>()
     val viewModel: HomeViewModel = koinViewModel()
     var backPressedOnce by remember { mutableStateOf(false) }
 
@@ -106,23 +106,24 @@ fun HomeScreen(
     }
 
     val allProjects by viewModel.projects.collectAsStateWithLifecycle()
+    val allInstruments by viewModel.instruments.collectAsStateWithLifecycle()
     val fetchError by viewModel.fetchError.collectAsStateWithLifecycle()
-    val isPreloading by viewModel.isPreloading.collectAsStateWithLifecycle()
-
-    LaunchedEffect(Unit) { viewModel.loadPersistedCache(platformContext) }
-    LaunchedEffect(apiKey) { viewModel.ensureLoaded(apiKey) }
-    LaunchedEffect(allProjects, pinnedProjects, syncedProjects) {
-        viewModel.preload(platformContext, pinnedProjects, syncedProjects)
+    LaunchedEffect(accountId, apiKey) {
+        viewModel.selectAccount(platformContext, accountId, syncedProjects)
+        viewModel.ensureLoaded(platformContext, apiKey, accountId)
+    }
+    LaunchedEffect(accountId, pinnedInstruments) {
+        if (accountId != null) viewModel.loadPinnedInstruments(pinnedInstruments)
     }
 
     val pinnedList = remember(pinnedProjects, allProjects) {
-        allProjects.filter { it.projectId in pinnedProjects }
+        allProjects.filter { it.uniqueId in pinnedProjects }
     }
-    val pinnedInstrumentList = remember(pinnedInstruments) {
-        repository.getCachedInstruments()?.filter { it.uniqueId in pinnedInstruments } ?: emptyList()
+    val pinnedInstrumentList = remember(pinnedInstruments, allInstruments) {
+        allInstruments.filter { it.uniqueId in pinnedInstruments }
     }
 
-    val isBackgroundLoading = isSyncing || isPreloading
+    val isBackgroundLoading = isSyncing
 
     AppScaffold(
         topBar = {
@@ -145,7 +146,7 @@ fun HomeScreen(
                                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                             }
                         } else {
-                            IconButton(onClick = { viewModel.refresh(apiKey) }) {
+                            IconButton(onClick = { viewModel.refresh(platformContext, apiKey, accountId) }) {
                                 AppIcon(AppIcons.Refresh)
                             }
                         }
@@ -230,7 +231,7 @@ fun HomeScreen(
                             modifier = Modifier.weight(1f)
                         )
                         TextButton(
-                            onClick = { viewModel.refresh(apiKey) },
+                            onClick = { viewModel.refresh(platformContext, apiKey, accountId) },
                             colors = ButtonDefaults.textButtonColors(
                                 contentColor = MaterialTheme.colorScheme.onErrorContainer
                             )
@@ -549,8 +550,8 @@ private fun HomePinnedProjects(
                     .collectAsStateWithLifecycle(initialValue = repository.getCachedPendingJoinRequestCount(project.projectId))
                 Card(
                     modifier = Modifier.fillMaxWidth().combinedClickable(
-                        onClick = { onProjectClick(project.projectId) },
-                        onLongClick = { pendingUnpinProjectId = project.projectId }
+                        onClick = { onProjectClick(project.uniqueId) },
+                        onLongClick = { pendingUnpinProjectId = project.uniqueId }
                     ),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                 ) {
@@ -642,7 +643,7 @@ private fun HomeFooter(graphExplorerUrl: String) {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         OutlinedButton(
-            onClick = { openUrl(ctx, graphExplorerUrl) },
+            onClick = { openInBrowser(ctx, buildCrucibleWebUrl(graphExplorerUrl)) },
             shape = MaterialTheme.shapes.medium,
             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)

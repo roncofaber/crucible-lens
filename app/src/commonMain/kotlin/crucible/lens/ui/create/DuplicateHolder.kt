@@ -18,6 +18,7 @@ object DuplicateHolder {
     data class DatasetPrefill(
         val name: String,
         val measurement: String?,
+        val instrumentId: String?,
         val instrumentName: String?,
         val dataFormat: String?,
         val sessionName: String?,

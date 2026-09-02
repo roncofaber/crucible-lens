@@ -21,10 +21,14 @@ import kotlinx.coroutines.withContext
 internal fun ThumbnailsSection(
     uuid: String,
     thumbnails: List<Thumbnail>,
+    deletingThumbnailIds: Set<Int> = emptySet(),
+    deleteErrors: Map<Int, String> = emptyMap(),
     onDelete: (thumbnailId: Int) -> Unit = {}
 ) {
     thumbnails.forEachIndexed { index, thumbnail ->
-        var showDeleteDialog by remember { mutableStateOf(false) }
+        var showDeleteDialog by remember(thumbnail.id) { mutableStateOf(false) }
+        val isDeleting = thumbnail.id in deletingThumbnailIds
+        val deleteError = deleteErrors[thumbnail.id]
 
         if (showDeleteDialog && thumbnail.id >= 0) {
             ConfirmationDialog(
@@ -62,7 +66,11 @@ internal fun ThumbnailsSection(
                     .heightIn(min = 200.dp, max = 400.dp)
                     .then(
                         if (thumbnail.id >= 0)
-                            Modifier.combinedClickable(onClick = {}, onLongClick = { showDeleteDialog = true })
+                            Modifier.combinedClickable(
+                                enabled = !isDeleting,
+                                onClick = {},
+                                onLongClick = { showDeleteDialog = true }
+                            )
                         else Modifier
                     ),
                 contentAlignment = Alignment.Center
@@ -83,7 +91,7 @@ internal fun ThumbnailsSection(
                 }
 
                 when {
-                    imageState == "loading" -> CircularProgressIndicator()
+                    isDeleting || imageState == "loading" -> CircularProgressIndicator()
                     imageState?.startsWith("error") == true -> Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -97,15 +105,33 @@ internal fun ThumbnailsSection(
                     }
                 }
 
-                if (thumbnail.id >= 0) {
+                if (thumbnail.id >= 0 && deleteError == null) {
                     Text(
-                        "Hold to delete",
+                        if (isDeleting) "Deleting" else "Hold to delete",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(8.dp)
                     )
+                }
+            }
+
+            if (deleteError != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        deleteError,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    TextButton(onClick = { onDelete(thumbnail.id) }, enabled = !isDeleting) {
+                        Text("Retry")
+                    }
                 }
             }
         }

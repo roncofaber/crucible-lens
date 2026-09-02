@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +27,11 @@ import androidx.navigation.NavType
 import kotlinx.coroutines.launch
 import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.data.preferences.AppPreferences
+import crucible.lens.data.preferences.migrateOfficialApiBaseUrl
+import crucible.lens.data.preferences.migratePinnedProjectReferences
+import crucible.lens.data.preferences.migrateSyncedProjectReferences
+import crucible.lens.data.preferences.syncedProjectReferencesNeedMigration
+import crucible.lens.data.util.isMfidReference
 import crucible.lens.ui.home.HomeScreen
 import crucible.lens.ui.history.HistoryScreen
 import crucible.lens.ui.scanner.QRCodeScannerView
@@ -48,6 +54,7 @@ import crucible.lens.ui.detail.ResourceDetailViewModel
 import crucible.lens.ui.detail.UiState
 import crucible.lens.ui.detail.ResourceDetailScreen
 import crucible.lens.ui.detail.EditResourceScreen
+import crucible.lens.ui.access.ManageResourceAccessScreen
 import crucible.lens.ui.projects.ProjectsListScreen
 import crucible.lens.ui.projects.ProjectDetailScreen
 import crucible.lens.ui.projects.ManageProjectScreen
@@ -63,11 +70,14 @@ import crucible.lens.ui.common.ToastHost
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.cache.PersistentProjectCache
+import crucible.lens.data.sync.DataSyncManager
+import crucible.lens.data.sync.toSyncTarget
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.ui.create.DuplicateHolder
 import crucible.lens.ui.create.CreateSampleScreen
 import crucible.lens.ui.create.CreateDatasetScreen
+import crucible.lens.ui.create.CreateInstrumentScreen
 import crucible.lens.ui.create.CreateProjectScreen
 import crucible.lens.ui.create.AddFilesScreen
 import crucible.lens.ui.metadata.MetadataEditorScreen
@@ -103,7 +113,8 @@ import kotlin.math.roundToInt
 @Composable
 fun NavGraph(
     navController: NavHostController,
-    deepLinkUuid: String?,
+    deepLinkTarget: DeepLinkTarget?,
+    onDeepLinkOpened: () -> Unit = {},
     openScanner: Boolean = false,
     onScannerOpened: () -> Unit = {},
     viewModel: ResourceDetailViewModel = koinViewModel()
@@ -113,10 +124,14 @@ fun NavGraph(
     val prefs = koinInject<AppPreferences>()
     val apiClient = koinInject<ApiClient>()
     val repository = koinInject<CrucibleRepository>()
+    val dataSyncManager = koinInject<DataSyncManager>()
 
     // ── Preference state ──────────────────────────────────────────────────────
     val apiKey by prefs.apiKey.collectAsStateWithLifecycle()
-    val apiBaseUrl by prefs.apiBaseUrl.collectAsStateWithLifecycle()
+    val activeAccountId by prefs.activeAccountId.collectAsStateWithLifecycle()
+    val storedApiBaseUrl by prefs.apiBaseUrl.collectAsStateWithLifecycle()
+    val apiBaseUrl = migrateOfficialApiBaseUrl(storedApiBaseUrl)
+    val isApiV3MigrationPending = apiBaseUrl != storedApiBaseUrl
     val graphExplorerUrl by prefs.graphExplorerUrl.collectAsStateWithLifecycle()
     val themeMode by prefs.themeMode.collectAsStateWithLifecycle()
     val accentColor by prefs.accentColor.collectAsStateWithLifecycle()
@@ -128,6 +143,9 @@ fun NavGraph(
     val lastVisitedResourceName by prefs.lastVisitedResourceName.collectAsStateWithLifecycle()
     val floatingScanButton by prefs.floatingScanButton.collectAsStateWithLifecycle()
     val pinnedProjects by prefs.pinnedProjects.collectAsStateWithLifecycle()
+    val liveProjects by repository.observeLiveProjects().collectAsStateWithLifecycle(
+        initialValue = repository.getCachedLiveProjects()
+    )
     val syncedProjects by prefs.syncedProjects.collectAsStateWithLifecycle()
     val pinnedInstruments by prefs.pinnedInstruments.collectAsStateWithLifecycle()
     val hiddenInstruments by prefs.hiddenInstruments.collectAsStateWithLifecycle()
@@ -138,25 +156,92 @@ fun NavGraph(
     val userProfile by prefs.userProfile.collectAsStateWithLifecycle()
     val userOrcid = userProfile?.uniqueId
 
-    // ── ApiClient sync ────────────────────────────────────────────────────────
-    LaunchedEffect(apiKey) { apiKey?.let { apiClient.setApiKey(it) } }
-    LaunchedEffect(apiBaseUrl) { apiClient.setBaseUrl(apiBaseUrl) }
+    SideEffect {
+        apiClient.setApiKey(apiKey.orEmpty())
+        apiClient.setBaseUrl(apiBaseUrl)
+        repository.activateCacheScope(activeAccountId)
+        dataSyncManager.activateCacheScope(activeAccountId)
+    }
 
-    LaunchedEffect(deepLinkUuid) {
-        if (!deepLinkUuid.isNullOrBlank()) {
-            navController.navigate(Screen.Detail.createRoute(deepLinkUuid))
+    LaunchedEffect(storedApiBaseUrl) {
+        if (isApiV3MigrationPending) {
+            repository.invalidateAll()
+            PersistentProjectCache.clear(platformCtx)
+            prefs.saveApiBaseUrl(apiBaseUrl)
         }
     }
 
-    LaunchedEffect(apiKey) {
-        // Reads syncedProjects/userOrcid as a one-time snapshot at sync start, not as a
-        // reactive key — this is a one-shot-per-session background preload, not something
-        // that should trigger a full re-sync (including forceRefresh on the whole projects
-        // list) every time a single project is synced/unsynced. HomeScreen/ProjectsListScreen's
-        // own preload effects already pick up newly-synced projects on their next composition.
-        if (!apiKey.isNullOrBlank()) {
-            viewModel.startBackgroundSync(syncedProjects, userOrcid)
+    LaunchedEffect(activeAccountId, liveProjects, pinnedProjects, syncedProjects) {
+        val accountId = activeAccountId ?: return@LaunchedEffect
+        val projects = liveProjects ?: return@LaunchedEffect
+        val migratedPins = migratePinnedProjectReferences(pinnedProjects, projects)
+        if (migratedPins != pinnedProjects) prefs.setPinnedProjects(migratedPins)
+        if (syncedProjectReferencesNeedMigration(syncedProjects, projects)) {
+            val migratedSync = migrateSyncedProjectReferences(syncedProjects, projects)
+            dataSyncManager.retainProjects(platformCtx, accountId, migratedSync)
+            prefs.setSyncedProjects(migratedSync)
         }
+    }
+
+    val hasLegacySyncedProjects = syncedProjects.any { reference ->
+        liveProjects?.none { it.uniqueId == reference } ?: !isMfidReference(reference)
+    }
+
+    LaunchedEffect(apiKey, activeAccountId, hasLegacySyncedProjects) {
+        val accountId = activeAccountId
+        if (hasLegacySyncedProjects && !apiKey.isNullOrBlank() && accountId != null) {
+            try {
+                dataSyncManager.refreshOverview(platformCtx, accountId)
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    LaunchedEffect(apiKey, apiBaseUrl, activeAccountId, isApiV3MigrationPending, hasLegacySyncedProjects) {
+        if (isApiV3MigrationPending || hasLegacySyncedProjects) {
+            viewModel.stopBackgroundSync()
+            return@LaunchedEffect
+        }
+        val accountId = activeAccountId
+        if (!apiKey.isNullOrBlank() && accountId != null) {
+            viewModel.startBackgroundSync(platformCtx, accountId, syncedProjects, userOrcid)
+        } else {
+            viewModel.stopBackgroundSync()
+        }
+    }
+
+    LaunchedEffect(deepLinkTarget, apiKey) {
+        val target = deepLinkTarget ?: return@LaunchedEffect
+        if (apiKey.isNullOrBlank()) {
+            navController.navigate(Screen.SettingsAccount.route) {
+                launchSingleTop = true
+            }
+            return@LaunchedEffect
+        }
+        when (target) {
+            is DeepLinkTarget.Project -> {
+                val projectMfid = if (isMfidReference(target.projectReference)) {
+                    target.projectReference
+                } else {
+                    when (val result = repository.fetchProject(target.projectReference)) {
+                        is crucible.lens.data.api.ApiResult.Success -> result.data.uniqueId
+                        is crucible.lens.data.api.ApiResult.Error -> {
+                            showToast(platformCtx, "Could not open project (${result.code})")
+                            null
+                        }
+                    }
+                }
+                if (projectMfid != null) navController.navigate(Screen.ProjectDetail.createRoute(projectMfid)) {
+                    launchSingleTop = true
+                }
+            }
+            is DeepLinkTarget.Resource -> navController.navigate(Screen.Detail.createRoute(target.resourceReference)) {
+                launchSingleTop = true
+            }
+        }
+        onDeepLinkOpened()
     }
 
     LaunchedEffect(openScanner, apiKey) {
@@ -184,6 +269,8 @@ fun NavGraph(
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val deletionRequestSubmissionState by viewModel.deletionRequestSubmissionState.collectAsStateWithLifecycle()
+    val associatedFileActionStates by viewModel.associatedFileActionStates.collectAsStateWithLifecycle()
     val userUsername = userProfile?.username
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -213,6 +300,58 @@ fun NavGraph(
     }
     val navigateSearch = remember(navController) { { navController.navigate(Screen.Search.route) } }
     val navigateSettings = remember(navController) { { navController.navigate(Screen.Settings.route) } }
+    val navigateToProject: (String) -> Unit = { reference ->
+        if (isMfidReference(reference)) {
+            navController.navigate(Screen.ProjectDetail.createRoute(reference))
+        } else {
+            scope.launch {
+                when (val result = repository.fetchProject(reference)) {
+                    is crucible.lens.data.api.ApiResult.Success -> {
+                        navController.navigate(Screen.ProjectDetail.createRoute(result.data.uniqueId))
+                    }
+                    is crucible.lens.data.api.ApiResult.Error -> {
+                        showToast(platformCtx, "Could not open project (${result.code})")
+                    }
+                }
+            }
+        }
+    }
+    val navigateToInstrument: (String) -> Unit = { reference ->
+        if (isMfidReference(reference)) {
+            navController.navigate(Screen.InstrumentDetail.createRoute(reference))
+        } else {
+            scope.launch {
+                when (val result = repository.fetchInstrument(reference)) {
+                    is crucible.lens.data.api.ApiResult.Success -> {
+                        navController.navigate(Screen.InstrumentDetail.createRoute(result.data.uniqueId))
+                    }
+                    is crucible.lens.data.api.ApiResult.Error -> {
+                        showToast(platformCtx, "Could not open instrument (${result.code})")
+                    }
+                }
+            }
+        }
+    }
+    val toggleProjectSync: (String) -> Unit = { projectMfid ->
+        val wasSynced = projectMfid in syncedProjects
+        val accountId = activeAccountId
+        val project = repository.getCachedProject(projectMfid)
+        scope.launch {
+            prefs.toggleSyncedProject(projectMfid)
+            if (accountId != null) {
+                if (wasSynced) {
+                    dataSyncManager.removeProject(platformCtx, accountId, projectMfid)
+                } else if (project != null) {
+                    try {
+                        dataSyncManager.syncProject(platformCtx, accountId, project.toSyncTarget(), forceRefresh = true)
+                    } catch (error: kotlinx.coroutines.CancellationException) {
+                        throw error
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
+    }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val density = LocalDensity.current
@@ -288,6 +427,7 @@ fun NavGraph(
                 lastVisitedResource = lastVisitedResource,
                 lastVisitedResourceName = lastVisitedResourceName,
                 apiKey = apiKey,
+                accountId = activeAccountId,
                 onScanClick = {
                     if (apiKey.isNullOrBlank()) {
                         navController.navigate(Screen.SettingsAccount.route)
@@ -333,14 +473,12 @@ fun NavGraph(
                 },
                 pinnedProjects = pinnedProjects,
                 syncedProjects = syncedProjects,
-                onProjectClick = { projectId ->
-                    navController.navigate(Screen.ProjectDetail.createRoute(projectId))
+                onProjectClick = navigateToProject,
+                onTogglePinnedProject = { id ->
+                    scope.launch { prefs.togglePinnedProject(id) }
                 },
-                onTogglePinnedProject = { id -> scope.launch { prefs.togglePinnedProject(id) } },
                 pinnedInstruments = pinnedInstruments,
-                onInstrumentClick = { id ->
-                    navController.navigate(Screen.InstrumentDetail.createRoute(id))
-                },
+                onInstrumentClick = navigateToInstrument,
                 onTogglePinnedInstrument = { id -> scope.launch { prefs.togglePinnedInstrument(id) } },
                 onCreateSample = {
                     navController.navigate(Screen.CreateSample.createRoute())
@@ -401,10 +539,11 @@ fun NavGraph(
                 onBack = navigateBack,
                 onKeyFound = { key ->
                     scope.launch {
+                        prefs.deactivateAccount()
                         prefs.saveApiKey(key)
                         apiClient.setApiKey(key)
-                        prefs.clearUserProfile()
                         repository.invalidateAll()
+                        PersistentProjectCache.clear(platformCtx)
                     }
                     showToast(platformCtx, "API key saved")
                     navController.popBackStack()
@@ -472,6 +611,10 @@ fun NavGraph(
                 onBack = navigateBack,
                 onHome = navigateHome,
                 onNavigateToOrcidLogin = { navController.navigate(Screen.OrcidLogin.route) },
+                onAccountCredentialsChanging = {
+                    repository.invalidateAll()
+                    scope.launch { PersistentProjectCache.clear(platformCtx) }
+                },
                 onUserClick = { identifier ->
                     navController.navigate(Screen.UserProfile.createRoute(identifier))
                 }
@@ -590,24 +733,28 @@ fun NavGraph(
                         onNavigateToResource = { newMfid ->
                             navController.navigate(Screen.Detail.createRoute(newMfid))
                         },
-                        onNavigateToProject = { projectId ->
-                            navController.navigate(Screen.ProjectDetail.createRoute(projectId))
-                        },
-                        onNavigateToInstrument = { instrumentId ->
-                            navController.navigate(Screen.InstrumentDetail.createRoute(instrumentId))
-                        },
+                        onNavigateToProject = navigateToProject,
+                        onNavigateToInstrument = navigateToInstrument,
                         onHome = navigateHome,
                         onRefresh = { uuid ->
                             viewModel.refreshResource(uuid)
                         },
                         getCardState = { key -> viewModel.getCardState(mfid, key) },
                         onCardStateChange = { key, value -> viewModel.setCardState(mfid, key, value) },
-                        onRequestDeletion = { resourceId, reason -> viewModel.requestDeletion(resourceId, reason) },
+                        deletionRequestSubmissionState = deletionRequestSubmissionState,
+                        onRequestDeletion = viewModel::submitDeletionRequest,
+                        onClearDeletionRequestSubmission = viewModel::clearDeletionRequestSubmission,
+                        associatedFileActionStates = associatedFileActionStates,
+                        onResolveAssociatedFileAction = viewModel::resolveAssociatedFileAction,
+                        onClearAssociatedFileAction = viewModel::clearAssociatedFileAction,
                         onNavigateToAddFiles = { datasetUuid ->
                             navController.navigate(Screen.AddFiles.createRoute(datasetUuid))
                         },
                         onNavigateToEdit = { uuid ->
                             navController.navigate(Screen.EditResource.createRoute(uuid))
+                        },
+                        onNavigateToManageAccess = { uuid ->
+                            navController.navigate(Screen.ManageResourceAccess.createRoute(uuid))
                         },
                         onNavigateToUser = { identifier ->
                             navController.navigate(Screen.UserProfile.createRoute(identifier))
@@ -629,6 +776,7 @@ fun NavGraph(
                                     DuplicateHolder.putDataset(DuplicateHolder.DatasetPrefill(
                                         name = resource.name,
                                         measurement = resource.measurement,
+                                        instrumentId = resource.instrumentId,
                                         instrumentName = resource.instrumentName,
                                         dataFormat = resource.dataFormat,
                                         sessionName = resource.sessionName,
@@ -741,6 +889,18 @@ fun NavGraph(
             )
         }
 
+        composable(
+            route = Screen.ManageResourceAccess.route,
+            arguments = listOf(navArgument("mfid") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val mfid = backStackEntry.savedStateHandle.get<String>("mfid") ?: ""
+            ManageResourceAccessScreen(
+                resourceMfid = mfid,
+                onBack = navigateBack,
+                onHome = navigateHome
+            )
+        }
+
         composable(Screen.Projects.route) {
             val setupComplete by prefs.syncSetupComplete.collectAsStateWithLifecycle()
             LaunchedEffect(setupComplete) {
@@ -751,62 +911,87 @@ fun NavGraph(
             ProjectsListScreen(
                 onBack = navigateBack,
                 onHome = navigateHome,
-                onProjectClick = { projectId ->
-                    navController.navigate(Screen.ProjectDetail.createRoute(projectId))
-                },
+                onProjectClick = navigateToProject,
                 pinnedProjects = pinnedProjects,
-                onTogglePin = { id -> scope.launch { prefs.togglePinnedProject(id) } },
+                onTogglePin = { id ->
+                    scope.launch { prefs.togglePinnedProject(id) }
+                },
                 syncedProjects = syncedProjects,
-                onToggleSync = { id -> scope.launch { prefs.toggleSyncedProject(id) } },
+                onToggleSync = toggleProjectSync,
                 onManageSyncedProjects = { navController.navigate(Screen.SyncedProjects.createRoute(firstRun = false)) },
                 onCreateProject = { navController.navigate(Screen.CreateProject.route) },
                 onManageProject = { projectId -> navController.navigate(Screen.ManageProject.createRoute(projectId)) },
-                currentUserOrcid = userOrcid
+                currentUserOrcid = userOrcid,
+                accountId = activeAccountId
             )
         }
 
         composable(
             route = Screen.ProjectDetail.route,
-            arguments = listOf(navArgument("projectId") { type = NavType.StringType })
+            arguments = listOf(navArgument("projectReference") { type = NavType.StringType })
             // Uses all default transitions
         ) { backStackEntry ->
-            val projectId = backStackEntry.savedStateHandle.get<String>("projectId") ?: ""
+            val projectReference = backStackEntry.savedStateHandle.get<String>("projectReference") ?: ""
+            if (!isMfidReference(projectReference)) {
+                LaunchedEffect(projectReference) {
+                    when (val result = repository.fetchProject(projectReference)) {
+                        is crucible.lens.data.api.ApiResult.Success -> {
+                            navController.navigate(Screen.ProjectDetail.createRoute(result.data.uniqueId)) {
+                                popUpTo(backStackEntry.destination.id) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
+                        is crucible.lens.data.api.ApiResult.Error -> {
+                            showToast(platformCtx, "Could not open project (${result.code})")
+                            navController.popBackStack()
+                        }
+                    }
+                }
+                LoadingContent(title = "Opening project")
+                return@composable
+            }
+            val routedProject by repository.observeProject(projectReference).collectAsStateWithLifecycle(
+                initialValue = repository.getCachedProject(projectReference)
+            )
+            val projectSlug = routedProject?.projectId
+            val projectMfid = routedProject?.uniqueId ?: projectReference
             ProjectDetailScreen(
-                projectId = projectId,
+                projectReference = projectReference,
                 graphExplorerUrl = graphExplorerUrl,
                 onBack = navigateBack,
                 onHome = navigateHome,
                 onResourceClick = { mfid, groupBy ->
                     navController.navigate(Screen.Detail.createRoute(mfid, groupBy))
                 },
-                isPinned = projectId in pinnedProjects,
-                onTogglePin = { scope.launch { prefs.togglePinnedProject(projectId) } },
-                isSynced = projectId in syncedProjects,
-                onToggleSync = { scope.launch { prefs.toggleSyncedProject(projectId) } },
+                isPinned = projectMfid in pinnedProjects,
+                onTogglePin = { scope.launch { prefs.togglePinnedProject(projectMfid) } },
+                isSynced = projectMfid in syncedProjects,
+                onToggleSync = { toggleProjectSync(projectMfid) },
                 onCreateSample = {
-                    navController.navigate(Screen.CreateSample.createRoute(projectId))
+                    projectSlug?.let { navController.navigate(Screen.CreateSample.createRoute(it)) }
                 },
                 onCreateDataset = {
-                    navController.navigate(Screen.CreateDataset.createRoute(projectId))
+                    projectSlug?.let { navController.navigate(Screen.CreateDataset.createRoute(it)) }
                 },
                 onManageProject = {
-                    navController.navigate(Screen.ManageProject.createRoute(projectId))
+                    navController.navigate(Screen.ManageProject.createRoute(projectMfid))
                 },
                 onUserClick = { identifier ->
                     navController.navigate(Screen.UserProfile.createRoute(identifier))
                 },
-                currentUserOrcid = userOrcid
+                currentUserOrcid = userOrcid,
+                accountId = activeAccountId
             )
         }
 
         composable(
             route = Screen.ManageProject.route,
-            arguments = listOf(navArgument("projectId") { type = NavType.StringType })
+            arguments = listOf(navArgument("projectReference") { type = NavType.StringType })
         ) { backStackEntry ->
-            val projectId = backStackEntry.savedStateHandle.get<String>("projectId") ?: ""
+            val projectReference = backStackEntry.savedStateHandle.get<String>("projectReference") ?: ""
             val manageViewModel: ManageProjectViewModel = koinViewModel()
             val currentUserProfile by prefs.userProfile.collectAsStateWithLifecycle()
-            LaunchedEffect(projectId) { manageViewModel.init(projectId, currentUserProfile?.uniqueId) }
+            LaunchedEffect(projectReference) { manageViewModel.init(projectReference, currentUserProfile?.uniqueId) }
             ManageProjectScreen(
                 viewModel = manageViewModel,
                 onBack = navigateBack,
@@ -817,17 +1002,35 @@ fun NavGraph(
             )
         }
 
-        composable(Screen.Instruments.route) {
+        composable(Screen.Instruments.route) { backStackEntry ->
+            val refreshKey by backStackEntry.savedStateHandle
+                .getStateFlow("instrumentRefreshKey", 0)
+                .collectAsStateWithLifecycle()
             InstrumentListScreen(
                 onBack = navigateBack,
                 onHome = navigateHome,
-                onInstrumentClick = { id ->
-                    navController.navigate(Screen.InstrumentDetail.createRoute(id))
-                },
+                onInstrumentClick = navigateToInstrument,
+                onCreateInstrument = { navController.navigate(Screen.CreateInstrument.route) },
+                canRegisterInstrument = userProfile?.isServiceAccount == false,
+                refreshKey = refreshKey,
                 pinnedInstruments = pinnedInstruments,
                 onTogglePin = { id -> scope.launch { prefs.togglePinnedInstrument(id) } },
                 hiddenInstruments = hiddenInstruments,
                 onToggleHide = { id -> scope.launch { prefs.toggleHiddenInstrument(id) } }
+            )
+        }
+
+        composable(Screen.CreateInstrument.route) {
+            CreateInstrumentScreen(
+                onBack = navigateBack,
+                onCreated = { instrumentMfid ->
+                    navController.previousBackStackEntry?.savedStateHandle?.let { handle ->
+                        handle["instrumentRefreshKey"] = handle.get<Int>("instrumentRefreshKey")?.plus(1) ?: 1
+                    }
+                    navController.popBackStack()
+                    navController.navigate(Screen.ManageInstrument.createRoute(instrumentMfid))
+                },
+                onHome = navigateHome
             )
         }
 
@@ -836,6 +1039,24 @@ fun NavGraph(
             arguments = listOf(navArgument("instrumentId") { type = NavType.StringType })
         ) { backStackEntry ->
             val instrumentId = backStackEntry.savedStateHandle.get<String>("instrumentId") ?: ""
+            if (!isMfidReference(instrumentId)) {
+                LaunchedEffect(instrumentId) {
+                    when (val result = repository.fetchInstrument(instrumentId)) {
+                        is crucible.lens.data.api.ApiResult.Success -> {
+                            navController.navigate(Screen.InstrumentDetail.createRoute(result.data.uniqueId)) {
+                                popUpTo(backStackEntry.destination.id) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
+                        is crucible.lens.data.api.ApiResult.Error -> {
+                            showToast(platformCtx, "Could not open instrument (${result.code})")
+                            navController.popBackStack()
+                        }
+                    }
+                }
+                LoadingContent(title = "Opening instrument")
+                return@composable
+            }
             InstrumentDetailScreen(
                 instrumentId = instrumentId,
                 isPinned = instrumentId in pinnedInstruments,
@@ -858,8 +1079,16 @@ fun NavGraph(
         ) { backStackEntry ->
             val instrumentId = backStackEntry.savedStateHandle.get<String>("instrumentId") ?: ""
             val manageViewModel: ManageInstrumentViewModel = koinViewModel()
-            LaunchedEffect(instrumentId) { manageViewModel.init(instrumentId) }
-            ManageInstrumentScreen(viewModel = manageViewModel, onBack = navigateBack, onHome = navigateHome)
+            val currentUserProfile by prefs.userProfile.collectAsStateWithLifecycle()
+            LaunchedEffect(instrumentId, currentUserProfile?.uniqueId) {
+                manageViewModel.init(instrumentId, currentUserProfile?.uniqueId)
+            }
+            ManageInstrumentScreen(
+                viewModel = manageViewModel,
+                onBack = navigateBack,
+                onHome = navigateHome,
+                onUserClick = { identifier -> navController.navigate(Screen.UserProfile.createRoute(identifier)) }
+            )
         }
 
         composable(
@@ -981,9 +1210,7 @@ fun NavGraph(
                 onResourceClick = { uuid ->
                     navController.navigate(Screen.Detail.createRoute(uuid))
                 },
-                onProjectClick = { projectId ->
-                    navController.navigate(Screen.ProjectDetail.createRoute(projectId))
-                },
+                onProjectClick = navigateToProject,
                 onUserClick = { identifier ->
                     navController.navigate(Screen.UserProfile.createRoute(identifier))
                 }

@@ -17,17 +17,33 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import crucible.lens.data.api.ApiClient
-import crucible.lens.data.api.ApiResult
-import crucible.lens.data.model.ThumbnailCreateRequest
+import crucible.lens.data.upload.DatasetFileUploadCheckpoint
+import crucible.lens.data.upload.DatasetFileAttachment
+import crucible.lens.data.upload.DatasetFileUploadRequest
+import crucible.lens.data.upload.DatasetFileUploadResult
+import crucible.lens.data.upload.DatasetFileUploadStage
+import crucible.lens.data.upload.DatasetFileUploader
+import crucible.lens.data.upload.summarizeDatasetFileUploads
 import crucible.lens.ui.create.FilesHolder
 import crucible.lens.data.util.PlatformCrypto
+import crucible.lens.platform.CameraPickerResult
+import crucible.lens.platform.ImagePickerResult
 import crucible.lens.platform.PlatformBase64
+import crucible.lens.platform.getPlatformContext
+import crucible.lens.platform.openAppSettings
 import crucible.lens.platform.rememberCameraPicker
-import crucible.lens.platform.rememberGalleryPicker
+import crucible.lens.platform.rememberImagePicker
 import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+
+private data class PendingFileUpload(
+    val bytes: ByteArray,
+    val asThumbnail: Boolean,
+    val filename: String,
+    val checkpoint: DatasetFileUploadCheckpoint = DatasetFileUploadCheckpoint()
+)
 
 @Composable
 fun AddFilesScreen(
@@ -37,17 +53,48 @@ fun AddFilesScreen(
     datasetUuid: String? = null
 ) {
     val isUploadMode = datasetUuid != null
-    var files by remember { mutableStateOf(if (isUploadMode) emptyList() else FilesHolder.files) }
+    var files by remember {
+        mutableStateOf<List<PendingFileUpload>>(
+            if (isUploadMode) {
+                emptyList()
+            } else {
+                FilesHolder.files.map { file ->
+                    PendingFileUpload(file.bytes, file.asThumbnail, file.filename)
+                }
+            }
+        )
+    }
     var isUploading by remember { mutableStateOf(false) }
+    var cameraIssue by remember { mutableStateOf<CameraPickerResult?>(null) }
+    var imageIssue by remember { mutableStateOf<ImagePickerResult.Failure?>(null) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val platformContext = getPlatformContext()
     val apiClient = koinInject<ApiClient>()
+    val fileUploader = remember(apiClient) { DatasetFileUploader(apiClient) }
 
-    val cameraPicker = rememberCameraPicker { bytes ->
-        if (bytes != null) files = files + Pair(bytes, true)
+    fun pendingCameraFile(bytes: ByteArray): PendingFileUpload {
+        val filename = "camera_${Clock.System.now().toEpochMilliseconds()}.jpg"
+        return PendingFileUpload(bytes, asThumbnail = true, filename = filename)
     }
-    val galleryPicker = rememberGalleryPicker { bytes ->
-        if (bytes != null) files = files + Pair(bytes, true)
+
+    val cameraPicker = rememberCameraPicker { result ->
+        when (result) {
+            is CameraPickerResult.Success -> files = files + pendingCameraFile(result.bytes)
+            CameraPickerResult.Cancelled -> Unit
+            else -> cameraIssue = result
+        }
+    }
+    val imagePicker = rememberImagePicker { result ->
+        when (result) {
+            is ImagePickerResult.Success -> files = files + PendingFileUpload(
+                bytes = result.bytes,
+                asThumbnail = true,
+                filename = result.filename
+            )
+            ImagePickerResult.Cancelled -> Unit
+            is ImagePickerResult.Failure -> imageIssue = result
+        }
     }
 
     fun onDoneClicked() {
@@ -56,52 +103,51 @@ fun AddFilesScreen(
             scope.launch {
                 isUploading = true
                 try {
-                    files.forEachIndexed { index, (bytes, asThumbnail) ->
-                        val filename = "file_${datasetUuid}_${Clock.System.now().toEpochMilliseconds()}_$index.jpg"
-                        val sha256 = PlatformCrypto.sha256Hex(bytes)
-                        val initiateResp = apiClient.service.initiateUpload(datasetUuid, filename, bytes.size.toLong(), sha256)
-                        if (initiateResp is ApiResult.Success) {
-                            val session = initiateResp.data
-                            val fileMfid: String?
-                            if (session.existingFile != null) {
-                                // Duplicate detected — skip upload
-                                fileMfid = session.existingFile.mfid
-                            } else {
-                                val chunkResp = apiClient.service.uploadChunksToGCS(
-                                    resumableUri = session.resumableUri ?: error("Missing resumable URI"),
-                                    bytes = bytes,
-                                    chunkSizeHint = session.chunkSizeHint
+                    val results = mutableListOf<DatasetFileUploadResult>()
+                    val failedFiles = mutableListOf<PendingFileUpload>()
+                    files.forEach { file ->
+                        val result = try {
+                            fileUploader.upload(
+                                DatasetFileUploadRequest(
+                                    datasetUuid = datasetUuid,
+                                    filename = file.filename,
+                                    bytes = file.bytes,
+                                    sha256 = PlatformCrypto.sha256Hex(file.bytes),
+                                    asThumbnail = file.asThumbnail,
+                                    thumbnailBase64 = if (file.asThumbnail) PlatformBase64.encode(file.bytes) else "",
+                                    checkpoint = file.checkpoint
                                 )
-                                if (chunkResp is ApiResult.Success) {
-                                    val completeResp = apiClient.service.completeUpload(datasetUuid, session.uploadId ?: error("Missing upload ID"), sha256)
-                                    fileMfid = if (completeResp is ApiResult.Success) completeResp.data.mfid else null
-                                } else {
-                                    fileMfid = null
-                                }
-                            }
-                            if (fileMfid != null) {
-                                apiClient.service.requestIngestion(fileMfid)
-                                if (asThumbnail) {
-                                    apiClient.service.addThumbnail(
-                                        datasetUuid,
-                                        ThumbnailCreateRequest(thumbnailName = filename, thumbnailB64str = PlatformBase64.encode(bytes))
-                                    )
-                                }
-                            }
+                            )
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            DatasetFileUploadResult.Failure(
+                                stage = DatasetFileUploadStage.Transfer,
+                                message = e.message ?: "Unexpected upload error",
+                                checkpoint = file.checkpoint
+                            )
+                        }
+                        results += result
+                        if (result is DatasetFileUploadResult.Failure) {
+                            failedFiles += file.copy(checkpoint = result.checkpoint)
                         }
                     }
-                    snackbarHostState.showSnackbar(if (files.size == 1) "File uploaded" else "${files.size} files uploaded")
+                    val summary = summarizeDatasetFileUploads(results)
+                    files = failedFiles
+                    snackbarHostState.showSnackbar(summary.userMessage())
+                    if (summary.allSucceeded) onDone()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
-                    snackbarHostState.showSnackbar("Upload failed — check your connection")
+                    snackbarHostState.showSnackbar("Upload failed - check your connection")
                 } finally {
                     isUploading = false
                 }
-                onDone()
             }
         } else {
-            FilesHolder.files = files
+            FilesHolder.files = files.map {
+                DatasetFileAttachment(bytes = it.bytes, filename = it.filename, asThumbnail = it.asThumbnail)
+            }
             FilesHolder.isDirty = true
             onDone()
         }
@@ -147,7 +193,7 @@ fun AddFilesScreen(
                     }
                 }
             } else {
-                files.forEachIndexed { index, (bytes, asThumbnail) ->
+                files.forEachIndexed { index, file ->
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
                     ) {
@@ -157,21 +203,21 @@ fun AddFilesScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             AsyncImage(
-                                model = bytes,
+                                model = file.bytes,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.size(80.dp).clip(MaterialTheme.shapes.small)
                             )
                             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("File ${index + 1}", style = MaterialTheme.typography.bodyMedium)
+                                Text(file.filename, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Switch(
-                                        checked = asThumbnail,
+                                        checked = file.asThumbnail,
                                         onCheckedChange = { checked ->
-                                            files = files.toMutableList().also { it[index] = it[index].copy(second = checked) }
+                                            files = files.toMutableList().also { it[index] = file.copy(asThumbnail = checked) }
                                         },
                                         modifier = Modifier.height(24.dp)
                                     )
@@ -199,12 +245,88 @@ fun AddFilesScreen(
                     Spacer(Modifier.width(6.dp))
                     Text("Camera")
                 }
-                OutlinedButton(onClick = { galleryPicker() }, modifier = Modifier.weight(1f), enabled = !isUploading) {
+                OutlinedButton(onClick = { imagePicker() }, modifier = Modifier.weight(1f), enabled = !isUploading) {
                     AppIcon(AppIcons.AttachFile, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Attach file")
+                    Text("Choose image")
                 }
             }
         }
+    }
+
+    cameraIssue?.let { issue ->
+        val title = when (issue) {
+            is CameraPickerResult.PermissionDenied -> "Camera access needed"
+            CameraPickerResult.Unavailable -> "Camera unavailable"
+            is CameraPickerResult.Failure -> "Camera failed"
+            else -> "Camera"
+        }
+        val message = when (issue) {
+            is CameraPickerResult.PermissionDenied -> if (issue.requiresSettings) {
+                "Camera access is disabled. Enable it in system settings to take photos."
+            } else {
+                "Allow camera access to take photos for this dataset."
+            }
+            CameraPickerResult.Unavailable -> "No camera is available on this device. You can attach an existing image instead."
+            is CameraPickerResult.Failure -> issue.message
+            else -> "The camera could not be used."
+        }
+        val actionLabel = when (issue) {
+            is CameraPickerResult.PermissionDenied -> if (issue.requiresSettings) "Open settings" else "Allow camera"
+            CameraPickerResult.Unavailable -> "OK"
+            is CameraPickerResult.Failure -> "Retry"
+            else -> "OK"
+        }
+        AlertDialog(
+            onDismissRequest = { cameraIssue = null },
+            icon = { AppIcon(AppIcons.TakePhoto) },
+            title = { Text(title) },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        cameraIssue = null
+                        when (issue) {
+                            is CameraPickerResult.PermissionDenied -> {
+                                if (issue.requiresSettings) openAppSettings(platformContext) else cameraPicker()
+                            }
+                            is CameraPickerResult.Failure -> cameraPicker()
+                            else -> Unit
+                        }
+                    }
+                ) {
+                    Text(actionLabel)
+                }
+            },
+            dismissButton = if (issue is CameraPickerResult.PermissionDenied || issue is CameraPickerResult.Failure) {
+                { TextButton(onClick = { cameraIssue = null }) { Text("Cancel") } }
+            } else {
+                null
+            }
+        )
+    }
+
+    imageIssue?.let { issue ->
+        AlertDialog(
+            onDismissRequest = { imageIssue = null },
+            icon = { AppIcon(AppIcons.AttachFile) },
+            title = { Text("Image unavailable") },
+            text = { Text(issue.message) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        imageIssue = null
+                        imagePicker()
+                    }
+                ) {
+                    Text("Retry")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { imageIssue = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

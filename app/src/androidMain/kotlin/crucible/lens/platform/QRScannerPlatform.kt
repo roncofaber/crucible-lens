@@ -1,7 +1,11 @@
 package crucible.lens.platform
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
@@ -12,21 +16,40 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.common.InputImage
+import crucible.lens.ui.common.AppIcon
+import crucible.lens.ui.common.AppIcons
 
 @Composable
 actual fun QRScannerWithPermission(
@@ -34,6 +57,7 @@ actual fun QRScannerWithPermission(
     onScanned: (String) -> Boolean
 ) {
     val context = LocalContext.current
+    val activity = context as? Activity
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var cameraGranted by remember {
@@ -43,12 +67,30 @@ actual fun QRScannerWithPermission(
             ) == PackageManager.PERMISSION_GRANTED
         )
     }
+    var hasRequestedPermission by rememberSaveable { mutableStateOf(false) }
+    var requestInFlight by remember { mutableStateOf(!cameraGranted && !hasRequestedPermission) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted -> cameraGranted = granted }
+    ) { granted ->
+        cameraGranted = granted
+        requestInFlight = false
+    }
+
+    val requestPermission = {
+        hasRequestedPermission = true
+        requestInFlight = true
+        permissionLauncher.launch(Manifest.permission.CAMERA)
+    }
 
     LaunchedEffect(Unit) {
-        if (!cameraGranted) permissionLauncher.launch(Manifest.permission.CAMERA)
+        if (!cameraGranted && !hasRequestedPermission) requestPermission()
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        cameraGranted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     if (cameraGranted) {
@@ -95,6 +137,66 @@ actual fun QRScannerWithPermission(
                 previewView
             }
         )
+    } else if (!requestInFlight) {
+        val shouldShowRationale = activity?.let {
+            ActivityCompat.shouldShowRequestPermissionRationale(it, Manifest.permission.CAMERA)
+        } == true
+        val recoveryAction = cameraPermissionRecoveryAction(hasRequestedPermission, shouldShowRationale)
+        CameraPermissionRequired(
+            modifier = modifier,
+            requiresSettings = recoveryAction == CameraPermissionRecoveryAction.OpenSettings,
+            onAction = {
+                when (recoveryAction) {
+                    CameraPermissionRecoveryAction.RequestPermission -> requestPermission()
+                    CameraPermissionRecoveryAction.OpenSettings -> context.startActivity(
+                        Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.fromParts("package", context.packageName, null)
+                        )
+                    )
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun CameraPermissionRequired(
+    modifier: Modifier,
+    requiresSettings: Boolean,
+    onAction: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .zIndex(1f)
+            .background(MaterialTheme.colorScheme.surface),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            AppIcon(
+                AppIcons.ScanQr,
+                modifier = Modifier.size(32.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text("Camera access needed", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = if (requiresSettings) {
+                    "Camera access is disabled. Enable it in system settings to scan QR codes."
+                } else {
+                    "Allow camera access to scan QR codes."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Button(onClick = onAction) {
+                Text(if (requiresSettings) "Open settings" else "Allow camera")
+            }
+        }
     }
 }
 

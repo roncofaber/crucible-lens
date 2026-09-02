@@ -52,6 +52,8 @@ import crucible.lens.ui.common.LazyColumnScrollbar
 import crucible.lens.ui.common.NotificationDot
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import crucible.lens.data.repository.CrucibleRepository
+import crucible.lens.data.sync.DataSyncManager
+import crucible.lens.data.sync.toSyncTarget
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.LoadState
 import crucible.lens.ui.common.ScrollToTopButton
@@ -75,10 +77,12 @@ fun ProjectsListScreen(
     onCreateProject: () -> Unit = {},
     onManageProject: (String) -> Unit = {},
     currentUserOrcid: String? = null,
+    accountId: String? = null,
 ) {
     val platformContext = getPlatformContext()
     val viewModel: ProjectsListViewModel = koinViewModel()
     val repository = koinInject<CrucibleRepository>()
+    val dataSyncManager = koinInject<DataSyncManager>()
     val loadState by viewModel.loadState.collectAsState()
     val refreshScope = rememberCoroutineScope()
     // Pending-request counts are cheap enough to refresh alongside the project list itself
@@ -128,8 +132,8 @@ fun ProjectsListScreen(
     LaunchedEffect(loadState, syncedProjects) {
         val projectList = (loadState as? LoadState.Success)?.data ?: return@LaunchedEffect
         val prioritizedProjects = projectList
-            .filter { it.projectId in syncedProjects }
-            .sortedByDescending { it.projectId in pinnedProjects }
+            .filter { it.uniqueId in syncedProjects }
+            .sortedByDescending { it.uniqueId in pinnedProjects }
 
         // Track consecutive failures to stop on network errors (thread-safe for concurrent launches)
         var consecutiveFailures = 0
@@ -144,14 +148,14 @@ fun ProjectsListScreen(
             batch.forEach { project ->
                 launch(kotlinx.coroutines.Dispatchers.Default) {
                     try {
-                        repository.fetchProjectData(
-                            projectId = project.projectId,
-                            onCountsAvailable = { sampleCount, datasetCount ->
-                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                    viewModel.updateCount(project.projectId, sampleCount, datasetCount)
-                                }
+                        val (samples, datasets) = if (accountId != null) {
+                            dataSyncManager.syncProject(platformContext, accountId, project.toSyncTarget()).let {
+                                it.samples to it.datasets
                             }
-                        )
+                        } else {
+                            repository.fetchProjectData(project.projectId)
+                        }
+                        viewModel.updateCount(project.projectId, samples.size, datasets.size)
                         consecutiveFailures = 0
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
@@ -204,7 +208,7 @@ fun ProjectsListScreen(
     // Cheap bookkeeping (sort/pin/pending-unsync), unlike the search above - recomputed on every
     // recomposition is fine since it's just comparisons over the already-filtered project list.
     val syncedProjectsList = filteredProjects
-        .filter { it.projectId in syncedProjects && pendingUnsync[it.projectId] != true }
+        .filter { it.uniqueId in syncedProjects && pendingUnsync[it.uniqueId] != true }
         .applySortState(
             sortState,
             name = { title?.lowercase() ?: projectId.lowercase() },
@@ -212,9 +216,9 @@ fun ProjectsListScreen(
             date = { createdAt ?: "" }
         )
         // Pinned always float to top regardless of sort
-        .sortedByDescending { it.projectId in pinnedProjects }
+        .sortedByDescending { it.uniqueId in pinnedProjects }
     val unsyncedProjectsList = filteredProjects
-        .filter { it.projectId !in syncedProjects }
+        .filter { it.uniqueId !in syncedProjects }
 
     AppScaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -395,7 +399,7 @@ fun ProjectsListScreen(
                                 }
 
                                 if (syncedExpanded) {
-                                    itemsIndexed(syncedProjectsList, key = { _, it -> "${it.projectId}:${undoGenerations[it.projectId] ?: 0}" }) { index, project ->
+                                    itemsIndexed(syncedProjectsList, key = { _, it -> "${it.uniqueId}:${undoGenerations[it.uniqueId] ?: 0}" }) { index, project ->
                                     if (index > 0) {
                                         HorizontalDivider(modifier = Modifier.padding(start = ResourceListDividerInset))
                                     }
@@ -414,13 +418,13 @@ fun ProjectsListScreen(
                                                 itemLabel = project.title ?: project.projectId,
                                                 message = "\"${project.title ?: project.projectId}\" will stop syncing",
                                                 onPending = { pending ->
-                                                    if (pending) pendingUnsync[project.projectId] = true
-                                                    else pendingUnsync.remove(project.projectId)
+                                                    if (pending) pendingUnsync[project.uniqueId] = true
+                                                    else pendingUnsync.remove(project.uniqueId)
                                                 },
-                                                onConfirmedHide = { onToggleSync(project.projectId) },
+                                                onConfirmedHide = { onToggleSync(project.uniqueId) },
                                                 onUndone = {
-                                                    onToggleSync(project.projectId)
-                                                    undoGenerations[project.projectId] = (undoGenerations[project.projectId] ?: 0) + 1
+                                                    onToggleSync(project.uniqueId)
+                                                    undoGenerations[project.uniqueId] = (undoGenerations[project.uniqueId] ?: 0) + 1
                                                 }
                                             )
                                         }
@@ -428,14 +432,14 @@ fun ProjectsListScreen(
                                         ProjectCard(
                                             project = project,
                                             counts = projectCounts[project.projectId],
-                                            onClick = { onProjectClick(project.projectId) },
-                                            isPinned = project.projectId in pinnedProjects,
+                                            onClick = { onProjectClick(project.uniqueId) },
+                                            isPinned = project.uniqueId in pinnedProjects,
                                             onTogglePin = {
-                                                showToast(platformContext, if (project.projectId in pinnedProjects) "Project unpinned" else "Project pinned")
-                                                onTogglePin(project.projectId)
+                                                showToast(platformContext, if (project.uniqueId in pinnedProjects) "Project unpinned" else "Project pinned")
+                                                onTogglePin(project.uniqueId)
                                             },
-                                            onManage = { onManageProject(project.projectId) },
-                                            onToggleSyncAction = { onToggleSync(project.projectId) }
+                                            onManage = { onManageProject(project.uniqueId) },
+                                            onToggleSyncAction = { onToggleSync(project.uniqueId) }
                                         )
                                     }
                                     }
@@ -453,7 +457,7 @@ fun ProjectsListScreen(
                                     }
 
                                     if (unsyncedExpanded) {
-                                        itemsIndexed(unsyncedProjectsList, key = { _, it -> "unsynced_${it.projectId}" }) { index, project ->
+                                        itemsIndexed(unsyncedProjectsList, key = { _, it -> "unsynced_${it.uniqueId}" }) { index, project ->
                                             if (index > 0) {
                                                 HorizontalDivider(modifier = Modifier.padding(start = ResourceListDividerInset))
                                             }
@@ -467,18 +471,18 @@ fun ProjectsListScreen(
                                                 ),
                                                 onDismiss = {
                                                     showToast(platformContext, "Syncing ${project.title ?: project.projectId}")
-                                                    onToggleSync(project.projectId)
+                                                    onToggleSync(project.uniqueId)
                                                 }
                                             ) {
                                                 ProjectCard(
                                                     project = project,
                                                     counts = projectCounts[project.projectId],
-                                                    onClick = { onProjectClick(project.projectId) },
+                                                    onClick = { onProjectClick(project.uniqueId) },
                                                     isPinned = false,
                                                     onTogglePin = {},
                                                     isSynced = false,
-                                                    onManage = { onManageProject(project.projectId) },
-                                                    onToggleSyncAction = { onToggleSync(project.projectId) }
+                                                    onManage = { onManageProject(project.uniqueId) },
+                                                    onToggleSyncAction = { onToggleSync(project.uniqueId) }
                                                 )
                                             }
                                         }
@@ -631,5 +635,3 @@ private fun CountChip(
         }
     }
 }
-
-

@@ -87,7 +87,7 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.name }}"
           # Pull the summary paragraph between the version's "## [X.Y.Z]" header and its
-          # first "### " subsection — see CHANGELOG.md style rule in CLAUDE.md. Matched by
+          # first "### " subsection - see the changelog rules in AGENTS.md. Matched by
           # literal prefix (index()), not regex, since "[X.Y.Z]" contains regex metacharacters.
           SUMMARY=$(awk -v hdr="## [$VERSION]" '
             index($0, hdr) == 1 { found=1; next }
@@ -96,7 +96,7 @@ jobs:
             found && NF { print; exit }
           ' CHANGELOG.md)
           if [ -z "$SUMMARY" ]; then
-            echo "::error::No summary paragraph found under '## [$VERSION]' in CHANGELOG.md — add one (see CLAUDE.md's changelog style rule)."
+            echo "::error::No summary paragraph found under '## [$VERSION]' in CHANGELOG.md - add one (see AGENTS.md's changelog rules)."
             exit 1
           fi
           {
@@ -118,8 +118,12 @@ jobs:
 
           See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for the full list of changes.
           EOF
+          RELEASE_FLAGS=(--draft)
+          if [[ "${{ steps.version.outputs.name }}" == *-* ]]; then
+            RELEASE_FLAGS+=(--prerelease)
+          fi
           gh release create "$TAG" \
-            --draft \
+            "${RELEASE_FLAGS[@]}" \
             --title "$TAG" \
             --notes-file release-notes.md \
             release-artifacts/*

@@ -2,18 +2,22 @@ package crucible.lens.platform
 
 import androidx.compose.runtime.Composable
 
-/**
- * Returns a launcher that opens the system gallery to pick an image.
- * On Android: uses ActivityResultContracts.GetContent
- * On iOS: uses PHPickerViewController (TODO: full implementation)
- */
-@Composable
-expect fun rememberGalleryPicker(onResult: (ByteArray?) -> Unit): () -> Unit
+sealed interface CameraPickerResult {
+    data class Success(val bytes: ByteArray) : CameraPickerResult
+    data object Cancelled : CameraPickerResult
+    data class PermissionDenied(val requiresSettings: Boolean) : CameraPickerResult
+    data object Unavailable : CameraPickerResult
+    data class Failure(val message: String) : CameraPickerResult
+}
 
-/**
- * Returns a launcher that opens the camera to capture an image.
- * On Android: uses ActivityResultContracts.TakePicture with FileProvider
- * On iOS: uses UIImagePickerController (TODO: full implementation)
- */
+sealed interface ImagePickerResult {
+    data class Success(val bytes: ByteArray, val filename: String) : ImagePickerResult
+    data object Cancelled : ImagePickerResult
+    data class Failure(val message: String) : ImagePickerResult
+}
+
 @Composable
-expect fun rememberCameraPicker(onResult: (ByteArray?) -> Unit): () -> Unit
+expect fun rememberImagePicker(onResult: (ImagePickerResult) -> Unit): () -> Unit
+
+@Composable
+expect fun rememberCameraPicker(onResult: (CameraPickerResult) -> Unit): () -> Unit

@@ -29,7 +29,8 @@ import crucible.lens.ui.common.LongPressMenuBox
 import crucible.lens.ui.common.OpenInWebMenuItem
 import crucible.lens.ui.common.ShareMenuItem
 import crucible.lens.platform.copyToClipboard
-import crucible.lens.platform.openUrl
+import crucible.lens.platform.buildCrucibleWebUrl
+import crucible.lens.platform.openInBrowser
 import org.koin.compose.koinInject
 import crucible.lens.platform.shareText
 import crucible.lens.ui.common.AppScaffold
@@ -174,21 +175,22 @@ private fun HistoryCard(
             repository.getCachedProjects()?.find { it.projectId == pid }?.title ?: pid
         }
     }
-    val icon = when (item.resourceType ?: resourceType) {
+    val resolvedResourceType = item.resourceType ?: resourceType
+    val icon = when (resolvedResourceType) {
         "sample" -> AppIcons.Sample
         "dataset" -> AppIcons.Dataset
         else -> AppIcons.History
     }
     val webUrl = if (projectId != null && graphExplorerUrl.isNotBlank()) {
-        if (resourceType == "dataset") "$graphExplorerUrl/$projectId/dataset/${item.uuid}"
-        else "$graphExplorerUrl/$projectId/sample-graph/${item.uuid}"
+        val resourcePath = if (resolvedResourceType == "dataset") "datasets" else "samples"
+        buildCrucibleWebUrl(graphExplorerUrl, projectId, resourcePath, item.uuid)
     } else null
 
     LongPressMenuBox(
         menu = { dismiss ->
             CopyIdMenuItem { dismiss(); copyToClipboard(platformContext, item.uuid, "ID") }
             if (webUrl != null) {
-                OpenInWebMenuItem { dismiss(); openUrl(platformContext, webUrl) }
+                OpenInWebMenuItem { dismiss(); openInBrowser(platformContext, webUrl) }
                 ShareMenuItem { dismiss(); shareText(platformContext, webUrl, item.name) }
             }
         }

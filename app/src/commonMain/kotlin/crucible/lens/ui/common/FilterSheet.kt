@@ -192,18 +192,18 @@ private fun OwnerPickerField(
     var query by remember { mutableStateOf(ownerUsername) }
     val apiClient = koinInject<ApiClient>()
 
-    val (liveResults, liveIsSearching) = rememberDebouncedSearchResults<User>(query = query) { q ->
+    val liveSearch = rememberDebouncedSearchState<User>(query = query) { q ->
         apiClient.service.searchUsers(q)
     }
     // Selecting a user changes `query` to their own exact username, which would otherwise
-    // retrigger rememberDebouncedSearchResults' LaunchedEffect(query) and briefly flip the field
+    // retrigger rememberDebouncedSearchState's LaunchedEffect(query) and briefly flip the field
     // back to searching before the redundant re-search confirms the same match again - visible as
     // a flash between the resolved and editable renderings. Pinning the pick locally skips that
     // pointless re-search entirely instead of just animating over the flash.
     var pinned by remember { mutableStateOf<User?>(null) }
     val isPinned = pinned?.username == query
-    val results = if (isPinned) listOf(pinned!!) else liveResults
-    val isSearching = if (isPinned) false else liveIsSearching
+    val results = if (isPinned) listOf(pinned!!) else liveSearch.results
+    val isSearching = if (isPinned) false else liveSearch.isSearching
     SearchPickerField(
         query = query,
         onQueryChange = {
@@ -215,6 +215,8 @@ private fun OwnerPickerField(
         results = results,
         onSelect = { user -> pinned = user; query = user.username ?: ""; onOwnerSelected(user) },
         label = "Owner",
+        searchError = liveSearch.error.takeUnless { isPinned },
+        onRetrySearch = liveSearch.retry,
         leadingIcon = AppIcons.Search,
         modifier = Modifier.fillMaxWidth(),
         resolution = ResolvedPicker(

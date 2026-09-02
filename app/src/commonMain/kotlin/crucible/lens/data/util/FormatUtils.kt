@@ -65,7 +65,7 @@ fun formatFileSize(bytes: Long): String = when {
 /**
  * Full name if either first/last name is set, else "@username", else the raw ORCID/ID.
  * This is the app-wide default for showing a person "in context" (owner rows, member lists,
- * project leads) — see CLAUDE.md's "User identity conventions". The deliberate exceptions are
+ * project leads) - see AGENTS.md's "User identity" section. The deliberate exceptions are
  * identity-lookup UI (UserResultItem, FilterSheet's search results, UserProfileScreen's own
  * header), which stay username-primary since disambiguating a search result is the whole point
  * there, unlike showing someone already in context.
@@ -77,6 +77,23 @@ fun userDisplayName(firstName: String?, lastName: String?, username: String?, un
 
 fun userDisplayName(user: User?): String =
     userDisplayName(user?.firstName, user?.lastName, user?.username, user?.uniqueId)
+
+fun compactUserDisplayName(firstName: String?, lastName: String?, username: String?, uniqueId: String? = null): String {
+    val initials = firstName
+        ?.trim()
+        ?.split(Regex("""\s+"""))
+        ?.mapNotNull { part -> part.firstOrNull()?.uppercaseChar()?.let { "$it." } }
+        ?.joinToString(" ")
+        ?.ifBlank { null }
+    val familyName = lastName?.trim()?.ifBlank { null }
+    val compactName = listOfNotNull(initials, familyName).joinToString(" ").ifBlank { null }
+    return compactName ?: username?.let { "@$it" } ?: uniqueId ?: "Unknown"
+}
+
+fun compactUserDisplayName(user: User?): String =
+    compactUserDisplayName(user?.firstName, user?.lastName, user?.username, user?.uniqueId)
+
+fun userHandle(user: User?): String? = user?.username?.trim()?.takeIf { it.isNotEmpty() }?.let { "@$it" }
 
 /**
  * Sort key for alphabetizing member/user lists by last name — falls back to username, then

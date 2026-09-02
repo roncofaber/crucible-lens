@@ -8,6 +8,7 @@ import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.model.User
 import crucible.lens.data.preferences.AppPreferences
+import crucible.lens.data.preferences.accountIdFor
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,13 @@ sealed class ProfileUiState {
     data class Loaded(val user: User) : ProfileUiState()
     object NotLoggedIn : ProfileUiState()
     data class Error(val message: String) : ProfileUiState()
+}
+
+sealed class JoinRequestsUiState {
+    object Idle : JoinRequestsUiState()
+    object Loading : JoinRequestsUiState()
+    data class Loaded(val refreshError: String? = null) : JoinRequestsUiState()
+    data class Error(val message: String) : JoinRequestsUiState()
 }
 
 enum class SaveErrorReason { UsernameTaken, Generic }
@@ -95,8 +103,14 @@ class AccountViewModel(
     val currentApiKey: StateFlow<String?> = prefs.apiKey
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    private val _joinRequests = MutableStateFlow<List<JoinRequest>>(emptyList())
-    val joinRequests: StateFlow<List<JoinRequest>> = _joinRequests.asStateFlow()
+    val joinRequests: StateFlow<List<JoinRequest>> = repository.observeMyJoinRequests()
+        .map { it.orEmpty() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repository.getCachedMyJoinRequests().orEmpty())
+
+    private val _joinRequestsState = MutableStateFlow<JoinRequestsUiState>(
+        if (repository.getCachedMyJoinRequests() != null) JoinRequestsUiState.Loaded() else JoinRequestsUiState.Idle
+    )
+    val joinRequestsState: StateFlow<JoinRequestsUiState> = _joinRequestsState.asStateFlow()
 
     // Reviewer identities (ORCID -> User) for requests already approved/rejected, resolved so
     // "Reviewed by" can show a name/username instead of a bare ORCID.
@@ -128,13 +142,20 @@ class AccountViewModel(
         val apiKey = prefs.apiKey.first()
         if (apiKey.isNullOrBlank()) {
             _profileState.value = ProfileUiState.NotLoggedIn
-            _joinRequests.value = emptyList()
+            repository.invalidateMyJoinRequests()
+            _joinRequestsState.value = JoinRequestsUiState.Idle
             _reviewerInfo.value = emptyMap()
             return
         }
         when (val result = apiClient.service.getProfile()) {
             is ApiResult.Success -> {
                 val user = result.data
+                val accountId = accountIdFor(user)
+                if (accountId == null) {
+                    _profileState.value = ProfileUiState.Error("The server profile has no stable account identifier")
+                    return
+                }
+                prefs.activateAccount(accountId)
                 prefs.saveUserProfile(user)
                 _profileState.value = ProfileUiState.Loaded(user)
             }
@@ -144,13 +165,39 @@ class AccountViewModel(
                 }
             }
         }
-        val requests = (apiClient.service.getMyJoinRequests() as? ApiResult.Success)?.data ?: emptyList()
-        _joinRequests.value = requests
+        fetchJoinRequests()
+    }
+
+    private suspend fun fetchJoinRequests() {
+        val cached = repository.getCachedMyJoinRequests()
+        if (cached == null) _joinRequestsState.value = JoinRequestsUiState.Loading
+        val requests = when (val result = repository.fetchMyJoinRequests(forceRefresh = true)) {
+            is ApiResult.Success -> {
+                _joinRequestsState.value = JoinRequestsUiState.Loaded()
+                result.data
+            }
+            is ApiResult.Error -> {
+                _joinRequestsState.value = if (cached != null) {
+                    JoinRequestsUiState.Loaded("Could not refresh join requests (${result.code})")
+                } else {
+                    JoinRequestsUiState.Error("Could not load join requests (${result.code})")
+                }
+                cached ?: return
+            }
+        }
         val reviewerIds = requests.mapNotNull { it.reviewerId }.distinct()
-        _reviewerInfo.value = if (reviewerIds.isNotEmpty()) {
+        if (reviewerIds.isEmpty()) {
+            _reviewerInfo.value = emptyMap()
+        } else {
             (apiClient.service.resolveUsers(orcids = reviewerIds) as? ApiResult.Success)?.data
-                ?.mapNotNull { (orcid, user) -> user?.let { orcid to it } }?.toMap() ?: emptyMap()
-        } else emptyMap()
+                ?.mapNotNull { (orcid, user) -> user?.let { orcid to it } }
+                ?.toMap()
+                ?.let { _reviewerInfo.value = it }
+        }
+    }
+
+    fun retryJoinRequests() {
+        viewModelScope.launch { fetchJoinRequests() }
     }
 
     fun retryLoad() {
@@ -232,13 +279,15 @@ class AccountViewModel(
 
     fun saveApiKey(key: String) {
         viewModelScope.launch {
+            prefs.deactivateAccount()
             prefs.saveApiKey(key)
             apiClient.setApiKey(key)
-            prefs.clearUserProfile()
             repository.invalidateAll()
             _editState.value = EditUiState.Idle
             if (key.isBlank()) {
                 _profileState.value = ProfileUiState.NotLoggedIn
+                _joinRequestsState.value = JoinRequestsUiState.Idle
+                _reviewerInfo.value = emptyMap()
             } else {
                 _profileState.value = ProfileUiState.Loading
                 fetchProfileFromApi()
@@ -249,14 +298,14 @@ class AccountViewModel(
     fun signOut() {
         usernameCheckJob?.cancel()
         viewModelScope.launch {
+            prefs.deactivateAccount()
             prefs.clearApiKey()
-            prefs.clearUserProfile()
             apiClient.setApiKey("")
             repository.invalidateAll()
             _profileState.value = ProfileUiState.NotLoggedIn
             _editState.value = EditUiState.Idle
             _lastDraft.value = null
-            _joinRequests.value = emptyList()
+            _joinRequestsState.value = JoinRequestsUiState.Idle
             _reviewerInfo.value = emptyMap()
         }
     }

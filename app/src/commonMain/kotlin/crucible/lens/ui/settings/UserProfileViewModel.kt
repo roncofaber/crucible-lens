@@ -7,6 +7,8 @@ import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.User
 import crucible.lens.data.repository.CrucibleRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +25,20 @@ sealed class UserProfileState {
 sealed class AddToProjectState {
     data object Idle : AddToProjectState()
     data class Adding(val project: Project) : AddToProjectState()
-    data class Result(val project: Project, val success: Boolean) : AddToProjectState()
+    data class Added(val project: Project) : AddToProjectState()
+    data class Error(val project: Project, val message: String) : AddToProjectState()
+}
+
+data class ProjectMembershipSnapshot(
+    val memberProjectIds: Set<String> = emptySet(),
+    val resolvedProjectIds: Set<String> = emptySet(),
+    val failedProjectIds: Set<String> = emptySet()
+)
+
+sealed class ProjectMembershipState {
+    data object Idle : ProjectMembershipState()
+    data class Checking(val previous: ProjectMembershipSnapshot? = null) : ProjectMembershipState()
+    data class Ready(val snapshot: ProjectMembershipSnapshot) : ProjectMembershipState()
 }
 
 class UserProfileViewModel(
@@ -43,17 +58,16 @@ class UserProfileViewModel(
     private val _addToProjectState = MutableStateFlow<AddToProjectState>(AddToProjectState.Idle)
     val addToProjectState: StateFlow<AddToProjectState> = _addToProjectState.asStateFlow()
 
-    // Which of myProjects this profile's user already belongs to - checked lazily (only once the
-    // "Add to Project" sheet is opened) via the same per-project member cache ManageProjectScreen
-    // reads from, so this is free when that project's members were already fetched elsewhere.
-    private val _memberProjectIds = MutableStateFlow<Set<String>>(emptySet())
-    val memberProjectIds: StateFlow<Set<String>> = _memberProjectIds.asStateFlow()
+    private val _membershipState = MutableStateFlow<ProjectMembershipState>(ProjectMembershipState.Idle)
+    val membershipState: StateFlow<ProjectMembershipState> = _membershipState.asStateFlow()
 
-    private val _isCheckingMembership = MutableStateFlow(false)
-    val isCheckingMembership: StateFlow<Boolean> = _isCheckingMembership.asStateFlow()
+    private var membershipJob: Job? = null
 
     fun load(identifier: String) {
         _state.value = UserProfileState.Loading
+        membershipJob?.cancel()
+        _membershipState.value = ProjectMembershipState.Idle
+        _addToProjectState.value = AddToProjectState.Idle
         viewModelScope.launch {
             val isOrcid = identifier.contains("-") && identifier.length > 10
             val result: ApiResult<User> = if (isOrcid) {
@@ -79,42 +93,116 @@ class UserProfileViewModel(
     }
 
     fun checkProjectMembership() {
+        checkProjectMembership(projectIds = _myProjects.value.map { it.projectId }.toSet(), previous = null)
+    }
+
+    fun retryProjectMembership() {
+        val previous = (_membershipState.value as? ProjectMembershipState.Ready)?.snapshot ?: return
+        if (previous.failedProjectIds.isEmpty()) return
+        checkProjectMembership(projectIds = previous.failedProjectIds, previous = previous)
+    }
+
+    private fun checkProjectMembership(projectIds: Set<String>, previous: ProjectMembershipSnapshot?) {
         val user = (_state.value as? UserProfileState.Loaded)?.user ?: return
-        _isCheckingMembership.value = true
-        viewModelScope.launch {
-            val memberIds = coroutineScope {
-                _myProjects.value.map { project ->
+        membershipJob?.cancel()
+        if (projectIds.isEmpty()) {
+            _membershipState.value = ProjectMembershipState.Ready(previous ?: ProjectMembershipSnapshot())
+            return
+        }
+        _membershipState.value = ProjectMembershipState.Checking(previous)
+        membershipJob = viewModelScope.launch {
+            val checks = coroutineScope {
+                _myProjects.value.filter { it.projectId in projectIds }.map { project ->
                     async {
-                        val members = (repository.fetchProjectMembers(project.projectId) as? ApiResult.Success)?.data
-                            ?: emptyList()
-                        val isMember = members.any { m ->
-                            (user.uniqueId != null && m.uniqueId == user.uniqueId) ||
-                                (user.username != null && m.username == user.username)
+                        try {
+                            when (val result = repository.fetchProjectMembers(project.uniqueId)) {
+                                is ApiResult.Success -> ProjectMembershipCheck(
+                                    projectId = project.projectId,
+                                    isMember = result.data.any { member ->
+                                        (user.uniqueId != null && member.uniqueId == user.uniqueId) ||
+                                            (user.username != null && member.username == user.username)
+                                    }
+                                )
+                                is ApiResult.Error -> ProjectMembershipCheck(project.projectId, isMember = null)
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            ProjectMembershipCheck(project.projectId, isMember = null)
                         }
-                        project.projectId.takeIf { isMember }
                     }
-                }.mapNotNull { it.await() }
-            }.toSet()
-            _memberProjectIds.value = memberIds
-            _isCheckingMembership.value = false
+                }.map { it.await() }
+            }
+            _membershipState.value = ProjectMembershipState.Ready(mergeProjectMembership(previous, checks))
         }
     }
 
     fun addToProject(project: Project) {
-        val username = (_state.value as? UserProfileState.Loaded)?.user?.username ?: return
+        val userId = (_state.value as? UserProfileState.Loaded)?.user?.uniqueId ?: return
+        if (_addToProjectState.value is AddToProjectState.Adding) return
         _addToProjectState.value = AddToProjectState.Adding(project)
         viewModelScope.launch {
-            val result = apiClient.service.addProjectMember(project.projectId, username)
-            val success = result is ApiResult.Success && result.data
-            if (success) {
-                repository.invalidateProjectMembers(project.projectId)
-                _memberProjectIds.value = _memberProjectIds.value + project.projectId
+            try {
+                when (val result = apiClient.service.addProjectMember(project.uniqueId, userId)) {
+                    is ApiResult.Success -> {
+                        repository.invalidateProjectMembers(project.uniqueId)
+                        val current = (_membershipState.value as? ProjectMembershipState.Ready)?.snapshot
+                            ?: ProjectMembershipSnapshot()
+                        _membershipState.value = ProjectMembershipState.Ready(
+                            current.copy(
+                                memberProjectIds = current.memberProjectIds + project.projectId,
+                                resolvedProjectIds = current.resolvedProjectIds + project.projectId,
+                                failedProjectIds = current.failedProjectIds - project.projectId
+                            )
+                        )
+                        _addToProjectState.value = AddToProjectState.Added(project)
+                    }
+                    is ApiResult.Error -> _addToProjectState.value = AddToProjectState.Error(
+                        project,
+                        addToProjectError(result.code)
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _addToProjectState.value = AddToProjectState.Error(
+                    project,
+                    "Connection error. Check your network and try again"
+                )
             }
-            _addToProjectState.value = AddToProjectState.Result(project, success)
         }
     }
 
     fun consumeAddToProjectResult() {
+        if (_addToProjectState.value is AddToProjectState.Adding) return
         _addToProjectState.value = AddToProjectState.Idle
     }
+}
+
+internal data class ProjectMembershipCheck(
+    val projectId: String,
+    val isMember: Boolean?
+)
+
+internal fun mergeProjectMembership(
+    previous: ProjectMembershipSnapshot?,
+    checks: List<ProjectMembershipCheck>
+): ProjectMembershipSnapshot {
+    val checkedIds = checks.mapTo(mutableSetOf()) { it.projectId }
+    val resolved = checks.filter { it.isMember != null }.mapTo(mutableSetOf()) { it.projectId }
+    val members = checks.filter { it.isMember == true }.mapTo(mutableSetOf()) { it.projectId }
+    val failed = checks.filter { it.isMember == null }.mapTo(mutableSetOf()) { it.projectId }
+    return ProjectMembershipSnapshot(
+        memberProjectIds = previous?.memberProjectIds.orEmpty() - checkedIds + members,
+        resolvedProjectIds = previous?.resolvedProjectIds.orEmpty() - checkedIds + resolved,
+        failedProjectIds = previous?.failedProjectIds.orEmpty() - checkedIds + failed
+    )
+}
+
+internal fun addToProjectError(code: Int): String = when (code) {
+    401 -> "Sign in again before adding a member"
+    403 -> "You do not have permission to add members to this project"
+    409 -> "This user may already be a project member"
+    in 500..599 -> "Crucible service error ($code)"
+    else -> "Could not add member ($code)"
 }

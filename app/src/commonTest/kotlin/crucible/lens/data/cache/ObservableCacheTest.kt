@@ -1,6 +1,10 @@
 package crucible.lens.data.cache
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -52,6 +56,20 @@ class ObservableCacheTest {
         cache.put("c", "value-c")
         assertNull(cache.get("a"))
         assertEquals("value-b", cache.get("b"))
+        assertEquals("value-c", cache.get("c"))
+    }
+
+    @Test
+    fun readRefreshesEvictionRecency() {
+        val cache = cacheWithClock(ttlMillis = 100_000, maxSize = 2) { 0L }
+        cache.put("a", "value-a")
+        cache.put("b", "value-b")
+        cache.get("a")
+
+        cache.put("c", "value-c")
+
+        assertEquals("value-a", cache.get("a"))
+        assertNull(cache.get("b"))
         assertEquals("value-c", cache.get("c"))
     }
 
@@ -111,11 +129,27 @@ class ObservableCacheTest {
     }
 
     @Test
-    fun observeEmitsNullForExpiredEntry() = runTest {
+    fun peekAndObserveRetainExpiredEntry() = runTest {
         var time = 0L
         val cache = cacheWithClock(ttlMillis = 1000, maxSize = 10) { time }
         cache.put("a", "value-a")
         time = 1001L
-        assertNull(cache.observe("a").first())
+        assertNull(cache.get("a"))
+        assertEquals("value-a", cache.peek("a"))
+        assertEquals("value-a", cache.observe("a").first())
+    }
+
+    @Test
+    fun concurrentPutsDoNotLoseEntries() = runTest {
+        val cache = cacheWithClock(ttlMillis = 1000, maxSize = 1000) { 0L }
+
+        coroutineScope {
+            (0 until 500).map { index ->
+                launch(Dispatchers.Default) { cache.put("key-$index", "value-$index") }
+            }.joinAll()
+        }
+
+        assertEquals(500, cache.size)
+        repeat(500) { index -> assertEquals("value-$index", cache.get("key-$index")) }
     }
 }

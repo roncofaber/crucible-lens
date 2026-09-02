@@ -19,7 +19,6 @@ import crucible.lens.data.api.ApiResult
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.util.formatDateTime
-import crucible.lens.data.util.formatFileSize
 import crucible.lens.data.util.userDisplayName
 import crucible.lens.platform.copyToClipboard
 import crucible.lens.platform.getPlatformContext
@@ -119,10 +118,15 @@ internal fun DatasetDetailsCard(
                         label = "Instrument",
                         value = dataset.instrumentName,
                         onClick = {
-                            instrumentScope.launch {
-                                val instruments = (repository.fetchInstruments() as? ApiResult.Success)?.data
-                                val instrument = instruments?.find { it.instrumentName == dataset.instrumentName }
-                                if (instrument != null) onInstrumentClick(instrument.uniqueId)
+                            val instrumentReference = dataset.instrumentId
+                            if (instrumentReference != null) {
+                                onInstrumentClick(instrumentReference)
+                            } else {
+                                instrumentScope.launch {
+                                    val instruments = (repository.fetchInstruments() as? ApiResult.Success)?.data
+                                    val instrument = instruments?.find { it.instrumentName == dataset.instrumentName }
+                                    if (instrument != null) onInstrumentClick(instrument.uniqueId)
+                                }
                             }
                         }
                     )
@@ -173,8 +177,6 @@ internal fun DatasetDetailsCard(
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     InfoRow(icon = AppIcons.FilePdf, label = "Format", value = dataset.dataFormat ?: "None")
                     InfoRow(icon = AppIcons.DataType, label = "Data Type", value = dataset.dataType ?: "None")
-                    InfoRow(icon = AppIcons.FileStorage, label = "Size", value = dataset.size?.let { formatFileSize(it) } ?: "None")
-                    InfoRow(icon = AppIcons.SourceFolder, label = "Source Folder", value = dataset.sourceFolder?.takeIf { it.isNotBlank() } ?: "None")
                 }
 
                 HorizontalDivider(modifier = Modifier.padding(top = 8.dp))

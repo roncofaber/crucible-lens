@@ -36,11 +36,12 @@ fun AddOrAddedAction(
     added: Boolean,
     isAdding: Boolean,
     onAdd: () -> Unit,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Button(
         onClick = onAdd,
-        enabled = !added && !isAdding,
+        enabled = enabled && !added && !isAdding,
         modifier = modifier,
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
         colors = ButtonDefaults.buttonColors(

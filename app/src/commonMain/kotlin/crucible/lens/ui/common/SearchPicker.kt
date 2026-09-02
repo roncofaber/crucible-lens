@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,14 +20,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.unit.dp
@@ -34,6 +38,7 @@ import crucible.lens.data.api.ApiResult
 import crucible.lens.data.util.SEARCH_DEBOUNCE_MS
 import crucible.lens.data.util.SEARCH_MIN_QUERY_LENGTH
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 
 /**
  * Debounced server-side search-as-you-type: waits [debounceMs] of no changes to [query] before
@@ -44,27 +49,56 @@ import kotlinx.coroutines.delay
  * cancellable-Job pattern since they need to be triggered from event handlers, not recomposition.
  */
 @Composable
-fun <T> rememberDebouncedSearchResults(
+fun <T> rememberDebouncedSearchState(
     query: String,
     minLength: Int = SEARCH_MIN_QUERY_LENGTH,
     debounceMs: Long = SEARCH_DEBOUNCE_MS,
     search: suspend (String) -> ApiResult<List<T>>
-): Pair<List<T>, Boolean> {
+): DebouncedSearchState<T> {
     var results by remember { mutableStateOf<List<T>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
-    LaunchedEffect(query) {
-        if (query.length < minLength) { results = emptyList(); isSearching = false; return@LaunchedEffect }
-        delay(debounceMs)
+    var error by remember { mutableStateOf<String?>(null) }
+    var retry by remember { mutableIntStateOf(0) }
+    LaunchedEffect(query, retry) {
+        if (query.length < minLength) {
+            results = emptyList()
+            isSearching = false
+            error = null
+            return@LaunchedEffect
+        }
         isSearching = true
-        results = (search(query) as? ApiResult.Success)?.data ?: emptyList()
-        isSearching = false
+        error = null
+        delay(debounceMs)
+        try {
+            when (val response = search(query)) {
+                is ApiResult.Success -> results = response.data
+                is ApiResult.Error -> {
+                    results = emptyList()
+                    error = "Search failed (${response.code})"
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            results = emptyList()
+            error = "Connection error. Check your network and try again"
+        } finally {
+            isSearching = false
+        }
     }
-    return results to isSearching
+    return DebouncedSearchState(results, isSearching, error) { retry++ }
 }
+
+data class DebouncedSearchState<T>(
+    val results: List<T>,
+    val isSearching: Boolean,
+    val error: String?,
+    val retry: () -> Unit
+)
 
 /**
  * Shared look for a search-as-you-type field: search icon, clear button, loading spinner.
- * Caller owns query state and debouncing (e.g. via [rememberDebouncedSearchResults]).
+ * Caller owns query state and debouncing (e.g. via [rememberDebouncedSearchState]).
  *
  * [isError] is for the "typed something that doesn't resolve to a real record" case (see
  * [ResolutionState.NotFound]) — tints the outline/label via M3's own error styling and swaps the
@@ -79,7 +113,9 @@ private fun SearchTextField(
     modifier: Modifier = Modifier,
     leadingIcon: AppIconToken = AppIcons.Search,
     enabled: Boolean = true,
-    isError: Boolean = false
+    isError: Boolean = false,
+    errorMessage: String? = null,
+    onRetry: (() -> Unit)? = null
 ) {
     OutlinedTextField(
         value = query,
@@ -88,14 +124,26 @@ private fun SearchTextField(
         modifier = modifier.fillMaxWidth(),
         singleLine = true,
         enabled = enabled,
-        isError = isError,
+        isError = isError || errorMessage != null,
         leadingIcon = { AppIcon(leadingIcon, modifier = Modifier.size(20.dp)) },
         trailingIcon = {
             when {
                 isSearching -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                isError -> AppIcon(AppIcons.SearchOff, tint = MaterialTheme.colorScheme.error)
+                isError || errorMessage != null -> AppIcon(AppIcons.SearchOff, tint = MaterialTheme.colorScheme.error)
                 query.isNotEmpty() -> IconButton(onClick = { onQueryChange("") }) {
                     AppIcon(AppIcons.ClearInput)
+                }
+            }
+        },
+        supportingText = errorMessage?.let { message ->
+            {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(message, modifier = Modifier.weight(1f))
+                    if (onRetry != null) TextButton(onClick = onRetry, enabled = enabled) { Text("Retry") }
                 }
             }
         }
@@ -103,8 +151,8 @@ private fun SearchTextField(
 }
 
 /**
- * Whether the current query in a [SearchPickerField] resolved to a real record — derived purely
- * from the same `(query, results, isSearching)` triple the field already receives, so no caller
+ * Whether the current query in a [SearchPickerField] resolved to a real record - derived purely
+ * from the same query, results, loading, and error state the field already receives, so no caller
  * needs a dedicated "resolved" field in its own state. [Resolved] fires either from tapping a
  * dropdown suggestion (callers keep the picked item as a singleton `results` list rather than
  * clearing it — see [ResolvedPicker]'s callers) or from typing the exact name/username and having
@@ -115,18 +163,21 @@ sealed class ResolutionState<out T> {
     data object Resolving : ResolutionState<Nothing>()
     data class Resolved<T>(val item: T) : ResolutionState<T>()
     data object NotFound : ResolutionState<Nothing>()
+    data class Error(val message: String) : ResolutionState<Nothing>()
 }
 
 private fun <T> resolveSearchMatch(
     query: String,
     results: List<T>,
     isSearching: Boolean,
+    searchError: String?,
     keyOf: (T) -> String?
 ): ResolutionState<T> {
     val exact = results.firstOrNull { keyOf(it)?.equals(query, ignoreCase = true) == true }
     return when {
         query.isBlank() -> ResolutionState.Idle
         isSearching -> ResolutionState.Resolving
+        searchError != null -> ResolutionState.Error(searchError)
         exact != null -> ResolutionState.Resolved(exact)
         query.length >= SEARCH_MIN_QUERY_LENGTH -> ResolutionState.NotFound
         else -> ResolutionState.Idle
@@ -198,10 +249,12 @@ fun <T> SearchPickerField(
     leadingIcon: AppIconToken = AppIcons.Search,
     enabled: Boolean = true,
     reopenOnFocus: Boolean = false,
+    searchError: String? = null,
+    onRetrySearch: (() -> Unit)? = null,
     resolution: ResolvedPicker<T>? = null,
     itemContent: @Composable (T) -> Unit
 ) {
-    val resolutionState = resolution?.let { resolveSearchMatch(query, results, isSearching, it.keyOf) }
+    val resolutionState = resolution?.let { resolveSearchMatch(query, results, isSearching, searchError, it.keyOf) }
     if (resolution != null && resolutionState is ResolutionState.Resolved) {
         ResolvedField(picker = resolution, item = resolutionState.item, label = label, modifier = modifier, enabled = enabled)
         return
@@ -215,7 +268,9 @@ fun <T> SearchPickerField(
             label = label,
             leadingIcon = leadingIcon,
             enabled = enabled,
-            isError = resolutionState is ResolutionState.NotFound,
+            isError = resolutionState is ResolutionState.NotFound || resolutionState is ResolutionState.Error,
+            errorMessage = searchError,
+            onRetry = onRetrySearch,
             modifier = if (reopenOnFocus) {
                 Modifier.onFocusChanged { if (it.isFocused && results.isNotEmpty()) expanded = true }
             } else Modifier
@@ -256,6 +311,7 @@ fun <T> SearchPickerSheet(
     modifier: Modifier = Modifier,
     leadingIcon: AppIconToken = AppIcons.Search,
     key: (T) -> Any,
+    supportingContent: (@Composable () -> Unit)? = null,
     emptyContent: (@Composable () -> Unit)? = null,
     itemContent: @Composable (T) -> Unit
 ) {
@@ -272,6 +328,7 @@ fun <T> SearchPickerSheet(
                 label = label,
                 leadingIcon = leadingIcon
             )
+            supportingContent?.invoke()
             if (results.isEmpty() && emptyContent != null) {
                 emptyContent()
             } else {

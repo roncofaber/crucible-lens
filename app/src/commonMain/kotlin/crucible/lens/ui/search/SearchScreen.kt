@@ -22,16 +22,15 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.api.ApiClient
-import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.ResourceSearchResult
-import crucible.lens.data.model.User
-import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.ui.common.FilterSheet
 import crucible.lens.ui.common.SearchFilters
@@ -43,9 +42,8 @@ import crucible.lens.ui.common.UserResultItem
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 
 private enum class SearchResultCategory(val label: String, val icon: AppIconToken) {
     People("People", AppIcons.User),
@@ -66,15 +64,12 @@ fun SearchScreen(
     userOrcid: String? = null,
     graphExplorerUrl: String = ""
 ) {
-    val apiClient = koinInject<ApiClient>()
+    val viewModel: SearchViewModel = koinViewModel()
+    val searchState by viewModel.state.collectAsStateWithLifecycle()
     val repository = koinInject<CrucibleRepository>()
-    val prefs = koinInject<AppPreferences>()
-    val peopleResultLimit by prefs.peopleResultLimit.collectAsStateWithLifecycle()
-    val projectResultLimit by prefs.projectResultLimit.collectAsStateWithLifecycle()
-    var query by rememberSaveable { mutableStateOf("") }
+    val query = searchState.query
     var showMineOnly by rememberSaveable { mutableStateOf(false) }
-    // Search mode: false = name search, true = metadata search
-    var metadataMode by rememberSaveable { mutableStateOf(false) }
+    val metadataMode = searchState.metadataMode
     val memberProjects by repository.observeProjects()
         .collectAsStateWithLifecycle(initialValue = null)
     val memberProjectIds = remember(memberProjects) { memberProjects?.map { it.projectId }?.toSet() }
@@ -86,164 +81,30 @@ fun SearchScreen(
     var datasetsExpanded by rememberSaveable { mutableStateOf(true) }
     var usersExpanded by rememberSaveable { mutableStateOf(true) }
 
-    var activeFilters by remember { mutableStateOf(SearchFilters()) }
-    var isFilterLoading by remember { mutableStateOf(false) }
+    val activeFilters = searchState.filters
+    val isFilterLoading = searchState.isLoading && activeFilters.isActive && !metadataMode
     var showFilterSheet by remember { mutableStateOf(false) }
 
-    // Both modes produce the same type — a unified list of ResourceSearchResult.
-    // Name search maps Sample/Dataset/Project → ResourceSearchResult at the call site.
-    // Metadata search returns ResourceSearchResult directly from the API.
-    var nameResults by remember { mutableStateOf<List<ResourceSearchResult>>(emptyList()) }
-    var isNameSearching by remember { mutableStateOf(false) }
-    // People are a separate result type (User, not ResourceSearchResult) so they're tracked in
-    // their own list rather than folded into the unified samples/datasets/projects one.
-    var userResults by remember { mutableStateOf<List<User>>(emptyList()) }
+    val nameResults = searchState.resourceResults
+    val userResults = searchState.userResults
+    val metadataResults = if (metadataMode && searchState.hasSearched) searchState.resourceResults else null
+    val isNameSearching = searchState.isLoading && !metadataMode && !activeFilters.isActive
+    val isMetadataSearching = searchState.isLoading && metadataMode
+    val metadataSearchError = searchState.error.takeIf { metadataMode }
+    val nameSearchError = searchState.error.takeIf { !metadataMode }
 
-    var metadataResults by remember { mutableStateOf<List<ResourceSearchResult>?>(null) }
-    var isMetadataSearching by remember { mutableStateOf(false) }
-    var metadataSearchError by remember { mutableStateOf<String?>(null) }
-    var metadataRetryTrigger by remember { mutableIntStateOf(0) }
-
-    // Name/filter search error - both silently degraded any API failure into "zero results"
-    // before, indistinguishable from a genuine no-match query. Only surfaced as a hard error when
-    // every category failed (e.g. actually offline); one category hiccuping while the others
-    // succeed still yields a useful result set, so that stays a silent per-category empty.
-    var nameSearchError by remember { mutableStateOf<String?>(null) }
-    var nameSearchRetryTrigger by remember { mutableIntStateOf(0) }
-    // The query the currently-displayed nameResults/userResults actually correspond to (or null
-    // if none yet) - lets searchPending below tell "haven't searched this query yet" apart from
-    // "searched it, got zero results", which query.length>=3 && !isNameSearching alone can't.
-    var lastSearchedQuery by remember { mutableStateOf<String?>(null) }
-
-    var isFirstComposition by remember { mutableStateOf(true) }
-
-    // Clear metadata results when query changes
-    LaunchedEffect(query) { metadataResults = null }
-
-    // Name search — fires in name mode
-    LaunchedEffect(query, metadataMode, activeFilters.isActive, peopleResultLimit, projectResultLimit, nameSearchRetryTrigger) {
-        if (metadataMode) {
-            nameResults = emptyList(); isNameSearching = false; userResults = emptyList(); return@LaunchedEffect
+    // Autofocus only the very first time this screen is entered - rememberSaveable so it
+    // survives navigating to a result and back (the composable is fully recreated on return),
+    // without re-popping the keyboard over the results the user is looking at.
+    var hasAutoFocused by rememberSaveable { mutableStateOf(false) }
+    val searchFieldFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) {
+        if (!hasAutoFocused) {
+            hasAutoFocused = true
+            searchFieldFocusRequester.requestFocus()
+            keyboardController?.show()
         }
-        if (activeFilters.isActive || query.length < 3) {
-            nameResults = emptyList(); isNameSearching = false; userResults = emptyList(); nameSearchError = null; return@LaunchedEffect
-        }
-        if (!isFirstComposition) delay(350)
-        isFirstComposition = false
-        isNameSearching = true
-        nameSearchError = null
-        val q = query.trim()
-        val samplesResult = apiClient.service.searchSamples(q)
-        val datasetsResult = apiClient.service.searchDatasets(q)
-        val projectsResult = apiClient.service.searchProjects(q, limit = projectResultLimit)
-        val usersResult = apiClient.service.searchUsers(q, limit = peopleResultLimit)
-
-        if (samplesResult is ApiResult.Error && datasetsResult is ApiResult.Error &&
-            projectsResult is ApiResult.Error && usersResult is ApiResult.Error
-        ) {
-            nameSearchError = samplesResult.message
-            nameResults = emptyList()
-            userResults = emptyList()
-            lastSearchedQuery = q
-            isNameSearching = false
-            return@LaunchedEffect
-        }
-
-        val samples = (samplesResult as? ApiResult.Success)?.data
-            ?.map { ResourceSearchResult(it.uniqueId, "sample", it.name, it.ownerOrcid, projectId = it.projectId) }
-            ?: emptyList()
-        val datasets = (datasetsResult as? ApiResult.Success)?.data
-            ?.map { ResourceSearchResult(it.uniqueId, "dataset", it.name, it.ownerOrcid, projectId = it.projectId) }
-            ?: emptyList()
-        // /projects/search returns every matching project regardless of membership - shown
-        // as-is, with non-member projects flagged via memberProjectIds below rather than hidden.
-        val allProjectMatches = (projectsResult as? ApiResult.Success)?.data ?: emptyList()
-        val projects = allProjectMatches.map { ResourceSearchResult(it.projectId, "project", it.title ?: it.projectId) }
-        val combined = projects + samples + datasets
-        nameResults = if (showMineOnly && userOrcid != null)
-            combined.filter { it.ownerOrcid == userOrcid || it.resourceType == "project" }
-        else combined
-        // People aren't scoped by "Mine" - that's about resource ownership, which doesn't apply
-        // to a person search.
-        // People and Projects are each capped independently (Settings > Search, default tighter
-        // than the API's own default of 20) - neither is "the main event" here, and a long list
-        // of either would crowd out samples/datasets for a query that happens to also match them.
-        // UserResultItem renders a username-less account too (falling back to their ORCID), so
-        // no filtering needed here for the header count to match what's shown.
-        userResults = (usersResult as? ApiResult.Success)?.data ?: emptyList()
-        lastSearchedQuery = q
-        isNameSearching = false
-    }
-
-    // Filter-based search — fires in name mode when filters are active
-    LaunchedEffect(activeFilters, nameSearchRetryTrigger) {
-        if (!activeFilters.isActive || metadataMode) { return@LaunchedEffect }
-        isFilterLoading = true
-        nameSearchError = null
-        try {
-            val after = activeFilters.createdAfter.ifBlank { null }
-            val before = activeFilters.createdBefore.ifBlank { null }
-            val projectId = activeFilters.projectId.ifBlank { null }
-            val ownerOrcid = activeFilters.ownerOrcid.ifBlank { null }
-            val samplesResult = apiClient.service.getFilteredSamples(
-                projectId = projectId,
-                sampleType = activeFilters.sampleType.ifBlank { null },
-                ownerOrcid = ownerOrcid,
-                creationTimeGte = after,
-                creationTimeLte = before
-            )
-            val datasetsResult = apiClient.service.getFilteredDatasets(
-                projectId = projectId,
-                measurement = activeFilters.measurement.ifBlank { null },
-                instrumentName = activeFilters.instrumentName.ifBlank { null },
-                dataFormat = activeFilters.dataFormat.ifBlank { null },
-                sessionName = activeFilters.sessionName.ifBlank { null },
-                ownerOrcid = ownerOrcid,
-                creationTimeGte = after,
-                creationTimeLte = before
-            )
-            if (samplesResult is ApiResult.Error && datasetsResult is ApiResult.Error) {
-                nameSearchError = samplesResult.message
-                nameResults = emptyList()
-            } else {
-                val samples = (samplesResult as? ApiResult.Success)?.data
-                    ?.map { ResourceSearchResult(it.uniqueId, "sample", it.name, it.ownerOrcid, projectId = it.projectId) }
-                    ?: emptyList()
-                val datasets = (datasetsResult as? ApiResult.Success)?.data
-                    ?.map { ResourceSearchResult(it.uniqueId, "dataset", it.name, it.ownerOrcid, projectId = it.projectId) }
-                    ?: emptyList()
-                nameResults = samples + datasets
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            nameSearchError = e.message ?: "Search failed"
-        }
-        isFilterLoading = false
-    }
-
-    // Metadata search — fires in metadata mode
-    LaunchedEffect(query, metadataMode, metadataRetryTrigger) {
-        if (!metadataMode) {
-            metadataResults = null; isMetadataSearching = false; metadataSearchError = null; return@LaunchedEffect
-        }
-        if (query.length < 3) { metadataResults = null; metadataSearchError = null; return@LaunchedEffect }
-        if (!isFirstComposition) delay(350)
-        isFirstComposition = false
-        isMetadataSearching = true
-        metadataSearchError = null
-        try {
-            when (val response = apiClient.service.searchScientificMetadata(query.trim())) {
-                is ApiResult.Success -> metadataResults = response.data
-                is ApiResult.Error -> { metadataResults = emptyList(); metadataSearchError = response.message }
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            metadataResults = emptyList()
-            metadataSearchError = e.message ?: "Metadata search failed"
-        }
-        isMetadataSearching = false
     }
 
     val filtersActive = activeFilters.isActive
@@ -256,6 +117,12 @@ fun SearchScreen(
         filtersActive && textQuery.length >= 3 ->
             nameResults.filter { it.name?.contains(textQuery, ignoreCase = true) == true }
         else -> nameResults
+    }.let { results ->
+        if (!metadataMode && showMineOnly && userOrcid != null) {
+            results.filter { it.ownerOrcid == userOrcid || it.resourceType == "project" }
+        } else {
+            results
+        }
     }
 
     // Group by resource type for section headers
@@ -291,17 +158,9 @@ fun SearchScreen(
         if (q.length >= 10 && q.all { c -> c.isLowerCase() || c.isDigit() }) q else null
     }
 
-    val isLoading = if (metadataMode) isMetadataSearching else (isNameSearching || isFilterLoading)
+    val isLoading = searchState.isLoading
     val hasResults = activeResults.isNotEmpty() || userResults.isNotEmpty()
-    val searchPending = when {
-        metadataMode -> query.length >= 3 && !isMetadataSearching && metadataResults == null
-        // query.trim() != lastSearchedQuery (not just !isNameSearching) - otherwise a genuinely
-        // empty-result search looks identical to "haven't searched this query yet" once it
-        // finishes, and isSearchLoading below (which requires !hasResults) would show the loading
-        // skeleton forever instead of ever reaching the "no results"/error branches.
-        else -> !filtersActive && query.length >= 3 && !isNameSearching && query.trim() != lastSearchedQuery
-    }
-    val isSearchLoading = (isLoading || searchPending) && !hasResults && mfidCandidate == null
+    val isSearchLoading = isLoading && !hasResults && mfidCandidate == null
 
     val lazyListState = remember { LazyListState() }
     LaunchedEffect(isNameSearching, isMetadataSearching) {
@@ -317,8 +176,9 @@ fun SearchScreen(
             inputField = {
                 SearchBarDefaults.InputField(
                     query = query,
-                    onQueryChange = { query = it },
+                    onQueryChange = viewModel::updateQuery,
                     onSearch = {},
+                    modifier = Modifier.focusRequester(searchFieldFocusRequester),
                     expanded = true,
                     onExpandedChange = { if (!it) onBack() },
                     placeholder = { Text("Search the Crucible...", style = MaterialTheme.typography.bodyMedium) },
@@ -397,7 +257,7 @@ fun SearchScreen(
                             if (!metadataMode && activeFilters.isActive) {
                                 FilterChip(
                                     selected = true,
-                                    onClick = { activeFilters = SearchFilters() },
+                                    onClick = { viewModel.setFilters(SearchFilters()) },
                                     label = { Text("${activeFilters.activeCount} filter${if (activeFilters.activeCount > 1) "s" else ""} · Clear") },
                                     leadingIcon = { AppIcon(AppIcons.Filter, modifier = Modifier.size(16.dp)) }
                                 )
@@ -405,7 +265,7 @@ fun SearchScreen(
                             if (searchActive) {
                                 FilterChip(
                                     selected = metadataMode,
-                                    onClick = { metadataMode = !metadataMode },
+                                    onClick = { viewModel.setMetadataMode(!metadataMode) },
                                     label = { Text("Metadata") },
                                     leadingIcon = { AppIcon(AppIcons.SearchFilters, modifier = Modifier.size(16.dp)) }
                                 )
@@ -437,13 +297,18 @@ fun SearchScreen(
                             }
                             metadataMode && metadataSearchError != null -> ErrorCard(
                                 title = "Metadata search failed",
-                                message = metadataSearchError ?: "",
-                                onRetry = { metadataSearchError = null; metadataRetryTrigger++ }
+                                message = metadataSearchError,
+                                onRetry = viewModel::retry
                             )
                             !metadataMode && nameSearchError != null -> ErrorCard(
                                 title = "Search failed",
-                                message = nameSearchError ?: "",
-                                onRetry = { nameSearchError = null; nameSearchRetryTrigger++ }
+                                message = nameSearchError,
+                                onRetry = viewModel::retry
+                            )
+                            searchState.warning != null && !hasResults -> ErrorCard(
+                                title = "Some results unavailable",
+                                message = searchState.warning ?: "",
+                                onRetry = viewModel::retry
                             )
                             // isFiltered = false despite this being the no-matches case:
                             // EmptyListCard's filtered branch hardcodes "No <x> match your search."
@@ -469,6 +334,16 @@ fun SearchScreen(
                                 modifier = Modifier.fillMaxSize().navigationBarsPadding(),
                                 contentPadding = PaddingValues(bottom = 16.dp)
                             ) {
+                                searchState.warning?.let { warning ->
+                                    item(key = "partial_error") {
+                                        ErrorCard(
+                                            title = "Some results unavailable",
+                                            message = warning,
+                                            onRetry = viewModel::retry,
+                                            modifier = Modifier.padding(16.dp)
+                                        )
+                                    }
+                                }
                                 if (mfidCandidate != null) {
                                     item(key = "direct") {
                                         DirectLookupCard(mfidCandidate) { onResourceClick(it) }
@@ -581,7 +456,7 @@ fun SearchScreen(
                         }
                     }
                 }
-                FilterLoadingBar(isFilterLoading)
+                FilterLoadingBar(isFilterLoading || (isLoading && hasResults))
             }
         }
     }
@@ -589,7 +464,7 @@ fun SearchScreen(
     if (showFilterSheet) {
         FilterSheet(
             filters = activeFilters,
-            onApply = { activeFilters = it },
+            onApply = viewModel::setFilters,
             onDismiss = { showFilterSheet = false }
         )
     }

@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.model.User
 import crucible.lens.data.util.formatDateTime
@@ -37,19 +38,21 @@ fun AccountScreen(
     onBack: () -> Unit,
     onHome: () -> Unit,
     onNavigateToOrcidLogin: () -> Unit,
+    onAccountCredentialsChanging: () -> Unit = {},
     onUserClick: (String) -> Unit = {}
 ) {
-    val profileState by viewModel.profileState.collectAsState()
-    val editState by viewModel.editState.collectAsState()
+    val profileState by viewModel.profileState.collectAsStateWithLifecycle()
+    val editState by viewModel.editState.collectAsStateWithLifecycle()
     // Plain val (not `by`), so the compiler can smart-cast it below - a delegated property's
     // getter isn't guaranteed to return the same value on repeated reads.
-    val activeDraft: EditUiState.Editing? = viewModel.activeDraft.collectAsState().value
-    val joinRequests by viewModel.joinRequests.collectAsState()
-    val reviewerInfo by viewModel.reviewerInfo.collectAsState()
+    val activeDraft: EditUiState.Editing? = viewModel.activeDraft.collectAsStateWithLifecycle().value
+    val joinRequests by viewModel.joinRequests.collectAsStateWithLifecycle()
+    val joinRequestsState by viewModel.joinRequestsState.collectAsStateWithLifecycle()
+    val reviewerInfo by viewModel.reviewerInfo.collectAsStateWithLifecycle()
     var showSignOutDialog by remember { mutableStateOf(false) }
     var advancedExpanded by remember { mutableStateOf(false) }
     var joinRequestsExpanded by remember { mutableStateOf(false) }
-    val currentApiKey by viewModel.currentApiKey.collectAsState()
+    val currentApiKey by viewModel.currentApiKey.collectAsStateWithLifecycle()
     var apiKeyInput by remember { mutableStateOf("") }
     var apiKeyVisible by remember { mutableStateOf(false) }
 
@@ -83,7 +86,11 @@ fun AccountScreen(
             text = "You will need to sign in again to access Crucible.",
             confirmLabel = "Sign out",
             isDestructive = true,
-            onConfirm = { showSignOutDialog = false; viewModel.signOut() },
+            onConfirm = {
+                showSignOutDialog = false
+                onAccountCredentialsChanging()
+                viewModel.signOut()
+            },
             onDismiss = { showSignOutDialog = false }
         )
     }
@@ -138,7 +145,10 @@ fun AccountScreen(
                     apiKeyVisible = apiKeyVisible,
                     onApiKeyChanged = { apiKeyInput = it },
                     onApiKeyVisibilityToggle = { apiKeyVisible = !apiKeyVisible },
-                    onApiKeySave = { viewModel.saveApiKey(apiKeyInput.trim()) }
+                    onApiKeySave = {
+                        onAccountCredentialsChanging()
+                        viewModel.saveApiKey(apiKeyInput.trim())
+                    }
                 )
                 is ProfileUiState.Error -> ErrorCard(
                     title = "Could not load profile",
@@ -222,7 +232,10 @@ fun AccountScreen(
                                     )
                                     Spacer(Modifier.height(8.dp))
                                     Button(
-                                        onClick = { viewModel.saveApiKey(apiKeyInput.trim()) },
+                                        onClick = {
+                                            onAccountCredentialsChanging()
+                                            viewModel.saveApiKey(apiKeyInput.trim())
+                                        },
                                         modifier = Modifier.fillMaxWidth(),
                                         enabled = apiKeyInput.isNotBlank()
                                     ) {
@@ -230,6 +243,28 @@ fun AccountScreen(
                                     }
                                     Spacer(Modifier.height(16.dp))
                                 }
+                            }
+                        }
+
+                        when (val requestsState = joinRequestsState) {
+                            JoinRequestsUiState.Idle -> Unit
+                            JoinRequestsUiState.Loading -> Box(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            }
+                            is JoinRequestsUiState.Error -> ErrorCard(
+                                title = "Could not load join requests",
+                                message = requestsState.message,
+                                onRetry = { viewModel.retryJoinRequests() }
+                            )
+                            is JoinRequestsUiState.Loaded -> requestsState.refreshError?.let {
+                                ErrorCard(
+                                    title = "Join requests may be out of date",
+                                    message = it,
+                                    onRetry = { viewModel.retryJoinRequests() }
+                                )
                             }
                         }
 

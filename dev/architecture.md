@@ -1,7 +1,6 @@
 # Architecture Notes
 
-Deep reference for structure, data flow, and caching. `CLAUDE.md` is the fast-reference layer;
-UI conventions live in `dev/style.md`.
+Deep reference for structure, data flow, and caching. `AGENTS.md` is the fast-reference layer; UI conventions live in `dev/style.md`.
 
 ---
 
@@ -17,6 +16,7 @@ UI conventions live in `dev/style.md`.
 | QR | easyqrscan (scanning) + qr-kit (display) |
 | Image picking | Native pickers on both platforms - no third-party library |
 | WebView (ORCID) | compose-webview-multiplatform 2.0.3 |
+| Browser links | AndroidX Browser 1.10.0 on Android, UIKit on iOS |
 | Navigation | org.jetbrains.androidx.navigation 2.9.2 |
 | DI | Koin 4.2.0 |
 | Build | AGP 9.2.1, Gradle 9.5.1, min SDK 26, target/compile SDK 36 |
@@ -50,7 +50,7 @@ crucible.lens
 │   ├── network/      ConnectivityObserver (expect/actual)
 │   ├── preferences/  AppPreferences interface, PreferencesFactory (expect/actual)
 │   ├── repository/   CrucibleRepository - single point of contact for resource/project/instrument fetches
-│   ├── sync/         DataSyncManager - background cache preload via CrucibleRepository
+│   ├── sync/         DataSyncManager - persistence, request coalescing, and project synchronization
 │   └── util/         SearchExtensions, DateTimeUtils, SortUtils, FormatUtils, CryptoUtils,
 │                     DuplicateHolder, SearchPickerConstants
 ├── di/               AppModule (Koin module), KoinInit (initKoin())
@@ -69,7 +69,7 @@ crucible.lens
     ├── projects/     ProjectsList/ProjectDetail/ManageProject Screen + ViewModel,
     │                 ProjectResourceLists (SamplesList, DatasetsList, groupedResourceItems)
     ├── scanner/      QRScannerPlatform (QRCodeScannerView via easyqrscan)
-    ├── search/       SearchScreen
+    ├── search/       SearchScreen, SearchViewModel
     ├── settings/     Settings, Api, Appearance, Cache, About, Account, UserProfile, OrcidLogin
     └── theme/        Theme.kt, Type.kt, Shape.kt, accents/ (12 hand-curated ColorSchemes)
 ```
@@ -91,7 +91,9 @@ All JSON models use `@Serializable` + `@SerialName("snake_case")`. The decoder s
   where `searchSamples`/`searchDatasets` already return full objects carrying it. Metadata-mode
   results therefore have a null `projectId` and fall back to the mfid. Preserve that asymmetry rather
   than papering over it with per-result lookups.
-- Also: `Instrument`, `Project`, `UserLead`, `AccountResponse`, `MetadataSearchResult`, and the
+- **`Project`** - `uniqueId` is the stable V3 MFID and `projectId` is the editable human-readable slug. Canonical detail caches, navigation, pins, and stored selections use only the MFID. Slugs are resolved through the exact project collection filter before navigation.
+- **`Instrument`** - `uniqueId` is the stable V3 MFID, `instrumentId` is the editable human-readable slug, and `instrumentName` is the display label. Canonical detail caches and navigation use only the MFID. Dataset responses retain both `instrument_id` and `instrument_name`, so links resolve without matching display names. `ownerOrcid` is the canonical owner identity, while `owner` is the optional expanded public user profile.
+- Also: `Instrument`, `UserLead`, `AccountResponse`, `MetadataSearchResult`, and the
   request DTOs (`SampleCreateRequest`, `DatasetCreateRequest`, `ThumbnailCreateRequest`,
   `SampleUpdateRequest`, `DatasetUpdateRequest`).
 
@@ -116,17 +118,37 @@ sealed class ApiResult<out T> {
 | Endpoint | Notes |
 |---|---|
 | `GET /resources/{uuid}` | Unified fetch - resolves type and returns the resource in one call |
-| `GET /samples/{uuid}?include_links=true` | Full sample with relationships |
-| `GET /datasets/{uuid}?include_links=true&include_metadata=true` | Dataset + scientific metadata inline |
-| `GET /datasets?instrument_name=X&limit=N` | Datasets by instrument |
+| `GET /samples/{uuid}?include_links=true&include_owner=true` | Full sample with relationships and expanded owner |
+| `GET /datasets/{uuid}?include_links=true&include_metadata=true&include_owner=true` | Dataset, scientific metadata, and expanded owner inline |
+| `GET /datasets?instrument_mfid={mfid}&limit=100&cursor=...` | Canonical instrument dataset pages. Instrument Detail loads one page automatically and follows `next_cursor` only after an explicit Load more action |
+| `PATCH /samples/{mfid}`, `PATCH /datasets/{mfid}` | Descriptive fields only. Project reassignment uses the dedicated resource operation, and dataset instrument reassignment is not currently available |
+| `POST /resources/{mfid}/project` | Previews a sample or dataset project move; repeat with `?confirm=true` to execute |
+| `GET /resources/{mfid}/access` | Canonical ACL rows for a sample or dataset detail, including owner, direct user, service-account, project, instrument, public, system, and unknown principals |
+| `PUT`/`DELETE` `/resources/{mfid}/access/{users|projects}/{principal}` | Adds, changes, or revokes an ordinary direct grant. User and service-account writes use `users` with the principal MFID; project writes use `projects` with the project slug |
+| `PUT`/`DELETE` `/resources/{mfid}/access/public` | Enables or disables public viewer access through its dedicated route |
 | `GET`/`POST`/`PATCH` `/resources/{id}/metadata` | See "Scientific metadata" below |
 | `GET /projects` | Member projects only (unlike `/projects/search`) |
-| `GET /projects/{id}`, `GET /projects/search` | Readable by any authenticated user - see "Access model" |
+| `GET /users?username={username}` | Canonical exact username lookup. The client requests at most two records and rejects zero or multiple matches |
+| `GET /users?{username|unique_id}=...&is_service_account=true` | Exact service-account lookup for instrument operator binding. The server-side type filter is authoritative even when a public-safe response omits the account-type field |
+| `GET /projects/{project_mfid}` | Canonical singleton project lookup with caller capabilities. Readable by any authenticated user - see "Access model" |
+| `GET /projects?project_id={slug}` | Exact project-slug resolution with caller capabilities. The client requests at most two records and rejects zero or multiple matches |
+| `GET /projects/search` | Project discovery search |
 | `POST /projects` | Creates a project; see "Project creation" |
-| `PATCH /projects/{id}` | Includes transferring leadership via `project_lead_username` |
-| `GET /projects/{id}/users` | Member list |
-| `DELETE /projects/{id}/users/{orcid}` | Admin, the lead, or the member themselves. The lead **cannot** remove themselves (409) - transfer leadership first |
-| `GET /instruments`, `GET /instruments/{id}` | |
+| `PATCH /projects/{project_reference}` | Updates `project_id`, title, organization, or status. Leadership fields are rejected. The app exposes project ID changes to project admins and owners |
+| `POST /resources/{project_mfid}/transfer_ownership` | Previews project leadership transfer; repeat with `?confirm=true` to execute |
+| `GET /projects/{project_reference}/users` | Paginated member list with each member's project role |
+| `POST /projects/{project_reference}/users/{user_id}` | Editors and above can add a member strictly below their own role: editors through contributor, admins through editor, and owners through admin |
+| `PATCH /projects/{project_reference}/users/{user_id}` | Editors and above can change only members strictly below their own role; same-role and owner mutations are rejected |
+| `DELETE /projects/{project_reference}/users/{user_id}` | Platform administrators, the project owner, or the member themselves. The owner **cannot** remove themselves (409) - transfer ownership first |
+| `GET /instruments?status={active|maintenance|decommissioned}&include_owner=true` | Paginated status-filtered instrument list with expanded owners. The app always sends a status and defaults to active |
+| `GET /instruments/search?q=...&status=active` | Fuzzy instrument search restricted to active instruments for dataset pickers |
+| `GET /instruments/{instrument_mfid}?include_owner=true` | Canonical singleton instrument lookup with expanded owner and caller capabilities |
+| `GET /instruments?instrument_id={slug}` | Exact instrument-slug resolution with caller capabilities. The client requests at most two records and rejects zero or multiple matches |
+| `POST /instruments` | Registers a self-owned instrument from its validated ID, display name, location, and optional descriptive fields. Service accounts are rejected by the API |
+| `PATCH /instruments/{instrument_mfid}` | Editor-gated descriptive update or validated `instrument_id` change. Ownership and status are excluded |
+| `POST /resources/{instrument_mfid}/transfer_ownership` | Owner or platform-admin preview and confirmed instrument ownership transfer |
+| `POST /instruments/{instrument_mfid}/status?status=` | Admin-gated lifecycle transition among `active`, `maintenance`, and `decommissioned` |
+| `GET`/`POST`/`DELETE` `/instruments/{instrument_mfid}/service_accounts...` | Admin-gated instrument service-account bindings |
 | `POST /deletion_requests` | Soft-delete request |
 | `POST /access_groups/{group_name}/join` | Request to join (`group_name` is always a `project_id` today); 409 if already a member or already pending |
 | `GET /join_requests` | Filters `group_name`/`status`/`requester_id` - see "Join requests" |
@@ -135,6 +157,14 @@ sealed class ApiResult<out T> {
 
 **Pagination**: `fetchAllPages` for offset-based lists, `fetchAllPagesCursor` for keyset lists
 (datasets, samples). Search endpoints return a flat list and need neither.
+
+`EditResourceScreen` keeps ordinary descriptive saves separate from project assignment. Selecting another project first requests the server preview and then presents the resolved source and destination for confirmation. Successful moves update the resource detail cache and invalidate both affected project-list caches. Dataset instrument assignment is displayed read-only during editing because V3 has no supported reassignment operation; instrument selection remains available during creation.
+
+Dataset models do not include the removed V3 `source_folder` field, and dataset search does not index it. Dataset details do not present an aggregate size because file locations, backends, and individual sizes belong to associated-file records.
+
+### Dataset file uploads
+
+`DatasetFileUploader` owns initiation, GCS transfer, completion, ingestion, and optional thumbnail creation for both dataset creation and adding files to an existing dataset. Every `ApiResult` is checked. Its checkpoint records completed stages so a retry does not repeat file registration, ingestion, or thumbnail creation. `DatasetFileAttachment` preserves selected image filenames through `FilesHolder` and dataset creation. `AddFilesScreen` removes successful items, retains failed items with their checkpoints, stays open after partial failure, and reports exact success and failure counts. The current picker intentionally accepts images only because selections are held in memory; general data-file attachment requires a streaming file abstraction.
 
 ### Scientific metadata
 
@@ -152,6 +182,10 @@ deep-merged) and never 409s. The `add-api-endpoint` skill has the PATCH-vs-POST 
 
 ### Access model
 
+Exact project, instrument, sample, dataset, and generic resource-detail responses carry nullable `ResourceCapabilities` guidance for `can_edit`, `can_manage_access`, `can_change_status`, `can_transfer`, and `max_grant_role`. General lists and searches leave capabilities null because no per-item ACL calculation is performed. Management screens use populated capabilities instead of inferring permissions from owner identity or cached roles, never include capabilities in write DTOs, and retain the previous role or ownership behavior only when communicating with a server that omits the field. The API remains authoritative for every mutation and all error responses remain user-visible.
+
+Sample and dataset detail overflow menus expose Manage Access only when `can_manage_access` is true. `ManageResourceAccessViewModel` loads canonical ACL rows through the repository, limits viewer through admin choices to `max_grant_role`, and keeps unsupported principal types visible but read-only. Owner grants are never changed through ACL routes, public access uses its dedicated endpoint, project writes use the returned slug, and user and service-account writes use the principal MFID. Failed refreshes retain the previous grants, and destructive confirmations stay open until the server confirms success.
+
 `GET /projects/search` and `GET /projects/{id}` are readable by **any** authenticated user, not just
 members. Non-members get `lead` as `UserPublicRead` (no email) and a null `scientific_metadata`
 regardless of `?include_metadata=`; members and admins get the full `UserRead` and the metadata. That
@@ -160,42 +194,23 @@ asymmetry is what makes discover-search and the non-member view in `ProjectDetai
 
 ### Project creation
 
-`POST /projects` has **no server-side authorization check**: any authenticated user can create a
-project naming any existing user as its lead. Deliberate, for ad-hoc personal projects.
+`POST /projects` allows any authenticated user to create a project naming an existing user as its lead. Exactly one flexible `project_lead` or explicit `project_lead_orcid`/`_email`/`_username` field is required; this app sends `_username` after resolving the user through search. The response `unique_id` is the stable project MFID, while `project_id` is an editable slug. Errors include `400` for a missing or conflicting lead identifier, `404` when the lead cannot be resolved, and `409` when the slug is unavailable.
 
-Exactly one of `project_lead_orcid`/`_email`/`_username` is required (this app only sends
-`_username`, resolved through the same `SearchPickerField` user search as Manage Project's lead
-field). `project_id` becomes the project's permanent handle and its access-group name; there is no
-rename route. Errors: `400` no lead identifier, `404` lead username doesn't resolve, `409`
-`project_id` taken. Unlike other resources, no `Resource`/`idtype` row is created, so
-`creation_time`/`modification_time` stay null and a project can't carry scientific metadata.
+`ManageProjectViewModel` keeps descriptive project edits and ownership changes separate. Title and organization use the ordinary project `PATCH`. Leadership transfer searches for a canonical user identity, previews `transfer_ownership` without mutation, shows both server-resolved owners, and executes only after confirmation. Success invalidates the project overview, detail, and member caches and immediately removes lead-only controls from the former lead's local state.
 
 ### Join requests
 
-`requestToJoinProject`, `reviewJoinRequest`, and `getMyJoinRequests` are one-shot calls with nothing
-to share, so they go straight to `apiClient.service.*` from the owning ViewModel - deliberately no
-repository wrapper. `getJoinRequests` is the exception: its *pending count per project* drives the
-lead-facing dot on Home, the Projects list, and `ProjectDetailScreen`, so it goes through
-`CrucibleRepository.fetchPendingJoinRequestCounts()`.
+`requestToJoinProject` and `reviewJoinRequest` are one-shot mutations, so they go straight to `apiClient.service.*` from the owning ViewModel. `getMyJoinRequests` goes through `CrucibleRepository` because Account and Project Detail share its account-scoped result. `getJoinRequests` also uses the repository because its pending count per project drives the lead-facing dot on Home, the Projects list, and `ProjectDetailScreen`.
 
-Authorization is what makes the bulk preload cheap. Passing `group_name` requires being that
-project's lead or an admin (403 otherwise), but **omitting it auto-scopes a non-admin lead to every
-project they lead in one call** (empty list, not 403, if they lead none). `DataSyncManager.syncAll()`
-therefore issues one `getJoinRequests(status = "pending")` and buckets by `groupName` client-side,
-writing `0` for projects with none so a resolved request clears its badge next sync.
+Authorization is what makes the bulk preload cheap. Passing `group_name` requires being that project's lead or an admin (403 otherwise), but **omitting it auto-scopes a non-admin lead to every project they lead in one call** (empty list, not 403, if they lead none). `DataSyncManager.syncAll()` therefore issues one `getJoinRequests(status = "pending")` and buckets by `groupName` client-side, writing `0` for projects with none so a resolved request clears its badge next sync.
 
-`syncAll()` runs once per session (plus a resume after an interrupted refresh); it forces the whole
-preload and is far too heavy for pull-to-refresh. `ProjectsListScreen`/`ProjectDetailScreen` call
-`fetchPendingJoinRequestCounts()` directly from their own refresh actions instead.
+`syncAll()` runs once per session (plus a resume after an interrupted refresh); it forces the whole preload and is far too heavy for pull-to-refresh. `ProjectsListScreen`/`ProjectDetailScreen` call `fetchPendingJoinRequestCounts()` directly from their own refresh actions instead.
 
 ---
 
 ## Caching layers
 
-`CrucibleRepository` (`data/repository/CrucibleRepository.kt`) is the **single source of truth for
-all in-memory caching**. Every cacheable read goes through it, backed by one `ObservableCache<K, V>`
-per data type (10-min TTL, LRU eviction), each exposing `observeX()` (reactive `Flow`),
-`fetchX(forceRefresh)` (cache-first), and `getCachedX()` (synchronous).
+`CrucibleRepository` (`data/repository/CrucibleRepository.kt`) is the **single source of truth for all in-memory caching**. Every cacheable read goes through it, backed by one `ObservableCache<K, V>` per data type with a 10-minute freshness TTL and least-recently-read-or-written capacity eviction. Freshness-aware `get()` calls decide whether a network fetch is needed, while `peek()` and reactive `observe()` calls retain the last value until replacement, explicit invalidation, or capacity eviction. Repository APIs expose this as `observeX()`, `fetchX(forceRefresh)`, and `getCachedX()`.
 
 ```
 CrucibleRepository
@@ -204,26 +219,42 @@ CrucibleRepository
   │                                                                        screens holding only a UUID
   ├── thumbnailObservableCache    ObservableCache<uuid, List<Thumbnail>>
   ├── projectsObservableCache     ObservableCache<Unit, List<Project>>   - member projects list
-  ├── projectObservableCache      ObservableCache<projectId, Project>    - per-project, incl. non-member
+  ├── projectObservableCache      ObservableCache<projectReference, Project> - MFID-canonical per-project detail
   │                                                                        projects via discover-search
   ├── projectMembersObservableCache  ObservableCache<projectId, List<User>>
-  ├── instrumentsObservableCache  ObservableCache<Unit, List<Instrument>>
-  ├── instrumentDatasetsObservableCache  ObservableCache<instrumentName, List<Dataset>>
-  ├── projectSamplesObservableCache      ObservableCache<projectId, List<Sample>>
-  ├── projectDatasetsObservableCache     ObservableCache<projectId, List<Dataset>>
+  ├── instrumentsObservableCache  ObservableCache<InstrumentStatus, List<Instrument>>
+  ├── instrumentObservableCache   ObservableCache<instrumentMfid, Instrument> - MFID-canonical per-instrument detail
+  ├── instrumentDatasetsObservableCache  ObservableCache<instrumentMfid, InstrumentDatasetPage>
+  ├── projectSamplesObservableCache      ObservableCache<projectSlug, List<Sample>>
+  ├── projectDatasetsObservableCache     ObservableCache<projectSlug, List<Dataset>>
+  ├── myJoinRequestsObservableCache      ObservableCache<Unit, List<JoinRequest>>  - active account
   ├── pendingJoinRequestCountObservableCache  ObservableCache<projectId, Int>  - led projects only
   └── datasetFilesObservableCache ObservableCache<datasetUuid, List<AssociatedFile>>
 
-PersistentProjectCache  (disk, 24h TTL)  - project summary lists only
+PersistentProjectCache  (disk)  - server- and account-owned project summaries and selected project replicas
 ```
 
-`projectMembersObservableCache` is fetched alongside the project itself in `ProjectDetailScreen`'s
-load effect and shared by the collapsing header's member count and `rememberOwnerNames`'s
-owner-groupby resolution, so `GET /projects/{id}/users` runs once per project.
+`projectMembersObservableCache` is fetched alongside the project itself in `ProjectDetailScreen`'s load effect and shared by the collapsing header's member count and `rememberOwnerNames`'s owner-groupby resolution, so `GET /projects/{id}/users` runs once per project. `myJoinRequestsObservableCache` backs both Account history and the non-member Project Detail status check. Failed refreshes preserve its last successful value, and `invalidateAll()` clears it during account or credential changes.
 
-`PersistentProjectCache` needs a `PlatformContext`, so it stays outside `CrucibleRepository`.
-`HomeViewModel` reads it on cold start and calls `repository.seedProjects()` to warm the in-memory
-cache; `HomeScreen` supplies the context, since `getPlatformContext()` is `@Composable`-only.
+Instrument collections are cached independently for active, maintenance, and decommissioned status. `InstrumentListViewModel` switches among those keys without mixing responses, while dataset instrument pickers always request active fuzzy-search results. Home resolves pinned instrument MFIDs individually when they are absent from the active collection, so maintenance and decommissioned pins remain reachable.
+
+Instrument dataset pages are keyed by the stable instrument MFID. The first 100 datasets load automatically, and each explicit Load more action follows one server cursor and merges that page into the cached collection without duplicate MFIDs. A refresh replaces the collection with a new first page. Project resource lists retain their full-fetch behavior.
+
+Resource ACL rows use a bounded ten-minute `ObservableCache` keyed by resource MFID. Successful grant, revoke, publish, and unpublish mutations update that cache from canonical server responses. Public-access mutations also update the authoritative resource-detail entry in place instead of invalidating it, so linked-resource and metadata sections remain visible while the detail screen observes the change. ACL cache entries are memory-only, account-scoped by the repository cache epoch, and cleared by `invalidateAll()`.
+
+`DataSyncManager` owns project summary persistence, selected-project restoration, full synchronization, and future delta application. Home and navigation-level refreshes converge on its single-flight overview request, while `CrucibleRepository` coalesces direct project and instrument list requests from other screens. Project-specific synchronization is serialized per project. The manager depends internally on the narrow `ProjectCacheStore` contract; production adapts it to `PersistentProjectCache` with a `PlatformContext`, while host tests use an in-memory implementation. Lightweight project, sample, and dataset summaries stay separate from authoritative detail entries, so bulk or future incremental sync cannot overwrite nullable detail fields such as resource relationships, metadata, or owners. Detail observers prefer authoritative entries and fall back to live or persisted summaries when no detail is available.
+
+Persistent project files are keyed by a hash of normalized API server URL and stable account identity, so work from one server or account cannot replace another owner's replica. Selected projects, synchronization state, and persisted project contents are keyed by stable project MFID. Each replica also records the current project slug because the v3 sample and dataset list filters still use that editable value. Legacy files without current ownership, identity, and version metadata are rejected and refreshed. Selected project contents and project summaries are stored atomically. Android uses `AtomicFile` inside the backup-excluded `project_cache` directory; iOS uses atomic `NSString.writeToFile` operations in the system Caches directory. Stopping sync removes that project's persisted lists, bulk selection retains only selected MFIDs, and sign-out, credential replacement, API server changes, or Cache settings can clear the complete disk tier. Thumbnails, associated files, member lists, full resource details, and signed download URLs are not persisted.
+
+Every repository network read captures the current cache epoch before starting and writes only if that epoch remains current. Credential, account, API server, and explicit cache transitions advance the epoch before clearing memory. A late response may still return to its canceled caller, but it cannot repopulate the active cache. Disk restoration and synchronization use the same epoch check, and per-owner filenames prevent an old write from replacing another account or server's file.
+
+### Incremental project sync contract
+
+The app currently performs full sample and dataset refreshes because the API modification-time filters and deletion feed are not complete. The local replica is ready for incremental sync without adding speculative routes: each `CachedProjectContent` records the stable project MFID, current slug, last successful synchronization time, optional opaque delta cursor, full-refresh requirement, and sample/dataset deletion tombstones. `ProjectContentDelta` applies upserts and deletions together, rejects the wrong MFID or slug and deltas older than the replica, and retains tombstones until the next authoritative full refresh. A slug change for the same MFID forces an authoritative refresh and invalidates transient entries under the former slug.
+
+When the API contract is available, one logical delta response must provide a stable cursor or modification watermark plus deleted sample and dataset identifiers. The client should request changes strictly after its stored cursor, apply the complete response atomically through `DataSyncManager.applyProjectDelta()`, and persist the new cursor only with the updated replica. Missing cursors, incompatible schema versions, invalid project identity, pagination discontinuity, or server reset must call `markProjectForFullRefresh()` and use the existing full-fetch path. A failed request leaves the previous replica and cursor intact.
+
+Account-derived preferences are stored as one serialized `AccountPreferencesData` record per confirmed account identity. Profile data, history, last-visited resources, project sync selections, and project/instrument pins are unavailable while signed out and switch atomically when `activateAccount()` confirms a profile. Theme, typography, grouping, and other device-level presentation settings remain global. Legacy preference values migrate only when a stored legacy profile identifies the same account.
 
 **`fetchFileUrl(mfid)` is the one deliberate non-cache.** Signed download URLs are always fetched
 fresh - it's only called on a share/download tap, never from a preload, so there's no repeated read a
@@ -237,22 +268,27 @@ owned here). `getCacheStats()` returns a snapshot for that same screen.
 
 ## ViewModels
 
-Every list/detail/manage/create screen has a ViewModel in commonMain, constructor-injected via Koin:
-`ResourceDetailViewModel`, `ProjectsListViewModel`, `ProjectDetailViewModel`, `ManageProjectViewModel`,
-`InstrumentListViewModel`, `InstrumentDetailViewModel`, `ManageInstrumentViewModel`, `AccountViewModel`,
-`CreateSampleViewModel`, `CreateDatasetViewModel`, `CreateProjectViewModel`, `EditResourceViewModel`,
-`HomeViewModel`, `UserProfileViewModel`.
+Every list/detail/manage/create screen has a ViewModel in commonMain, constructor-injected via Koin: `ResourceDetailViewModel`, `LinkResourceViewModel`, `ManageResourceAccessViewModel`, `SearchViewModel`, `ProjectsListViewModel`, `ProjectDetailViewModel`, `ManageProjectViewModel`, `InstrumentListViewModel`, `InstrumentDetailViewModel`, `ManageInstrumentViewModel`, `AccountViewModel`, `CreateSampleViewModel`, `CreateDatasetViewModel`, `CreateProjectViewModel`, `CreateInstrumentViewModel`, `EditResourceViewModel`, `HomeViewModel`, and `UserProfileViewModel`.
 
-`UserProfileViewModel` backs `UserProfileScreen`'s "Add to Project" flow. It holds the viewed user
-(`UserProfileState`), the current user's own project list (`myProjects`, from `CrucibleRepository.observeProjects()` - already scoped server-side to
-member projects, so no new fetch), and `addToProjectState` for the add-in-progress/result feedback
-the screen turns into a toast. `checkProjectMembership()` - triggered when the "Add to Project" sheet
-opens, not on screen load - fetches each of `myProjects`' member lists in parallel via
-`CrucibleRepository.fetchProjectMembers()` (cache-backed, so free if already loaded) and matches the
-viewed user by ORCID/username into `memberProjectIds`; `isCheckingMembership` covers the gap so the
-sheet shows a pending state instead of flashing "Add" for projects that already include them.
-`addToProject()` mirrors `ManageProjectViewModel.addMember()`'s call shape (`addProjectMember`,
-invalidate that project's member cache on success) and folds the new project into `memberProjectIds`.
+`ManageProjectViewModel` owns project-management loading, member and join-request retries, search errors, project ID changes, ownership transfer, role-aware member mutations, and mutation progress. Project member responses carry `viewer`, `contributor`, `editor`, `admin`, or `owner`. Exact project capabilities control editing, renaming, access management, transfer, and the highest selectable non-owner grant role. Project capability ceilings are contributor for editors, editor for admins, and admin for owners, making all same-role mutations unavailable; the capability-less compatibility fallback enforces the same strict hierarchy. Ownership remains transfer-only. The member's returned role remains useful for labels, target-specific constraints, and compatibility fallback only. API failures must remain distinct from valid empty member, request, or search results, and destructive confirmations remain open until the server confirms success. Member mutations replace the local list with the full list returned by V3 and invalidate the shared member cache.
+
+Project member and resource ACL lists sort by descending authority - owner, admin, editor, contributor, viewer - and alphabetically within each role. Project owner remains the API and authorization value but is labeled Lead in project UI. The shared `RoleBadge` maps roles to paired Material 3 semantic container and content colors, so badges retain contrast under static, dark, and dynamic color schemes without fixed hue assumptions. Add-member and resource-access forms use the shared `RoleDropdownField`. Project member roles become `CompactRoleDropdown` controls only after the user enters the explicit Edit roles mode; each selection writes immediately through the single-member API, retains the prior role until success, and shows row-scoped progress or failure without simulating a batch save.
+
+`ManageInstrumentViewModel` owns capability-gated descriptive editing, validated instrument-ID changes, lifecycle transitions, service-account operator bindings, and previewed ownership transfer. Lifecycle controls use the dedicated status route, offer only `active`, `maintenance`, and `decommissioned`, and require explicit confirmation before decommissioning. A successful transition invalidates the active-instrument list and writes the returned instrument into the canonical detail cache. Service-account management uses exact username or MFID lookup filtered server-side by principal type, labels bindings as operators rather than exposing their internal group standing, requires confirmation before removal, and replaces local state with each mutation's complete returned list. Instrument ownership is read-only during descriptive editing and changes only through the shared transfer workflow. Project and instrument management reuse `ResourceIdRenameDialog` and the ownership picker, progress, and confirmation components from `ui/common/ResourceManagementDialogs.kt`. Both preserve the editable human-facing slug separately from the display title or name and keep navigation keyed by MFID.
+
+`CreateInstrumentViewModel` owns the Register Instrument form and submits only the V3 creation fields. Display name seeds a locally validated instrument ID until the user edits that ID manually. Name, ID, and location are required; descriptive fields remain optional. Ownership is omitted so the API assigns the signed-in human, and ownership transfer remains a separate Manage Instrument operation. The Instruments screen hides registration from service accounts. Successful creation caches the canonical MFID detail, invalidates status-filtered instrument collections, refreshes the retained Instruments screen, and opens Manage Instrument.
+
+Project navigation accepts a slug only at external or resource-display boundaries. MFIDs use the canonical singleton route directly; slugs use `GET /projects?project_id=` and are converted to the returned MFID before entering Project Detail. The project detail cache is keyed only by MFID and never stores a second slug alias. Project web links continue to use the current slug because that is the human-facing URL.
+
+Instrument navigation follows the same canonical boundary. MFIDs use the singleton route directly; slugs use `GET /instruments?instrument_id=` and are converted to the returned MFID before entering Instrument Detail. The instrument detail cache is keyed only by MFID. Dataset instrument links use the V3 `instrument_id` field, with display-name matching retained only as a fallback for legacy cached datasets.
+
+Supported sample, dataset, and instrument reads request `include_owner=true`; project responses already include the resolved public lead without an owner flag. Dataset creation stores the selected instrument name for display state but submits `instrument_id` when the selection resolves to a registered instrument. Free-text `instrument_name` remains only as a compatibility fallback.
+
+`LinkResourceViewModel` owns the Link Resource sheet's debounced name search, direct UUID resolution, and link mutation. Search failures remain distinct from valid empty results, partial search results retain a warning, and resolved targets remain available when link submission fails.
+
+`SearchViewModel` owns global name, filter, and scientific-metadata searches. It uses `collectLatest` to cancel stale criteria, runs independent category endpoints concurrently, preserves successful categories during partial failures, and reads People and Project result limits directly from `AppPreferences`.
+
+`UserProfileViewModel` backs `UserProfileScreen`'s "Add to Project" flow. Username profile navigation resolves through the canonical exact `GET /users?username=` collection filter and rejects missing or non-unique results without calling a compatibility singleton route. The ViewModel holds the viewed user, the current user's cache-backed project list, `ProjectMembershipState`, and `AddToProjectState`. Membership checks run in parallel when the sheet opens, retain verified projects during partial failures, disable unknown projects, and retry only failed project IDs. Add-member failures remain visible and retryable, while success invalidates the shared member cache and updates the verified membership snapshot.
 
 **`AccountViewModel` is reused as-is by `CompleteProfileScreen`** (`ui/settings/CompleteProfileScreen.kt`),
 not duplicated into a second profile-editing ViewModel - `startEdit()`/`editState`/`saveProfile()`
@@ -269,10 +305,9 @@ username is saved).
 Most expose a single `StateFlow<LoadState<T>>` (`ui/common/LoadState.kt`) rather than separate
 loading/error/data/refreshing flags. Two exceptions:
 
-**`HomeViewModel`** exposes three flows (`projects`, `fetchError`, `isPreloading`) plus a background
-`preload()` with failure-tolerant batching (stops after 5 consecutive project-fetch failures). Three
-genuinely independent concerns - the list, a foreground error, and a background prefetch that fails
-silently by design - so one `LoadState` would lose information.
+`LoadState.Success` can carry a `refreshError` while retaining its existing data. Use it when a refresh failure should remain visible and retryable without replacing already loaded content with a full-screen error.
+
+**`HomeViewModel`** exposes project summaries and foreground refresh errors. It restores summaries through `DataSyncManager` and delegates overview refreshes to the manager instead of starting its own project preload. `ResourceDetailViewModel.startBackgroundSync()` remains the session-level owner of selected-project synchronization and exposes `isSyncing` for Home's progress indicator.
 
 **`ResourceDetailViewModel`** drives the detail pager:
 
@@ -280,6 +315,8 @@ silently by design - so one `LoadState` would lose information.
   `Success` carries **only the uuid**: the screen and every pager page read the resource and
   thumbnails from `CrucibleRepository.observeResource(uuid)`/`.observeThumbnails(uuid)` directly, so
   there is no second copy of resource state to keep in sync.
+- `deletionRequestSubmissionState: StateFlow<DeletionRequestSubmissionState>` owns deletion-request progress and errors so `DeletionRequestDialog` remains presentation-only.
+- `associatedFileActionStates: StateFlow<Map<AssociatedFileActionKey, AssociatedFileActionState>>` resolves uncached signed URLs independently for each dataset, file, and Download or Share action. Compose launches the platform browser or share sheet only after a URL is ready, then clears that action state.
 - `isSyncing: StateFlow<Boolean>` - true while `DataSyncManager.syncAll()` runs (drives the home spinner).
 - `fetchResource(uuid)` shows the cached version immediately, then always fetches fresh.
 - `refreshResource(uuid)` / `refreshThumbnails(uuid)` force-refresh through the repository; observers
@@ -309,7 +346,7 @@ the pull; the indicator overlays it, matching M3 and iOS `UIRefreshControl`.
 ## Navigation (`ui/navigation/`)
 
 `Screen` is a sealed class of route strings; optional args use `?argName={argName}`, and special
-characters in segments go through `encodeRouteSegment()`. 27 routes - see `Screen.kt` for the list,
+characters in segments go through `encodeRouteSegment()`. 31 routes - see `Screen.kt` for the list,
 which is the only place worth reading for it.
 
 ---
@@ -322,12 +359,7 @@ Siblings are all resources of the same type within the same project, drawn from 
 - Plain bounded pager: `pageCount = siblingList.size`, `initialPage = siblingIndex`, so it opens at
   the right position. No virtual `Int.MAX_VALUE` count, no wrap-around. A `LaunchedEffect` scroll only
   covers the cold-start case where the sibling list wasn't resolved yet.
-- **No manual preload or eviction windows.** Each page is `key(pageUuid)`'d and self-contained: it
-  observes `observeResource(pageUuid)`/`.observeThumbnails(pageUuid)` and runs its own
-  `LaunchedEffect(pageUuid) { repository.fetchResourceByUuid(pageUuid) }`. `HorizontalPager` decides
-  which pages exist; `ObservableCache`'s TTL + LRU decides what's evicted. Earlier versions kept
-  `loadedResources`/`enrichedUuids`/`failedEnrichmentUuids` maps and ±N distance math, which caused
-  repeated stale- and flashing-content bugs - don't reintroduce them.
+- **No manual preload or eviction windows.** Each page is `key(pageUuid)`'d and self-contained: it observes `observeResource(pageUuid)`/`.observeThumbnails(pageUuid)` and runs its own `LaunchedEffect(pageUuid) { repository.fetchResourceByUuid(pageUuid) }`. `HorizontalPager` decides which pages exist; `ObservableCache` applies freshness and bounded recency eviction. Earlier versions kept `loadedResources`/`enrichedUuids`/`failedEnrichmentUuids` maps and ±N distance math, which caused repeated stale- and flashing-content bugs - don't reintroduce them.
 - A page renders its lightweight sibling-list stub immediately and swaps in the enriched resource in
   place, so there's no per-page spinner or flash. A page-local `enrichmentFailed` flag marks a failure.
 - Swiping is a pure UI gesture - the ViewModel isn't updated, and `UiState.Success.uuid` stays the
@@ -380,7 +412,7 @@ setup is in `dev/platform-parity.md`.
 | `SearchExtensions.kt` | `matchesSearch()` for Sample, Dataset, Instrument, JsonObject, Project |
 | `DateTimeUtils.kt` | `MONTH_NAMES`, `dateGroupKey(String?)` - ISO timestamp → "Mon YYYY" |
 | `SortUtils.kt` | `SortField` enum, `SortState`, `List<T>.applySortState()` |
-| `FormatUtils.kt` | File size / date formatting, `userDisplayName()` |
+| `FormatUtils.kt` | File size and date formatting plus centralized full, compact, and handle-based user identity labels |
 | `CryptoUtils.kt` | `PlatformCrypto.sha256Hex()` (expect/actual) for upload dedup |
 
 `fetchProjectData(projectId)` (parallel sample+dataset fetch behind a per-project mutex) is a method
@@ -391,30 +423,18 @@ than here - it's an in-memory clipboard for the duplication flow, kept next to t
 
 ## Preferences (`data/preferences/AppPreferences.kt`)
 
-A platform-agnostic interface (DataStore on Android, NSUserDefaults on iOS). Every value is a
-`StateFlow`.
+A platform-agnostic interface backed by DataStore on Android and NSUserDefaults on iOS. Every exposed value is a `StateFlow`.
 
-| Preference | Key | Notes |
+| Scope | Values | Storage |
 |---|---|---|
-| API key | `api_key` | |
-| API base URL | `api_base_url` | Default `https://crucible.lbl.gov/api/v2/` |
-| Graph Explorer URL | `graph_explorer_url` | Default `https://crucible.lbl.gov/explore/` |
-| Theme mode | `theme_mode` | `system` / `light` / `dark` |
-| Accent colour | `accent_color` | One of the 12 named accents |
-| Accent contrast | `accent_contrast` | `standard` / `medium` / `high` |
-| Dynamic colour | `use_dynamic_color` | Android 12+ only; forced false on iOS |
-| Last visited resource | `last_visited_resource`, `last_visited_resource_name` | |
-| Floating scan button | `floating_scan_button` | |
-| Pinned projects | `pinned_projects` | |
-| Synced projects | `synced_projects` | Preloaded in the background by `DataSyncManager.syncAll()` |
-| Sync setup complete | `sync_setup_complete` | Set after the first-visit sync picker |
-| Pinned / hidden instruments | `pinned_instruments`, `hidden_instruments` | |
-| User ORCID | `user_orcid` | |
-| User profile | `user_profile` | JSON-serialized `User`; `userProfile?.uniqueId` is the source of truth for ORCID |
-| Resource history | `resource_history` | `HistoryItem`: `uuid`, `name`, `timestamp`, `resourceType?`, `projectId?` - `projectId` is recorded at view time, not derived from a cache lookup at render time |
-| Sample / dataset / instrument group-by | `sample_group_by`, `dataset_group_by`, `instrument_group_by` | Defaults `TYPE` / `MEASUREMENT` / `MEASUREMENT` |
-| Default project tab | `default_project_tab` | `SAMPLES` / `DATASETS` |
-| People / Project result limit | `people_result_limit`, `project_result_limit` | Caps each category's results per search independently; default 5 |
+| Credential | API key | `SecureCredentialStore`: Android Keystore-backed AES-GCM or an iOS device-only Keychain item. The legacy `api_key` preference is removed only after verified migration. |
+| Account selection | Active account ID | Global preference used to select a hashed `account_preferences_{sha256}` record. Stable identity preference is ORCID, username, then email. |
+| Account-specific | User profile and ORCID, last visited resource, pinned and synced projects, sync setup, pinned and hidden instruments, resource history | One serialized `AccountPreferencesData` record per account. Switching or signing out replaces the active flows so data cannot leak between accounts. |
+| App-wide | API and Graph Explorer URLs, theme mode, accent and contrast, dynamic color, floating scan button, group-by settings, default project tab, and search result limits | Platform preference store, shared across accounts. |
+
+Pinned and synced projects are stored by stable project MFID. When an authoritative project list is available, recognized legacy slug selections are replaced with their MFIDs. Unresolved synced selections are removed because their contents cannot be refreshed, while unresolved pins remain available for a later authoritative refresh.
+
+`HistoryItem` stores `uuid`, `name`, `timestamp`, optional `resourceType`, and optional `projectId`. The project ID is recorded when the resource is viewed rather than inferred from cache state during rendering.
 
 ---
 
@@ -424,8 +444,7 @@ A platform-agnostic interface (DataStore on Android, NSUserDefaults on iOS). Eve
 JAVA_HOME="${JAVA_HOME:-$HOME/software/android-studio/jbr}" ./gradlew :composeApp:testAndroidHostTest
 ```
 
-Runs in ~2s. Two gates: `.claude/hooks/pre-commit-check.sh` blocks any `git commit` made through
-Claude Code's Bash tool whose tests fail, and `scripts/release.sh` runs them again in its verify step.
+`scripts/verify-change.sh` is the tool-neutral local gate for Android compilation and host tests. Claude Code's `.claude/hooks/pre-commit-check.sh` invokes it before Bash-based commits, and `scripts/release.sh` runs the same checks in its verify step.
 
 **CI on tag only is deliberate, not a gap.** `.github/workflows/release.yml` fires on a `v*.*.*` tag
 (or `workflow_dispatch`) and nothing else, because that workflow takes up to 20 minutes on GitHub -
@@ -437,33 +456,50 @@ another terminal bypass it, so run the suite yourself in that case.
 (`data/cache/ObservableCacheTest.kt` tests `data/cache/ObservableCache.kt`). Platform-agnostic, so
 one suite covers both targets.
 
-**Dependencies** (`commonTest` block in `app/build.gradle.kts`): `kotlin("test")` and
-`kotlinx-coroutines-test`. No mocking library, deliberately - see below.
+**Dependencies** (`commonTest` block in `app/build.gradle.kts`): `kotlin("test")`, `kotlinx-coroutines-test`, and Ktor's official `ktor-client-mock`. There is no general-purpose mocking library.
 
 ### What is covered
 
 | Suite | Covers |
 |---|---|
-| `ObservableCacheTest` | TTL expiry, LRU eviction at capacity, `invalidate`/`invalidateAll`, `ageMillis`, `observe` emission semantics |
-| `CrucibleRepositoryTest` | Cache-miss paths: `getCachedX` returns null, `invalidateX` is a safe no-op, `observeX` emits null when uncached, `fetchSiblings` fallbacks |
+| `ObservableCacheTest` | Freshness expiry, stale-visible `peek` and `observe`, read/write recency eviction at capacity, atomic concurrent writes, invalidation, and `ageMillis` |
+| `CacheEpochTest` | Rejection of writes captured before a cache-scope transition |
+| `CrucibleRepositoryTest` | Cache-miss fallbacks, persisted and live summary precedence, stale restoration rejection, full-detail preservation across summary seeding and mutation responses, and `fetchSiblings` fallbacks |
+| `CrucibleRepositoryNetworkTest` | Delayed responses across cache-scope changes, single-flight HTTP request coalescing, canonical MFID project and instrument routing, exact slug-filter routing, MFID-only detail caching, and ACL mutation consistency through Ktor `MockEngine` |
+| `CrucibleApiServiceV3WriteTest` | V3-safe update payloads, instrument-reference response fields, and project-move and ownership-transfer preview and confirmation requests |
+| `CrucibleApiServiceResourceAccessTest` | Sample and dataset capability decoding plus canonical resource ACL models, routes, HTTP methods, and authentication |
+| `CrucibleApiServiceUserLookupTest` | Canonical username-filter routing plus zero, one, and multiple exact-result handling |
+| `CrucibleApiServiceProjectLookupTest` | Exact project-slug zero and multiple result handling |
+| `CrucibleApiServiceInstrumentLookupTest` | Exact instrument-slug zero and multiple result handling |
+| `CrucibleApiServiceInstrumentDatasetsTest` | Canonical instrument-MFID filtering and bounded cursor-page requests |
+| `CrucibleApiServiceInstrumentCreateTest` | V3 instrument registration route, required payload fields, self-owner omission, and response parsing |
+| `CrucibleApiServiceOwnerExpansionTest` | Expanded-owner query coverage for typed sample, dataset, and instrument detail and list reads |
+| `ResourceSlugTest` | Shared project and instrument ID grammar plus project-only reserved values |
 | `FormatUtilsTest` | `formatDateTime` timezone conversion, missing-offset fallback, compact AM/PM, null and unparseable input |
+| `ResourceLinkOperationTest` | Parent-child direction mapping, cross-type dataset-sample mapping, and self-link rejection |
+| `ResourceAccessTest` | Writable ACL principal routing, read-only grant types, and maximum grant-role enforcement |
+| `SearchCoverageTest` | Complete, partial, and total multi-endpoint search failure classification |
+| `InstrumentDetailStateTest` | Instrument and dataset error classification plus retained-content refresh failures |
+| `CreateInstrumentStateTest` | Generated instrument IDs, required-field validation, and expected V3 registration errors |
+| `ProjectMembershipStateTest` | Complete, partial, failed, and retried project membership resolution plus add-member error classification |
+| `AssociatedFileActionStateTest` | Independent Download and Share state, scoped clearing, and signed-link error classification |
 | `SyncSuggestionsTest` | Which projects are suggested (led, pinned, the union without duplicates) and their sort order |
+| `AccountPreferencesDataTest` | Account-record serialization, corruption fallback, storage-key isolation, and stable identity selection |
+| `PersistentProjectCacheTest` | Account and server isolation, schema migration, serialization corruption, retention, ordered delta application, tombstones, and full-refresh fallback |
+| `SingleFlightTest` | Concurrent request coalescing and recovery after a failed shared request |
+| `DataSyncManagerNetworkTest` | Atomic sample/dataset publication, partial-failure replica retention, retry, delta rejection, and authoritative full-refresh fallback |
+| `SecureCredentialManagerTest` | Credential migration, migration verification, cleanup, and failure handling |
 
-Nothing in `ui/` is tested. There is no instrumented, Compose-UI, or screenshot suite, and no
-ViewModel tests.
+Pure state transitions extracted from `ui/` are covered by host tests. There is no instrumented, Compose UI, screenshot, or ViewModel test suite.
 
 ### Patterns to follow
 
-- **Inject time rather than sleeping.** `ObservableCacheTest`'s `cacheWithClock(ttl, maxSize, clock)`
-  helper passes a fake `() -> Long`, so TTL tests are instant and deterministic. Never use a real
-  delay to cross an expiry boundary.
+- **Inject time rather than sleeping.** `ObservableCacheTest`'s `cacheWithClock(ttl, maxSize, clock)` helper passes a fake `() -> Long`, so TTL tests are instant and deterministic. Never use a real delay to cross an expiry boundary.
 - **`runTest` for anything `Flow`-shaped**, which is every `observe*` test.
 - **Assert against recomputed values, not hardcoded output**, wherever the environment can vary.
   `FormatUtilsTest` derives the expected local hour the way production code does, so it passes in any
   timezone. A hardcoded `"2:32 PM"` would pass only on the machine that wrote it.
-- **No fakes or mocks.** Everything tested is either pure or on a path that never touches the network,
-  which is why `CrucibleRepositoryTest` covers only cache misses and fallbacks. Testing a hit path
-  means introducing a fake `ApiClient` - reasonable to add, just not there yet.
+- **Use native test boundaries.** Repository HTTP tests construct `ApiClient` with Ktor `MockEngine`, preserving the production client configuration and serialization path. Synchronization tests use an in-memory `ProjectCacheStore` so they can exercise the common orchestration without Android or iOS filesystem APIs. Do not introduce a general mocking framework for these paths.
 
 ### When to add one
 
@@ -472,8 +508,7 @@ sorting, grouping, search matching, or any pure function with branches. Cheap to
 the four existing suites exist because the logic they cover broke once (`FormatUtilsTest`'s first
 case documents a timezone bug it guards against).
 
-Don't add one for a screen, a ViewModel, or an API call. There's no harness for the first two, and
-the third would test Ktor rather than this app.
+Do not add a test for a screen or ViewModel until a suitable harness exists. Add API-path tests when repository caching, request coordination, error classification, serialization, or synchronization behavior depends on the response; use `MockEngine` rather than a live service.
 
 ---
 
@@ -508,5 +543,4 @@ the `actual` is a compile error.
 
 ## Known gaps
 
-- iOS: no deep-link/URL-scheme handling, no launch screen - see `dev/platform-parity.md`. Not
-  blocking; iOS distribution isn't active yet.
+- iOS has no launch screen. Universal Link deployment still requires the Apple Team ID and the server-side AASA file described in `dev/platform-parity.md`.

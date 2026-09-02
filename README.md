@@ -44,7 +44,7 @@ Every tagged version is also published on the [Releases](../../releases) page. I
 1. Clone the repository
 2. Open in Android Studio with support for AGP 9.x (see `gradle/libs.versions.toml` for the exact toolchain versions)
 3. Let Gradle sync complete
-4. Build the installable app with `:androidApp:assembleDebug` (see `CLAUDE.md` for exact commands)
+4. Build the installable app with `:androidApp:assembleDebug` (see `AGENTS.md` for exact commands)
 5. Run on a device or emulator (API 26+)
 6. On first launch, go to **Settings > Account** and login via ORCID or enter your API key
 

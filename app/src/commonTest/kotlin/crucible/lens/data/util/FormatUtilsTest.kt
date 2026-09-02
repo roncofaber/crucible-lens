@@ -53,4 +53,18 @@ class FormatUtilsTest {
     fun formatDateTimeReturnsRawStringForUnparseable() {
         assertEquals("not-a-date", formatDateTime("not-a-date"))
     }
+
+    @Test
+    fun compactUserDisplayNameAbbreviatesEachGivenName() {
+        assertEquals("F. Roncoroni", compactUserDisplayName("Fabrice", "Roncoroni", "faber"))
+        assertEquals("G. P. Wall", compactUserDisplayName("George Peter", "Wall", "gpwall"))
+        assertEquals("G. P. Wall", compactUserDisplayName("G. P.", "Wall", "gpwall"))
+    }
+
+    @Test
+    fun compactUserDisplayNameRetainsIdentityFallbacks() {
+        assertEquals("Roncoroni", compactUserDisplayName(null, "Roncoroni", "faber"))
+        assertEquals("@faber", compactUserDisplayName(null, null, "faber"))
+        assertEquals("0000-0001", compactUserDisplayName(null, null, null, "0000-0001"))
+    }
 }

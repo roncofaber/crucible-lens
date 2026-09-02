@@ -381,36 +381,22 @@ invent a third without a second real use case.
   search field pinned above a bounded `LazyColumn` (`heightIn(max = 420.dp)`), so the field can't
   scroll away. Use when picking *is* the sheet's purpose and each pick triggers an action
   (`AddMemberSheet` stays open for several adds).
-- Both share `rememberDebouncedSearchResults<T>()` (debounce + min-length gating, constants in
-  `data/util/SearchPickerConstants.kt`). ViewModel-owned searches that must fire from an event handler
-  rather than recomposition - `ManageProjectViewModel`'s lead/member search - keep their own
-  cancellable-`Job` pattern but reference the same constants.
+- Both leaf-composable pickers share `rememberDebouncedSearchState<T>()`, which provides debounce, minimum-length gating, explicit results and errors, and retry while using constants from `data/util/SearchPickerConstants.kt`. ViewModel-owned searches that fire from event handlers keep their own cancellable-`Job` pattern and the same explicit error behavior.
 - **Not unified:** `LinkResourceSheet.kt` mixes search with other contextual controls (selected-item
   summary, QR scan, direction picker). It's a workflow that *contains* a picker; it stays bespoke
   until a second case justifies generalizing.
+- Use `SearchPickerSheet.supportingContent` for search or row-action errors that must remain visible while the sheet stays open; keep valid empty-result messaging in `emptyContent`.
+
+Role selection uses `RoleDropdownField` for forms and `CompactRoleDropdown` for an explicitly activated inline-editing mode. Both render the shared semantic `RoleBadge` in their menus. The compact menu must opt out of matching its badge anchor width and retain its bounded 200 to 240 dp popup width so role labels never wrap into an unreadable column. Do not use radio lists or horizontally scrolling chips for the viewer, contributor, editor, and admin choices, and do not make a display-only role badge silently clickable. Project member role changes write one row immediately because the API has no batch mutation; keep the old role visible until success and show progress or failure on that row.
 
 ### Resolve-to-field (`SearchPickerField`'s `resolution` param)
 
 All four callers resolve free-typed text to a real record, modelled on Gmail's recipient resolution,
 so a confirmed match reads as confirmed rather than as text that only fails at submit time.
 
-- **`ResolutionState<T>`** (`Idle`/`Resolving`/`Resolved`/`NotFound`) is derived *purely* from the
-  `(query, results, isSearching)` triple the field already receives (`resolveSearchMatch`, private to
-  `SearchPicker.kt`). No caller carries its own "resolved" field.
-- **Callers must keep a just-picked item in `results` as a singleton list, not clear it to
-  `emptyList()`** - clearing re-derives the fresh selection as `NotFound` the instant it's picked (see
-  `ManageProjectViewModel`/`CreateProjectViewModel`'s `selectLeadUser`). The two
-  `rememberDebouncedSearchResults` callers hit this differently: selecting sets `query` to the item's
-  exact value, retriggering a search that briefly flips the field back to editable. Both pin the
-  picked item in a local `remember`ed var overriding the hook's `results`/`isSearching` while `query`
-  still matches, released as soon as the user types again.
-- **Opt in via `resolution: ResolvedPicker<T>?`** (`keyOf`, `resolvedLabel`, `resolvedLeading`,
-  `onClear`). When resolved, the field becomes a **read-only `OutlinedTextField`** - same label, same
-  transparent background and outline, with `resolvedLeading` as leading content, `resolvedLabel` as
-  the value, and a clear "×" trailing icon. Not a coloured pill: a pill drops the label and reads as
-  an error banner on any accent whose `secondaryContainer` leans orange. `NotFound` stays editable,
-  tints via `isError`, and swaps the trailing icon to `AppIcons.SearchOff`. `User`-resolving callers
-  reuse `UserChipLeading`/`userDisplayName()`.
+- **`ResolutionState<T>`** (`Idle`/`Resolving`/`Resolved`/`NotFound`/`Error`) is derived from the query, results, loading state, and lookup error received by `SearchPickerField`. A failed lookup must render `Error` with retry rather than being interpreted as `NotFound`.
+- **Callers must keep a just-picked item in `results` as a singleton list, not clear it to `emptyList()`** - clearing re-derives the fresh selection as `NotFound` the instant it is picked. The two `rememberDebouncedSearchState` callers pin the selected item locally while the query still matches and release it as soon as the user types again.
+- **Opt in via `resolution: ResolvedPicker<T>?`** (`keyOf`, `resolvedLabel`, `resolvedLeading`, `onClear`). When resolved, the field becomes a read-only `OutlinedTextField` with its label, resolved leading content, resolved label, and clear action. `NotFound` stays editable with `AppIcons.SearchOff`; `Error` additionally shows its message and Retry action. User-resolving callers reuse `UserChipLeading` and `userDisplayName()`.
 
 ---
 
@@ -422,10 +408,7 @@ white initials stay legible against every generated colour. Same person, same co
 **Always pass `orcid = user.uniqueId`**; omitting it silently falls back to the static
 `containerColor`/`contentColor` pair.
 
-Prefer `UserIdentityRow` over a bare `UserAvatar` + hand-rolled name `Text` when the row is just
-"avatar + one line of name" (member lists, join-request rows) - it wires `orcid` through and uses
-`userDisplayName()`, so both conventions change in one place. Reach for `UserAvatar` directly only
-when the layout doesn't fit (profile header, edit form, multi-line subtitle), and still pass `orcid`.
+Prefer `UserIdentityRow` over a bare `UserAvatar` + hand-rolled name `Text` for member and identity rows. It wires `orcid` through, abbreviates each given name through `compactUserDisplayName()`, preserves the family name, and shows `@username` as supporting text. Reach for `UserAvatar` directly only when the layout doesn't fit (profile header, edit form, multi-line subtitle), and still pass `orcid`.
 
 ---
 
@@ -441,6 +424,8 @@ filters are active. `NotificationDot` is for a count that's normally absent.
 ---
 
 ## Confirmation dialogs
+
+Project and instrument ID changes and ownership transfers use the shared components in `ui/common/ResourceManagementDialogs.kt`. Keep the resource-specific impact text and permission checks in the owning screen and ViewModel while preserving the same picker, preview, confirmation, progress, and retry behavior.
 
 `ConfirmationDialog` (`ui/common/ConfirmationDialog.kt`) is the shape for a plain "confirm this one
 action" dialog: icon, one-sentence title, one-sentence body, confirm/cancel. `DiscardChangesDialog`

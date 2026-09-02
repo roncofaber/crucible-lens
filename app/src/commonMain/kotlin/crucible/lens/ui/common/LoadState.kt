@@ -10,7 +10,8 @@ sealed class LoadState<out T> {
     data class Success<T>(
         val data: T,
         val isRefreshing: Boolean = false,
-        val fromCache: Boolean = false
+        val fromCache: Boolean = false,
+        val refreshError: String? = null
     ) : LoadState<T>()
 
     /** True only when data is loaded and a pull-to-refresh is in progress. */

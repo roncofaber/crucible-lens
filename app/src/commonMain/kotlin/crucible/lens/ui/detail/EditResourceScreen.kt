@@ -5,6 +5,7 @@ import crucible.lens.ui.common.AppIcon
 import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppTopBar
 import crucible.lens.ui.common.DiscardChangesDialog
+import crucible.lens.ui.common.ConfirmationDialog
 import crucible.lens.platform.*
 
 import androidx.compose.foundation.layout.*
@@ -23,7 +24,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.DateTimePickerField
-import crucible.lens.ui.common.InstrumentPickerField
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.MetadataWrite
 import crucible.lens.ui.common.diffMetadataWrite
@@ -36,6 +36,7 @@ import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.ui.create.EditResourceViewModel
+import crucible.lens.ui.create.ProjectMoveState
 import crucible.lens.ui.create.SaveState
 import crucible.lens.ui.metadata.MetadataHolder
 import kotlinx.serialization.json.JsonObject
@@ -48,19 +49,22 @@ import org.koin.compose.viewmodel.koinViewModel
 private fun EditProjectDropdown(
     projects: List<Project>,
     selectedProjectId: String?,
+    enabled: Boolean,
     onProjectSelected: (String) -> Unit
 ) {
     if (projects.isEmpty()) return
     val selectedProject = projects.firstOrNull { it.projectId == selectedProjectId }
     var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { if (enabled) expanded = it }) {
         OutlinedTextField(
             value = selectedProject?.title ?: selectedProjectId ?: "",
             onValueChange = {},
             readOnly = true,
+            enabled = enabled,
             label = { Text("Project") },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             leadingIcon = { AppIcon(AppIcons.Project) },
+            supportingText = { Text("Changing the project requires confirmation") },
             modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -146,8 +150,10 @@ fun EditResourceScreen(
         .collectAsStateWithLifecycle(initialValue = repository.getCachedResource(uuid))
 
     val editViewModel: EditResourceViewModel = koinViewModel()
-    val saveState by editViewModel.saveState.collectAsState()
+    val saveState by editViewModel.saveState.collectAsStateWithLifecycle()
+    val projectMoveState by editViewModel.projectMoveState.collectAsStateWithLifecycle()
     val isSaving = saveState is SaveState.Saving
+    val isMovingProject = projectMoveState is ProjectMoveState.Previewing || projectMoveState is ProjectMoveState.Moving
     val snackbarHostState = remember { SnackbarHostState() }
     val ctx = getPlatformContext()
 
@@ -157,6 +163,38 @@ fun EditResourceScreen(
             is SaveState.Error   -> { snackbarHostState.showSnackbar(s.message); editViewModel.resetState() }
             else -> {}
         }
+    }
+
+    LaunchedEffect(projectMoveState) {
+        when (val state = projectMoveState) {
+            is ProjectMoveState.Success -> {
+                showToast(ctx, "Moved to ${state.result.newProjectId}")
+                editViewModel.resetProjectMoveState()
+            }
+            is ProjectMoveState.Error -> {
+                editViewModel.resetProjectMoveState()
+                snackbarHostState.showSnackbar(state.message)
+            }
+            else -> Unit
+        }
+    }
+
+    val movePreview = when (val state = projectMoveState) {
+        is ProjectMoveState.PreviewReady -> state.preview
+        is ProjectMoveState.Moving -> state.preview
+        else -> null
+    }
+    if (movePreview != null) {
+        val resourceName = if (resource is Dataset) "dataset" else "sample"
+        ConfirmationDialog(
+            title = "Move this $resourceName?",
+            text = "Move from ${movePreview.previousProjectId ?: "no project"} to ${movePreview.newProjectId}? Project access will change with it.",
+            confirmLabel = "Move",
+            onConfirm = { editViewModel.confirmProjectMove(uuid) },
+            onDismiss = editViewModel::resetProjectMoveState,
+            icon = AppIcons.Project,
+            confirmEnabled = projectMoveState is ProjectMoveState.PreviewReady
+        )
     }
 
     // Reported by SampleEditFields/DatasetEditFields (whichever is showing) by comparing their
@@ -188,8 +226,8 @@ fun EditResourceScreen(
     ) { padding ->
         when (val r = resource) {
             null -> LoadingContent(title = "Loading", modifier = Modifier.padding(padding))
-            is Sample -> SampleEditFields(r, isSaving, editViewModel, onOpenMetadataEditor, padding, onDirtyChanged = { hasUnsavedChanges = it })
-            is Dataset -> DatasetEditFields(r, isSaving, editViewModel, onOpenMetadataEditor, padding, onDirtyChanged = { hasUnsavedChanges = it })
+            is Sample -> SampleEditFields(r, isSaving, isMovingProject, editViewModel, onOpenMetadataEditor, padding, onDirtyChanged = { hasUnsavedChanges = it })
+            is Dataset -> DatasetEditFields(r, isSaving, isMovingProject, editViewModel, onOpenMetadataEditor, padding, onDirtyChanged = { hasUnsavedChanges = it })
         }
     }
 }
@@ -200,6 +238,7 @@ fun EditResourceScreen(
 private fun SampleEditFields(
     resource: Sample,
     isSaving: Boolean,
+    isMovingProject: Boolean,
     viewModel: EditResourceViewModel,
     onOpenMetadataEditor: () -> Unit,
     padding: PaddingValues,
@@ -212,7 +251,6 @@ private fun SampleEditFields(
     var description by rememberSaveable { mutableStateOf(resource.description ?: "") }
     var timestamp by rememberSaveable { mutableStateOf(resource.timestamp ?: "") }
     var isPublic by rememberSaveable { mutableStateOf(resource.isPublic ?: false) }
-    var selectedProjectId by rememberSaveable { mutableStateOf(resource.projectId) }
     val originalMetadata = remember { resource.scientificMetadata ?: JsonObject(emptyMap()) }
     val initialMetadata = remember { if (originalMetadata.isEmpty()) null else originalMetadata }
     // Not rememberSaveable — JsonObject has no default Saver — but this is safe: MetadataHolder
@@ -231,7 +269,6 @@ private fun SampleEditFields(
                 description != (resource.description ?: "") ||
                 timestamp != (resource.timestamp ?: "") ||
                 isPublic != (resource.isPublic ?: false) ||
-                selectedProjectId != resource.projectId ||
                 metadata != initialMetadata
         )
     }
@@ -249,7 +286,9 @@ private fun SampleEditFields(
             modifier = Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { AppIcon(AppIcons.Sample) })
         OutlinedTextField(value = type, onValueChange = { type = it }, label = { Text("Type") },
             modifier = Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { AppIcon(AppIcons.Category) })
-        EditProjectDropdown(projects, selectedProjectId) { selectedProjectId = it }
+        EditProjectDropdown(projects, resource.projectId, enabled = !isSaving && !isMovingProject) { projectId ->
+            if (projectId != resource.projectId) viewModel.previewProjectMove(resource.uniqueId, projectId)
+        }
         DateTimePickerField(value = timestamp, onValueChange = { timestamp = it }, modifier = Modifier.fillMaxWidth())
         EditVisibilityToggle(isPublic, { isPublic = it }, "Sample")
 
@@ -264,7 +303,7 @@ private fun SampleEditFields(
             onOpenMetadataEditor()
         }
 
-        SaveButton(enabled = name.isNotBlank() && !isSaving, isSaving = isSaving) {
+        SaveButton(enabled = name.isNotBlank() && !isSaving && !isMovingProject, isSaving = isSaving) {
             val metadataWrite = diffMetadataWrite(originalMetadata, metadata ?: JsonObject(emptyMap()))
             viewModel.updateSample(
                 resource.uniqueId,
@@ -273,7 +312,6 @@ private fun SampleEditFields(
                     sampleType = type.trim().ifBlank { null },
                     description = description.trim().ifBlank { null },
                     timestamp = timestamp.trim().ifBlank { null },
-                    projectId = selectedProjectId,
                     public = isPublic
                 ),
                 metadataWrite = metadataWrite
@@ -286,6 +324,7 @@ private fun SampleEditFields(
 private fun DatasetEditFields(
     resource: Dataset,
     isSaving: Boolean,
+    isMovingProject: Boolean,
     viewModel: EditResourceViewModel,
     onOpenMetadataEditor: () -> Unit,
     padding: PaddingValues,
@@ -295,13 +334,11 @@ private fun DatasetEditFields(
     val projects = remember { repository.getCachedProjects() ?: emptyList() }
     var name by rememberSaveable { mutableStateOf(resource.name) }
     var measurement by rememberSaveable { mutableStateOf(resource.measurement ?: "") }
-    var instrumentName by rememberSaveable { mutableStateOf(resource.instrumentName ?: "") }
     var sessionName by rememberSaveable { mutableStateOf(resource.sessionName ?: "") }
     var dataType by rememberSaveable { mutableStateOf(resource.dataType ?: "") }
     var dataFormat by rememberSaveable { mutableStateOf(resource.dataFormat ?: "") }
     var isPublic by rememberSaveable { mutableStateOf(resource.isPublic ?: false) }
     var timestamp by rememberSaveable { mutableStateOf(resource.timestamp ?: "") }
-    var selectedProjectId by rememberSaveable { mutableStateOf(resource.projectId) }
     val originalMetadata = remember { resource.scientificMetadata ?: JsonObject(emptyMap()) }
     val initialMetadata = remember { if (originalMetadata.isEmpty()) null else originalMetadata }
     var metadata by remember { mutableStateOf<JsonObject?>(initialMetadata) }
@@ -314,13 +351,11 @@ private fun DatasetEditFields(
         onDirtyChanged(
             name != resource.name ||
                 measurement != (resource.measurement ?: "") ||
-                instrumentName != (resource.instrumentName ?: "") ||
                 sessionName != (resource.sessionName ?: "") ||
                 dataType != (resource.dataType ?: "") ||
                 dataFormat != (resource.dataFormat ?: "") ||
                 isPublic != (resource.isPublic ?: false) ||
                 timestamp != (resource.timestamp ?: "") ||
-                selectedProjectId != resource.projectId ||
                 metadata != initialMetadata
         )
     }
@@ -338,13 +373,23 @@ private fun DatasetEditFields(
             modifier = Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { AppIcon(AppIcons.Dataset) })
         OutlinedTextField(value = measurement, onValueChange = { measurement = it }, label = { Text("Measurement") },
             modifier = Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { AppIcon(AppIcons.Sample) })
-        EditProjectDropdown(projects, selectedProjectId) { selectedProjectId = it }
+        EditProjectDropdown(projects, resource.projectId, enabled = !isSaving && !isMovingProject) { projectId ->
+            if (projectId != resource.projectId) viewModel.previewProjectMove(resource.uniqueId, projectId)
+        }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
         Text("Scientific Details", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         OutlinedTextField(value = sessionName, onValueChange = { sessionName = it }, label = { Text("Session") },
             modifier = Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { AppIcon(AppIcons.Tag) })
-        InstrumentPickerField(value = instrumentName, onValueChange = { instrumentName = it }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(
+            value = resource.instrumentName ?: "None",
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Instrument") },
+            leadingIcon = { AppIcon(AppIcons.Instrument) },
+            supportingText = { Text("Instrument reassignment is not currently supported") },
+            modifier = Modifier.fillMaxWidth()
+        )
         DateTimePickerField(value = timestamp, onValueChange = { timestamp = it }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = dataType, onValueChange = { dataType = it }, label = { Text("Data Type") },
             modifier = Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { AppIcon(AppIcons.DataType) })
@@ -358,17 +403,15 @@ private fun DatasetEditFields(
             onOpenMetadataEditor()
         }
 
-        SaveButton(enabled = name.isNotBlank() && !isSaving, isSaving = isSaving) {
+        SaveButton(enabled = name.isNotBlank() && !isSaving && !isMovingProject, isSaving = isSaving) {
             val metadataWrite = diffMetadataWrite(originalMetadata, metadata ?: JsonObject(emptyMap()))
             viewModel.updateDataset(
                 resource.uniqueId,
                 DatasetUpdateRequest(
                     datasetName = name.trim(),
                     measurement = measurement.trim().ifBlank { null },
-                    instrumentName = instrumentName.trim().ifBlank { null },
                     sessionName = sessionName.trim().ifBlank { null },
                     timestamp = timestamp.trim().ifBlank { null },
-                    projectId = selectedProjectId,
                     dataType = dataType.trim().ifBlank { null },
                     dataFormat = dataFormat.trim().ifBlank { null },
                     public = isPublic

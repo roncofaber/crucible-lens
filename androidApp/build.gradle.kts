@@ -70,6 +70,11 @@ android {
             if (releaseSigning.storeFile != null) {
                 signingConfig = releaseSigning
             }
+            // Bundles native debug symbols into the AAB so Play Console can symbolicate native
+            // crashes/ANRs automatically - without this, Play Console warns on every upload.
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
         }
     }
 

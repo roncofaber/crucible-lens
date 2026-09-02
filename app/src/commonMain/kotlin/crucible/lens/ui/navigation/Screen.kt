@@ -19,11 +19,11 @@ sealed class Screen(val route: String) {
         fun createRoute(firstRun: Boolean = false) = "settings/synced-projects?firstRun=${firstRun.toString()}"
     }
     object Projects : Screen("projects")
-    object ProjectDetail : Screen("project/{projectId}") {
-        fun createRoute(projectId: String) = "project/$projectId"
+    object ProjectDetail : Screen("project/{projectReference}") {
+        fun createRoute(projectReference: String) = "project/${encodeRouteSegment(projectReference)}"
     }
-    object ManageProject : Screen("project/{projectId}/manage") {
-        fun createRoute(projectId: String) = "project/${encodeRouteSegment(projectId)}/manage"
+    object ManageProject : Screen("project/{projectReference}/manage") {
+        fun createRoute(projectReference: String) = "project/${encodeRouteSegment(projectReference)}/manage"
     }
     object ManageInstrument : Screen("instrument/{instrumentId}/manage") {
         fun createRoute(id: String) = "instrument/${encodeRouteSegment(id)}/manage"
@@ -34,6 +34,9 @@ sealed class Screen(val route: String) {
     }
     object EditResource : Screen("edit-resource/{mfid}") {
         fun createRoute(mfid: String) = "edit-resource/${encodeRouteSegment(mfid)}"
+    }
+    object ManageResourceAccess : Screen("detail/{mfid}/access") {
+        fun createRoute(mfid: String) = "detail/${encodeRouteSegment(mfid)}/access"
     }
     object History : Screen("history")
     object Search : Screen("search")
@@ -47,6 +50,7 @@ sealed class Screen(val route: String) {
             if (projectId != null) "create-dataset?projectId=${encodeRouteSegment(projectId)}" else "create-dataset?projectId="
     }
     object CreateProject : Screen("create-project")
+    object CreateInstrument : Screen("create-instrument")
     object Instruments : Screen("instruments")
     object InstrumentDetail : Screen("instrument/{instrumentId}") {
         fun createRoute(id: String) = "instrument/${encodeRouteSegment(id)}"

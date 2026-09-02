@@ -30,6 +30,8 @@ actual fun App() {
     val themeMode by prefs.themeMode.collectAsState(initial = AppPreferences.THEME_MODE_SYSTEM)
     val accentColor by prefs.accentColor.collectAsState(initial = AppPreferences.DEFAULT_ACCENT_COLOR)
     val accentContrast by prefs.accentContrast.collectAsState(initial = AppPreferences.DEFAULT_ACCENT_CONTRAST)
+    val preferencesLoaded by prefs.isLoaded.collectAsState(initial = false)
+    val deepLinkTarget by IosDeepLinkHandler.deepLinkTarget.collectAsState()
     val darkTheme = themeMode == AppPreferences.THEME_MODE_DARK ||
         (themeMode == AppPreferences.THEME_MODE_SYSTEM && isSystemInDarkTheme())
 
@@ -39,9 +41,12 @@ actual fun App() {
         accentColor = accentColor,
         accentContrast = accentContrast
     ) {
-        NavGraph(
-            navController = navController,
-            deepLinkUuid = null
-        )
+        if (preferencesLoaded) {
+            NavGraph(
+                navController = navController,
+                deepLinkTarget = deepLinkTarget,
+                onDeepLinkOpened = IosDeepLinkHandler::clear
+            )
+        }
     }
 }

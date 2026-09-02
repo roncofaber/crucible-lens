@@ -43,17 +43,16 @@ fun UserProfileScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val myProjects by viewModel.myProjects.collectAsStateWithLifecycle()
     val addToProjectState by viewModel.addToProjectState.collectAsStateWithLifecycle()
-    val memberProjectIds by viewModel.memberProjectIds.collectAsStateWithLifecycle()
-    val isCheckingMembership by viewModel.isCheckingMembership.collectAsStateWithLifecycle()
+    val membershipState by viewModel.membershipState.collectAsStateWithLifecycle()
     var showAddToProjectSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(identifier) { viewModel.load(identifier) }
 
     LaunchedEffect(addToProjectState) {
         val result = addToProjectState
-        if (result is AddToProjectState.Result) {
+        if (result is AddToProjectState.Added) {
             val name = result.project.title ?: result.project.projectId
-            showToast(platformCtx, if (result.success) "Added to $name" else "Couldn't add to $name")
+            showToast(platformCtx, "Added to $name")
             viewModel.consumeAddToProjectResult()
         }
     }
@@ -184,11 +183,14 @@ fun UserProfileScreen(
                     if (showAddToProjectSheet) {
                         AddToProjectSheet(
                             projects = myProjects,
-                            memberProjectIds = memberProjectIds,
-                            isCheckingMembership = isCheckingMembership,
+                            membershipState = membershipState,
                             addToProjectState = addToProjectState,
+                            onRetryMembership = { viewModel.retryProjectMembership() },
                             onAdd = { viewModel.addToProject(it) },
-                            onDismiss = { showAddToProjectSheet = false }
+                            onDismiss = {
+                                viewModel.consumeAddToProjectResult()
+                                showAddToProjectSheet = false
+                            }
                         )
                     }
                 }
@@ -200,9 +202,9 @@ fun UserProfileScreen(
 @Composable
 private fun AddToProjectSheet(
     projects: List<Project>,
-    memberProjectIds: Set<String>,
-    isCheckingMembership: Boolean,
+    membershipState: ProjectMembershipState,
     addToProjectState: AddToProjectState,
+    onRetryMembership: () -> Unit,
     onAdd: (Project) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -217,6 +219,13 @@ private fun AddToProjectSheet(
             }
         }
     }
+    val snapshot = when (membershipState) {
+        is ProjectMembershipState.Checking -> membershipState.previous
+        is ProjectMembershipState.Ready -> membershipState.snapshot
+        ProjectMembershipState.Idle -> null
+    }
+    val isCheckingMembership = membershipState is ProjectMembershipState.Checking
+    val membershipFailureCount = snapshot?.failedProjectIds?.size ?: 0
 
     SearchPickerSheet(
         title = "Add to Project",
@@ -224,9 +233,49 @@ private fun AddToProjectSheet(
         onQueryChange = { query = it },
         isSearching = false,
         results = filtered,
-        onDismiss = onDismiss,
+        onDismiss = { if (addToProjectState !is AddToProjectState.Adding) onDismiss() },
         label = "Search your projects",
         key = { it.projectId },
+        supportingContent = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (isCheckingMembership) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Text(
+                            "Checking project membership",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                if (!isCheckingMembership && membershipFailureCount > 0) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            membershipFailureMessage(membershipFailureCount),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        TextButton(onClick = onRetryMembership) { Text("Retry") }
+                    }
+                }
+                val addError = addToProjectState as? AddToProjectState.Error
+                if (addError != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            addError.message,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        TextButton(onClick = { onAdd(addError.project) }) { Text("Retry") }
+                    }
+                }
+            }
+        },
         emptyContent = {
             Text(
                 "No projects match \"$query\"",
@@ -259,13 +308,21 @@ private fun AddToProjectSheet(
                         }
                     }
                     AddOrAddedAction(
-                        added = project.projectId in memberProjectIds,
-                        isAdding = isCheckingMembership ||
-                            (addToProjectState as? AddToProjectState.Adding)?.project?.projectId == project.projectId,
+                        added = project.projectId in snapshot?.memberProjectIds.orEmpty(),
+                        isAdding = (addToProjectState as? AddToProjectState.Adding)?.project?.projectId == project.projectId,
+                        enabled = !isCheckingMembership &&
+                            project.projectId in snapshot?.resolvedProjectIds.orEmpty() &&
+                            addToProjectState !is AddToProjectState.Adding,
                         onAdd = { onAdd(project) }
                     )
                 }
             }
         }
     )
+}
+
+internal fun membershipFailureMessage(count: Int): String = if (count == 1) {
+    "Could not verify membership for 1 project"
+} else {
+    "Could not verify membership for $count projects"
 }

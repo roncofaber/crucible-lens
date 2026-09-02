@@ -2,19 +2,69 @@ package crucible.lens.data.preferences
 
 import com.russhwolf.settings.NSUserDefaultsSettings
 import crucible.lens.data.model.User
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlin.time.Clock
 
-class IosAppPreferences : AppPreferences {
+class IosAppPreferences(
+    secureCredentialStore: SecureCredentialStore = IosSecureCredentialStore()
+) : AppPreferences {
     private val settings = NSUserDefaultsSettings.Factory().create("crucible_lens_prefs")
     private val iosProfileJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true }
+    private var currentAccountData = AccountPreferencesData()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val credentialManager = SecureCredentialManager(secureCredentialStore)
+
+    private val _isLoaded = MutableStateFlow(false)
+    override val isLoaded: StateFlow<Boolean> = _isLoaded.asStateFlow()
+
+    private val _apiKey = MutableStateFlow<String?>(null)
+    override val apiKey: StateFlow<String?> = _apiKey.asStateFlow()
+
+    private val _activeAccountId = MutableStateFlow<String?>(null)
+    override val activeAccountId: StateFlow<String?> = _activeAccountId.asStateFlow()
+
+    init {
+        val legacyProfile = settings.getStringOrNull("user_profile")?.let { value ->
+            runCatching { iosProfileJson.decodeFromString<User>(value) }.getOrNull()
+        }
+        val accountId = settings.getStringOrNull("active_account_id")
+            ?: legacyProfile?.let(::accountIdFor)
+            ?: settings.getStringOrNull("user_orcid")
+        if (accountId != null) {
+            val key = accountPreferencesStorageKey(accountId)
+            currentAccountData = if (settings.hasKey(key)) {
+                decodeAccountPreferences(settings.getStringOrNull(key))
+            } else {
+                legacyAccountData(legacyProfile).also { settings.putString(key, encodeAccountPreferences(it)) }
+            }
+            settings.putString("active_account_id", accountId)
+            removeLegacyAccountData()
+            _activeAccountId.value = accountId
+        }
+        scope.launch {
+            try {
+                _apiKey.value = credentialManager.loadAndMigrate(
+                    legacyCredential = { settings.getStringOrNull("api_key") },
+                    removeLegacyCredential = { settings.remove("api_key") }
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _apiKey.value = null
+            } finally {
+                _isLoaded.value = true
+            }
+        }
+    }
 
     // ── Private backing fields — updated synchronously on every save ──────────
-
-    private val _apiKey = MutableStateFlow(settings.getStringOrNull("api_key"))
-    override val apiKey: StateFlow<String?> = _apiKey.asStateFlow()
 
     private val _apiBaseUrl = MutableStateFlow(settings.getString("api_base_url", AppPreferences.DEFAULT_API_BASE_URL))
     override val apiBaseUrl: StateFlow<String> = _apiBaseUrl.asStateFlow()
@@ -34,43 +84,37 @@ class IosAppPreferences : AppPreferences {
     private val _useDynamicColor = MutableStateFlow(settings.getBoolean("use_dynamic_color", false))
     override val useDynamicColor: StateFlow<Boolean> = _useDynamicColor.asStateFlow()
 
-    private val _lastVisitedResource = MutableStateFlow(settings.getStringOrNull("last_visited_resource"))
+    private val _lastVisitedResource = MutableStateFlow(currentAccountData.lastVisitedResource)
     override val lastVisitedResource: StateFlow<String?> = _lastVisitedResource.asStateFlow()
 
-    private val _lastVisitedResourceName = MutableStateFlow(settings.getStringOrNull("last_visited_resource_name"))
+    private val _lastVisitedResourceName = MutableStateFlow(currentAccountData.lastVisitedResourceName)
     override val lastVisitedResourceName: StateFlow<String?> = _lastVisitedResourceName.asStateFlow()
 
     private val _floatingScanButton = MutableStateFlow(settings.getBoolean("floating_scan_button", true))
     override val floatingScanButton: StateFlow<Boolean> = _floatingScanButton.asStateFlow()
 
-    private val _pinnedProjects = MutableStateFlow(settings.getString("pinned_projects", "").toStringSet())
+    private val _pinnedProjects = MutableStateFlow(currentAccountData.pinnedProjects)
     override val pinnedProjects: StateFlow<Set<String>> = _pinnedProjects.asStateFlow()
 
-    private val _syncedProjects = MutableStateFlow(settings.getString("synced_projects", "").toStringSet())
+    private val _syncedProjects = MutableStateFlow(currentAccountData.syncedProjects)
     override val syncedProjects: StateFlow<Set<String>> = _syncedProjects.asStateFlow()
 
-    private val _syncSetupComplete = MutableStateFlow(settings.getBoolean("sync_setup_complete", false))
+    private val _syncSetupComplete = MutableStateFlow(currentAccountData.syncSetupComplete)
     override val syncSetupComplete: StateFlow<Boolean> = _syncSetupComplete.asStateFlow()
 
-    private val _hiddenInstruments = MutableStateFlow(settings.getString("hidden_instruments", "").toStringSet())
+    private val _hiddenInstruments = MutableStateFlow(currentAccountData.hiddenInstruments)
     override val hiddenInstruments: StateFlow<Set<String>> = _hiddenInstruments.asStateFlow()
 
-    private val _pinnedInstruments = MutableStateFlow(settings.getString("pinned_instruments", "").toStringSet())
+    private val _pinnedInstruments = MutableStateFlow(currentAccountData.pinnedInstruments)
     override val pinnedInstruments: StateFlow<Set<String>> = _pinnedInstruments.asStateFlow()
 
-    private val _userOrcid = MutableStateFlow(settings.getStringOrNull("user_orcid"))
+    private val _userOrcid = MutableStateFlow(currentAccountData.userOrcid)
     override val userOrcid: StateFlow<String?> = _userOrcid.asStateFlow()
 
-    private val _userProfile = MutableStateFlow<User?>(
-        settings.getStringOrNull("user_profile")?.let { json ->
-            runCatching { iosProfileJson.decodeFromString<User>(json) }.getOrNull()
-        }
-    )
+    private val _userProfile = MutableStateFlow(currentAccountData.userProfile)
     override val userProfile: StateFlow<User?> = _userProfile.asStateFlow()
 
-    private val _resourceHistory = MutableStateFlow(
-        settings.getString("resource_history", "").decodeHistory()
-    )
+    private val _resourceHistory = MutableStateFlow(currentAccountData.resourceHistory)
     override val resourceHistory: StateFlow<List<HistoryItem>> = _resourceHistory.asStateFlow()
 
     private val _sampleGroupBy = MutableStateFlow(settings.getString("sample_group_by", "TYPE"))
@@ -94,7 +138,36 @@ class IosAppPreferences : AppPreferences {
     // ── Save operations ───────────────────────────────────────────────────────
 
     override suspend fun saveApiKey(key: String) {
-        settings.putString("api_key", key); _apiKey.value = key
+        credentialManager.save(key)
+        settings.remove("api_key")
+        _apiKey.value = key
+    }
+
+    override suspend fun activateAccount(accountId: String) {
+        val key = accountPreferencesStorageKey(accountId)
+        currentAccountData = if (settings.hasKey(key)) {
+            decodeAccountPreferences(settings.getStringOrNull(key))
+        } else {
+            val legacyProfile = settings.getStringOrNull("user_profile")?.let { value ->
+                runCatching { iosProfileJson.decodeFromString<User>(value) }.getOrNull()
+            }
+            val legacyOwner = legacyProfile?.let(::accountIdFor) ?: settings.getStringOrNull("user_orcid")
+            if (legacyOwner == accountId) legacyAccountData(legacyProfile)
+            else AccountPreferencesData()
+        }
+        settings.putString(key, encodeAccountPreferences(currentAccountData))
+        settings.putString("active_account_id", accountId)
+        removeLegacyAccountData()
+        _activeAccountId.value = accountId
+        publishAccountData()
+    }
+
+    override suspend fun deactivateAccount() {
+        settings.remove("active_account_id")
+        removeLegacyAccountData()
+        _activeAccountId.value = null
+        currentAccountData = AccountPreferencesData()
+        publishAccountData()
     }
 
     override suspend fun saveApiBaseUrl(url: String) {
@@ -122,8 +195,7 @@ class IosAppPreferences : AppPreferences {
     }
 
     override suspend fun saveLastVisitedResource(uuid: String, name: String) {
-        settings.putString("last_visited_resource", uuid); _lastVisitedResource.value = uuid
-        settings.putString("last_visited_resource_name", name); _lastVisitedResourceName.value = name
+        updateAccountData { it.copy(lastVisitedResource = uuid, lastVisitedResourceName = name) }
     }
 
     override suspend fun saveFloatingScanButton(enabled: Boolean) {
@@ -131,68 +203,77 @@ class IosAppPreferences : AppPreferences {
     }
 
     override suspend fun clearApiKey() {
-        settings.remove("api_key"); _apiKey.value = null
+        credentialManager.clear()
+        settings.remove("api_key")
+        _apiKey.value = null
     }
 
     override suspend fun togglePinnedProject(id: String) {
-        val current = _pinnedProjects.value.toMutableSet()
-        val adding = id !in current
-        if (adding) current.add(id) else current.remove(id)
-        settings.putString("pinned_projects", current.joinToString(",")); _pinnedProjects.value = current
-        if (adding) {
-            val synced = _syncedProjects.value.toMutableSet()
-            synced.add(id)
-            settings.putString("synced_projects", synced.joinToString(",")); _syncedProjects.value = synced
+        updateAccountData { data ->
+            val pinned = data.pinnedProjects.toMutableSet()
+            val adding = id !in pinned
+            if (adding) pinned.add(id) else pinned.remove(id)
+            val synced = data.syncedProjects.toMutableSet()
+            if (adding) synced.add(id)
+            data.copy(pinnedProjects = pinned, syncedProjects = synced)
         }
     }
 
+    override suspend fun setPinnedProjects(ids: Set<String>) {
+        updateAccountData { it.copy(pinnedProjects = ids) }
+    }
+
     override suspend fun toggleSyncedProject(id: String) {
-        val updated = _syncedProjects.value.toMutableSet().apply { if (id in this) remove(id) else add(id) }
-        settings.putString("synced_projects", updated.joinToString(",")); _syncedProjects.value = updated
+        updateAccountData { data ->
+            val updated = data.syncedProjects.toMutableSet().apply { if (id in this) remove(id) else add(id) }
+            data.copy(syncedProjects = updated)
+        }
     }
 
     override suspend fun setSyncedProjects(ids: Set<String>) {
-        settings.putString("synced_projects", ids.joinToString(",")); _syncedProjects.value = ids
+        updateAccountData { it.copy(syncedProjects = ids) }
     }
 
     override suspend fun saveSyncSetupComplete(complete: Boolean) {
-        settings.putBoolean("sync_setup_complete", complete); _syncSetupComplete.value = complete
+        updateAccountData { it.copy(syncSetupComplete = complete) }
     }
 
     override suspend fun toggleHiddenInstrument(id: String) {
-        val updated = _hiddenInstruments.value.toMutableSet().apply { if (id in this) remove(id) else add(id) }
-        settings.putString("hidden_instruments", updated.joinToString(",")); _hiddenInstruments.value = updated
+        updateAccountData { data ->
+            val updated = data.hiddenInstruments.toMutableSet().apply { if (id in this) remove(id) else add(id) }
+            data.copy(hiddenInstruments = updated)
+        }
     }
 
     override suspend fun togglePinnedInstrument(id: String) {
-        val updated = _pinnedInstruments.value.toMutableSet().apply { if (id in this) remove(id) else add(id) }
-        settings.putString("pinned_instruments", updated.joinToString(",")); _pinnedInstruments.value = updated
+        updateAccountData { data ->
+            val updated = data.pinnedInstruments.toMutableSet().apply { if (id in this) remove(id) else add(id) }
+            data.copy(pinnedInstruments = updated)
+        }
     }
 
     override suspend fun saveUserOrcid(orcid: String?) {
-        if (orcid != null) settings.putString("user_orcid", orcid) else settings.remove("user_orcid")
-        _userOrcid.value = orcid
+        updateAccountData { it.copy(userOrcid = orcid) }
     }
 
     override suspend fun saveUserProfile(user: User?) {
-        if (user != null) settings.putString("user_profile", iosProfileJson.encodeToString(User.serializer(), user))
-        else settings.remove("user_profile")
-        _userProfile.value = user
+        updateAccountData { it.copy(userProfile = user, userOrcid = user?.uniqueId ?: it.userOrcid) }
     }
 
     override suspend fun clearUserProfile() {
-        settings.remove("user_profile"); _userProfile.value = null
+        updateAccountData { it.copy(userProfile = null) }
     }
 
     override suspend fun addToHistory(uuid: String, name: String, resourceType: String?, projectId: String?) {
-        val updated = (listOf(HistoryItem(uuid, name, Clock.System.now().toEpochMilliseconds(), resourceType, projectId)) +
-            _resourceHistory.value.filter { it.uuid != uuid }).take(20)
-        settings.putString("resource_history", updated.encodeHistory())
-        _resourceHistory.value = updated
+        updateAccountData { data ->
+            val updated = (listOf(HistoryItem(uuid, name, Clock.System.now().toEpochMilliseconds(), resourceType, projectId)) +
+                data.resourceHistory.filter { it.uuid != uuid }).take(20)
+            data.copy(resourceHistory = updated)
+        }
     }
 
     override suspend fun clearHistory() {
-        settings.remove("resource_history"); _resourceHistory.value = emptyList()
+        updateAccountData { it.copy(resourceHistory = emptyList()) }
     }
 
     override suspend fun saveSampleGroupBy(value: String) {
@@ -221,6 +302,54 @@ class IosAppPreferences : AppPreferences {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    private fun updateAccountData(update: (AccountPreferencesData) -> AccountPreferencesData) {
+        val accountId = _activeAccountId.value ?: return
+        currentAccountData = update(currentAccountData)
+        settings.putString(accountPreferencesStorageKey(accountId), encodeAccountPreferences(currentAccountData))
+        publishAccountData()
+    }
+
+    private fun publishAccountData() {
+        _lastVisitedResource.value = currentAccountData.lastVisitedResource
+        _lastVisitedResourceName.value = currentAccountData.lastVisitedResourceName
+        _pinnedProjects.value = currentAccountData.pinnedProjects
+        _syncedProjects.value = currentAccountData.syncedProjects
+        _syncSetupComplete.value = currentAccountData.syncSetupComplete
+        _hiddenInstruments.value = currentAccountData.hiddenInstruments
+        _pinnedInstruments.value = currentAccountData.pinnedInstruments
+        _userOrcid.value = currentAccountData.userOrcid
+        _userProfile.value = currentAccountData.userProfile
+        _resourceHistory.value = currentAccountData.resourceHistory
+    }
+
+    private fun legacyAccountData(profile: User?): AccountPreferencesData = AccountPreferencesData(
+        lastVisitedResource = settings.getStringOrNull("last_visited_resource"),
+        lastVisitedResourceName = settings.getStringOrNull("last_visited_resource_name"),
+        pinnedProjects = settings.getString("pinned_projects", "").toStringSet(),
+        syncedProjects = settings.getString("synced_projects", "").toStringSet(),
+        syncSetupComplete = settings.getBoolean("sync_setup_complete", false),
+        pinnedInstruments = settings.getString("pinned_instruments", "").toStringSet(),
+        hiddenInstruments = settings.getString("hidden_instruments", "").toStringSet(),
+        userOrcid = settings.getStringOrNull("user_orcid"),
+        userProfile = profile,
+        resourceHistory = settings.getString("resource_history", "").decodeHistory()
+    )
+
+    private fun removeLegacyAccountData() {
+        listOf(
+            "last_visited_resource",
+            "last_visited_resource_name",
+            "pinned_projects",
+            "synced_projects",
+            "sync_setup_complete",
+            "hidden_instruments",
+            "pinned_instruments",
+            "user_orcid",
+            "user_profile",
+            "resource_history"
+        ).forEach(settings::remove)
+    }
+
     private fun String.toStringSet(): Set<String> =
         split(",").filter { it.isNotBlank() }.toSet()
 
@@ -236,6 +365,4 @@ class IosAppPreferences : AppPreferences {
             ) else null
         }
 
-    private fun List<HistoryItem>.encodeHistory(): String =
-        joinToString(",") { "${it.uuid}|||${it.name}|||${it.timestamp}|||${it.resourceType ?: ""}|||${it.projectId ?: ""}" }
 }

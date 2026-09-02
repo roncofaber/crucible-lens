@@ -3,8 +3,12 @@ package crucible.lens.platform
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.browser.customtabs.CustomTabsClient
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.net.toUri
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.ui.common.ShareCardGenerator
@@ -32,6 +36,29 @@ actual fun openUrl(context: PlatformContext, url: String) {
     } catch (_: android.content.ActivityNotFoundException) {
         Toast.makeText(context, "No app found to open this link", Toast.LENGTH_SHORT).show()
     }
+}
+
+actual fun openInBrowser(context: PlatformContext, url: String) {
+    if (url.isBlank()) return
+    try {
+        val browserPackage = CustomTabsClient.getPackageName(context, null)
+            ?: throw android.content.ActivityNotFoundException()
+        CustomTabsIntent.Builder().build().apply {
+            intent.setPackage(browserPackage)
+            launchUrl(context, url.toUri())
+        }
+    } catch (_: android.content.ActivityNotFoundException) {
+        Toast.makeText(context, "No browser found to open this link", Toast.LENGTH_SHORT).show()
+    }
+}
+
+actual fun openAppSettings(context: PlatformContext) {
+    context.startActivity(
+        Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", context.packageName, null)
+        )
+    )
 }
 
 actual fun shareText(context: PlatformContext, text: String, subject: String) {

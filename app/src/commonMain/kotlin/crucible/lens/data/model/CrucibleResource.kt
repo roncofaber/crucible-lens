@@ -9,6 +9,7 @@ sealed class CrucibleResource {
     abstract val name: String
     abstract val description: String?
     open val resourceType: String? get() = null
+    open val capabilities: ResourceCapabilities? get() = null
 }
 
 @Serializable
@@ -28,7 +29,8 @@ data class Sample(
     @SerialName("datasets") val datasets: List<DatasetReference>? = null,
     @SerialName("deletion_request") val deletionRequest: JsonObject? = null,
     @SerialName("links") val links: List<ResourceLink>? = null,
-    @SerialName("owner") val owner: User? = null
+    @SerialName("owner") val owner: User? = null,
+    @SerialName("capabilities") override val capabilities: ResourceCapabilities? = null
 ) : CrucibleResource() {
     override val name: String get() = sampleName ?: uniqueId
 }
@@ -41,6 +43,7 @@ data class Dataset(
     @SerialName("measurement") val measurement: String? = null,
     @SerialName("project_id") val projectId: String? = null,
     @SerialName("instrument_name") val instrumentName: String? = null,
+    @SerialName("instrument_id") val instrumentId: String? = null,
     @SerialName("owner_orcid") val ownerOrcid: String? = null,
     @SerialName("data_format") val dataFormat: String? = null,
     @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null,
@@ -48,14 +51,14 @@ data class Dataset(
     @SerialName("creation_time") val creationTime: String? = null,
     @SerialName("modification_time") val modificationTime: String? = null,
     @SerialName("public") val isPublic: Boolean? = null,
-    @SerialName("source_folder") val sourceFolder: String? = null,
     @SerialName("session_name") val sessionName: String? = null,
     @SerialName("data_type") val dataType: String? = null,
     @SerialName("size") val size: Long? = null,
     @SerialName("resource_type") override val resourceType: String? = null,
     @SerialName("deletion_request") val deletionRequest: JsonObject? = null,
     @SerialName("links") val links: List<ResourceLink>? = null,
-    @SerialName("owner") val owner: User? = null
+    @SerialName("owner") val owner: User? = null,
+    @SerialName("capabilities") override val capabilities: ResourceCapabilities? = null
 ) : CrucibleResource() {
     override val name: String get() = datasetName ?: uniqueId
 }
@@ -118,7 +121,8 @@ data class User(
     @SerialName("email") val email: String? = null,
     @SerialName("unique_id") val uniqueId: String? = null,
     @SerialName("username") val username: String? = null,
-    @SerialName("is_service_account") val isServiceAccount: Boolean = false
+    @SerialName("is_service_account") val isServiceAccount: Boolean = false,
+    @SerialName("role") val role: String? = null
 )
 
 @Serializable
@@ -142,7 +146,64 @@ data class ProfileUpdateRequest(
 )
 
 @Serializable
+enum class ResourceGrantRole {
+    @SerialName("viewer") Viewer,
+    @SerialName("contributor") Contributor,
+    @SerialName("editor") Editor,
+    @SerialName("admin") Admin
+}
+
+@Serializable
+data class ResourceCapabilities(
+    @SerialName("can_edit") val canEdit: Boolean = false,
+    @SerialName("can_manage_access") val canManageAccess: Boolean = false,
+    @SerialName("can_change_status") val canChangeStatus: Boolean = false,
+    @SerialName("can_transfer") val canTransfer: Boolean = false,
+    @SerialName("max_grant_role") val maxGrantRole: ResourceGrantRole? = null
+)
+
+@Serializable
+enum class AccessPrincipalType {
+    @SerialName("user") User,
+    @SerialName("service_account") ServiceAccount,
+    @SerialName("project") Project,
+    @SerialName("instrument") Instrument,
+    @SerialName("public") Public,
+    @SerialName("system") System,
+    @SerialName("unknown") Unknown
+}
+
+@Serializable
+enum class AccessPermission {
+    @SerialName("viewer") Viewer,
+    @SerialName("contributor") Contributor,
+    @SerialName("editor") Editor,
+    @SerialName("admin") Admin,
+    @SerialName("owner") Owner
+}
+
+enum class AccessPrincipalKind(val pathValue: String) {
+    Users("users"),
+    Projects("projects")
+}
+
+@Serializable
+data class AccessGrant(
+    @SerialName("principal_id") val principalId: String,
+    @SerialName("principal_type") val principalType: AccessPrincipalType,
+    @SerialName("permission") val permission: AccessPermission,
+    @SerialName("slug") val slug: String? = null,
+    @SerialName("display_name") val displayName: String? = null
+)
+
+@Serializable
+data class AccessGrantWrite(
+    @SerialName("permission") val permission: ResourceGrantRole
+)
+
+@Serializable
 data class Project(
+    @SerialName("unique_id") val uniqueId: String,
     @SerialName("project_id") val projectId: String,
     @SerialName("title") val title: String? = null,
     @SerialName("organization") val organization: String? = null,
@@ -150,30 +211,53 @@ data class Project(
     @SerialName("status") val status: String? = null,
     @SerialName("lead") val lead: User? = null,
     @SerialName("creation_time") val createdAt: String? = null,
-    @SerialName("modification_time") val modifiedAt: String? = null
+    @SerialName("modification_time") val modifiedAt: String? = null,
+    @SerialName("capabilities") val capabilities: ResourceCapabilities? = null
 )
 
 @Serializable
 data class InstrumentUpdateRequest(
+    @SerialName("instrument_id") val instrumentId: String? = null,
     @SerialName("instrument_name") val instrumentName: String? = null,
     @SerialName("instrument_type") val instrumentType: String? = null,
     @SerialName("manufacturer") val manufacturer: String? = null,
     @SerialName("model") val model: String? = null,
     @SerialName("location") val location: String? = null,
-    @SerialName("owner") val owner: String? = null,
-    @SerialName("description") val description: String? = null
+    @SerialName("description") val description: String? = null,
+    @SerialName("other_id") val otherId: String? = null,
+    @SerialName("other_id_source") val otherIdSource: String? = null
 )
 
 @Serializable
-data class ProjectUpdateRequest(
-    @SerialName("title") val title: String? = null,
-    @SerialName("organization") val organization: String? = null,
-    @SerialName("project_lead_username") val projectLeadUsername: String? = null
+data class InstrumentCreateRequest(
+    @SerialName("instrument_id") val instrumentId: String,
+    @SerialName("instrument_name") val instrumentName: String,
+    @SerialName("location") val location: String,
+    @SerialName("instrument_type") val instrumentType: String? = null,
+    @SerialName("manufacturer") val manufacturer: String? = null,
+    @SerialName("model") val model: String? = null,
+    @SerialName("description") val description: String? = null,
+    @SerialName("other_id") val otherId: String? = null,
+    @SerialName("other_id_source") val otherIdSource: String? = null
 )
 
-// project_id is required and, unlike every other field here, effectively immutable afterward —
-// there is no rename route server-side, since the access group, Dataset.project_id and
-// Sample.project_id all point at this exact string.
+enum class InstrumentStatus(val apiValue: String, val label: String) {
+    Active("active", "Active"),
+    Maintenance("maintenance", "Maintenance"),
+    Decommissioned("decommissioned", "Decommissioned");
+
+    companion object {
+        fun fromApi(value: String?): InstrumentStatus? = entries.firstOrNull { it.apiValue == value }
+    }
+}
+
+@Serializable
+data class ProjectUpdateRequest(
+    @SerialName("project_id") val projectId: String? = null,
+    @SerialName("title") val title: String? = null,
+    @SerialName("organization") val organization: String? = null
+)
+
 @Serializable
 data class ProjectCreateRequest(
     @SerialName("project_id") val projectId: String,
@@ -181,6 +265,18 @@ data class ProjectCreateRequest(
     @SerialName("organization") val organization: String,
     @SerialName("project_lead_username") val projectLeadUsername: String? = null,
     @SerialName("status") val status: String = "active"
+)
+
+@Serializable
+data class TransferOwnershipRequest(
+    @SerialName("new_owner") val newOwner: String
+)
+
+@Serializable
+data class TransferOwnershipResponse(
+    @SerialName("resource_id") val resourceId: String,
+    @SerialName("previous_owner") val previousOwner: User? = null,
+    @SerialName("new_owner") val newOwner: User
 )
 
 @Serializable
@@ -226,18 +322,23 @@ data class ResourceSearchResult(
 @Serializable
 data class Instrument(
     @SerialName("unique_id") val uniqueId: String,
+    @SerialName("instrument_id") val instrumentId: String? = null,
     @SerialName("instrument_name") val instrumentName: String? = null,
     @SerialName("instrument_type") val instrumentType: String? = null,
     @SerialName("manufacturer") val manufacturer: String? = null,
     @SerialName("model") val model: String? = null,
-    @SerialName("owner") val owner: String? = null,
+    @SerialName("owner_orcid") val ownerOrcid: String? = null,
+    @SerialName("owner") val owner: User? = null,
     @SerialName("location") val location: String? = null,
     @SerialName("description") val description: String? = null,
     @SerialName("other_id") val otherId: String? = null,
     @SerialName("other_id_source") val otherIdSource: String? = null,
     @SerialName("creation_time") val createdAt: String? = null,
     @SerialName("modification_time") val modifiedAt: String? = null,
-    @SerialName("resource_type") val resourceType: String? = null
+    @SerialName("resource_type") val resourceType: String? = null,
+    @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null,
+    @SerialName("status") val status: String? = null,
+    @SerialName("capabilities") val capabilities: ResourceCapabilities? = null
 )
 
 @Serializable
@@ -267,6 +368,7 @@ data class DatasetCreateRequest(
     @SerialName("project_id") val projectId: String? = null,
     @SerialName("measurement") val measurement: String? = null,
     @SerialName("instrument_name") val instrumentName: String? = null,
+    @SerialName("instrument_id") val instrumentId: String? = null,
     @SerialName("data_format") val dataFormat: String? = null,
     @SerialName("session_name") val sessionName: String? = null,
     @SerialName("timestamp") val timestamp: String? = null,
@@ -286,7 +388,6 @@ data class SampleUpdateRequest(
     @SerialName("sample_type") val sampleType: String? = null,
     @SerialName("description") val description: String? = null,
     @SerialName("timestamp") val timestamp: String? = null,
-    @SerialName("project_id") val projectId: String? = null,
     @SerialName("public") val public: Boolean? = null
 )
 
@@ -294,13 +395,23 @@ data class SampleUpdateRequest(
 data class DatasetUpdateRequest(
     @SerialName("dataset_name") val datasetName: String? = null,
     @SerialName("measurement") val measurement: String? = null,
-    @SerialName("instrument_name") val instrumentName: String? = null,
     @SerialName("data_format") val dataFormat: String? = null,
     @SerialName("session_name") val sessionName: String? = null,
     @SerialName("timestamp") val timestamp: String? = null,
-    @SerialName("project_id") val projectId: String? = null,
     @SerialName("public") val public: Boolean? = null,
     @SerialName("data_type") val dataType: String? = null
+)
+
+@Serializable
+data class ReassignProjectRequest(
+    @SerialName("project_id") val projectId: String
+)
+
+@Serializable
+data class ReassignProjectResponse(
+    @SerialName("resource_id") val resourceId: String,
+    @SerialName("previous_project_id") val previousProjectId: String? = null,
+    @SerialName("new_project_id") val newProjectId: String
 )
 
 @Serializable

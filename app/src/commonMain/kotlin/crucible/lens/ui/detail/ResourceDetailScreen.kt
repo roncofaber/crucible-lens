@@ -34,6 +34,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -60,7 +61,8 @@ import crucible.lens.ui.common.ScrollToTopButton
 import crucible.lens.ui.detail.components.*
 import org.koin.compose.koinInject
 
-private data class UnlinkRequest(val name: String, val otherUuid: String, val action: suspend () -> Unit)
+private data class UnlinkRequest(val name: String, val otherUuid: String, val action: suspend () -> ApiResult<Unit>)
+private data class ThumbnailKey(val datasetUuid: String, val thumbnailId: Int)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -83,8 +85,14 @@ fun ResourceDetailScreen(
     onCardStateChange: (key: String, value: Boolean) -> Unit = { _, _ -> },
     onNavigateToAddFiles: (datasetUuid: String) -> Unit = {},
     onNavigateToEdit: (uuid: String) -> Unit = {},
+    onNavigateToManageAccess: (uuid: String) -> Unit = {},
     onNavigateToUser: (String) -> Unit = {},
-    onRequestDeletion: suspend (resourceId: String, reason: String?) -> ApiResult<Unit>,
+    deletionRequestSubmissionState: DeletionRequestSubmissionState,
+    onRequestDeletion: (resourceId: String, reason: String) -> Unit,
+    onClearDeletionRequestSubmission: () -> Unit,
+    associatedFileActionStates: Map<AssociatedFileActionKey, AssociatedFileActionState>,
+    onResolveAssociatedFileAction: (AssociatedFileActionKey) -> Unit,
+    onClearAssociatedFileAction: (AssociatedFileActionKey) -> Unit,
 ) {
     val apiClient = koinInject<ApiClient>()
     val repository = koinInject<CrucibleRepository>()
@@ -172,10 +180,21 @@ fun ResourceDetailScreen(
 
     // Screen-level sheet/dialog state — operate on currentDisplayResource. Editing itself is a
     // full nav destination (Screen.EditResource), not a sheet here — see EditResourceScreen.kt.
-    var showLinkSheet by remember { mutableStateOf(false) }
-    var showDeletionDialog by remember { mutableStateOf(false) }
+    var showLinkSheet by rememberSaveable { mutableStateOf(false) }
+    var showDeletionDialog by rememberSaveable { mutableStateOf(false) }
     var pendingUnlink by remember { mutableStateOf<UnlinkRequest?>(null) }
+    var deletingThumbnails by remember { mutableStateOf<Set<ThumbnailKey>>(emptySet()) }
+    var thumbnailDeleteErrors by remember { mutableStateOf<Map<ThumbnailKey, String>>(emptyMap()) }
     var overflowMenuExpanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(deletionRequestSubmissionState) {
+        val submitted = deletionRequestSubmissionState as? DeletionRequestSubmissionState.Submitted
+        if (submitted != null) {
+            showDeletionDialog = false
+            onRefresh(submitted.resourceId)
+            onClearDeletionRequestSubmission()
+        }
+    }
 
     // Track history and last-viewed sibling continuously as user scrolls through pages
     LaunchedEffect(pagerState.currentPage, pagerState.targetPage) {
@@ -231,6 +250,34 @@ fun ResourceDetailScreen(
     // Primary resource refresh only — sibling PTR is handled inline above.
     LaunchedEffect(isRefreshing) {
         localRefreshState = isRefreshing
+    }
+
+    fun deleteThumbnail(datasetUuid: String, thumbnailId: Int) {
+        val key = ThumbnailKey(datasetUuid, thumbnailId)
+        if (key in deletingThumbnails) return
+        scope.launch {
+            deletingThumbnails += key
+            thumbnailDeleteErrors -= key
+            try {
+                when (val result = apiClient.service.deleteThumbnail(datasetUuid, thumbnailId)) {
+                    is ApiResult.Success -> {
+                        if (result.data) {
+                            repository.invalidateThumbnails(datasetUuid)
+                            repository.fetchThumbnails(datasetUuid, forceRefresh = true)
+                        } else {
+                            thumbnailDeleteErrors += key to "The server did not confirm deletion"
+                        }
+                    }
+                    is ApiResult.Error -> thumbnailDeleteErrors += key to "Delete failed (${result.code})"
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                thumbnailDeleteErrors += key to "Connection error. Check your network and try again"
+            } finally {
+                deletingThumbnails -= key
+            }
+        }
     }
 
     AppScaffold(
@@ -332,6 +379,16 @@ fun ResourceDetailScreen(
                                 onClick = { overflowMenuExpanded = false; displayForMenu?.let { onNavigateToEdit(it.uniqueId) } },
                                 enabled = displayForMenu != null
                             )
+                            if (displayForMenu?.capabilities?.canManageAccess == true) {
+                                DropdownMenuItem(
+                                    text = { Text("Manage access") },
+                                    leadingIcon = { AppIcon(AppIcons.ManageMembers) },
+                                    onClick = {
+                                        overflowMenuExpanded = false
+                                        onNavigateToManageAccess(displayForMenu.uniqueId)
+                                    }
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text("Duplicate") },
                                 leadingIcon = { AppIcon(AppIcons.CopyResource) },
@@ -364,7 +421,11 @@ fun ResourceDetailScreen(
                                 text = { Text(if (deletionStatus != null) "Deletion ${deletionStatus.replaceFirstChar { it.uppercase() }}" else "Request deletion") },
                                 leadingIcon = { AppIcon(AppIcons.RequestDeletion) },
                                 enabled = displayForMenu != null && deletionStatus == null,
-                                onClick = { overflowMenuExpanded = false; showDeletionDialog = true }
+                                onClick = {
+                                    overflowMenuExpanded = false
+                                    onClearDeletionRequestSubmission()
+                                    showDeletionDialog = true
+                                }
                             )
                             val projectId = when (displayForMenu) {
                                 is Sample -> displayForMenu.projectId
@@ -373,10 +434,10 @@ fun ResourceDetailScreen(
                             }
                             if (displayForMenu != null && projectId != null && graphExplorerUrl.isNotBlank()) {
                                 val webUrl = when (displayForMenu) {
-                                    is Sample  -> "$graphExplorerUrl/$projectId/samples/${displayForMenu.uniqueId}"
-                                    is Dataset -> "$graphExplorerUrl/$projectId/datasets/${displayForMenu.uniqueId}"
+                                    is Sample -> buildCrucibleWebUrl(graphExplorerUrl, projectId, "samples", displayForMenu.uniqueId)
+                                    is Dataset -> buildCrucibleWebUrl(graphExplorerUrl, projectId, "datasets", displayForMenu.uniqueId)
                                 }
-                                OpenInWebMenuItem { overflowMenuExpanded = false; openUrl(platformContext, webUrl) }
+                                OpenInWebMenuItem { overflowMenuExpanded = false; openInBrowser(platformContext, webUrl) }
                                 ShareMenuItem {
                                     overflowMenuExpanded = false
                                     shareResource(
@@ -566,15 +627,13 @@ fun ResourceDetailScreen(
                                                     ThumbnailsSection(
                                                         uuid = pageUuid,
                                                         thumbnails = resolvedThumbnails,
-                                                        onDelete = { thumbnailId ->
-                                                            scope.launch {
-                                                                val resp = apiClient.service.deleteThumbnail(pageUuid, thumbnailId)
-                                                                if (resp is ApiResult.Success) {
-                                                                    repository.invalidateThumbnails(pageUuid)
-                                                                    repository.fetchThumbnails(pageUuid, forceRefresh = true)
-                                                                }
-                                                            }
-                                                        }
+                                                        deletingThumbnailIds = deletingThumbnails
+                                                            .filter { it.datasetUuid == pageUuid }
+                                                            .mapTo(mutableSetOf()) { it.thumbnailId },
+                                                        deleteErrors = thumbnailDeleteErrors
+                                                            .filterKeys { it.datasetUuid == pageUuid }
+                                                            .mapKeys { it.key.thumbnailId },
+                                                        onDelete = { thumbnailId -> deleteThumbnail(pageUuid, thumbnailId) }
                                                     )
                                                 }
                                             }
@@ -641,6 +700,9 @@ fun ResourceDetailScreen(
                                         }
                                         AssociatedFilesCard(
                                             datasetUuid = pageUuid,
+                                            actionStates = associatedFileActionStates,
+                                            onResolveAction = onResolveAssociatedFileAction,
+                                            onClearAction = onClearAssociatedFileAction,
                                             initialExpanded = pageGetCardState("download_links"),
                                             onExpandedChange = { pageSetCardState("download_links", it) }
                                         )
@@ -760,13 +822,17 @@ fun ResourceDetailScreen(
     if (showDeletionDialog && deletionResource != null) {
         DeletionRequestDialog(
             resource = deletionResource,
-            onDismiss = { showDeletionDialog = false },
-            onSubmit = { reason -> onRequestDeletion(deletionResource.uniqueId, reason) },
-            onSubmitted = { showDeletionDialog = false; onRefresh(deletionResource.uniqueId) }
+            submissionState = deletionRequestSubmissionState,
+            onDismiss = {
+                onClearDeletionRequestSubmission()
+                showDeletionDialog = false
+            },
+            onSubmit = { reason -> onRequestDeletion(deletionResource.uniqueId, reason) }
         )
     }
     pendingUnlink?.let { req ->
-        var isUnlinking by remember { mutableStateOf(false) }
+        var isUnlinking by remember(req) { mutableStateOf(false) }
+        var unlinkError by remember(req) { mutableStateOf<String?>(null) }
         AlertDialog(
             onDismissRequest = { if (!isUnlinking) pendingUnlink = null },
             title = {
@@ -775,21 +841,35 @@ fun ResourceDetailScreen(
                     Text("Unlink resource?")
                 }
             },
-            text = { Text("Remove link to \"${req.name}\"? The resources themselves will not be deleted.") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Remove link to \"${req.name}\"? The resources themselves will not be deleted.")
+                    unlinkError?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
             confirmButton = {
                 Button(
                     onClick = {
                         scope.launch {
                             isUnlinking = true
+                            unlinkError = null
                             try {
-                                req.action()
-                                repository.invalidateResource(req.otherUuid)
-                                pendingUnlink = null
-                                currentDisplayResource?.let { onRefresh(it.uniqueId) }
+                                when (val result = req.action()) {
+                                    is ApiResult.Success -> {
+                                        repository.invalidateResource(req.otherUuid)
+                                        pendingUnlink = null
+                                        currentDisplayResource?.let { onRefresh(it.uniqueId) }
+                                    }
+                                    is ApiResult.Error -> unlinkError = "Unlink failed (${result.code})"
+                                }
                             } catch (e: kotlinx.coroutines.CancellationException) {
                                 throw e
                             } catch (_: Exception) {
-                                pendingUnlink = null
+                                unlinkError = "Connection error. Check your network and try again"
+                            } finally {
+                                isUnlinking = false
                             }
                         }
                     },

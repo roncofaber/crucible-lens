@@ -6,10 +6,20 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.model.Project
+import crucible.lens.data.model.TransferOwnershipResponse
 import crucible.lens.data.model.User
 import crucible.lens.data.repository.CrucibleRepository
+import crucible.lens.data.util.ProjectMemberRole
 import crucible.lens.data.util.SEARCH_DEBOUNCE_MS
 import crucible.lens.data.util.SEARCH_MIN_QUERY_LENGTH
+import crucible.lens.data.util.allowsAccessManagement
+import crucible.lens.data.util.allowsEdit
+import crucible.lens.data.util.allowsTransfer
+import crucible.lens.data.util.assignableProjectRoles
+import crucible.lens.data.util.canAddProjectMembers
+import crucible.lens.data.util.canChangeProjectRole
+import crucible.lens.data.util.canRenameProject
+import crucible.lens.data.util.projectSlugValidationError
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,9 +33,22 @@ sealed class ManageProjectState {
         val project: Project,
         val members: List<User>,
         val isLead: Boolean,
+        val currentUserRole: ProjectMemberRole?,
         val joinRequests: List<JoinRequest> = emptyList(),
-        val requesterInfo: Map<String, User> = emptyMap()
-    ) : ManageProjectState()
+        val requesterInfo: Map<String, User> = emptyMap(),
+        val membersError: String? = null,
+        val joinRequestsError: String? = null
+    ) : ManageProjectState() {
+        val canEdit: Boolean get() = project.capabilities.allowsEdit(isLead)
+        val canManageAccess: Boolean get() = project.capabilities.allowsAccessManagement(currentUserRole.canAddProjectMembers())
+        val canRename: Boolean get() = project.capabilities.allowsEdit(currentUserRole.canRenameProject())
+        val canTransfer: Boolean get() = project.capabilities.allowsTransfer(isLead)
+        val canReviewJoinRequests: Boolean get() = isLead || canTransfer
+        val canLeave: Boolean get() = currentUserRole != null && !isLead
+        val assignableRoles: List<ProjectMemberRole> get() = project.capabilities.assignableProjectRoles(currentUserRole)
+
+        fun canChangeMemberRole(role: ProjectMemberRole?): Boolean = project.capabilities.canChangeProjectRole(role, currentUserRole)
+    }
     data class Error(val message: String) : ManageProjectState()
 }
 
@@ -33,13 +56,40 @@ sealed class ProjectEditState {
     object Idle : ProjectEditState()
     data class Editing(
         val title: String,
-        val organization: String,
-        val leadUsername: String,
-        val leadSearch: List<User> = emptyList(),
-        val isLeadSearching: Boolean = false
+        val organization: String
     ) : ProjectEditState()
     object Saving : ProjectEditState()
     data class SaveError(val draft: Editing, val message: String) : ProjectEditState()
+}
+
+data class LeadershipTransferDraft(
+    val query: String = "",
+    val results: List<User> = emptyList(),
+    val isSearching: Boolean = false,
+    val searchError: String? = null,
+    val actionError: String? = null
+)
+
+sealed class LeadershipTransferState {
+    data object Idle : LeadershipTransferState()
+    data class Selecting(val draft: LeadershipTransferDraft = LeadershipTransferDraft()) : LeadershipTransferState()
+    data class Previewing(val draft: LeadershipTransferDraft) : LeadershipTransferState()
+    data class PreviewReady(val preview: TransferOwnershipResponse, val error: String? = null) : LeadershipTransferState()
+    data class Transferring(val preview: TransferOwnershipResponse) : LeadershipTransferState()
+    data class Success(val newOwner: User) : LeadershipTransferState()
+}
+
+sealed class ProjectRenameState {
+    data object Idle : ProjectRenameState()
+    data class Editing(val value: String, val error: String? = null) : ProjectRenameState()
+    data class Saving(val value: String) : ProjectRenameState()
+    data class Success(val projectSlug: String) : ProjectRenameState()
+}
+
+sealed class MemberRoleState {
+    data object Idle : MemberRoleState()
+    data class Saving(val userId: String, val role: ProjectMemberRole) : MemberRoleState()
+    data class Error(val userId: String, val message: String) : MemberRoleState()
 }
 
 class ManageProjectViewModel(
@@ -53,8 +103,23 @@ class ManageProjectViewModel(
     private val _editState = MutableStateFlow<ProjectEditState>(ProjectEditState.Idle)
     val editState: StateFlow<ProjectEditState> = _editState.asStateFlow()
 
+    private val _leadershipTransferState = MutableStateFlow<LeadershipTransferState>(LeadershipTransferState.Idle)
+    val leadershipTransferState: StateFlow<LeadershipTransferState> = _leadershipTransferState.asStateFlow()
+
+    private val _projectRenameState = MutableStateFlow<ProjectRenameState>(ProjectRenameState.Idle)
+    val projectRenameState: StateFlow<ProjectRenameState> = _projectRenameState.asStateFlow()
+
+    private val _memberRoleState = MutableStateFlow<MemberRoleState>(MemberRoleState.Idle)
+    val memberRoleState: StateFlow<MemberRoleState> = _memberRoleState.asStateFlow()
+
     private val _pendingRemove = MutableStateFlow<User?>(null)
     val pendingRemove: StateFlow<User?> = _pendingRemove.asStateFlow()
+
+    private val _removingMemberOrcid = MutableStateFlow<String?>(null)
+    val removingMemberOrcid: StateFlow<String?> = _removingMemberOrcid.asStateFlow()
+
+    private val _removeMemberError = MutableStateFlow<String?>(null)
+    val removeMemberError: StateFlow<String?> = _removeMemberError.asStateFlow()
 
     private val _leaveError = MutableStateFlow<String?>(null)
     val leaveError: StateFlow<String?> = _leaveError.asStateFlow()
@@ -68,15 +133,26 @@ class ManageProjectViewModel(
     private val _isMemberSearching = MutableStateFlow(false)
     val isMemberSearching: StateFlow<Boolean> = _isMemberSearching.asStateFlow()
 
-    // The specific user (by username) currently being added, not just a global flag - lets only
-    // that one row show a spinner instead of disabling the whole list on any single tap.
-    private val _addingMemberUsername = MutableStateFlow<String?>(null)
-    val addingMemberUsername: StateFlow<String?> = _addingMemberUsername.asStateFlow()
+    private val _memberSearchError = MutableStateFlow<String?>(null)
+    val memberSearchError: StateFlow<String?> = _memberSearchError.asStateFlow()
+
+    private val _addMemberError = MutableStateFlow<String?>(null)
+    val addMemberError: StateFlow<String?> = _addMemberError.asStateFlow()
+
+    private val _reviewingJoinRequestId = MutableStateFlow<Int?>(null)
+    val reviewingJoinRequestId: StateFlow<Int?> = _reviewingJoinRequestId.asStateFlow()
+
+    private val _projectActionError = MutableStateFlow<String?>(null)
+    val projectActionError: StateFlow<String?> = _projectActionError.asStateFlow()
+
+    private val _addingMemberId = MutableStateFlow<String?>(null)
+    val addingMemberId: StateFlow<String?> = _addingMemberId.asStateFlow()
 
     private var projectId: String = ""
+    private var projectSlug: String = ""
     private var currentUserOrcid: String? = null
     private var memberSearchJob: Job? = null
-    private var leadSearchJob: Job? = null
+    private var leadershipSearchJob: Job? = null
 
     fun init(projectId: String, currentUserOrcid: String?) {
         this.projectId = projectId
@@ -87,24 +163,107 @@ class ManageProjectViewModel(
     fun load() {
         viewModelScope.launch {
             _state.value = ManageProjectState.Loading
-            val projectResult = apiClient.service.getProject(projectId)
-            val project = (projectResult as? ApiResult.Success)?.data
-            if (project == null) {
-                _state.value = ManageProjectState.Error("Project not found")
-                return@launch
+            try {
+                val project = when (val result = repository.fetchProject(projectId, forceRefresh = true)) {
+                    is ApiResult.Success -> result.data
+                    is ApiResult.Error -> {
+                        _state.value = ManageProjectState.Error(
+                            if (result.code == 404) "Project not found" else "Failed to load project (${result.code})"
+                        )
+                        return@launch
+                    }
+                }
+                projectSlug = project.projectId
+                val membersResult = repository.fetchProjectMembers(projectId, forceRefresh = true)
+                val members = (membersResult as? ApiResult.Success)?.data ?: emptyList()
+                val membersError = (membersResult as? ApiResult.Error)?.let { "Failed to load members (${it.code})" }
+                val isLead = isCurrentUserLead(project)
+                val currentUserRole = currentUserRole(project, members, isLead)
+                val canReviewJoinRequests = project.capabilities.allowsTransfer(isLead)
+                val joinRequestsResult = if (canReviewJoinRequests) {
+                    apiClient.service.getJoinRequests(groupName = projectSlug, status = "pending")
+                } else {
+                    ApiResult.Success<List<JoinRequest>>(emptyList())
+                }
+                val joinRequests = (joinRequestsResult as? ApiResult.Success)?.data ?: emptyList()
+                val joinRequestsError = (joinRequestsResult as? ApiResult.Error)?.let { "Failed to load pending requests (${it.code})" }
+                val requesterInfo = if (joinRequests.isNotEmpty()) {
+                    (apiClient.service.resolveUsers(orcids = joinRequests.map { it.requesterId }) as? ApiResult.Success)?.data
+                        ?.mapNotNull { (orcid, user) -> user?.let { orcid to it } }?.toMap() ?: emptyMap()
+                } else emptyMap()
+                _state.value = ManageProjectState.Loaded(
+                    project = project,
+                    members = members,
+                    isLead = isLead,
+                    currentUserRole = currentUserRole,
+                    joinRequests = joinRequests,
+                    requesterInfo = requesterInfo,
+                    membersError = membersError,
+                    joinRequestsError = joinRequestsError
+                )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _state.value = ManageProjectState.Error("Connection error. Check your network and try again")
             }
-            val members = (apiClient.service.getProjectUsers(projectId) as? ApiResult.Success)?.data ?: emptyList()
-            val isLead = isCurrentUserLead(project)
-            // Only leads (or admins) are authorized by GET /join_requests?group_name= — skip
-            // the call entirely for non-leads rather than eating a guaranteed 403.
-            val joinRequests = if (isLead) {
-                (apiClient.service.getJoinRequests(groupName = projectId, status = "pending") as? ApiResult.Success)?.data ?: emptyList()
-            } else emptyList()
-            val requesterInfo = if (joinRequests.isNotEmpty()) {
-                (apiClient.service.resolveUsers(orcids = joinRequests.map { it.requesterId }) as? ApiResult.Success)?.data
-                    ?.mapNotNull { (orcid, user) -> user?.let { orcid to it } }?.toMap() ?: emptyMap()
-            } else emptyMap()
-            _state.value = ManageProjectState.Loaded(project, members, isLead, joinRequests, requesterInfo)
+        }
+    }
+
+    fun retryMembers() {
+        if (_state.value !is ManageProjectState.Loaded) return
+        viewModelScope.launch {
+            try {
+                when (val result = repository.fetchProjectMembers(projectId, forceRefresh = true)) {
+                    is ApiResult.Success -> (_state.value as? ManageProjectState.Loaded)?.let {
+                        _state.value = it.copy(
+                            members = result.data,
+                            currentUserRole = currentUserRole(it.project, result.data, it.isLead),
+                            membersError = null
+                        )
+                    }
+                    is ApiResult.Error -> (_state.value as? ManageProjectState.Loaded)?.let {
+                        _state.value = it.copy(membersError = "Failed to load members (${result.code})")
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                (_state.value as? ManageProjectState.Loaded)?.let {
+                    _state.value = it.copy(membersError = "Connection error. Check your network and try again")
+                }
+            }
+        }
+    }
+
+    fun retryJoinRequests() {
+        val loaded = _state.value as? ManageProjectState.Loaded ?: return
+        if (!loaded.canReviewJoinRequests) return
+        viewModelScope.launch {
+            try {
+                when (val result = apiClient.service.getJoinRequests(groupName = projectSlug, status = "pending")) {
+                    is ApiResult.Success -> {
+                        val requesterInfo = if (result.data.isNotEmpty()) {
+                            (apiClient.service.resolveUsers(orcids = result.data.map { it.requesterId }) as? ApiResult.Success)?.data
+                                ?.mapNotNull { (orcid, user) -> user?.let { orcid to it } }?.toMap() ?: emptyMap()
+                        } else emptyMap()
+                        val current = _state.value as? ManageProjectState.Loaded ?: return@launch
+                        _state.value = current.copy(
+                            joinRequests = result.data,
+                            requesterInfo = requesterInfo,
+                            joinRequestsError = null
+                        )
+                    }
+                    is ApiResult.Error -> (_state.value as? ManageProjectState.Loaded)?.let {
+                        _state.value = it.copy(joinRequestsError = "Failed to load pending requests (${result.code})")
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                (_state.value as? ManageProjectState.Loaded)?.let {
+                    _state.value = it.copy(joinRequestsError = "Connection error. Check your network and try again")
+                }
+            }
         }
     }
 
@@ -115,75 +274,61 @@ class ManageProjectViewModel(
         return project.projectLeadOrcid == orcid || project.lead?.uniqueId == orcid
     }
 
+    private fun currentUserRole(project: Project, members: List<User>, isLead: Boolean): ProjectMemberRole? {
+        if (isLead) return ProjectMemberRole.Owner
+        val memberRole = members.firstOrNull { it.uniqueId == currentUserOrcid }?.role
+        return ProjectMemberRole.fromApi(memberRole)
+    }
+
     // ── Edit project info ─────────────────────────────────────────────────────
 
     fun startEdit() {
         val loaded = _state.value as? ManageProjectState.Loaded ?: return
+        if (!loaded.canEdit) return
         _editState.value = ProjectEditState.Editing(
             title = loaded.project.title ?: "",
-            organization = loaded.project.organization ?: "",
-            leadUsername = loaded.project.lead?.username ?: "",
-            // Seeded with the current lead, not emptyList() - SearchPickerField derives "resolved"
-            // by matching leadUsername against leadSearch, so an empty list here would render the
-            // existing lead as an unresolved/not-found field the moment editing starts.
-            leadSearch = listOfNotNull(loaded.project.lead)
+            organization = loaded.project.organization ?: ""
         )
     }
 
     fun cancelEdit() {
-        leadSearchJob?.cancel()
         _editState.value = ProjectEditState.Idle
     }
 
     fun onTitleChanged(value: String) = updateEditDraft { it.copy(title = value) }
     fun onOrganizationChanged(value: String) = updateEditDraft { it.copy(organization = value) }
 
-    fun onLeadUsernameChanged(value: String) {
-        leadSearchJob?.cancel()
-        updateEditDraft { it.copy(leadUsername = value, leadSearch = emptyList(), isLeadSearching = false) }
-        if (value.length < SEARCH_MIN_QUERY_LENGTH) return
-        updateEditDraft { it.copy(isLeadSearching = true) }
-        leadSearchJob = viewModelScope.launch {
-            delay(SEARCH_DEBOUNCE_MS)
-            val results = (apiClient.service.searchUsers(value) as? ApiResult.Success)?.data ?: emptyList()
-            updateEditDraft { it.copy(leadSearch = results, isLeadSearching = false) }
-        }
-    }
-
-    fun selectLeadUser(user: User) {
-        leadSearchJob?.cancel()
-        // Keeps the picked user as a singleton list, not emptyList() - SearchPickerField derives
-        // "resolved" by matching the current query against `results`, so clearing it would
-        // immediately un-resolve the field right after picking.
-        updateEditDraft { it.copy(leadUsername = user.username ?: "", leadSearch = listOf(user), isLeadSearching = false) }
-    }
-
     fun saveProject() {
+        val loadedState = _state.value as? ManageProjectState.Loaded ?: return
+        if (!loadedState.canEdit) return
         val draft = currentEditDraft() ?: return
         if (_editState.value is ProjectEditState.Saving) return
         _editState.value = ProjectEditState.Saving
         viewModelScope.launch {
             val loaded = _state.value as? ManageProjectState.Loaded
             val result = apiClient.service.updateProject(
-                projectId = projectId,
+                projectReference = projectId,
                 title = draft.title.trim().ifBlank { null },
-                organization = draft.organization.trim().ifBlank { null },
-                projectLeadUsername = draft.leadUsername.trim().ifBlank { null }
+                organization = draft.organization.trim().ifBlank { null }
             )
             when (result) {
                 is ApiResult.Success -> {
                     // Both caches: invalidateProjects() only clears the projects *list* (keyed on
                     // Unit). ProjectDetailScreen's header reads observeProject(projectId) from the
-                    // separate per-project cache, so an edited title/organization/lead would stay
+                    // separate per-project cache, so an edited title or organization would stay
                     // stale there for the rest of the TTL without this.
                     repository.invalidateProjects()
                     repository.invalidateProject(projectId)
                     val members = loaded?.members ?: emptyList()
-                    val isLead = isCurrentUserLead(result.data)
+                    val project = result.data.copy(capabilities = result.data.capabilities ?: loaded?.project?.capabilities)
+                    val isLead = isCurrentUserLead(project)
                     _state.value = ManageProjectState.Loaded(
-                        result.data, members, isLead,
+                        project, members, isLead,
+                        currentUserRole = currentUserRole(project, members, isLead),
                         joinRequests = loaded?.joinRequests ?: emptyList(),
-                        requesterInfo = loaded?.requesterInfo ?: emptyMap()
+                        requesterInfo = loaded?.requesterInfo ?: emptyMap(),
+                        membersError = loaded?.membersError,
+                        joinRequestsError = loaded?.joinRequestsError
                     )
                     _editState.value = ProjectEditState.Idle
                 }
@@ -194,40 +339,339 @@ class ManageProjectViewModel(
 
     // ── Member management ─────────────────────────────────────────────────────
 
-    fun showAddMemberSheet() { _isAddMemberSheetVisible.value = true; _memberSearchResults.value = emptyList() }
-    fun hideAddMemberSheet() { _isAddMemberSheetVisible.value = false; memberSearchJob?.cancel() }
+    fun showProjectRename() {
+        val loaded = _state.value as? ManageProjectState.Loaded ?: return
+        if (!loaded.canRename) return
+        _projectRenameState.value = ProjectRenameState.Editing(loaded.project.projectId)
+    }
+
+    fun updateProjectRename(value: String) {
+        val state = _projectRenameState.value as? ProjectRenameState.Editing ?: return
+        _projectRenameState.value = state.copy(value = value, error = null)
+    }
+
+    fun dismissProjectRename() {
+        if (_projectRenameState.value !is ProjectRenameState.Saving) {
+            _projectRenameState.value = ProjectRenameState.Idle
+        }
+    }
+
+    fun renameProject() {
+        val loaded = _state.value as? ManageProjectState.Loaded ?: return
+        if (!loaded.canRename) return
+        val state = _projectRenameState.value as? ProjectRenameState.Editing ?: return
+        val newSlug = state.value.trim()
+        val validationError = projectSlugValidationError(newSlug)
+        if (validationError != null) {
+            _projectRenameState.value = state.copy(error = validationError)
+            return
+        }
+        if (newSlug == projectSlug) {
+            _projectRenameState.value = ProjectRenameState.Idle
+            return
+        }
+        _projectRenameState.value = ProjectRenameState.Saving(newSlug)
+        viewModelScope.launch {
+            try {
+                when (val result = apiClient.service.updateProject(projectReference = projectId, projectSlug = newSlug)) {
+                    is ApiResult.Success -> {
+                        projectSlug = result.data.projectId
+                        repository.invalidateProjects()
+                        repository.invalidateProject(projectId)
+                        val loaded = _state.value as? ManageProjectState.Loaded
+                        if (loaded != null) {
+                            _state.value = loaded.copy(
+                                project = result.data.copy(capabilities = result.data.capabilities ?: loaded.project.capabilities)
+                            )
+                        }
+                        _projectRenameState.value = ProjectRenameState.Success(result.data.projectId)
+                    }
+                    is ApiResult.Error -> _projectRenameState.value = ProjectRenameState.Editing(
+                        value = newSlug,
+                        error = projectRenameError(result.code)
+                    )
+                }
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _projectRenameState.value = ProjectRenameState.Editing(newSlug, "Connection error. Try again")
+            }
+        }
+    }
+
+    fun consumeProjectRenameSuccess() {
+        if (_projectRenameState.value is ProjectRenameState.Success) {
+            _projectRenameState.value = ProjectRenameState.Idle
+        }
+    }
+
+    fun showLeadershipTransfer() {
+        val loaded = _state.value as? ManageProjectState.Loaded ?: return
+        if (!loaded.canTransfer) return
+        _leadershipTransferState.value = LeadershipTransferState.Selecting()
+    }
+
+    fun dismissLeadershipTransfer() {
+        when (_leadershipTransferState.value) {
+            is LeadershipTransferState.Previewing, is LeadershipTransferState.Transferring -> return
+            else -> {
+                leadershipSearchJob?.cancel()
+                _leadershipTransferState.value = LeadershipTransferState.Idle
+            }
+        }
+    }
+
+    fun searchLeadershipCandidates(query: String) {
+        val state = _leadershipTransferState.value as? LeadershipTransferState.Selecting ?: return
+        leadershipSearchJob?.cancel()
+        val draft = state.draft.copy(
+            query = query,
+            results = emptyList(),
+            isSearching = query.length >= SEARCH_MIN_QUERY_LENGTH,
+            searchError = null,
+            actionError = null
+        )
+        _leadershipTransferState.value = LeadershipTransferState.Selecting(draft)
+        if (query.length < SEARCH_MIN_QUERY_LENGTH) return
+        leadershipSearchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MS)
+            try {
+                when (val result = apiClient.service.searchUsers(query)) {
+                    is ApiResult.Success -> {
+                        val currentLead = (_state.value as? ManageProjectState.Loaded)?.project?.projectLeadOrcid
+                        updateLeadershipDraft {
+                            it.copy(results = result.data.filter { user -> user.uniqueId != null && user.uniqueId != currentLead }, isSearching = false)
+                        }
+                    }
+                    is ApiResult.Error -> updateLeadershipDraft {
+                        it.copy(isSearching = false, searchError = "Search failed (${result.code})")
+                    }
+                }
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                updateLeadershipDraft { it.copy(isSearching = false, searchError = "Connection error. Try again") }
+            }
+        }
+    }
+
+    fun previewLeadershipTransfer(user: User) {
+        val newOwner = user.uniqueId ?: return
+        val loaded = _state.value as? ManageProjectState.Loaded ?: return
+        if (!loaded.canTransfer) return
+        val draft = (_leadershipTransferState.value as? LeadershipTransferState.Selecting)?.draft ?: return
+        leadershipSearchJob?.cancel()
+        _leadershipTransferState.value = LeadershipTransferState.Previewing(draft)
+        viewModelScope.launch {
+            try {
+                when (val result = apiClient.service.transferResourceOwnership(projectId, newOwner)) {
+                    is ApiResult.Success -> _leadershipTransferState.value = LeadershipTransferState.PreviewReady(result.data)
+                    is ApiResult.Error -> _leadershipTransferState.value = LeadershipTransferState.Selecting(
+                        draft.copy(actionError = leadershipTransferError(result.code))
+                    )
+                }
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _leadershipTransferState.value = LeadershipTransferState.Selecting(
+                    draft.copy(actionError = "Connection error. Try again")
+                )
+            }
+        }
+    }
+
+    fun confirmLeadershipTransfer() {
+        val preview = (_leadershipTransferState.value as? LeadershipTransferState.PreviewReady)?.preview ?: return
+        val newOwnerId = preview.newOwner.uniqueId ?: return
+        _leadershipTransferState.value = LeadershipTransferState.Transferring(preview)
+        viewModelScope.launch {
+            try {
+                when (val result = apiClient.service.transferResourceOwnership(projectId, newOwnerId, confirm = true)) {
+                    is ApiResult.Success -> {
+                        repository.invalidateProjects()
+                        repository.invalidateProject(projectId)
+                        repository.invalidateProjectMembers(projectId)
+                        val loaded = _state.value as? ManageProjectState.Loaded
+                        if (loaded != null) {
+                            val project = loaded.project.copy(
+                                projectLeadOrcid = result.data.newOwner.uniqueId,
+                                lead = result.data.newOwner,
+                                capabilities = loaded.project.capabilities.takeUnless { loaded.isLead }
+                            )
+                            val members = if (result.data.newOwner.uniqueId != null && loaded.members.none { it.uniqueId == result.data.newOwner.uniqueId }) {
+                                loaded.members + result.data.newOwner.copy(role = ProjectMemberRole.Owner.apiValue)
+                            } else {
+                                loaded.members.map { member ->
+                                    when (member.uniqueId) {
+                                        result.data.previousOwner?.uniqueId -> member.copy(role = ProjectMemberRole.Admin.apiValue)
+                                        result.data.newOwner.uniqueId -> member.copy(role = ProjectMemberRole.Owner.apiValue)
+                                        else -> member
+                                    }
+                                }
+                            }
+                            val isLead = isCurrentUserLead(project)
+                            val canReviewJoinRequests = project.capabilities.allowsTransfer(isLead)
+                            _state.value = loaded.copy(
+                                project = project,
+                                members = members,
+                                isLead = isLead,
+                                currentUserRole = currentUserRole(project, members, isLead),
+                                joinRequests = if (canReviewJoinRequests) loaded.joinRequests else emptyList(),
+                                requesterInfo = if (canReviewJoinRequests) loaded.requesterInfo else emptyMap()
+                            )
+                        }
+                        _leadershipTransferState.value = LeadershipTransferState.Success(result.data.newOwner)
+                    }
+                    is ApiResult.Error -> _leadershipTransferState.value = LeadershipTransferState.PreviewReady(
+                        preview = preview,
+                        error = leadershipTransferError(result.code)
+                    )
+                }
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _leadershipTransferState.value = LeadershipTransferState.PreviewReady(
+                    preview = preview,
+                    error = "Connection error. Try again"
+                )
+            }
+        }
+    }
+
+    fun consumeLeadershipTransferSuccess() {
+        if (_leadershipTransferState.value is LeadershipTransferState.Success) {
+            _leadershipTransferState.value = LeadershipTransferState.Idle
+        }
+    }
+
+    fun showAddMemberSheet() {
+        val loaded = _state.value as? ManageProjectState.Loaded ?: return
+        if (!loaded.canManageAccess || loaded.assignableRoles.isEmpty()) return
+        _isAddMemberSheetVisible.value = true
+        _memberSearchResults.value = emptyList()
+        _memberSearchError.value = null
+        _addMemberError.value = null
+    }
+
+    fun hideAddMemberSheet() {
+        _isAddMemberSheetVisible.value = false
+        memberSearchJob?.cancel()
+        _isMemberSearching.value = false
+    }
 
     fun searchMembers(query: String) {
         memberSearchJob?.cancel()
+        _memberSearchError.value = null
         if (query.length < SEARCH_MIN_QUERY_LENGTH) { _memberSearchResults.value = emptyList(); return }
         memberSearchJob = viewModelScope.launch {
             delay(SEARCH_DEBOUNCE_MS)
             _isMemberSearching.value = true
-            _memberSearchResults.value = (apiClient.service.searchUsers(query) as? ApiResult.Success)?.data ?: emptyList()
-            _isMemberSearching.value = false
+            try {
+                when (val result = apiClient.service.searchUsers(query)) {
+                    is ApiResult.Success -> _memberSearchResults.value = result.data
+                    is ApiResult.Error -> {
+                        _memberSearchResults.value = emptyList()
+                        _memberSearchError.value = "Search failed (${result.code})"
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _memberSearchResults.value = emptyList()
+                _memberSearchError.value = "Connection error. Try again"
+            } finally {
+                _isMemberSearching.value = false
+            }
         }
     }
 
     // Sheet stays open on success so multiple members can be added in one visit — see
     // MembersCard/AddMemberSheet's WhatsApp-style "add participants" flow in ManageProjectScreen.kt.
-    fun addMember(user: User) {
-        val username = user.username ?: return
+    fun addMember(user: User, role: ProjectMemberRole) {
+        val userId = user.uniqueId ?: return
+        val loaded = _state.value as? ManageProjectState.Loaded ?: return
+        if (role !in loaded.assignableRoles) return
+        if (_addingMemberId.value != null) return
         viewModelScope.launch {
-            _addingMemberUsername.value = username
-            val result = apiClient.service.addProjectMember(projectId, username)
-            if (result is ApiResult.Success && result.data) {
-                repository.invalidateProjectMembers(projectId)
-                val loaded = _state.value as? ManageProjectState.Loaded
-                if (loaded != null && loaded.members.none { it.uniqueId == user.uniqueId }) {
-                    _state.value = loaded.copy(members = loaded.members + user)
+            _addingMemberId.value = userId
+            _addMemberError.value = null
+            try {
+                when (val result = apiClient.service.addProjectMember(projectId, userId, role.apiValue)) {
+                    is ApiResult.Success -> {
+                        repository.invalidateProjectMembers(projectId)
+                        val current = _state.value as? ManageProjectState.Loaded
+                        if (current != null) {
+                            _state.value = current.copy(
+                                members = result.data,
+                                currentUserRole = currentUserRole(current.project, result.data, current.isLead)
+                            )
+                        }
+                    }
+                    is ApiResult.Error -> _addMemberError.value = "Could not add member (${result.code})"
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _addMemberError.value = "Connection error. Try again"
+            } finally {
+                _addingMemberId.value = null
             }
-            _addingMemberUsername.value = null
         }
     }
 
-    fun confirmRemove(user: User) { _pendingRemove.value = user }
-    fun cancelRemove() { _pendingRemove.value = null }
+    fun changeMemberRole(user: User, role: ProjectMemberRole) {
+        if (_memberRoleState.value is MemberRoleState.Saving) return
+        val loaded = _state.value as? ManageProjectState.Loaded ?: return
+        val userId = user.uniqueId ?: return
+        val currentRole = ProjectMemberRole.fromApi(user.role)
+        if (!loaded.canChangeMemberRole(currentRole)) return
+        if (role !in loaded.assignableRoles) return
+        if (role == currentRole) {
+            _memberRoleState.value = MemberRoleState.Idle
+            return
+        }
+        _memberRoleState.value = MemberRoleState.Saving(userId, role)
+        viewModelScope.launch {
+            try {
+                when (val result = apiClient.service.updateProjectMemberRole(projectId, userId, role.apiValue)) {
+                    is ApiResult.Success -> {
+                        repository.invalidateProjectMembers(projectId)
+                        val current = _state.value as? ManageProjectState.Loaded
+                        if (current != null) {
+                            _state.value = current.copy(
+                                members = result.data,
+                                currentUserRole = currentUserRole(current.project, result.data, current.isLead)
+                            )
+                        }
+                        _memberRoleState.value = MemberRoleState.Idle
+                    }
+                    is ApiResult.Error -> _memberRoleState.value = MemberRoleState.Error(userId, "Could not change role (${result.code})")
+                }
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _memberRoleState.value = MemberRoleState.Error(userId, "Connection error. Try again")
+            }
+        }
+    }
+
+    fun clearMemberRoleError() {
+        if (_memberRoleState.value is MemberRoleState.Error) _memberRoleState.value = MemberRoleState.Idle
+    }
+
+    fun confirmRemove(user: User) {
+        val loaded = _state.value as? ManageProjectState.Loaded ?: return
+        if (!loaded.canTransfer || user.uniqueId == loaded.project.projectLeadOrcid) return
+        _removeMemberError.value = null
+        _pendingRemove.value = user
+    }
+
+    fun cancelRemove() {
+        if (_removingMemberOrcid.value == null) {
+            _removeMemberError.value = null
+            _pendingRemove.value = null
+        }
+    }
 
     // ── Join request review ───────────────────────────────────────────────────
 
@@ -235,22 +679,38 @@ class ManageProjectViewModel(
     fun rejectJoinRequest(request: JoinRequest) = reviewJoinRequest(request, "rejected")
 
     private fun reviewJoinRequest(request: JoinRequest, status: String) {
+        if (_reviewingJoinRequestId.value != null) return
         viewModelScope.launch {
-            val result = apiClient.service.reviewJoinRequest(request.id, status)
-            if (result is ApiResult.Success) {
-                val loaded = _state.value as? ManageProjectState.Loaded ?: return@launch
-                val updatedRequests = loaded.joinRequests.filter { it.id != request.id }
-                if (status == "approved") {
-                    // Refresh members from the server rather than constructing a User locally —
-                    // resolveUsers only carries partial fields, and the member list must reflect
-                    // the server's actual post-approval membership state.
-                    repository.invalidateProjectMembers(projectId)
-                    val members = (apiClient.service.getProjectUsers(projectId) as? ApiResult.Success)?.data
-                        ?: loaded.members
-                    _state.value = loaded.copy(joinRequests = updatedRequests, members = members)
-                } else {
-                    _state.value = loaded.copy(joinRequests = updatedRequests)
+            _reviewingJoinRequestId.value = request.id
+            _projectActionError.value = null
+            try {
+                when (val result = apiClient.service.reviewJoinRequest(request.id, status)) {
+                    is ApiResult.Success -> {
+                        val loaded = _state.value as? ManageProjectState.Loaded ?: return@launch
+                        val updatedRequests = loaded.joinRequests.filter { it.id != request.id }
+                        if (status == "approved") {
+                            _state.value = loaded.copy(joinRequests = updatedRequests)
+                            repository.invalidateProjectMembers(projectId)
+                            when (val membersResult = repository.fetchProjectMembers(projectId, forceRefresh = true)) {
+                                is ApiResult.Success -> (_state.value as? ManageProjectState.Loaded)?.let {
+                                    _state.value = it.copy(members = membersResult.data, membersError = null)
+                                }
+                                is ApiResult.Error -> (_state.value as? ManageProjectState.Loaded)?.let {
+                                    _state.value = it.copy(membersError = "Request approved, but members could not refresh (${membersResult.code})")
+                                }
+                            }
+                        } else {
+                            _state.value = loaded.copy(joinRequests = updatedRequests)
+                        }
+                    }
+                    is ApiResult.Error -> _projectActionError.value = "Could not review request (${result.code})"
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _projectActionError.value = "Connection error. Try again"
+            } finally {
+                _reviewingJoinRequestId.value = null
             }
         }
     }
@@ -258,18 +718,36 @@ class ManageProjectViewModel(
     fun removeMember() {
         val user = _pendingRemove.value ?: return
         val orcid = user.uniqueId ?: return
-        _pendingRemove.value = null
+        if (_removingMemberOrcid.value != null) return
         viewModelScope.launch {
-            val result = apiClient.service.removeProjectMember(projectId, orcid)
-            if (result is ApiResult.Success && result.data) {
-                repository.invalidateProjectMembers(projectId)
-                val loaded = _state.value as? ManageProjectState.Loaded
-                if (loaded != null) {
-                    _state.value = loaded.copy(members = loaded.members.filter { it.uniqueId != orcid })
+            _removingMemberOrcid.value = orcid
+            _removeMemberError.value = null
+            try {
+                when (val result = apiClient.service.removeProjectMember(projectId, orcid)) {
+                    is ApiResult.Success -> {
+                        repository.invalidateProjectMembers(projectId)
+                        val loaded = _state.value as? ManageProjectState.Loaded
+                        if (loaded != null) {
+                            _state.value = loaded.copy(
+                                members = result.data,
+                                currentUserRole = currentUserRole(loaded.project, result.data, loaded.isLead)
+                            )
+                        }
+                        _pendingRemove.value = null
+                    }
+                    is ApiResult.Error -> _removeMemberError.value = "Could not remove member (${result.code})"
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _removeMemberError.value = "Connection error. Try again"
+            } finally {
+                _removingMemberOrcid.value = null
             }
         }
     }
+
+    fun dismissProjectActionError() { _projectActionError.value = null }
 
     // ── Leave project (any member, except the lead — must transfer leadership first) ────────
 
@@ -281,15 +759,13 @@ class ManageProjectViewModel(
     fun leaveProject(onLeft: () -> Unit) {
         val orcid = currentUserOrcid ?: return
         val loaded = _state.value as? ManageProjectState.Loaded ?: return
-        if (loaded.isLead) return
+        if (!loaded.canLeave) return
         viewModelScope.launch {
             when (val result = apiClient.service.removeProjectMember(projectId, orcid)) {
-                is ApiResult.Success -> if (result.data) {
+                is ApiResult.Success -> {
                     repository.invalidateProjects()
                     repository.invalidateProjectMembers(projectId)
                     onLeft()
-                } else {
-                    _leaveError.value = "Failed to leave project"
                 }
                 is ApiResult.Error -> _leaveError.value = "Failed to leave project (${result.code})"
             }
@@ -297,6 +773,26 @@ class ManageProjectViewModel(
     }
 
     fun dismissLeaveError() { _leaveError.value = null }
+
+    private fun updateLeadershipDraft(update: (LeadershipTransferDraft) -> LeadershipTransferDraft) {
+        val state = _leadershipTransferState.value as? LeadershipTransferState.Selecting ?: return
+        _leadershipTransferState.value = LeadershipTransferState.Selecting(update(state.draft))
+    }
+
+    private fun leadershipTransferError(code: Int): String = when (code) {
+        403 -> "You do not have permission to transfer leadership"
+        404 -> "The selected user is no longer available"
+        409 -> "Leadership cannot be transferred to that user"
+        422 -> "The selected user is invalid"
+        else -> "Could not transfer leadership ($code)"
+    }
+
+    private fun projectRenameError(code: Int): String = when (code) {
+        403 -> "You do not have permission to rename this project"
+        409 -> "That project ID is already in use"
+        422 -> "That project ID is invalid"
+        else -> "Could not rename the project ($code)"
+    }
 
     private fun currentEditDraft(): ProjectEditState.Editing? = when (val s = _editState.value) {
         is ProjectEditState.Editing -> s

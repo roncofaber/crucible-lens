@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,23 +28,16 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 
 
-import crucible.lens.data.api.ApiClient
-import crucible.lens.data.api.ApiResult
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.data.preferences.HistoryItem
-import crucible.lens.data.util.SEARCH_DEBOUNCE_MS
-import crucible.lens.data.util.SEARCH_MIN_QUERY_LENGTH
+import crucible.lens.data.util.ResourceLinkDirection
 import crucible.lens.ui.scanner.QRCodeScannerView
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.compose.koinInject
-
-
-private enum class Direction { THEY_ARE_PARENT, THEY_ARE_CHILD }
+import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun LinkResourceSheet(
@@ -52,73 +46,38 @@ fun LinkResourceSheet(
     onDismiss: () -> Unit,
     onLinked: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
-    val apiClient = koinInject<ApiClient>()
+    val viewModel: LinkResourceViewModel = koinViewModel()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val repository = koinInject<CrucibleRepository>()
 
-    var input by remember { mutableStateOf("") }
-    var resolvedType by remember { mutableStateOf<String?>(null) }
-    var resolvedUuid by remember { mutableStateOf<String?>(null) }
-    var selectedResource by remember { mutableStateOf<CrucibleResource?>(null) }
-    var isResolving by remember { mutableStateOf(false) }
-    var isLinking by remember { mutableStateOf(false) }
-    var direction by remember { mutableStateOf(Direction.THEY_ARE_CHILD) }
+    var direction by rememberSaveable { mutableStateOf(ResourceLinkDirection.THEY_ARE_CHILD) }
     var directionExpanded by remember { mutableStateOf(false) }
     var scanning by remember { mutableStateOf(false) }
 
-    // TODO: implement platform-specific camera permission (expect/actual)
-    var hasCameraPermission by remember { mutableStateOf(true) }
+    val input = state.input
+    val selectedResource = (state.resolution as? LinkResolutionState.Resolved)?.resource
+    val resolvedType = selectedResource?.let {
+        when (it) {
+            is Sample -> "sample"
+            is Dataset -> "dataset"
+        }
+    }
+    val searchResults = (state.search as? LinkSearchState.Results)?.resources.orEmpty()
+    val isResolving = state.resolution is LinkResolutionState.Resolving
+    val isSearchingNames = state.search is LinkSearchState.Searching
+    val isLinking = state.submission is LinkSubmissionState.Submitting
+
+    LaunchedEffect(resource.uniqueId) { viewModel.start(resource.uniqueId) }
+    LaunchedEffect(state.submission) {
+        if (state.submission is LinkSubmissionState.Submitted) {
+            viewModel.reset()
+            onLinked()
+        }
+    }
 
     val currentType = when (resource) {
         is Sample -> "sample"
         is Dataset -> "dataset"
-    }
-
-    val projectId = when (resource) {
-        is Sample -> resource.projectId
-        is Dataset -> resource.projectId
-    }
-    var searchResults by remember { mutableStateOf<List<CrucibleResource>>(emptyList()) }
-    var isSearchingNames by remember { mutableStateOf(false) }
-
-    // Server-side fuzzy name search, scoped to the current project
-    LaunchedEffect(input) {
-        val q = input.trim()
-        if (q.length < SEARCH_MIN_QUERY_LENGTH || q.contains(' ').not() && q.length >= 10) {
-            searchResults = emptyList(); return@LaunchedEffect
-        }
-        delay(SEARCH_DEBOUNCE_MS)
-        isSearchingNames = true
-        val samples = (apiClient.service.searchSamples(q, projectId, limit = 6) as? ApiResult.Success)?.data ?: emptyList()
-        val datasets = (apiClient.service.searchDatasets(q, projectId, limit = 6) as? ApiResult.Success)?.data ?: emptyList()
-        searchResults = (samples + datasets).filter { it.uniqueId != resource.uniqueId }.take(6)
-        isSearchingNames = false
-    }
-
-    // UUID resolve for direct UUID input (no spaces, long enough)
-    LaunchedEffect(input) {
-        val trimmed = input.trim()
-        if (trimmed.length < 10 || trimmed.contains(' ')) {
-            if (resolvedUuid == null) resolvedType = null
-            return@LaunchedEffect
-        }
-        isResolving = true
-        resolvedType = try {
-            when (val resp = apiClient.service.getResource(trimmed)) {
-                is ApiResult.Success -> {
-                    resolvedUuid = trimmed
-                    val resource = resp.data
-                    val type = resource.resourceType?.lowercase()
-                    if (type != null) selectedResource = resource
-                    type
-                }
-                is ApiResult.Error -> null
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) { null }
-        isResolving = false
     }
 
     val isSameType = resolvedType == currentType
@@ -127,7 +86,12 @@ fun LinkResourceSheet(
     }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            if (!isLinking) {
+                viewModel.reset()
+                onDismiss()
+            }
+        },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ) {
         Box {
@@ -143,7 +107,7 @@ fun LinkResourceSheet(
 
                 // ── Selected resource card ────────────────────────────────────
                 if (selectedResource != null) {
-                    val sel = selectedResource!!
+                    val sel = selectedResource
                     val selType = resolvedType ?: ""
                     val selProjectId = when (sel) {
                         is Sample -> sel.projectId
@@ -173,9 +137,11 @@ fun LinkResourceSheet(
                                 if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer)
                             }
-                            IconButton(onClick = {
-                                selectedResource = null; input = ""; resolvedUuid = null; resolvedType = null
-                            }, modifier = Modifier.size(32.dp)) {
+                            IconButton(
+                                onClick = { viewModel.updateInput("", resource) },
+                                enabled = !isLinking,
+                                modifier = Modifier.size(32.dp)
+                            ) {
                                 AppIcon(AppIcons.ClearInput,
                                     modifier = Modifier.size(16.dp),
                                     tint = MaterialTheme.colorScheme.onPrimaryContainer)
@@ -196,9 +162,7 @@ fun LinkResourceSheet(
                         QRCodeScannerView(
                             modifier = Modifier.fillMaxSize(),
                             onCodeScanned = { code ->
-                                input = code
-                                resolvedUuid = null
-                                resolvedType = null
+                                viewModel.updateInput(code, resource)
                                 scanning = false
                             }
                         )
@@ -214,12 +178,8 @@ fun LinkResourceSheet(
                 // ── Search / UUID input ───────────────────────────────────────
                 if (selectedResource == null) OutlinedTextField(
                     value = input,
-                    onValueChange = {
-                        input = it
-                        resolvedUuid = null
-                        resolvedType = null
-                        selectedResource = null
-                    },
+                    onValueChange = { viewModel.updateInput(it, resource) },
+                    enabled = !isLinking,
                     label = { Text("Search by name or paste UUID") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
@@ -227,24 +187,46 @@ fun LinkResourceSheet(
                     trailingIcon = {
                         when {
                             isResolving || isSearchingNames -> CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            input.isNotBlank() -> IconButton(onClick = { input = ""; resolvedUuid = null; resolvedType = null }) {
+                            input.isNotBlank() -> IconButton(onClick = { viewModel.updateInput("", resource) }) {
                                 AppIcon(AppIcons.ClearInput)
                             }
                             else -> IconButton(onClick = {
-                                if (hasCameraPermission) scanning = true
-                                /* TODO: request camera permission on iOS */
+                                scanning = true
                             }) {
                                 AppIcon(AppIcons.ScanQr)
                             }
                         }
                     },
-                    supportingText = resolvedType?.let {
-                        { Text("Detected: ${it.replaceFirstChar { c -> c.uppercase() }}") }
+                    isError = state.resolution is LinkResolutionState.NotFound ||
+                        state.resolution is LinkResolutionState.Error || state.search is LinkSearchState.Error,
+                    supportingText = when (val resolution = state.resolution) {
+                        is LinkResolutionState.Resolved -> {
+                            { Text("Detected: ${resolvedType.orEmpty().replaceFirstChar { it.uppercase() }}") }
+                        }
+                        LinkResolutionState.NotFound -> ({ Text("Resource not found") })
+                        is LinkResolutionState.Error -> ({ Text(resolution.message) })
+                        else -> when (val search = state.search) {
+                            is LinkSearchState.Error -> ({ Text(search.message) })
+                            is LinkSearchState.Results -> search.warning?.let { warning -> ({ Text(warning) }) }
+                            else -> null
+                        }
                     }
                 )
 
+                val lookupCanRetry = state.search is LinkSearchState.Error ||
+                    (state.search as? LinkSearchState.Results)?.warning != null ||
+                    state.resolution is LinkResolutionState.Error
+                if (lookupCanRetry) {
+                    TextButton(
+                        onClick = { viewModel.retryLookup(resource) },
+                        enabled = !isSearchingNames && !isResolving
+                    ) {
+                        Text("Retry")
+                    }
+                }
+
                 // ── Search results from project ───────────────────────────────
-                if (searchResults.isNotEmpty() && resolvedUuid == null) {
+                if (searchResults.isNotEmpty() && selectedResource == null) {
                     Text("Results", style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     searchResults.forEach { result ->
@@ -265,10 +247,7 @@ fun LinkResourceSheet(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = MaterialTheme.shapes.small,
                             modifier = Modifier.fillMaxWidth().clickable {
-                                input = result.uniqueId
-                                resolvedUuid = result.uniqueId
-                                resolvedType = resultType
-                                selectedResource = result
+                                viewModel.selectResource(result)
                             }
                         ) {
                             Row(
@@ -306,15 +285,22 @@ fun LinkResourceSheet(
                         }
                     }
                 }
+                if (state.search is LinkSearchState.Results && searchResults.isEmpty()) {
+                    Text(
+                        "No matching resources",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
                 // ── Direction selector (same-type only) ───────────────────────
                 if (resolvedType != null && isSameType) {
                     ExposedDropdownMenuBox(
                         expanded = directionExpanded,
-                        onExpandedChange = { directionExpanded = it }
+                        onExpandedChange = { if (!isLinking) directionExpanded = it }
                     ) {
                         OutlinedTextField(
-                            value = if (direction == Direction.THEY_ARE_PARENT)
+                            value = if (direction == ResourceLinkDirection.THEY_ARE_PARENT)
                                 "Linked $currentType is parent" else "This $currentType is parent",
                             onValueChange = {},
                             readOnly = true,
@@ -329,11 +315,11 @@ fun LinkResourceSheet(
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Linked $currentType is parent") },
-                                onClick = { direction = Direction.THEY_ARE_PARENT; directionExpanded = false }
+                                onClick = { direction = ResourceLinkDirection.THEY_ARE_PARENT; directionExpanded = false }
                             )
                             DropdownMenuItem(
                                 text = { Text("This $currentType is parent") },
-                                onClick = { direction = Direction.THEY_ARE_CHILD; directionExpanded = false }
+                                onClick = { direction = ResourceLinkDirection.THEY_ARE_CHILD; directionExpanded = false }
                             )
                         }
                     }
@@ -341,7 +327,7 @@ fun LinkResourceSheet(
 
                 // ── Link summary (cross-type) ─────────────────────────────────
                 if (resolvedType != null && !isSameType) {
-                    val desc = buildLinkDescription(currentType, resolvedType!!)
+                    val desc = buildLinkDescription(currentType, resolvedType)
                     if (desc != null) {
                         Surface(
                             color = MaterialTheme.colorScheme.primaryContainer,
@@ -371,9 +357,7 @@ fun LinkResourceSheet(
                                 color = MaterialTheme.colorScheme.surfaceVariant,
                                 shape = MaterialTheme.shapes.small,
                                 modifier = Modifier.fillMaxWidth().clickable {
-                                    input = item.uuid
-                                    resolvedUuid = null
-                                    resolvedType = null
+                                    viewModel.updateInput(item.uuid, resource)
                                 }
                             ) {
                                 Row(
@@ -395,31 +379,15 @@ fun LinkResourceSheet(
                 }
 
                 // ── Link button ───────────────────────────────────────────────
+                (state.submission as? LinkSubmissionState.Error)?.let {
+                    Text(
+                        it.message,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
                 Button(
-                    onClick = {
-                        scope.launch {
-                            isLinking = true
-                            try {
-                                val targetUuid = (resolvedUuid ?: input).trim()
-                                val targetType = resolvedType ?: run {
-                                    snackbarHostState.showSnackbar("Couldn't identify resource type")
-                                    return@launch
-                                }
-                                val ok = performLink(apiClient, resource, currentType, targetUuid, targetType, direction)
-                                if (ok) {
-                                    onLinked()
-                                } else {
-                                    snackbarHostState.showSnackbar("Link failed — check the ID and try again")
-                                }
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                snackbarHostState.showSnackbar("Connection error — check your network")
-                            } finally {
-                                isLinking = false
-                            }
-                        }
-                    },
+                    onClick = { viewModel.submit(resource, direction) },
                     enabled = resolvedType != null && !isLinking,
                     modifier = Modifier.fillMaxWidth().height(52.dp)
                 ) {
@@ -436,11 +404,6 @@ fun LinkResourceSheet(
                     }
                 }
             }
-
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp)
-            )
         }
     }
 }
@@ -449,35 +412,4 @@ private fun buildLinkDescription(currentType: String, targetType: String): Strin
     currentType == "sample" && targetType == "dataset" -> "This sample will be linked to the dataset"
     currentType == "dataset" && targetType == "sample" -> "The sample will be linked to this dataset"
     else -> null
-}
-
-private suspend fun performLink(
-    apiClient: ApiClient,
-    current: CrucibleResource,
-    currentType: String,
-    targetUuid: String,
-    targetType: String,
-    direction: Direction
-): Boolean {
-    val api = apiClient.service
-    val resp = when {
-        currentType == "sample" && targetType == "sample" -> {
-            if (direction == Direction.THEY_ARE_PARENT)
-                api.linkSamples(parentUuid = targetUuid, childUuid = current.uniqueId)
-            else
-                api.linkSamples(parentUuid = current.uniqueId, childUuid = targetUuid)
-        }
-        currentType == "dataset" && targetType == "dataset" -> {
-            if (direction == Direction.THEY_ARE_PARENT)
-                api.linkDatasets(parentUuid = targetUuid, childUuid = current.uniqueId)
-            else
-                api.linkDatasets(parentUuid = current.uniqueId, childUuid = targetUuid)
-        }
-        currentType == "sample" && targetType == "dataset" ->
-            api.linkDatasetSample(datasetUuid = targetUuid, sampleUuid = current.uniqueId)
-        currentType == "dataset" && targetType == "sample" ->
-            api.linkDatasetSample(datasetUuid = current.uniqueId, sampleUuid = targetUuid)
-        else -> return false
-    }
-    return resp is ApiResult.Success
 }

@@ -21,19 +21,25 @@ import platform.PhotosUI.PHPickerConfiguration
 import platform.PhotosUI.PHPickerFilter
 import platform.PhotosUI.PHPickerResult
 import platform.PhotosUI.PHPickerViewControllerDelegateProtocol
+import platform.darwin.dispatch_async
+import platform.darwin.dispatch_get_main_queue
 
 @Composable
-actual fun rememberCameraPicker(onResult: (ByteArray?) -> Unit): () -> Unit {
-    val callback = remember { CameraCallback(onResult) }
-    return remember {
-        {
+actual fun rememberCameraPicker(onResult: (CameraPickerResult) -> Unit): () -> Unit {
+    val currentOnResult = androidx.compose.runtime.rememberUpdatedState(onResult)
+    val callback = remember { CameraCallback { currentOnResult.value(it) } }
+    val launchCamera = remember(callback) {
+        fun launch() {
             val cameraType = UIImagePickerControllerSourceType.UIImagePickerControllerSourceTypeCamera
             if (!UIImagePickerController.isSourceTypeAvailable(cameraType)) {
-                onResult(null)
-                return@remember
+                currentOnResult.value(CameraPickerResult.Unavailable)
+                return
             }
             val rootVC = UIApplication.sharedApplication.keyWindow?.rootViewController
-                ?: run { onResult(null); return@remember }
+            if (rootVC == null) {
+                currentOnResult.value(CameraPickerResult.Failure("The camera could not be opened"))
+                return
+            }
             try {
                 val picker = UIImagePickerController()
                 picker.sourceType = cameraType
@@ -41,25 +47,35 @@ actual fun rememberCameraPicker(onResult: (ByteArray?) -> Unit): () -> Unit {
                 picker.delegate = callback
                 rootVC.presentViewController(picker, animated = true, completion = null)
             } catch (_: Throwable) {
-                onResult(null)
+                currentOnResult.value(CameraPickerResult.Failure("The camera could not be opened"))
             }
         }
+        ::launch
     }
+    return remember(launchCamera) { { launchCamera() } }
 }
 
 @Composable
-actual fun rememberGalleryPicker(onResult: (ByteArray?) -> Unit): () -> Unit {
-    val callback = remember { GalleryCallback(onResult) }
-    return remember {
+actual fun rememberImagePicker(onResult: (ImagePickerResult) -> Unit): () -> Unit {
+    val currentOnResult = androidx.compose.runtime.rememberUpdatedState(onResult)
+    val callback = remember { ImageCallback { currentOnResult.value(it) } }
+    return remember(callback) {
         {
             val rootVC = UIApplication.sharedApplication.keyWindow?.rootViewController
-                ?: return@remember
+            if (rootVC == null) {
+                currentOnResult.value(ImagePickerResult.Failure("The image picker could not be opened"))
+                return@remember
+            }
             val config = PHPickerConfiguration()
             config.filter = PHPickerFilter.imagesFilter
             config.selectionLimit = 1
-            val picker = PHPickerViewController(configuration = config)
-            picker.delegate = callback
-            rootVC.presentViewController(picker, animated = true, completion = null)
+            try {
+                val picker = PHPickerViewController(configuration = config)
+                picker.delegate = callback
+                rootVC.presentViewController(picker, animated = true, completion = null)
+            } catch (_: Throwable) {
+                currentOnResult.value(ImagePickerResult.Failure("The image picker could not be opened"))
+            }
         }
     }
 }
@@ -76,7 +92,7 @@ private fun UIImage.toJpegBytes(): ByteArray? {
 }
 
 private class CameraCallback(
-    private val onResult: (ByteArray?) -> Unit
+    private val onResult: (CameraPickerResult) -> Unit
 ) : NSObject(), UIImagePickerControllerDelegateProtocol, UINavigationControllerDelegateProtocol {
 
     override fun imagePickerController(
@@ -86,28 +102,33 @@ private class CameraCallback(
         val image = (didFinishPickingMediaWithInfo[UIImagePickerControllerEditedImage]
             ?: didFinishPickingMediaWithInfo[UIImagePickerControllerOriginalImage]) as? UIImage
         picker.dismissViewControllerAnimated(true, completion = null)
-        onResult(image?.toJpegBytes())
+        val bytes = image?.toJpegBytes()
+        onResult(
+            if (bytes == null || bytes.isEmpty()) CameraPickerResult.Failure("The captured image could not be read")
+            else CameraPickerResult.Success(bytes)
+        )
     }
 
     override fun imagePickerControllerDidCancel(picker: UIImagePickerController) {
         picker.dismissViewControllerAnimated(true, completion = null)
-        onResult(null)
+        onResult(CameraPickerResult.Cancelled)
     }
 }
 
-private class GalleryCallback(
-    private val onResult: (ByteArray?) -> Unit
+private class ImageCallback(
+    private val onResult: (ImagePickerResult) -> Unit
 ) : NSObject(), PHPickerViewControllerDelegateProtocol {
 
     override fun picker(picker: PHPickerViewController, didFinishPicking: List<*>) {
         picker.dismissViewControllerAnimated(true, completion = null)
         val result = didFinishPicking.firstOrNull() as? PHPickerResult ?: run {
-            onResult(null)
+            onResult(ImagePickerResult.Cancelled)
             return
         }
+        val filename = normalizePickedImageFilename(result.itemProvider.suggestedName)
         result.itemProvider.loadDataRepresentationForTypeIdentifier(
             typeIdentifier = "public.image"
-        ) { data, _ ->
+        ) { data, error ->
             @OptIn(ExperimentalForeignApi::class)
             val bytes = data?.let { nsData ->
                 val size = nsData.length.toInt()
@@ -117,7 +138,15 @@ private class GalleryCallback(
                 }
                 arr
             }
-            onResult(bytes)
+            dispatch_async(dispatch_get_main_queue()) {
+                onResult(
+                    if (error != null || bytes == null || bytes.isEmpty()) {
+                        ImagePickerResult.Failure("The selected image could not be read")
+                    } else {
+                        ImagePickerResult.Success(bytes, filename)
+                    }
+                )
+            }
         }
     }
 }

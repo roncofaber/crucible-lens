@@ -9,27 +9,42 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import crucible.lens.data.model.User
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
-class PreferencesManager(private val context: Context) : AppPreferences {
+class PreferencesManager(
+    private val context: Context,
+    secureCredentialStore: SecureCredentialStore = AndroidSecureCredentialStore(context)
+) : AppPreferences {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val credentialManager = SecureCredentialManager(secureCredentialStore)
+    private val credentialsLoaded = MutableStateFlow(false)
 
-    /** True once DataStore has emitted its first snapshot — all StateFlows have real values. */
-    val isLoaded: StateFlow<Boolean> = context.dataStore.data
+    private val dataStoreLoaded = context.dataStore.data
         .map { true }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
+    override val isLoaded: StateFlow<Boolean> = combine(dataStoreLoaded, credentialsLoaded) { data, credentials ->
+        data && credentials
+    }.stateIn(scope, SharingStarted.Eagerly, false)
+
     companion object {
         private val API_KEY = stringPreferencesKey("api_key")
+        private val ACTIVE_ACCOUNT_ID = stringPreferencesKey("active_account_id")
         private val API_BASE_URL = stringPreferencesKey("api_base_url")
         private val GRAPH_EXPLORER_URL = stringPreferencesKey("graph_explorer_url")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
@@ -57,7 +72,7 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         const val PROJECT_TAB_SAMPLES = "SAMPLES"
         const val PROJECT_TAB_DATASETS = "DATASETS"
 
-        const val DEFAULT_API_BASE_URL = "https://crucible.lbl.gov/api/v2/"
+        const val DEFAULT_API_BASE_URL = AppPreferences.DEFAULT_API_BASE_URL
         const val DEFAULT_GRAPH_EXPLORER_URL = "https://crucible.lbl.gov/explore/"
         const val THEME_MODE_SYSTEM = "system"
         const val THEME_MODE_LIGHT = "light"
@@ -68,10 +83,63 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         private val profileJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true }
     }
 
-    override val apiKey: StateFlow<String?> = context.dataStore.data.map { preferences ->
-        preferences[API_KEY]
+    private fun Preferences.legacyProfile(): User? = this[USER_PROFILE]?.let { value ->
+        runCatching { profileJson.decodeFromString<User>(value) }.getOrNull()
     }
+
+    private fun Preferences.legacyAccountData(): AccountPreferencesData = AccountPreferencesData(
+        lastVisitedResource = this[LAST_VISITED_RESOURCE],
+        lastVisitedResourceName = this[LAST_VISITED_RESOURCE_NAME],
+        pinnedProjects = this[PINNED_PROJECTS].toStringSet(),
+        syncedProjects = this[SYNCED_PROJECTS].toStringSet(),
+        syncSetupComplete = this[SYNC_SETUP_COMPLETE]?.toBoolean() ?: false,
+        pinnedInstruments = this[PINNED_INSTRUMENTS].toStringSet(),
+        hiddenInstruments = this[HIDDEN_INSTRUMENTS].toStringSet(),
+        userOrcid = this[USER_ORCID],
+        userProfile = legacyProfile(),
+        resourceHistory = this[RESOURCE_HISTORY]?.split(",")?.mapNotNull { it.toHistoryItem() } ?: emptyList()
+    )
+
+    private fun Preferences.currentAccount(): Pair<String?, AccountPreferencesData> {
+        val activeId = this[ACTIVE_ACCOUNT_ID]
+        if (activeId != null) {
+            val value = this[stringPreferencesKey(accountPreferencesStorageKey(activeId))]
+            return activeId to decodeAccountPreferences(value)
+        }
+        val legacyProfile = legacyProfile()
+        val legacyId = legacyProfile?.let(::accountIdFor) ?: this[USER_ORCID]
+        return legacyId to if (legacyId != null) legacyAccountData() else AccountPreferencesData()
+    }
+
+    private val accountState = context.dataStore.data
+        .map { it.currentAccount() }
+        .stateIn(scope, SharingStarted.Eagerly, null to AccountPreferencesData())
+
+    override val activeAccountId: StateFlow<String?> = accountState
+        .map { it.first }
         .stateIn(scope, SharingStarted.Eagerly, null)
+
+    private val _apiKey = MutableStateFlow<String?>(null)
+    override val apiKey: StateFlow<String?> = _apiKey.asStateFlow()
+
+    init {
+        scope.launch {
+            try {
+                _apiKey.value = credentialManager.loadAndMigrate(
+                    legacyCredential = { context.dataStore.data.first()[API_KEY] },
+                    removeLegacyCredential = {
+                        context.dataStore.edit { preferences -> preferences.remove(API_KEY) }
+                    }
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _apiKey.value = null
+            } finally {
+                credentialsLoaded.value = true
+            }
+        }
+    }
 
     override val apiBaseUrl: StateFlow<String> = context.dataStore.data.map { preferences ->
         preferences[API_BASE_URL] ?: DEFAULT_API_BASE_URL
@@ -98,14 +166,10 @@ class PreferencesManager(private val context: Context) : AppPreferences {
     }
         .stateIn(scope, SharingStarted.Eagerly, DEFAULT_ACCENT_CONTRAST)
 
-    override val lastVisitedResource: StateFlow<String?> = context.dataStore.data.map { preferences ->
-        preferences[LAST_VISITED_RESOURCE]
-    }
+    override val lastVisitedResource: StateFlow<String?> = accountState.map { it.second.lastVisitedResource }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
-    override val lastVisitedResourceName: StateFlow<String?> = context.dataStore.data.map { preferences ->
-        preferences[LAST_VISITED_RESOURCE_NAME]
-    }
+    override val lastVisitedResourceName: StateFlow<String?> = accountState.map { it.second.lastVisitedResourceName }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
     override val floatingScanButton: StateFlow<Boolean> = context.dataStore.data.map { preferences ->
@@ -113,24 +177,16 @@ class PreferencesManager(private val context: Context) : AppPreferences {
     }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
-    override val pinnedProjects: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
-        prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
-    }
+    override val pinnedProjects: StateFlow<Set<String>> = accountState.map { it.second.pinnedProjects }
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
-    override val syncedProjects: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
-        prefs[SYNCED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
-    }
+    override val syncedProjects: StateFlow<Set<String>> = accountState.map { it.second.syncedProjects }
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
-    override val syncSetupComplete: StateFlow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[SYNC_SETUP_COMPLETE]?.toBoolean() ?: false
-    }
+    override val syncSetupComplete: StateFlow<Boolean> = accountState.map { it.second.syncSetupComplete }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
-    override val hiddenInstruments: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
-        prefs[HIDDEN_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
-    }
+    override val hiddenInstruments: StateFlow<Set<String>> = accountState.map { it.second.hiddenInstruments }
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
     override val sampleGroupBy: StateFlow<String> = context.dataStore.data.map { prefs ->
@@ -168,31 +224,47 @@ class PreferencesManager(private val context: Context) : AppPreferences {
     }
         .stateIn(scope, SharingStarted.Eagerly, AppPreferences.DEFAULT_SEARCH_RESULT_LIMIT)
 
-    override val pinnedInstruments: StateFlow<Set<String>> = context.dataStore.data.map { prefs ->
-        prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
-    }
+    override val pinnedInstruments: StateFlow<Set<String>> = accountState.map { it.second.pinnedInstruments }
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
-    override val userOrcid: StateFlow<String?> = context.dataStore.data.map { preferences ->
-        preferences[USER_ORCID]
-    }
+    override val userOrcid: StateFlow<String?> = accountState.map { it.second.userOrcid }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
-    override val userProfile: StateFlow<User?> = context.dataStore.data.map { preferences ->
-        preferences[USER_PROFILE]?.let { json ->
-            runCatching { profileJson.decodeFromString<User>(json) }.getOrNull()
-        }
-    }
+    override val userProfile: StateFlow<User?> = accountState.map { it.second.userProfile }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
-    override val resourceHistory: StateFlow<List<HistoryItem>> = context.dataStore.data.map { prefs ->
-        prefs[RESOURCE_HISTORY]?.split(",")?.mapNotNull { it.toHistoryItem() } ?: emptyList()
-    }
+    override val resourceHistory: StateFlow<List<HistoryItem>> = accountState.map { it.second.resourceHistory }
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     override suspend fun saveApiKey(key: String) {
+        credentialManager.save(key)
         context.dataStore.edit { preferences ->
-            preferences[API_KEY] = key
+            preferences.remove(API_KEY)
+        }
+        _apiKey.value = key
+    }
+
+    override suspend fun activateAccount(accountId: String) {
+        context.dataStore.edit { prefs ->
+            val storageKey = stringPreferencesKey(accountPreferencesStorageKey(accountId))
+            if (prefs[storageKey] == null) {
+                val legacyOwner = prefs.legacyProfile()?.let(::accountIdFor) ?: prefs[USER_ORCID]
+                val initialData = if (legacyOwner == accountId) {
+                    prefs.legacyAccountData()
+                } else {
+                    AccountPreferencesData()
+                }
+                prefs[storageKey] = encodeAccountPreferences(initialData)
+            }
+            prefs[ACTIVE_ACCOUNT_ID] = accountId
+            prefs.removeLegacyAccountData()
+        }
+    }
+
+    override suspend fun deactivateAccount() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(ACTIVE_ACCOUNT_ID)
+            prefs.removeLegacyAccountData()
         }
     }
 
@@ -227,9 +299,16 @@ class PreferencesManager(private val context: Context) : AppPreferences {
     }
 
     override suspend fun saveLastVisitedResource(uuid: String, name: String) {
-        context.dataStore.edit { preferences ->
-            preferences[LAST_VISITED_RESOURCE] = uuid
-            preferences[LAST_VISITED_RESOURCE_NAME] = name
+        updateAccountData { data ->
+            data.copy(lastVisitedResource = uuid, lastVisitedResourceName = name)
+        }
+    }
+
+    private suspend fun updateAccountData(update: (AccountPreferencesData) -> AccountPreferencesData) {
+        context.dataStore.edit { prefs ->
+            val accountId = prefs[ACTIVE_ACCOUNT_ID] ?: return@edit
+            val key = stringPreferencesKey(accountPreferencesStorageKey(accountId))
+            prefs[key] = encodeAccountPreferences(update(decodeAccountPreferences(prefs[key])))
         }
     }
 
@@ -240,46 +319,49 @@ class PreferencesManager(private val context: Context) : AppPreferences {
     }
 
     override suspend fun clearApiKey() {
+        credentialManager.clear()
         context.dataStore.edit { preferences ->
             preferences.remove(API_KEY)
         }
+        _apiKey.value = null
     }
 
     override suspend fun togglePinnedProject(id: String) {
-        context.dataStore.edit { prefs ->
-            val current = prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+        updateAccountData { data ->
+            val current = data.pinnedProjects.toMutableSet()
             val adding = id !in current
             if (adding) current.add(id) else current.remove(id)
-            prefs[PINNED_PROJECTS] = current.joinToString(",")
-            if (adding) {
-                val synced = prefs[SYNCED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
-                synced.add(id)
-                prefs[SYNCED_PROJECTS] = synced.joinToString(",")
-            }
+            val synced = data.syncedProjects.toMutableSet()
+            if (adding) synced.add(id)
+            data.copy(pinnedProjects = current, syncedProjects = synced)
         }
     }
 
+    override suspend fun setPinnedProjects(ids: Set<String>) {
+        updateAccountData { it.copy(pinnedProjects = ids) }
+    }
+
     override suspend fun toggleSyncedProject(id: String) {
-        context.dataStore.edit { prefs ->
-            val current = prefs[SYNCED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+        updateAccountData { data ->
+            val current = data.syncedProjects.toMutableSet()
             if (id in current) current.remove(id) else current.add(id)
-            prefs[SYNCED_PROJECTS] = current.joinToString(",")
+            data.copy(syncedProjects = current)
         }
     }
 
     override suspend fun setSyncedProjects(ids: Set<String>) {
-        context.dataStore.edit { prefs -> prefs[SYNCED_PROJECTS] = ids.joinToString(",") }
+        updateAccountData { it.copy(syncedProjects = ids) }
     }
 
     override suspend fun saveSyncSetupComplete(complete: Boolean) {
-        context.dataStore.edit { prefs -> prefs[SYNC_SETUP_COMPLETE] = complete.toString() }
+        updateAccountData { it.copy(syncSetupComplete = complete) }
     }
 
     override suspend fun toggleHiddenInstrument(id: String) {
-        context.dataStore.edit { prefs ->
-            val current = prefs[HIDDEN_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+        updateAccountData { data ->
+            val current = data.hiddenInstruments.toMutableSet()
             if (id in current) current.remove(id) else current.add(id)
-            prefs[HIDDEN_INSTRUMENTS] = current.joinToString(",")
+            data.copy(hiddenInstruments = current)
         }
     }
 
@@ -312,47 +394,53 @@ class PreferencesManager(private val context: Context) : AppPreferences {
     }
 
     override suspend fun togglePinnedInstrument(id: String) {
-        context.dataStore.edit { prefs ->
-            val instruments = prefs[PINNED_INSTRUMENTS]?.split(",")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
-            val projects = prefs[PINNED_PROJECTS]?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+        updateAccountData { data ->
+            val instruments = data.pinnedInstruments.toMutableSet()
             if (id in instruments) instruments.remove(id)
             else instruments.add(id)
-            prefs[PINNED_INSTRUMENTS] = instruments.joinToString(",")
+            data.copy(pinnedInstruments = instruments)
         }
     }
 
     override suspend fun saveUserOrcid(orcid: String?) {
-        context.dataStore.edit { preferences ->
-            if (orcid != null) preferences[USER_ORCID] = orcid
-            else preferences.remove(USER_ORCID)
-        }
+        updateAccountData { it.copy(userOrcid = orcid) }
     }
 
     override suspend fun saveUserProfile(user: User?) {
-        context.dataStore.edit { preferences ->
-            if (user != null) preferences[USER_PROFILE] = profileJson.encodeToString(User.serializer(), user)
-            else preferences.remove(USER_PROFILE)
-        }
+        updateAccountData { it.copy(userProfile = user, userOrcid = user?.uniqueId ?: it.userOrcid) }
     }
 
     override suspend fun clearUserProfile() {
-        context.dataStore.edit { preferences ->
-            preferences.remove(USER_PROFILE)
-        }
+        updateAccountData { it.copy(userProfile = null) }
     }
 
     override suspend fun clearHistory() {
-        context.dataStore.edit { prefs -> prefs.remove(RESOURCE_HISTORY) }
+        updateAccountData { it.copy(resourceHistory = emptyList()) }
     }
 
     override suspend fun addToHistory(uuid: String, name: String, resourceType: String?, projectId: String?) {
-        context.dataStore.edit { prefs ->
-            val existing = prefs[RESOURCE_HISTORY]?.split(",")?.mapNotNull { it.toHistoryItem() } ?: emptyList()
+        updateAccountData { data ->
             val updated = listOf(HistoryItem(uuid, name, System.currentTimeMillis(), resourceType, projectId)) +
-                existing.filter { it.uuid != uuid }
-            prefs[RESOURCE_HISTORY] = updated.take(20).joinToString(",") { it.toHistoryEntry() }
+                data.resourceHistory.filter { it.uuid != uuid }
+            data.copy(resourceHistory = updated.take(20))
         }
     }
+
+    private fun androidx.datastore.preferences.core.MutablePreferences.removeLegacyAccountData() {
+        remove(LAST_VISITED_RESOURCE)
+        remove(LAST_VISITED_RESOURCE_NAME)
+        remove(PINNED_PROJECTS)
+        remove(SYNCED_PROJECTS)
+        remove(SYNC_SETUP_COMPLETE)
+        remove(HIDDEN_INSTRUMENTS)
+        remove(PINNED_INSTRUMENTS)
+        remove(USER_ORCID)
+        remove(USER_PROFILE)
+        remove(RESOURCE_HISTORY)
+    }
+
+    private fun String?.toStringSet(): Set<String> =
+        this?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
 
     private fun String.toHistoryItem(): HistoryItem? {
         val parts = split("|||")
@@ -365,6 +453,4 @@ class PreferencesManager(private val context: Context) : AppPreferences {
         ) else null
     }
 
-    private fun HistoryItem.toHistoryEntry(): String =
-        "$uuid|||$name|||$timestamp|||${resourceType ?: ""}|||${projectId ?: ""}"
 }

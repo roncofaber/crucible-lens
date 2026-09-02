@@ -43,6 +43,7 @@ fun CreateDatasetScreen(
     var name by rememberSaveable { mutableStateOf(prefill?.name?.let { "$it (copy)" } ?: "") }
     var measurement by rememberSaveable { mutableStateOf(prefill?.measurement ?: "") }
     var instrumentName by rememberSaveable { mutableStateOf(prefill?.instrumentName ?: "") }
+    var instrumentId by rememberSaveable { mutableStateOf(prefill?.instrumentId) }
     var sessionName by rememberSaveable { mutableStateOf(prefill?.sessionName ?: "") }
     var dataType by rememberSaveable { mutableStateOf("") }
     var metadata by remember { mutableStateOf<JsonObject?>(null) }
@@ -228,7 +229,12 @@ fun CreateDatasetScreen(
                 singleLine = true,
                 leadingIcon = { AppIcon(AppIcons.Tag) }
             )
-            InstrumentPickerField(value = instrumentName, onValueChange = { instrumentName = it }, modifier = Modifier.fillMaxWidth())
+            InstrumentPickerField(
+                value = instrumentName,
+                onValueChange = { instrumentName = it },
+                onInstrumentSelected = { instrumentId = it?.instrumentId },
+                modifier = Modifier.fillMaxWidth()
+            )
             DateTimePickerField(value = timestamp, onValueChange = { timestamp = it }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(
                 value = dataType,
@@ -279,7 +285,8 @@ fun CreateDatasetScreen(
                             datasetName = name.trim(),
                             projectId = selectedProjectId,
                             measurement = measurement.trim().ifBlank { null },
-                            instrumentName = instrumentName.trim().ifBlank { null },
+                            instrumentName = instrumentName.trim().ifBlank { null }.takeIf { instrumentId == null },
+                            instrumentId = instrumentId,
                             sessionName = sessionName.trim().ifBlank { null },
                             timestamp = timestamp.trim().ifBlank { null },
                             dataType = dataType.trim().ifBlank { null },

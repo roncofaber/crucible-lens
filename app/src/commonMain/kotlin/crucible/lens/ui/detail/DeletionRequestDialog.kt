@@ -5,28 +5,25 @@ import crucible.lens.ui.common.AppIcons
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.CrucibleResource
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
 
 @Composable
 internal fun DeletionRequestDialog(
     resource: CrucibleResource,
+    submissionState: DeletionRequestSubmissionState,
     onDismiss: () -> Unit,
-    onSubmit: suspend (reason: String?) -> ApiResult<Unit>,
-    onSubmitted: () -> Unit
+    onSubmit: (reason: String) -> Unit
 ) {
-    var reason by remember { mutableStateOf("") }
-    var isSubmitting by remember { mutableStateOf(false) }
-    var errorMsg by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
+    var reason by rememberSaveable { mutableStateOf("") }
+    val isSubmitting = submissionState is DeletionRequestSubmissionState.Submitting
+    val errorMessage = (submissionState as? DeletionRequestSubmissionState.Error)?.message
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isSubmitting) onDismiss() },
         title = {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 AppIcon(AppIcons.RequestDeletion)
@@ -47,9 +44,9 @@ internal fun DeletionRequestDialog(
                     minLines = 2,
                     maxLines = 4,
                 )
-                if (errorMsg != null) {
+                if (errorMessage != null) {
                     Text(
-                        errorMsg!!,
+                        errorMessage,
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -58,25 +55,7 @@ internal fun DeletionRequestDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = {
-                    scope.launch {
-                        isSubmitting = true
-                        errorMsg = null
-                        try {
-                            val resp = onSubmit(reason.trim().ifBlank { null })
-                            when (resp) {
-                                is ApiResult.Success -> onSubmitted()
-                                is ApiResult.Error -> errorMsg = "Failed (${resp.code}) — a request may already exist"
-                            }
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            errorMsg = "Network error: ${e.message}"
-                        } finally {
-                            isSubmitting = false
-                        }
-                    }
-                },
+                onClick = { onSubmit(reason) },
                 enabled = !isSubmitting
             ) {
                 if (isSubmitting) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -84,7 +63,7 @@ internal fun DeletionRequestDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss, enabled = !isSubmitting) { Text("Cancel") }
         }
     )
 }

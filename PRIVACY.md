@@ -1,7 +1,7 @@
 # Privacy Policy for Crucible Lens
 
 **Effective:** August 11, 2026
-**Last updated:** August 11, 2026
+**Last updated:** August 27, 2026
 
 ## Who provides this app
 
@@ -25,17 +25,17 @@ Crucible Lens is intended for people who already hold, or can obtain, a Crucible
 
 ## What the app stores on your device
 
-All of the following is stored locally, in the app's own private storage, using standard platform mechanisms (Android DataStore and app-private files; iOS `NSUserDefaults` and app-private files). None of it is transmitted to the developer.
+All of the following is stored locally, in the app's own private storage, using standard platform mechanisms (Android DataStore, Android Keystore, and app-private files; iOS Keychain, `NSUserDefaults`, and app-private files). None of it is transmitted to the developer.
 
-- **Your Crucible API key.** Held only to authenticate your requests to the Crucible server. If you sign in with ORCID, this is the key issued by Crucible at the end of that flow.
+- **Your Crucible API key.** Held only to authenticate your requests to the Crucible server. On Android it is encrypted with a non-exportable key held by Android Keystore. On iOS it is stored as a device-only Keychain item. If you sign in with ORCID, this is the key issued by Crucible at the end of that flow.
 - **Your Crucible profile**, as returned by the server: first name, last name, email, username, and ORCID iD. Used to display your identity within the app.
 - **App settings**: theme, accent color, server URLs, pinned and hidden items, sync selections, grouping and result-limit preferences.
 - **Recently viewed items**: a local list of samples, datasets, and projects you have opened, to facilitate navigation.
-- **A cached copy of project records** you have access to, held for up to 24 hours and then discarded.
+- **Offline copies of synced projects.** For projects you select for offline access, the app stores project records and their sample and dataset information until you stop syncing the project, clear the cache, sign out, switch accounts, or uninstall the app.
 
-Other information the app displays about Crucible users, projects, samples, datasets, and instruments is held in memory only while the app is running, and is discarded when it exits.
+Other information the app displays about Crucible users, projects, samples, datasets, and instruments is held in memory only while the app is running and is discarded when it exits.
 
-**A note on device backups.** On Android, the app's stored data, including your API key, your profile, and the project cache, is excluded from cloud backup and from device-to-device transfer. On iOS, app preferences may be included in iCloud and computer backups. Those backups are governed by Apple's and Google's own privacy policies, not by this one.
+**A note on device backups.** On Android, the app's stored data, including the encrypted API key, your profile, and offline project data, is excluded from cloud backup and from device-to-device transfer. On iOS, the API key uses device-only Keychain protection and does not migrate to another device, while app preferences and offline project data may be included in iCloud and computer backups. Those backups are governed by Apple's and Google's own privacy policies, not by this one.
 
 ## What the app sends, and to whom
 
@@ -79,13 +79,13 @@ The app lets you point it at a Crucible API server other than the default. **If 
 
 - **Signing out** clears your stored API key from the device.
 - **Clearing the app's storage** through your device's system settings removes all locally stored data, including settings, history, and the project cache.
-- **Uninstalling the app** removes all data the app has stored on your device.
+- **Uninstalling the app** removes app preferences, history, and cached files. On iOS, Keychain items can remain after uninstall, so sign out before uninstalling if you want to ensure the stored API key is removed.
 
 Deleting data locally does not delete anything held by the Crucible server. For that, contact the Crucible platform administrators.
 
 ## Security
 
-Data the app stores is kept in the app's private storage area, which the operating system isolates from other apps. Connections to remote servers use HTTPS. No system is perfectly secure, and the developer cannot guarantee the security of data once it has been transmitted to the Crucible server, or of data held on a device you control. If you believe your Crucible API key has been exposed, revoke and regenerate it through Crucible.
+Data the app stores is kept in the app's private storage area, which the operating system isolates from other apps. The API key additionally uses Android Keystore-backed encryption or the iOS Keychain. Connections to remote servers use HTTPS. No system is perfectly secure, and the developer cannot guarantee the security of data once it has been transmitted to the Crucible server, or of data held on a device you control. If you believe your Crucible API key has been exposed, revoke and regenerate it through Crucible.
 
 If you discover a security or privacy problem in the app, please report it using the contact below.
 

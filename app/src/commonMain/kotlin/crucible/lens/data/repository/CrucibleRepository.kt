@@ -2,24 +2,41 @@ package crucible.lens.data.repository
 
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
+import crucible.lens.data.cache.CachedProjectContent
+import crucible.lens.data.cache.CacheEpoch
 import crucible.lens.data.cache.ObservableCache
+import crucible.lens.data.cache.ProjectCacheOwner
 import crucible.lens.data.model.AssociatedFile
+import crucible.lens.data.model.AccessGrant
+import crucible.lens.data.model.AccessPrincipalKind
+import crucible.lens.data.model.AccessPrincipalType
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Instrument
+import crucible.lens.data.model.InstrumentCreateRequest
+import crucible.lens.data.model.InstrumentStatus
+import crucible.lens.data.model.JoinRequest
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.model.User
+import crucible.lens.data.model.ResourceGrantRole
 import crucible.lens.data.model.creationTimeOrEmpty
+import crucible.lens.data.sync.SingleFlight
 import crucible.lens.data.util.SortState
+import crucible.lens.data.util.accessGrantComparator
+import crucible.lens.data.util.accessGrantMutationTarget
 import crucible.lens.data.util.applySortState
+import crucible.lens.data.util.isMfidReference
 import crucible.lens.data.util.monthBounds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -28,6 +45,26 @@ sealed class ResourceResult {
     data class Success(val resource: CrucibleResource) : ResourceResult()
     data class Error(val message: String) : ResourceResult()
     object Loading : ResourceResult()
+}
+
+data class InstrumentDatasetPage(
+    val datasets: List<Dataset>,
+    val nextCursor: String?
+)
+
+internal const val INSTRUMENT_DATASET_PAGE_SIZE = 100
+
+internal fun mergeInstrumentDatasetPage(
+    current: InstrumentDatasetPage?,
+    incoming: List<Dataset>,
+    nextCursor: String?,
+    append: Boolean
+): InstrumentDatasetPage {
+    val datasets = if (append) current?.datasets.orEmpty() + incoming else incoming
+    return InstrumentDatasetPage(
+        datasets = datasets.distinctBy { it.uniqueId },
+        nextCursor = nextCursor
+    )
 }
 
 private fun httpError(code: Int): ResourceResult.Error = when (code) {
@@ -47,13 +84,37 @@ class CrucibleRepository(
     private val apiClient: ApiClient
 ) {
     private val api get() = apiClient.service
+    private val cacheEpoch = CacheEpoch()
+    private val activeCacheScope = MutableStateFlow<RepositoryCacheScope?>(null)
 
-    // Per-project mutex prevents duplicate concurrent fetches of the same project.
     private val projectFetchMutexes = mutableMapOf<String, Mutex>()
+    private val projectFetchMutexesGuard = Mutex()
+
+    fun activateCacheScope(accountId: String?) {
+        val scope = RepositoryCacheScope(accountId, apiClient.getBaseUrl(), apiClient.getApiKey())
+        if (activeCacheScope.value == scope) return
+        activeCacheScope.value = scope
+        invalidateAll()
+    }
+
+    internal fun captureCacheEpoch(): Long = cacheEpoch.capture()
+
+    internal fun isCacheEpochCurrent(epoch: Long): Boolean = cacheEpoch.isCurrent(epoch)
+
+    internal fun projectCacheOwner(accountId: String): ProjectCacheOwner =
+        ProjectCacheOwner(accountId, apiClient.getBaseUrl())
+
+    private suspend fun projectFetchMutex(projectId: String): Mutex =
+        projectFetchMutexesGuard.withLock { projectFetchMutexes.getOrPut(projectId) { Mutex() } }
 
     private val resourceObservableCache = ObservableCache<String, CrucibleResource>(
         ttlMillis = 10 * 60 * 1000L,
         maxSize = 50
+    )
+
+    private val resourceAccessObservableCache = ObservableCache<String, List<AccessGrant>>(
+        ttlMillis = 10 * 60 * 1000L,
+        maxSize = 30
     )
 
     /**
@@ -68,6 +129,8 @@ class CrucibleRepository(
      * popped them back in once the new fetch landed).
      */
     suspend fun fetchResourceByUuid(uuid: String, forceRefresh: Boolean = false): ResourceResult = withContext(Dispatchers.Default) {
+        val epoch = cacheEpoch.capture()
+        val service = api
         try {
             val cached = resourceObservableCache.get(uuid)
             // Check if we have a fully-loaded cached version (with links)
@@ -75,10 +138,10 @@ class CrucibleRepository(
                 return@withContext ResourceResult.Success(cached)
             }
 
-            when (val result = api.getResource(uuid)) {
+            when (val result = service.getResource(uuid)) {
                 is ApiResult.Success -> {
                     val resource = result.data
-                    resourceObservableCache.put(uuid, resource)
+                    if (cacheEpoch.isCurrent(epoch)) resourceObservableCache.put(uuid, resource)
                     ResourceResult.Success(resource)
                 }
                 is ApiResult.Error -> httpError(result.code)
@@ -90,17 +153,109 @@ class CrucibleRepository(
         }
     }
 
-    /** Reactive read — emits the current cached resource (or null) and re-emits on any change. */
-    fun observeResource(uuid: String): Flow<CrucibleResource?> = resourceObservableCache.observe(uuid)
+    fun observeResource(uuid: String): Flow<CrucibleResource?> = combine(
+        resourceObservableCache.observe(uuid),
+        persistedProjectData
+    ) { detail, persisted -> detail ?: persisted.findResource(uuid) }
 
-    /** One-shot synchronous read — null if absent or expired. */
-    fun getCachedResource(uuid: String): CrucibleResource? = resourceObservableCache.get(uuid)
+    fun getCachedResource(uuid: String): CrucibleResource? =
+        resourceObservableCache.peek(uuid) ?: persistedProjectData.value.findResource(uuid)
 
-    /** Writes a resource straight into the cache — for create/edit flows that already have the fresh object from the API response. */
-    fun cacheResource(uuid: String, resource: CrucibleResource) = resourceObservableCache.put(uuid, resource)
+    fun cacheResource(uuid: String, resource: CrucibleResource, epoch: Long = cacheEpoch.capture()) {
+        if (!cacheEpoch.isCurrent(epoch)) return
+        resourceObservableCache.put(uuid, preserveResourceDetailFields(resourceObservableCache.peek(uuid), resource))
+    }
 
     /** Evicts a single resource, forcing the next fetch to hit the network. */
     fun invalidateResource(uuid: String) = resourceObservableCache.invalidate(uuid)
+
+    suspend fun fetchResourceAccess(resourceMfid: String, forceRefresh: Boolean = false): ApiResult<List<AccessGrant>> {
+        val epoch = cacheEpoch.capture()
+        if (!forceRefresh) {
+            resourceAccessObservableCache.get(resourceMfid)?.let { return ApiResult.Success(it) }
+        }
+        return api.getResourceAccess(resourceMfid).also { result ->
+            if (result is ApiResult.Success && cacheEpoch.isCurrent(epoch)) {
+                resourceAccessObservableCache.put(resourceMfid, result.data)
+            }
+        }
+    }
+
+    fun getCachedResourceAccess(resourceMfid: String): List<AccessGrant>? =
+        resourceAccessObservableCache.get(resourceMfid)
+
+    suspend fun setResourceAccess(
+        resourceMfid: String,
+        kind: AccessPrincipalKind,
+        principal: String,
+        permission: ResourceGrantRole
+    ): ApiResult<AccessGrant> {
+        val epoch = cacheEpoch.capture()
+        return api.setResourceAccess(resourceMfid, kind, principal, permission).also { result ->
+            if (result is ApiResult.Success && cacheEpoch.isCurrent(epoch)) {
+                val current = resourceAccessObservableCache.peek(resourceMfid).orEmpty()
+                resourceAccessObservableCache.put(
+                    resourceMfid,
+                    (current.filterNot { it.principalId == result.data.principalId } + result.data)
+                        .sortedWith(accessGrantComparator)
+                )
+            }
+        }
+    }
+
+    suspend fun revokeResourceAccess(resourceMfid: String, grant: AccessGrant): ApiResult<Boolean> {
+        val target = accessGrantMutationTarget(grant)
+            ?: return ApiResult.Error(422, "This grant cannot be revoked through the client")
+        val epoch = cacheEpoch.capture()
+        return api.revokeResourceAccess(resourceMfid, target.kind, target.principal).also { result ->
+            if (result is ApiResult.Success && result.data && cacheEpoch.isCurrent(epoch)) {
+                val current = resourceAccessObservableCache.peek(resourceMfid).orEmpty()
+                resourceAccessObservableCache.put(resourceMfid, current.filterNot { it.principalId == grant.principalId })
+            }
+        }
+    }
+
+    suspend fun setResourcePublic(resourceMfid: String, isPublic: Boolean): ApiResult<AccessGrant?> {
+        val epoch = cacheEpoch.capture()
+        return if (isPublic) {
+            when (val result = api.publishResource(resourceMfid)) {
+                is ApiResult.Success -> {
+                    if (cacheEpoch.isCurrent(epoch)) {
+                        val current = resourceAccessObservableCache.peek(resourceMfid).orEmpty()
+                        resourceAccessObservableCache.put(
+                            resourceMfid,
+                            (current.filterNot { it.principalType == AccessPrincipalType.Public } + result.data)
+                                .sortedWith(accessGrantComparator)
+                        )
+                        updateCachedResourceVisibility(resourceMfid, true)
+                    }
+                    ApiResult.Success(result.data)
+                }
+                is ApiResult.Error -> result
+            }
+        } else {
+            when (val result = api.unpublishResource(resourceMfid)) {
+                is ApiResult.Success -> {
+                    if (cacheEpoch.isCurrent(epoch)) {
+                        val current = resourceAccessObservableCache.peek(resourceMfid).orEmpty()
+                        resourceAccessObservableCache.put(resourceMfid, current.filterNot { it.principalType == AccessPrincipalType.Public })
+                        updateCachedResourceVisibility(resourceMfid, false)
+                    }
+                    ApiResult.Success(null)
+                }
+                is ApiResult.Error -> result
+            }
+        }
+    }
+
+    private fun updateCachedResourceVisibility(resourceMfid: String, isPublic: Boolean) {
+        val updated = when (val resource = resourceObservableCache.peek(resourceMfid)) {
+            is Sample -> resource.copy(isPublic = isPublic)
+            is Dataset -> resource.copy(isPublic = isPublic)
+            null -> null
+        }
+        if (updated != null) resourceObservableCache.put(resourceMfid, updated)
+    }
 
     /** Age of the cached entry in milliseconds, or null if absent/expired. */
     fun resourceAgeMillis(uuid: String): Long? = resourceObservableCache.ageMillis(uuid)
@@ -128,12 +283,16 @@ class CrucibleRepository(
     )
 
     suspend fun fetchThumbnails(datasetUuid: String, forceRefresh: Boolean = false): List<Thumbnail> = withContext(Dispatchers.Default) {
+        val epoch = cacheEpoch.capture()
+        val service = api
         if (!forceRefresh) {
             thumbnailObservableCache.get(datasetUuid)?.let { return@withContext it }
         }
         try {
-            when (val result = api.getThumbnails(datasetUuid)) {
-                is ApiResult.Success -> result.data.also { thumbnailObservableCache.put(datasetUuid, it) }
+            when (val result = service.getThumbnails(datasetUuid)) {
+                is ApiResult.Success -> result.data.also {
+                    if (cacheEpoch.isCurrent(epoch)) thumbnailObservableCache.put(datasetUuid, it)
+                }
                 is ApiResult.Error -> emptyList()
             }
         } catch (e: CancellationException) {
@@ -151,38 +310,58 @@ class CrucibleRepository(
         ttlMillis = 10 * 60 * 1000L,
         maxSize = 1
     )
-    // Per-project entries, keyed by projectId — populated both in bulk (every project from a
-    // fetchProjects() list fetch is written through here too) and individually (fetchProject()
-    // for a single project, e.g. one found via discover-search that isn't in the member list).
-    // This is what ProjectDetailScreen should observe for its cold-open header.
+    private val projectsFetchFlight = SingleFlight<Long, ApiResult<List<Project>>>()
     private val projectObservableCache = ObservableCache<String, Project>(
         ttlMillis = 10 * 60 * 1000L,
         maxSize = 50
     )
-    private val instrumentsObservableCache = ObservableCache<Unit, List<Instrument>>(
+    private val persistedProjects = MutableStateFlow<List<Project>>(emptyList())
+    private val instrumentsObservableCache = ObservableCache<InstrumentStatus, List<Instrument>>(
         ttlMillis = 10 * 60 * 1000L,
-        maxSize = 1
+        maxSize = InstrumentStatus.entries.size
     )
+    private val instrumentObservableCache = ObservableCache<String, Instrument>(
+        ttlMillis = 10 * 60 * 1000L,
+        maxSize = 30
+    )
+    private val instrumentsFetchFlight = SingleFlight<Pair<Long, InstrumentStatus>, ApiResult<List<Instrument>>>()
 
     /** Cache-first project list fetch. Caches on success. */
     suspend fun fetchProjects(forceRefresh: Boolean = false): ApiResult<List<Project>> {
+        val epoch = cacheEpoch.capture()
+        val service = api
         if (!forceRefresh) {
             projectsObservableCache.get(Unit)?.let { return ApiResult.Success(it) }
         }
-        return api.getProjects().also { result ->
-            if (result is ApiResult.Success) seedProjects(result.data)
+        return projectsFetchFlight.run(epoch) {
+            service.getProjects().also { result ->
+                if (result is ApiResult.Success && cacheEpoch.isCurrent(epoch)) seedProjects(result.data)
+            }
         }
     }
 
-    fun observeProjects(): Flow<List<Project>?> = projectsObservableCache.observe(Unit)
+    fun observeProjects(): Flow<List<Project>?> = combine(
+        projectsObservableCache.observe(Unit),
+        persistedProjects
+    ) { live, persisted -> live ?: persisted.takeIf { it.isNotEmpty() } }
 
-    /** One-shot synchronous read — null if absent or expired. */
-    fun getCachedProjects(): List<Project>? = projectsObservableCache.get(Unit)
+    fun getCachedProjects(): List<Project>? =
+        projectsObservableCache.peek(Unit) ?: persistedProjects.value.takeIf { it.isNotEmpty() }
 
-    /** Writes a project list into the cache without pretending it came from a live fetch — for the disk-cache bootstrap (see PersistentProjectCache). */
+    fun observeLiveProjects(): Flow<List<Project>?> = projectsObservableCache.observe(Unit)
+
+    fun getCachedLiveProjects(): List<Project>? = projectsObservableCache.peek(Unit)
+
     fun seedProjects(projects: List<Project>) {
         projectsObservableCache.put(Unit, projects)
-        projects.forEach { projectObservableCache.put(it.projectId, it) }
+    }
+
+    fun seedPersistedProjects(projects: List<Project>) {
+        persistedProjects.value = projects
+    }
+
+    internal fun seedPersistedProjects(projects: List<Project>, epoch: Long) {
+        if (cacheEpoch.isCurrent(epoch)) seedPersistedProjects(projects)
     }
 
     fun invalidateProjects() = projectsObservableCache.invalidate(Unit)
@@ -198,20 +377,33 @@ class CrucibleRepository(
      * [forceRefresh] behaves like [fetchResourceByUuid]'s — always hits the network but never
      * evicts the existing entry first, so observers keep the old value until the new one lands.
      */
-    suspend fun fetchProject(projectId: String, forceRefresh: Boolean = false): ApiResult<Project> {
-        if (!forceRefresh) {
-            projectObservableCache.get(projectId)?.let { return ApiResult.Success(it) }
+    suspend fun fetchProject(projectReference: String, forceRefresh: Boolean = false): ApiResult<Project> {
+        val epoch = cacheEpoch.capture()
+        val service = api
+        if (!forceRefresh && isMfidReference(projectReference)) {
+            projectObservableCache.get(projectReference)?.let { return ApiResult.Success(it) }
         }
-        return api.getProject(projectId).also { result ->
-            if (result is ApiResult.Success) projectObservableCache.put(projectId, result.data)
+        return service.getProject(projectReference).also { result ->
+            if (result is ApiResult.Success && cacheEpoch.isCurrent(epoch)) {
+                projectObservableCache.put(result.data.uniqueId, result.data)
+            }
         }
     }
 
-    /** Reactive read — emits the current cached project (or null) and re-emits on any change. */
-    fun observeProject(projectId: String): Flow<Project?> = projectObservableCache.observe(projectId)
+    fun observeProject(projectMfid: String): Flow<Project?> = combine(
+        projectObservableCache.observe(projectMfid),
+        projectsObservableCache.observe(Unit),
+        persistedProjects
+    ) { detail, liveProjects, persisted ->
+        detail
+            ?: liveProjects?.find { it.uniqueId == projectMfid }
+            ?: persisted.find { it.uniqueId == projectMfid }
+    }
 
-    /** One-shot synchronous read — null if absent or expired. */
-    fun getCachedProject(projectId: String): Project? = projectObservableCache.get(projectId)
+    fun getCachedProject(projectMfid: String): Project? =
+        projectObservableCache.peek(projectMfid)
+            ?: projectsObservableCache.peek(Unit)?.find { it.uniqueId == projectMfid }
+            ?: persistedProjects.value.find { it.uniqueId == projectMfid }
 
     fun invalidateProject(projectId: String) = projectObservableCache.invalidate(projectId)
 
@@ -224,11 +416,13 @@ class CrucibleRepository(
     )
 
     suspend fun fetchProjectMembers(projectId: String, forceRefresh: Boolean = false): ApiResult<List<User>> {
+        val epoch = cacheEpoch.capture()
+        val service = api
         if (!forceRefresh) {
             projectMembersObservableCache.get(projectId)?.let { return ApiResult.Success(it) }
         }
-        return api.getProjectUsers(projectId).also { result ->
-            if (result is ApiResult.Success) projectMembersObservableCache.put(projectId, result.data)
+        return service.getProjectUsers(projectId).also { result ->
+            if (result is ApiResult.Success && cacheEpoch.isCurrent(epoch)) projectMembersObservableCache.put(projectId, result.data)
         }
     }
 
@@ -237,6 +431,36 @@ class CrucibleRepository(
     fun getCachedProjectMembers(projectId: String): List<User>? = projectMembersObservableCache.get(projectId)
 
     fun invalidateProjectMembers(projectId: String) = projectMembersObservableCache.invalidate(projectId)
+
+    private val myJoinRequestsObservableCache = ObservableCache<Unit, List<JoinRequest>>(
+        ttlMillis = 10 * 60 * 1000L,
+        maxSize = 1
+    )
+
+    suspend fun fetchMyJoinRequests(forceRefresh: Boolean = false): ApiResult<List<JoinRequest>> {
+        val epoch = cacheEpoch.capture()
+        val service = api
+        if (!forceRefresh) {
+            myJoinRequestsObservableCache.get(Unit)?.let { return ApiResult.Success(it) }
+        }
+        return service.getMyJoinRequests().also { result ->
+            if (result is ApiResult.Success && cacheEpoch.isCurrent(epoch)) myJoinRequestsObservableCache.put(Unit, result.data)
+        }
+    }
+
+    fun observeMyJoinRequests(): Flow<List<JoinRequest>?> = myJoinRequestsObservableCache.observe(Unit)
+
+    fun getCachedMyJoinRequests(): List<JoinRequest>? = myJoinRequestsObservableCache.get(Unit)
+
+    internal fun cacheMyJoinRequests(requests: List<JoinRequest>) = myJoinRequestsObservableCache.put(Unit, requests)
+
+    fun updateCachedMyJoinRequest(request: JoinRequest, epoch: Long = cacheEpoch.capture()) {
+        if (!cacheEpoch.isCurrent(epoch)) return
+        val cached = myJoinRequestsObservableCache.get(Unit) ?: return
+        myJoinRequestsObservableCache.put(Unit, cached.filterNot { it.id == request.id } + request)
+    }
+
+    fun invalidateMyJoinRequests() = myJoinRequestsObservableCache.invalidate(Unit)
 
     // Pending join-request count per project, for the lead-facing badge on Home/Projects list.
     // Only ever populated for projects the current user leads (DataSyncManager filters by
@@ -254,11 +478,15 @@ class CrucibleRepository(
      * resolved request clears its badge on the next sync instead of staying stuck.
      */
     suspend fun fetchPendingJoinRequestCounts(ledProjectIds: Collection<String>): ApiResult<Map<String, Int>> {
-        return when (val result = api.getJoinRequests(status = "pending")) {
+        val epoch = cacheEpoch.capture()
+        val service = api
+        return when (val result = service.getJoinRequests(status = "pending")) {
             is ApiResult.Success -> {
                 val counts = result.data.groupingBy { it.groupName }.eachCount()
-                ledProjectIds.forEach { projectId ->
-                    pendingJoinRequestCountObservableCache.put(projectId, counts[projectId] ?: 0)
+                if (cacheEpoch.isCurrent(epoch)) {
+                    ledProjectIds.forEach { projectId ->
+                        pendingJoinRequestCountObservableCache.put(projectId, counts[projectId] ?: 0)
+                    }
                 }
                 ApiResult.Success(counts)
             }
@@ -271,21 +499,64 @@ class CrucibleRepository(
     fun getCachedPendingJoinRequestCount(projectId: String): Int? = pendingJoinRequestCountObservableCache.get(projectId)
 
     /** Cache-first instrument list fetch. Caches on success. */
-    suspend fun fetchInstruments(forceRefresh: Boolean = false): ApiResult<List<Instrument>> {
+    suspend fun fetchInstruments(
+        forceRefresh: Boolean = false,
+        status: InstrumentStatus = InstrumentStatus.Active
+    ): ApiResult<List<Instrument>> {
+        val epoch = cacheEpoch.capture()
+        val service = api
         if (!forceRefresh) {
-            instrumentsObservableCache.get(Unit)?.let { return ApiResult.Success(it) }
+            instrumentsObservableCache.get(status)?.let { return ApiResult.Success(it) }
         }
-        return api.getInstruments().also { result ->
-            if (result is ApiResult.Success) instrumentsObservableCache.put(Unit, result.data)
+        return instrumentsFetchFlight.run(epoch to status) {
+            service.getInstruments(status).also { result ->
+                if (result is ApiResult.Success && cacheEpoch.isCurrent(epoch)) instrumentsObservableCache.put(status, result.data)
+            }
         }
     }
 
-    fun observeInstruments(): Flow<List<Instrument>?> = instrumentsObservableCache.observe(Unit)
+    fun observeInstruments(status: InstrumentStatus = InstrumentStatus.Active): Flow<List<Instrument>?> = instrumentsObservableCache.observe(status)
 
     /** One-shot synchronous read — null if absent or expired. */
-    fun getCachedInstruments(): List<Instrument>? = instrumentsObservableCache.get(Unit)
+    fun getCachedInstruments(status: InstrumentStatus = InstrumentStatus.Active): List<Instrument>? = instrumentsObservableCache.get(status)
 
-    fun invalidateInstruments() = instrumentsObservableCache.invalidate(Unit)
+    suspend fun fetchInstrument(instrumentReference: String, forceRefresh: Boolean = false): ApiResult<Instrument> {
+        val epoch = cacheEpoch.capture()
+        val service = api
+        if (!forceRefresh && isMfidReference(instrumentReference)) {
+            instrumentObservableCache.get(instrumentReference)?.let { return ApiResult.Success(it) }
+            InstrumentStatus.entries.firstNotNullOfOrNull { status ->
+                instrumentsObservableCache.get(status)?.firstOrNull { it.uniqueId == instrumentReference }
+            }?.let { return ApiResult.Success(it) }
+        }
+        return service.getInstrument(instrumentReference).also { result ->
+            if (result is ApiResult.Success && cacheEpoch.isCurrent(epoch)) {
+                instrumentObservableCache.put(result.data.uniqueId, result.data)
+            }
+        }
+    }
+
+    fun getCachedInstrument(instrumentMfid: String): Instrument? =
+        instrumentObservableCache.peek(instrumentMfid)
+            ?: InstrumentStatus.entries.firstNotNullOfOrNull { status ->
+                instrumentsObservableCache.peek(status)?.firstOrNull { it.uniqueId == instrumentMfid }
+            }
+
+    fun cacheInstrumentDetail(instrument: Instrument) = instrumentObservableCache.put(instrument.uniqueId, instrument)
+
+    fun invalidateInstruments() = instrumentsObservableCache.invalidateAll()
+
+    fun invalidateInstrument(instrumentMfid: String) = instrumentObservableCache.invalidate(instrumentMfid)
+
+    suspend fun createInstrument(request: InstrumentCreateRequest): ApiResult<Instrument> {
+        val epoch = cacheEpoch.capture()
+        return api.createInstrument(request).also { result ->
+            if (result is ApiResult.Success && cacheEpoch.isCurrent(epoch)) {
+                instrumentObservableCache.put(result.data.uniqueId, result.data)
+                instrumentsObservableCache.invalidateAll()
+            }
+        }
+    }
 
     /**
      * Fetches samples and datasets for a project in parallel, using the cache when available.
@@ -304,13 +575,61 @@ class CrucibleRepository(
         ttlMillis = 10 * 60 * 1000L,
         maxSize = 30
     )
+    private val persistedProjectData = MutableStateFlow<Map<String, CachedProjectContent>>(emptyMap())
+
+    private fun persistedProjectContent(projectReference: String): CachedProjectContent? =
+        persistedProjectData.value[projectReference]
+            ?: persistedProjectData.value.values.firstOrNull { it.projectSlug == projectReference }
+
+    fun seedPersistedProjectData(content: CachedProjectContent) {
+        val previousSlug = persistedProjectData.value[content.projectMfid]?.projectSlug
+        if (previousSlug != null && previousSlug != content.projectSlug) {
+            projectSamplesObservableCache.invalidate(previousSlug)
+            projectDatasetsObservableCache.invalidate(previousSlug)
+        }
+        persistedProjectData.update { it + (content.projectMfid to content) }
+        projectSamplesObservableCache.put(content.projectSlug, content.samples)
+        projectDatasetsObservableCache.put(content.projectSlug, content.datasets)
+        content.samples.forEach {
+            cacheResourceType(it.uniqueId, "sample")
+        }
+        content.datasets.forEach {
+            cacheResourceType(it.uniqueId, "dataset")
+        }
+    }
+
+    internal fun seedPersistedProjectData(content: CachedProjectContent, epoch: Long) {
+        if (cacheEpoch.isCurrent(epoch)) seedPersistedProjectData(content)
+    }
+
+    fun hasPersistedProjectData(projectMfid: String): Boolean = projectMfid in persistedProjectData.value
+
+    fun removePersistedProjectData(projectMfid: String) {
+        val slug = persistedProjectData.value[projectMfid]?.projectSlug
+        persistedProjectData.update { it - projectMfid }
+        if (slug != null) {
+            projectSamplesObservableCache.invalidate(slug)
+            projectDatasetsObservableCache.invalidate(slug)
+        }
+    }
+
+    fun retainPersistedProjectData(projectMfids: Set<String>) {
+        val removed = persistedProjectData.value.filterKeys { it !in projectMfids }.values
+        persistedProjectData.update { data -> data.filterKeys { it in projectMfids } }
+        removed.forEach {
+            projectSamplesObservableCache.invalidate(it.projectSlug)
+            projectDatasetsObservableCache.invalidate(it.projectSlug)
+        }
+    }
 
     suspend fun fetchProjectData(
         projectId: String,
         forceRefresh: Boolean = false,
         onCountsAvailable: (suspend (Int, Int) -> Unit)? = null
     ): Pair<List<Sample>, List<Dataset>> {
-        val mutex = projectFetchMutexes.getOrPut(projectId) { Mutex() }
+        val epoch = cacheEpoch.capture()
+        val service = api
+        val mutex = projectFetchMutex(projectId)
         return mutex.withLock {
             val cachedSamples = if (!forceRefresh) projectSamplesObservableCache.get(projectId) else null
             val cachedDatasets = if (!forceRefresh) projectDatasetsObservableCache.get(projectId) else null
@@ -346,11 +665,8 @@ class CrucibleRepository(
                         sOnTotal?.invoke(cachedSamples.size)
                         cachedSamples
                     } else {
-                        when (val result = api.getSamplesByProject(projectId, onTotalKnown = sOnTotal)) {
-                            is ApiResult.Success -> result.data.also {
-                                projectSamplesObservableCache.put(projectId, it)
-                                it.forEach { s -> cacheResourceType(s.uniqueId, "sample") }
-                            }
+                        when (val result = service.getSamplesByProject(projectId, onTotalKnown = sOnTotal)) {
+                            is ApiResult.Success -> result.data
                             // Thrown (not swallowed to emptyList()) so a genuinely empty project
                             // is never confused with a failed fetch — callers already catch and
                             // handle generic exceptions (error card / retry, or best-effort
@@ -364,16 +680,21 @@ class CrucibleRepository(
                         dOnTotal?.invoke(cachedDatasets.size)
                         cachedDatasets
                     } else {
-                        when (val result = api.getDatasetsByProject(projectId, onTotalKnown = dOnTotal)) {
-                            is ApiResult.Success -> result.data.also {
-                                projectDatasetsObservableCache.put(projectId, it)
-                                it.forEach { ds -> cacheResourceType(ds.uniqueId, "dataset") }
-                            }
+                        when (val result = service.getDatasetsByProject(projectId, onTotalKnown = dOnTotal)) {
+                            is ApiResult.Success -> result.data
                             is ApiResult.Error -> error("Failed to load datasets: ${result.message}")
                         }
                     }
                 }
-                s.await() to d.await()
+                val samples = s.await()
+                val datasets = d.await()
+                if (cacheEpoch.isCurrent(epoch)) {
+                    projectSamplesObservableCache.put(projectId, samples)
+                    projectDatasetsObservableCache.put(projectId, datasets)
+                    samples.forEach { cacheResourceType(it.uniqueId, "sample") }
+                    datasets.forEach { cacheResourceType(it.uniqueId, "dataset") }
+                }
+                samples to datasets
             }
         }
     }
@@ -385,45 +706,64 @@ class CrucibleRepository(
         projectDatasetsObservableCache.observe(projectId)
 
     /** One-shot synchronous reads — null if absent or expired. Used for cache-first renders. */
-    fun getCachedProjectSamples(projectId: String): List<Sample>? = projectSamplesObservableCache.get(projectId)
-    fun getCachedProjectDatasets(projectId: String): List<Dataset>? = projectDatasetsObservableCache.get(projectId)
+    fun getCachedProjectSamples(projectId: String): List<Sample>? =
+        projectSamplesObservableCache.get(projectId) ?: persistedProjectContent(projectId)?.samples
+
+    fun getCachedProjectDatasets(projectId: String): List<Dataset>? =
+        projectDatasetsObservableCache.get(projectId) ?: persistedProjectContent(projectId)?.datasets
 
     /** Age of the cached sample list for [projectId], in minutes — null if absent or expired. */
-    fun projectDataAgeMinutes(projectId: String): Long? =
-        projectSamplesObservableCache.ageMillis(projectId)?.let { it / 60000 }
+    fun projectDataAgeMinutes(projectId: String): Long? = persistedProjectContent(projectId)
+        ?.let { (kotlin.time.Clock.System.now().toEpochMilliseconds() - it.cachedAt).coerceAtLeast(0L) / 60000 }
+        ?: projectSamplesObservableCache.ageMillis(projectId)?.let { it / 60000 }
 
-    fun invalidateProjectData(projectId: String) {
+    fun invalidateProjectData(projectId: String, epoch: Long = cacheEpoch.capture()) {
+        if (!cacheEpoch.isCurrent(epoch)) return
         projectSamplesObservableCache.invalidate(projectId)
         projectDatasetsObservableCache.invalidate(projectId)
+        persistedProjectData.update { data ->
+            data.filterValues { it.projectMfid != projectId && it.projectSlug != projectId }
+        }
     }
 
-    private val instrumentDatasetsObservableCache = ObservableCache<String, List<Dataset>>(
+    private val instrumentDatasetsObservableCache = ObservableCache<String, InstrumentDatasetPage>(
         ttlMillis = 10 * 60 * 1000L,
         maxSize = 15
     )
 
-    /** Cache-first dataset-by-instrument fetch. Caches on success. */
     suspend fun fetchInstrumentDatasets(
-        instrumentName: String,
+        instrumentMfid: String,
+        cursor: String? = null,
         forceRefresh: Boolean = false
-    ): ApiResult<List<Dataset>> {
-        if (!forceRefresh) {
-            instrumentDatasetsObservableCache.get(instrumentName)?.let { return ApiResult.Success(it) }
+    ): ApiResult<InstrumentDatasetPage> {
+        val epoch = cacheEpoch.capture()
+        val service = api
+        if (cursor == null && !forceRefresh) {
+            instrumentDatasetsObservableCache.get(instrumentMfid)?.let { return ApiResult.Success(it) }
         }
-        return api.getDatasetsByInstrument(instrumentName).also { result ->
-            if (result is ApiResult.Success) instrumentDatasetsObservableCache.put(instrumentName, result.data)
+        return when (val result = service.getInstrumentDatasetsPage(instrumentMfid, INSTRUMENT_DATASET_PAGE_SIZE, cursor)) {
+            is ApiResult.Success -> {
+                val page = mergeInstrumentDatasetPage(
+                    current = instrumentDatasetsObservableCache.peek(instrumentMfid),
+                    incoming = result.data.items,
+                    nextCursor = result.data.nextCursor,
+                    append = cursor != null
+                )
+                if (cacheEpoch.isCurrent(epoch)) instrumentDatasetsObservableCache.put(instrumentMfid, page)
+                ApiResult.Success(page)
+            }
+            is ApiResult.Error -> result
         }
     }
 
-    fun observeInstrumentDatasets(instrumentName: String): Flow<List<Dataset>?> =
-        instrumentDatasetsObservableCache.observe(instrumentName)
+    fun observeInstrumentDatasets(instrumentMfid: String): Flow<InstrumentDatasetPage?> =
+        instrumentDatasetsObservableCache.observe(instrumentMfid)
 
-    /** One-shot synchronous read — null if absent or expired. */
-    fun getCachedInstrumentDatasets(instrumentName: String): List<Dataset>? =
-        instrumentDatasetsObservableCache.get(instrumentName)
+    fun getCachedInstrumentDatasets(instrumentMfid: String): InstrumentDatasetPage? =
+        instrumentDatasetsObservableCache.get(instrumentMfid)
 
-    fun invalidateInstrumentDatasets(instrumentName: String) =
-        instrumentDatasetsObservableCache.invalidate(instrumentName)
+    fun invalidateInstrumentDatasets(instrumentMfid: String) =
+        instrumentDatasetsObservableCache.invalidate(instrumentMfid)
 
     /**
      * Resolves the sibling list for [resource] within its project, applying [groupBy]
@@ -486,11 +826,13 @@ class CrucibleRepository(
 
     /** Cache-first associated-files list fetch for a dataset. Caches on success. */
     suspend fun fetchDatasetFiles(datasetUuid: String, forceRefresh: Boolean = false): ApiResult<List<AssociatedFile>> {
+        val epoch = cacheEpoch.capture()
+        val service = api
         if (!forceRefresh) {
             datasetFilesObservableCache.get(datasetUuid)?.let { return ApiResult.Success(it) }
         }
-        return api.getDatasetFiles(datasetUuid).also { result ->
-            if (result is ApiResult.Success) datasetFilesObservableCache.put(datasetUuid, result.data)
+        return service.getDatasetFiles(datasetUuid).also { result ->
+            if (result is ApiResult.Success && cacheEpoch.isCurrent(epoch)) datasetFilesObservableCache.put(datasetUuid, result.data)
         }
     }
 
@@ -529,24 +871,59 @@ class CrucibleRepository(
 
     /** Evicts every cache this repository owns — for logout, API key change, or a manual "clear cache" action. */
     fun invalidateAll() {
+        cacheEpoch.advance()
         resourceObservableCache.invalidateAll()
+        resourceAccessObservableCache.invalidateAll()
         resourceTypeObservableCache.invalidateAll()
         thumbnailObservableCache.invalidateAll()
         projectsObservableCache.invalidateAll()
         projectObservableCache.invalidateAll()
+        persistedProjects.value = emptyList()
         projectMembersObservableCache.invalidateAll()
+        myJoinRequestsObservableCache.invalidateAll()
         instrumentsObservableCache.invalidateAll()
+        instrumentObservableCache.invalidateAll()
         instrumentDatasetsObservableCache.invalidateAll()
         projectSamplesObservableCache.invalidateAll()
         projectDatasetsObservableCache.invalidateAll()
+        persistedProjectData.value = emptyMap()
         pendingJoinRequestCountObservableCache.invalidateAll()
         datasetFilesObservableCache.invalidateAll()
     }
 }
 
+private data class RepositoryCacheScope(
+    val accountId: String?,
+    val serverUrl: String,
+    val apiKey: String
+)
+
 private fun <T : CrucibleResource> List<T>.ensureContains(resource: T, sortState: SortState): List<T> =
     (if (any { it.uniqueId == resource.uniqueId }) this else this + resource)
         .applySortState(sortState, name = { name }, mfid = { uniqueId }, date = { creationTimeOrEmpty() })
+
+private fun Map<String, CachedProjectContent>.findResource(uuid: String): CrucibleResource? {
+    values.forEach { content ->
+        content.samples.find { it.uniqueId == uuid }?.let { return it }
+        content.datasets.find { it.uniqueId == uuid }?.let { return it }
+    }
+    return null
+}
+
+private fun preserveResourceDetailFields(existing: CrucibleResource?, incoming: CrucibleResource): CrucibleResource = when {
+    existing is Sample && incoming is Sample -> incoming.copy(
+        scientificMetadata = incoming.scientificMetadata ?: existing.scientificMetadata,
+        datasets = incoming.datasets ?: existing.datasets,
+        links = incoming.links ?: existing.links,
+        owner = incoming.owner ?: existing.owner
+    )
+    existing is Dataset && incoming is Dataset -> incoming.copy(
+        scientificMetadata = incoming.scientificMetadata ?: existing.scientificMetadata,
+        links = incoming.links ?: existing.links,
+        owner = incoming.owner ?: existing.owner
+    )
+    else -> incoming
+}
 
 private fun List<Sample>.filterSiblings(groupBy: String?, resource: Sample) =
     filter { s -> when (groupBy) {
