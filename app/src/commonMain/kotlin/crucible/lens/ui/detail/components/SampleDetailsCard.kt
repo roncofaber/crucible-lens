@@ -16,6 +16,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import crucible.lens.data.model.Sample
+import crucible.lens.data.model.resolvedProjectName
+import crucible.lens.data.model.resolvedProjectReference
 import crucible.lens.data.util.formatDateTime
 import crucible.lens.data.util.formatFileSize
 import crucible.lens.data.util.userDisplayName
@@ -39,7 +41,8 @@ internal fun SampleDetailsCard(
     var advanced by remember { mutableStateOf(initialAdvanced) }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim)) {
-            val projectId = sample.projectId
+            val projectName = sample.resolvedProjectName
+            val projectReference = sample.resolvedProjectReference
 
             // Header: title + action icons (copy, open, share, QR)
             Row(
@@ -105,8 +108,10 @@ internal fun SampleDetailsCard(
             // Basic fields
             Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 InfoRow(icon = AppIcons.Category, label = "Type", value = sample.sampleType ?: "None")
-                if (projectId != null) {
-                    ClickableInfoRow(icon = AppIcons.Project, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })
+                if (projectName != null && projectReference != null) {
+                    ClickableInfoRow(icon = AppIcons.Project, label = "Project", value = projectName, onClick = { onProjectClick(projectReference) })
+                } else if (projectName != null) {
+                    InfoRow(icon = AppIcons.Project, label = "Project", value = projectName)
                 } else {
                     InfoRow(icon = AppIcons.Project, label = "Project", value = "None")
                 }

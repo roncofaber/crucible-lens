@@ -13,6 +13,29 @@ import kotlin.test.assertIs
 
 class CrucibleApiServiceInstrumentDatasetsTest {
     @Test
+    fun filteredDatasetsAcceptCanonicalInstrumentMfid() = runTest {
+        var instrumentMfid: String? = null
+        val engine = MockEngine { request ->
+            instrumentMfid = request.url.parameters["instrument_mfid"]
+            respond(
+                content = """{"total":0,"limit":1000,"next_cursor":null,"items":[]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val client = ApiClient.withEngine(engine).apply {
+            setApiKey("test-key")
+            setBaseUrl("https://example.test/api/")
+        }
+
+        assertIs<ApiResult.Success<List<crucible.lens.data.model.Dataset>>>(
+            client.service.getFilteredDatasets(instrumentMfid = "instrument-mfid")
+        )
+
+        assertEquals("instrument-mfid", instrumentMfid)
+    }
+
+    @Test
     fun instrumentDatasetPageUsesCanonicalMfidAndBoundedCursorPagination() = runTest {
         val requests = mutableListOf<Map<String, String>>()
         var requestCount = 0

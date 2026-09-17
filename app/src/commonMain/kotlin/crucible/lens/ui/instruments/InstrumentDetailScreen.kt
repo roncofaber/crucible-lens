@@ -42,6 +42,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import crucible.lens.data.model.resolvedProjectId
+import crucible.lens.data.model.resolvedProjectName
 import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.util.SortField
@@ -126,9 +128,7 @@ fun InstrumentDetailScreen(
             when (groupBy) {
                 InstrumentDatasetGroupBy.NONE        -> ""
                 InstrumentDatasetGroupBy.MEASUREMENT -> d.measurement ?: "No measurement"
-                InstrumentDatasetGroupBy.PROJECT     -> d.projectId?.let { pid ->
-                    repository.getCachedProjects()?.find { it.projectId == pid }?.title ?: pid
-                } ?: "No project"
+                InstrumentDatasetGroupBy.PROJECT     -> d.resolvedProjectName ?: "No project"
                 InstrumentDatasetGroupBy.DATE        -> dateGroupKey(d.timestamp)
                 InstrumentDatasetGroupBy.SESSION     -> d.sessionName ?: "No session"
                 InstrumentDatasetGroupBy.FORMAT      -> d.dataFormat ?: "No format"
@@ -293,11 +293,11 @@ fun InstrumentDetailScreen(
                                 itemsIndexed(filteredDatasets, key = { _, it -> it.uniqueId }) { index, dataset ->
                                     ResourceRow(
                                         title = dataset.name,
-                                        subtitle = dataset.projectId ?: "No project",
+                                        subtitle = dataset.resolvedProjectName ?: "No project",
                                         uniqueId = dataset.uniqueId,
                                         subtitleMonospace = false,
                                         graphExplorerUrl = graphExplorerUrl,
-                                        projectId = dataset.projectId,
+                                        projectId = dataset.resolvedProjectId,
                                         resourceType = "dataset",
                                         showDivider = index > 0,
                                         onClick = { onDatasetClick(dataset.uniqueId) }
@@ -319,11 +319,11 @@ fun InstrumentDetailScreen(
                                         itemsIndexed(datasetsInGroup, key = { _, it -> it.uniqueId }) { index, dataset ->
                                             ResourceRow(
                                                 title = dataset.name,
-                                                subtitle = dataset.projectId ?: "No project",
+                                                subtitle = dataset.resolvedProjectName ?: "No project",
                                                 uniqueId = dataset.uniqueId,
                                                 subtitleMonospace = false,
                                                 graphExplorerUrl = graphExplorerUrl,
-                                                projectId = dataset.projectId,
+                                                projectId = dataset.resolvedProjectId,
                                                 resourceType = "dataset",
                                                 showDivider = index > 0,
                                                 onClick = { onDatasetClick(dataset.uniqueId) }

@@ -75,6 +75,7 @@ fun ProjectsListScreen(
     onToggleSync: (String) -> Unit = {},
     onManageSyncedProjects: () -> Unit = {},
     onCreateProject: () -> Unit = {},
+    canCreateProject: Boolean = true,
     onManageProject: (String) -> Unit = {},
     currentUserOrcid: String? = null,
     accountId: String? = null,
@@ -153,7 +154,7 @@ fun ProjectsListScreen(
                                 it.samples to it.datasets
                             }
                         } else {
-                            repository.fetchProjectData(project.projectId)
+                            repository.fetchProjectData(project.uniqueId, project.projectId)
                         }
                         viewModel.updateCount(project.projectId, samples.size, datasets.size)
                         consecutiveFailures = 0
@@ -236,11 +237,13 @@ fun ProjectsListScreen(
                             AppIcon(AppIcons.MoreVert)
                         }
                         DropdownMenu(expanded = listMenuExpanded, onDismissRequest = { listMenuExpanded = false }) {
-                            DropdownMenuItem(
-                                text = { Text("New project") },
-                                leadingIcon = { AppIcon(AppIcons.Add) },
-                                onClick = { listMenuExpanded = false; onCreateProject() }
-                            )
+                            if (canCreateProject) {
+                                DropdownMenuItem(
+                                    text = { Text("New project") },
+                                    leadingIcon = { AppIcon(AppIcons.Add) },
+                                    onClick = { listMenuExpanded = false; onCreateProject() }
+                                )
+                            }
                             ManageSyncedProjectsMenuItem { listMenuExpanded = false; onManageSyncedProjects() }
                             RefreshMenuItem { listMenuExpanded = false; refreshProjects() }
                         }
@@ -494,7 +497,7 @@ fun ProjectsListScreen(
                                 // screen (create a brand new project), so it earns the same
                                 // treatment as Home's "New Sample"/"New Dataset" buttons rather
                                 // than blending in as just another list row.
-                                item(key = "__create_project__") {
+                                if (canCreateProject) item(key = "__create_project__") {
                                     Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                                         OutlinedButton(
                                             onClick = onCreateProject,

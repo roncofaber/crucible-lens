@@ -32,6 +32,8 @@ import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
+import crucible.lens.data.model.resolvedProjectName
+import crucible.lens.data.model.resolvedProjectId
 import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.data.util.ResourceLinkDirection
 import crucible.lens.ui.scanner.QRCodeScannerView
@@ -110,10 +112,13 @@ fun LinkResourceSheet(
                     val sel = selectedResource
                     val selType = resolvedType ?: ""
                     val selProjectId = when (sel) {
-                        is Sample -> sel.projectId
-                        is Dataset -> sel.projectId
+                        is Sample -> sel.resolvedProjectId
+                        is Dataset -> sel.resolvedProjectId
                     }
-                    val selProjectName = selProjectId?.let { projectNames[it] }
+                    val selProjectName = when (sel) {
+                        is Sample -> sel.resolvedProjectName
+                        is Dataset -> sel.resolvedProjectName
+                    }
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer,
                         shape = MaterialTheme.shapes.medium,
@@ -162,8 +167,9 @@ fun LinkResourceSheet(
                         QRCodeScannerView(
                             modifier = Modifier.fillMaxSize(),
                             onCodeScanned = { code ->
-                                viewModel.updateInput(code, resource)
+                                viewModel.updateScannedInput(code, resource)
                                 scanning = false
+                                true
                             }
                         )
                         IconButton(
@@ -239,10 +245,13 @@ fun LinkResourceSheet(
                             is Dataset -> AppIcons.Dataset
                         }
                         val resultProjectId = when (result) {
-                            is Sample -> result.projectId
-                            is Dataset -> result.projectId
+                            is Sample -> result.resolvedProjectId
+                            is Dataset -> result.resolvedProjectId
                         }
-                        val projectName = resultProjectId?.let { projectNames[it] }
+                        val projectName = when (result) {
+                            is Sample -> result.resolvedProjectName
+                            is Dataset -> result.resolvedProjectName
+                        }
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = MaterialTheme.shapes.small,

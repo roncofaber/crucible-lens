@@ -13,6 +13,38 @@ import kotlin.test.assertEquals
 
 class CrucibleApiServiceOwnerExpansionTest {
     @Test
+    fun sampleReadsSkipEmbeddedDatasetsAndRetainLinks() = runTest {
+        val requests = mutableListOf<Triple<String, String?, String?>>()
+        val engine = MockEngine { request ->
+            requests += Triple(
+                request.url.encodedPath,
+                request.url.parameters["include_datasets"],
+                request.url.parameters["include_links"]
+            )
+            respond(
+                content = """{"unique_id":"sample-mfid","resource_type":"sample","datasets":null,"links":[]}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val service = ApiClient.withEngine(engine).apply {
+            setApiKey("test-key")
+            setBaseUrl("https://example.test/api/")
+        }.service
+
+        service.getSample("sample-mfid")
+        service.getResource("sample-mfid")
+
+        assertEquals(
+            listOf<Triple<String, String?, String?>>(
+                Triple("/api/samples/sample-mfid", "false", "true"),
+                Triple("/api/resources/sample-mfid", "false", "true")
+            ),
+            requests
+        )
+    }
+
+    @Test
     fun typedResourceReadsRequestExpandedOwners() = runTest {
         val mfid = "01k4abcdefghjkmnpqrstvwxyz"
         val requests = mutableListOf<Pair<String, String?>>()

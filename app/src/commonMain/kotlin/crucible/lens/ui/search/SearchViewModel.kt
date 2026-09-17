@@ -5,11 +5,17 @@ import androidx.lifecycle.viewModelScope
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.ResourceSearchResult
+import crucible.lens.data.model.DatasetFacetField
+import crucible.lens.data.model.SampleFacetField
 import crucible.lens.data.model.User
+import crucible.lens.data.model.resolvedProjectId
+import crucible.lens.data.model.resolvedProjectName
 import crucible.lens.data.preferences.AppPreferences
 import crucible.lens.data.util.SearchCoverage
 import crucible.lens.data.util.SearchEndpointCategory
 import crucible.lens.data.util.searchCoverage
+import crucible.lens.data.util.toUtcQueryTimestamp
+import crucible.lens.ui.common.FacetSuggestions
 import crucible.lens.ui.common.SearchFilters
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -33,7 +39,10 @@ data class SearchUiState(
     val isLoading: Boolean = false,
     val hasSearched: Boolean = false,
     val error: String? = null,
-    val warning: String? = null
+    val warning: String? = null,
+    val facetSuggestions: FacetSuggestions = FacetSuggestions(),
+    val isLoadingFacets: Boolean = false,
+    val facetError: String? = null
 )
 
 private data class SearchCriteria(
@@ -108,6 +117,47 @@ class SearchViewModel(
         _state.update { it.copy(isLoading = true, error = null, warning = null) }
     }
 
+    fun loadFacetSuggestions(forceRefresh: Boolean = false) {
+        val current = _state.value
+        if (current.isLoadingFacets) return
+        if (!forceRefresh && current.facetSuggestions != FacetSuggestions()) return
+        _state.update { it.copy(isLoadingFacets = true, facetError = null) }
+        viewModelScope.launch {
+            try {
+                coroutineScope {
+                    val measurements = async { apiClient.service.getDatasetFacetValues(DatasetFacetField.Measurement) }
+                    val formats = async { apiClient.service.getDatasetFacetValues(DatasetFacetField.DataFormat) }
+                    val sessions = async { apiClient.service.getDatasetFacetValues(DatasetFacetField.Session) }
+                    val sampleTypes = async { apiClient.service.getSampleFacetValues(SampleFacetField.SampleType) }
+                    val responses = listOf(measurements.await(), formats.await(), sessions.await(), sampleTypes.await())
+                    fun values(index: Int) = (responses[index] as? ApiResult.Success)
+                        ?.data
+                        .orEmpty()
+                        .mapNotNull { it.value }
+                        .distinct()
+                    _state.update {
+                        it.copy(
+                            facetSuggestions = FacetSuggestions(
+                                measurements = values(0),
+                                dataFormats = values(1),
+                                sessionNames = values(2),
+                                sampleTypes = values(3)
+                            ),
+                            isLoadingFacets = false,
+                            facetError = if (responses.any { response -> response is ApiResult.Error }) {
+                                "Some suggestions could not be loaded"
+                            } else null
+                        )
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _state.update { it.copy(isLoadingFacets = false, facetError = "Could not load suggestions") }
+            }
+        }
+    }
+
     private fun updateCriteria(updated: SearchCriteria) {
         criteria.value = updated
         val shouldSearch = shouldSearch(updated)
@@ -115,7 +165,10 @@ class SearchViewModel(
             query = updated.query,
             metadataMode = updated.metadataMode,
             filters = updated.filters,
-            isLoading = shouldSearch
+            isLoading = shouldSearch,
+            facetSuggestions = _state.value.facetSuggestions,
+            isLoadingFacets = _state.value.isLoadingFacets,
+            facetError = _state.value.facetError
         )
     }
 
@@ -128,7 +181,10 @@ class SearchViewModel(
             _state.value = SearchUiState(
                 query = current.query,
                 metadataMode = current.metadataMode,
-                filters = current.filters
+                filters = current.filters,
+                facetSuggestions = _state.value.facetSuggestions,
+                isLoadingFacets = _state.value.isLoadingFacets,
+                facetError = _state.value.facetError
             )
             return
         }
@@ -191,9 +247,9 @@ class SearchViewModel(
         val resources = (projects as? ApiResult.Success)?.data.orEmpty().map {
             ResourceSearchResult(it.projectId, "project", it.title ?: it.projectId)
         } + (samples as? ApiResult.Success)?.data.orEmpty().map {
-            ResourceSearchResult(it.uniqueId, "sample", it.name, it.ownerOrcid, projectId = it.projectId)
+            ResourceSearchResult(it.uniqueId, "sample", it.name, it.ownerOrcid, projectId = it.resolvedProjectId, projectLabel = it.resolvedProjectName)
         } + (datasets as? ApiResult.Success)?.data.orEmpty().map {
-            ResourceSearchResult(it.uniqueId, "dataset", it.name, it.ownerOrcid, projectId = it.projectId)
+            ResourceSearchResult(it.uniqueId, "dataset", it.name, it.ownerOrcid, projectId = it.resolvedProjectId, projectLabel = it.resolvedProjectName)
         }
 
         publish(
@@ -206,15 +262,15 @@ class SearchViewModel(
 
     private suspend fun searchFilters(current: SearchCriteria) = coroutineScope {
         val filters = current.filters
-        val after = filters.createdAfter.ifBlank { null }
-        val before = filters.createdBefore.ifBlank { null }
+        val after = toUtcQueryTimestamp(filters.createdAfter)
+        val before = toUtcQueryTimestamp(filters.createdBefore)
         val projectId = filters.projectId.ifBlank { null }
-        val ownerOrcid = filters.ownerOrcid.ifBlank { null }
+        val ownerId = filters.ownerId.ifBlank { null }
         val samplesRequest = async {
             apiClient.service.getFilteredSamples(
                 projectId = projectId,
                 sampleType = filters.sampleType.ifBlank { null },
-                ownerOrcid = ownerOrcid,
+                ownerId = ownerId,
                 creationTimeGte = after,
                 creationTimeLte = before
             )
@@ -226,7 +282,7 @@ class SearchViewModel(
                 instrumentName = filters.instrumentName.ifBlank { null },
                 dataFormat = filters.dataFormat.ifBlank { null },
                 sessionName = filters.sessionName.ifBlank { null },
-                ownerOrcid = ownerOrcid,
+                ownerId = ownerId,
                 creationTimeGte = after,
                 creationTimeLte = before
             )
@@ -239,9 +295,9 @@ class SearchViewModel(
         }
         val requested = setOf(SearchEndpointCategory.SAMPLES, SearchEndpointCategory.DATASETS)
         val resources = (samples as? ApiResult.Success)?.data.orEmpty().map {
-            ResourceSearchResult(it.uniqueId, "sample", it.name, it.ownerOrcid, projectId = it.projectId)
+            ResourceSearchResult(it.uniqueId, "sample", it.name, it.ownerOrcid, projectId = it.resolvedProjectId, projectLabel = it.resolvedProjectName)
         } + (datasets as? ApiResult.Success)?.data.orEmpty().map {
-            ResourceSearchResult(it.uniqueId, "dataset", it.name, it.ownerOrcid, projectId = it.projectId)
+            ResourceSearchResult(it.uniqueId, "dataset", it.name, it.ownerOrcid, projectId = it.resolvedProjectId, projectLabel = it.resolvedProjectName)
         }
         publish(current, resources, emptyList(), searchCoverage(requested, failures))
     }

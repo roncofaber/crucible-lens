@@ -243,11 +243,11 @@ fun CreateSampleScreen(
                             sampleName = name.trim(),
                             sampleType = type.trim().ifBlank { null },
                             description = description.trim().ifBlank { null },
-                            projectId = selectedProjectId,
+                            projectId = selectedProjectId.takeIf { selectedProject == null },
+                            projectMfid = selectedProject?.uniqueId,
                             timestamp = timestamp.trim().ifBlank { null },
                             public = isPublic
                         ),
-                        projectId = selectedProjectId,
                         metadata = metadata
                     )
                 },

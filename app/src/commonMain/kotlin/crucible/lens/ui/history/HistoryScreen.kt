@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
+import crucible.lens.data.model.resolvedProjectId
+import crucible.lens.data.model.resolvedProjectName
 import crucible.lens.data.preferences.HistoryItem
 import crucible.lens.platform.getPlatformContext
 import crucible.lens.ui.common.ConfirmationDialog
@@ -164,14 +166,18 @@ private fun HistoryCard(
     // resource cache by the time History renders. Falls back to the old cache-derived lookup only
     // for entries recorded before this field existed.
     val projectId = remember(item.projectId, cached) {
-        item.projectId ?: when (cached) {
-            is Sample -> cached.projectId
-            is Dataset -> cached.projectId
-            else -> null
+        when (cached) {
+            is Sample -> cached.resolvedProjectId ?: item.projectId
+            is Dataset -> cached.resolvedProjectId ?: item.projectId
+            else -> item.projectId
         }
     }
-    val projectName = remember(projectId) {
-        projectId?.let { pid ->
+    val projectName = remember(projectId, cached) {
+        when (cached) {
+            is Sample -> cached.resolvedProjectName
+            is Dataset -> cached.resolvedProjectName
+            else -> null
+        } ?: projectId?.let { pid ->
             repository.getCachedProjects()?.find { it.projectId == pid }?.title ?: pid
         }
     }

@@ -382,6 +382,7 @@ invent a third without a second real use case.
   scroll away. Use when picking *is* the sheet's purpose and each pick triggers an action
   (`AddMemberSheet` stays open for several adds).
 - Both leaf-composable pickers share `rememberDebouncedSearchState<T>()`, which provides debounce, minimum-length gating, explicit results and errors, and retry while using constants from `data/util/SearchPickerConstants.kt`. ViewModel-owned searches that fire from event handlers keep their own cancellable-`Job` pattern and the same explicit error behavior.
+- Facet-backed scientific fields use `SearchPickerField` as an editable suggestion menu. Selecting an existing value is optional, and free text must remain valid so new measurements, formats, sessions, and sample types can be introduced.
 - **Not unified:** `LinkResourceSheet.kt` mixes search with other contextual controls (selected-item
   summary, QR scan, direction picker). It's a workflow that *contains* a picker; it stays bespoke
   until a second case justifies generalizing.

@@ -73,4 +73,28 @@ class DeepLinksTest {
         assertNull(parseDeepLink("https://crucible.lbl.gov/explore/$projectId/instruments/$resourceId"))
         assertNull(parseDeepLink("https://crucible.lbl.gov/explore/$projectId/samples/not-a-uuid"))
     }
+
+    @Test
+    fun scannerAcceptsRawResourceReferences() {
+        assertEquals(DeepLinkTarget.Resource(resourceId), parseScannedTarget("  $resourceId  "))
+        assertEquals(DeepLinkTarget.Resource(projectMfid), parseScannedTarget(projectMfid))
+    }
+
+    @Test
+    fun scannerExtractsTargetsFromKnownCrucibleLinks() {
+        assertEquals(
+            DeepLinkTarget.Resource(resourceId),
+            parseScannedTarget("https://crucible.lbl.gov/explore/$projectSlug/datasets/$resourceId?tab=files#details")
+        )
+        assertEquals(
+            DeepLinkTarget.Project(projectSlug),
+            parseScannedTarget("https://crucible.lbl.gov/explore/$projectSlug")
+        )
+    }
+
+    @Test
+    fun scannerRejectsUnknownTextAndUntrustedLinks() {
+        assertNull(parseScannedTarget("not a resource"))
+        assertNull(parseScannedTarget("https://example.com/explore/$projectSlug/datasets/$resourceId"))
+    }
 }

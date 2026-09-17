@@ -6,12 +6,18 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
+import crucible.lens.data.model.ProjectScope
 import crucible.lens.data.model.Sample
+import crucible.lens.data.model.resolvedProjectId
+import crucible.lens.data.model.resolvedProjectReference
+import crucible.lens.data.util.isMfidReference
 import crucible.lens.data.util.ResourceLinkDirection
 import crucible.lens.data.util.ResourceLinkOperation
 import crucible.lens.data.util.SEARCH_DEBOUNCE_MS
 import crucible.lens.data.util.SEARCH_MIN_QUERY_LENGTH
 import crucible.lens.data.util.resourceLinkOperation
+import crucible.lens.ui.navigation.DeepLinkTarget
+import crucible.lens.ui.navigation.parseScannedTarget
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -52,6 +58,29 @@ internal data class LinkResourceUiState(
     val submission: LinkSubmissionState = LinkSubmissionState.Idle
 )
 
+internal data class LinkProjectSearchContext(
+    val projectId: String?,
+    val projectMfid: String?,
+    val projectScope: ProjectScope?
+)
+
+internal fun CrucibleResource.linkProjectSearchContext(): LinkProjectSearchContext {
+    val projectReference = when (this) {
+        is Sample -> resolvedProjectReference
+        is Dataset -> resolvedProjectReference
+    }
+    val projectMfid = projectReference?.takeIf(::isMfidReference)
+    val projectId = if (projectMfid == null) when (this) {
+        is Sample -> resolvedProjectId
+        is Dataset -> resolvedProjectId
+    } else null
+    return LinkProjectSearchContext(
+        projectId = projectId,
+        projectMfid = projectMfid,
+        projectScope = if (projectMfid != null || projectId != null) ProjectScope.Assigned else null
+    )
+}
+
 internal class LinkResourceViewModel(
     private val apiClient: ApiClient
 ) : ViewModel() {
@@ -77,6 +106,26 @@ internal class LinkResourceViewModel(
         when {
             query.length >= 10 && !query.contains(' ') -> resolve(query, current)
             query.length >= SEARCH_MIN_QUERY_LENGTH -> search(query, current)
+        }
+    }
+
+    fun updateScannedInput(value: String, current: CrucibleResource) {
+        when (val target = parseScannedTarget(value)) {
+            is DeepLinkTarget.Resource -> updateInput(target.resourceReference, current)
+            is DeepLinkTarget.Project -> {
+                lookupJob?.cancel()
+                _state.value = LinkResourceUiState(
+                    input = value,
+                    resolution = LinkResolutionState.Error("Scan a sample or dataset code")
+                )
+            }
+            null -> {
+                lookupJob?.cancel()
+                _state.value = LinkResourceUiState(
+                    input = value,
+                    resolution = LinkResolutionState.Error("This is not a recognized Crucible resource code")
+                )
+            }
         }
     }
 
@@ -150,17 +199,26 @@ internal class LinkResourceViewModel(
     }
 
     private fun search(query: String, current: CrucibleResource) {
-        val projectId = when (current) {
-            is Sample -> current.projectId
-            is Dataset -> current.projectId
-        }
+        val project = current.linkProjectSearchContext()
         lookupJob = viewModelScope.launch {
             delay(SEARCH_DEBOUNCE_MS)
             if (_state.value.input.trim() != query) return@launch
             _state.value = _state.value.copy(search = LinkSearchState.Searching)
             try {
-                val samples = apiClient.service.searchSamples(query, projectId, limit = 6)
-                val datasets = apiClient.service.searchDatasets(query, projectId, limit = 6)
+                val samples = apiClient.service.searchSamples(
+                    q = query,
+                    projectId = project.projectId,
+                    projectMfid = project.projectMfid,
+                    projectScope = project.projectScope,
+                    limit = 6
+                )
+                val datasets = apiClient.service.searchDatasets(
+                    q = query,
+                    projectId = project.projectId,
+                    projectMfid = project.projectMfid,
+                    projectScope = project.projectScope,
+                    limit = 6
+                )
                 if (_state.value.input.trim() != query) return@launch
                 val resources = listOfNotNull(
                     (samples as? ApiResult.Success)?.data,
@@ -193,7 +251,13 @@ internal class LinkResourceViewModel(
         _state.value = _state.value.copy(resolution = LinkResolutionState.Resolving)
         lookupJob = viewModelScope.launch {
             try {
-                when (val result = apiClient.service.getResource(query)) {
+                when (val result = apiClient.service.getResource(
+                    uuid = query,
+                    includeLinks = false,
+                    includeDatasets = false,
+                    includeMetadata = false,
+                    includeOwner = false
+                )) {
                     is ApiResult.Success -> {
                         if (_state.value.input.trim() != query) return@launch
                         _state.value = _state.value.copy(

@@ -6,11 +6,18 @@ import crucible.lens.data.model.Instrument
 import crucible.lens.data.model.InstrumentStatus
 import crucible.lens.data.model.InstrumentUpdateRequest
 import crucible.lens.data.model.Project
+import crucible.lens.data.model.ProjectRelation
 import crucible.lens.data.model.ProjectUpdateRequest
 import crucible.lens.data.model.ReassignProjectResponse
 import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.TransferOwnershipRequest
 import crucible.lens.data.model.TransferOwnershipResponse
+import crucible.lens.data.model.resolvedInstrumentId
+import crucible.lens.data.model.resolvedInstrumentName
+import crucible.lens.data.model.resolvedInstrumentReference
+import crucible.lens.data.model.resolvedProjectId
+import crucible.lens.data.model.resolvedProjectName
+import crucible.lens.data.model.resolvedProjectReference
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.ContentType
@@ -57,17 +64,49 @@ class CrucibleApiServiceV3WriteTest {
     @Test
     fun v3InstrumentReferencesDeserializeFromDatasetsAndInstruments() {
         val dataset = Json.decodeFromString<Dataset>(
-            """{"unique_id":"dataset-a","instrument_id":"instrument-a","instrument_name":"Instrument"}"""
+            """{"unique_id":"dataset-a","instrument_id":"legacy-instrument","instrument_name":"Legacy instrument","project_id":"legacy-project","instrument":{"unique_id":"instrument-mfid","instrument_id":"instrument-a","instrument_name":"Current instrument"},"project":{"unique_id":"project-mfid","project_id":"project-a","title":"Current project"}}"""
         )
         val instrument = Json.decodeFromString<Instrument>(
             """{"unique_id":"instrument-mfid","instrument_id":"instrument-a","instrument_name":"Instrument","owner_orcid":"owner-a","owner":{"unique_id":"owner-a","username":"alice"},"status":"maintenance"}"""
         )
 
-        assertEquals("instrument-a", dataset.instrumentId)
+        assertEquals("legacy-instrument", dataset.instrumentId)
+        assertEquals("Current instrument", dataset.resolvedInstrumentName)
+        assertEquals("instrument-mfid", dataset.resolvedInstrumentReference)
+        assertEquals("instrument-a", dataset.resolvedInstrumentId)
+        assertEquals("Current project", dataset.resolvedProjectName)
+        assertEquals("project-mfid", dataset.resolvedProjectReference)
+        assertEquals("project-a", dataset.resolvedProjectId)
         assertEquals("instrument-a", instrument.instrumentId)
         assertEquals("owner-a", instrument.ownerOrcid)
         assertEquals("alice", instrument.owner?.username)
         assertEquals("maintenance", instrument.status)
+    }
+
+    @Test
+    fun datasetReferenceAccessorsFallBackToLegacyFields() {
+        val dataset = Json.decodeFromString<Dataset>(
+            """{"unique_id":"dataset-a","instrument_id":"instrument-a","instrument_name":"Instrument","project_id":"project-a"}"""
+        )
+
+        assertEquals("Instrument", dataset.resolvedInstrumentName)
+        assertEquals("instrument-a", dataset.resolvedInstrumentReference)
+        assertEquals("instrument-a", dataset.resolvedInstrumentId)
+        assertEquals("project-a", dataset.resolvedProjectName)
+        assertEquals("project-a", dataset.resolvedProjectReference)
+        assertEquals("project-a", dataset.resolvedProjectId)
+    }
+
+    @Test
+    fun sampleProjectReferenceAndScopedRelationDeserialize() {
+        val sample = Json.decodeFromString<crucible.lens.data.model.Sample>(
+            """{"unique_id":"sample-a","project_id":"legacy-project","project":{"unique_id":"project-mfid","project_id":"project-a","title":"Current project"},"project_relation":"shared"}"""
+        )
+
+        assertEquals("Current project", sample.resolvedProjectName)
+        assertEquals("project-mfid", sample.resolvedProjectReference)
+        assertEquals("project-a", sample.resolvedProjectId)
+        assertEquals(ProjectRelation.Shared, sample.projectRelation)
     }
 
     @Test

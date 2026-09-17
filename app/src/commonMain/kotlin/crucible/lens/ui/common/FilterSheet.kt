@@ -24,8 +24,8 @@ import org.koin.compose.koinInject
 
 data class SearchFilters(
     val projectId: String = "",
-    val ownerOrcid: String = "",
-    val ownerUsername: String = "",  // display only — ownerOrcid is sent to API
+    val ownerId: String = "",
+    val ownerUsername: String = "",
     val createdAfter: String = "",
     val createdBefore: String = "",
     // Dataset-specific
@@ -38,14 +38,24 @@ data class SearchFilters(
 ) {
     val isActive: Boolean get() = activeCount > 0
     val activeCount: Int get() = listOf(
-        projectId, ownerOrcid, createdAfter, createdBefore,
+        projectId, ownerId, createdAfter, createdBefore,
         measurement, instrumentName, dataFormat, sessionName, sampleType
     ).count { it.isNotBlank() }
 }
 
+data class FacetSuggestions(
+    val measurements: List<String> = emptyList(),
+    val dataFormats: List<String> = emptyList(),
+    val sessionNames: List<String> = emptyList(),
+    val sampleTypes: List<String> = emptyList()
+)
+
 @Composable
 fun FilterSheet(
     filters: SearchFilters,
+    suggestions: FacetSuggestions = FacetSuggestions(),
+    suggestionsError: String? = null,
+    onRetrySuggestions: () -> Unit = {},
     onApply: (SearchFilters) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -85,15 +95,15 @@ fun FilterSheet(
                 icon = AppIcons.Project
             )
             OwnerPickerField(
-                ownerOrcid = local.ownerOrcid,
+                ownerId = local.ownerId,
                 ownerUsername = local.ownerUsername,
                 onOwnerSelected = { user ->
                     local = local.copy(
-                        ownerOrcid = user.uniqueId ?: "",
+                        ownerId = user.uniqueId ?: "",
                         ownerUsername = user.username ?: user.uniqueId ?: ""
                     )
                 },
-                onOwnerCleared = { local = local.copy(ownerOrcid = "", ownerUsername = "") }
+                onOwnerCleared = { local = local.copy(ownerId = "", ownerUsername = "") }
             )
             DateTimePickerField(
                 value = local.createdAfter,
@@ -128,9 +138,10 @@ fun FilterSheet(
             Text("Datasets", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary)
 
-            FilterTextField(
+            FacetSuggestionField(
                 value = local.measurement,
                 onValueChange = { local = local.copy(measurement = it) },
+                suggestions = suggestions.measurements,
                 label = "Measurement",
                 icon = AppIcons.Sample
             )
@@ -139,15 +150,17 @@ fun FilterSheet(
                 onValueChange = { local = local.copy(instrumentName = it) },
                 modifier = Modifier.fillMaxWidth()
             )
-            FilterTextField(
+            FacetSuggestionField(
                 value = local.dataFormat,
                 onValueChange = { local = local.copy(dataFormat = it) },
+                suggestions = suggestions.dataFormats,
                 label = "Data format",
                 icon = AppIcons.DataFormat
             )
-            FilterTextField(
+            FacetSuggestionField(
                 value = local.sessionName,
                 onValueChange = { local = local.copy(sessionName = it) },
+                suggestions = suggestions.sessionNames,
                 label = "Session name",
                 icon = AppIcons.Tag
             )
@@ -158,12 +171,25 @@ fun FilterSheet(
             Text("Samples", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary)
 
-            FilterTextField(
+            FacetSuggestionField(
                 value = local.sampleType,
                 onValueChange = { local = local.copy(sampleType = it) },
+                suggestions = suggestions.sampleTypes,
                 label = "Sample type",
                 icon = AppIcons.Category
             )
+
+            if (suggestionsError != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        suggestionsError,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    TextButton(onClick = onRetrySuggestions) { Text("Retry") }
+                }
+            }
 
             // ── Apply ─────────────────────────────────────────────────────────
             Button(
@@ -180,7 +206,7 @@ fun FilterSheet(
 
 @Composable
 private fun OwnerPickerField(
-    ownerOrcid: String,
+    ownerId: String,
     ownerUsername: String,
     onOwnerSelected: (User) -> Unit,
     onOwnerCleared: () -> Unit
@@ -209,7 +235,7 @@ private fun OwnerPickerField(
         onQueryChange = {
             pinned = null
             query = it
-            if (ownerOrcid.isNotBlank()) onOwnerCleared()
+            if (ownerId.isNotBlank()) onOwnerCleared()
         },
         isSearching = isSearching,
         results = results,
@@ -226,6 +252,31 @@ private fun OwnerPickerField(
             resolvedLeading = { user -> UserChipLeading(user) }
         ),
         itemContent = { user -> UserPickerItemContent(user) }
+    )
+}
+
+@Composable
+private fun FacetSuggestionField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    suggestions: List<String>,
+    label: String,
+    icon: AppIconToken
+) {
+    val matches = remember(value, suggestions) {
+        suggestions.filter { value.isBlank() || it.contains(value, ignoreCase = true) }.take(20)
+    }
+    SearchPickerField(
+        query = value,
+        onQueryChange = onValueChange,
+        isSearching = false,
+        results = matches,
+        onSelect = onValueChange,
+        label = label,
+        leadingIcon = icon,
+        reopenOnFocus = true,
+        modifier = Modifier.fillMaxWidth(),
+        itemContent = { Text(it) }
     )
 }
 

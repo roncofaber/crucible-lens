@@ -15,6 +15,7 @@ import crucible.lens.data.model.Sample
 import crucible.lens.data.model.SampleCreateRequest
 import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.User
+import crucible.lens.data.model.resolvedProjectId
 import crucible.lens.ui.common.MetadataWrite
 import kotlinx.serialization.json.JsonObject
 import crucible.lens.data.upload.DatasetFileUploadRequest
@@ -52,7 +53,7 @@ class CreateSampleViewModel(
     private val _saveState = MutableStateFlow<SaveState>(SaveState.Idle)
     val saveState: StateFlow<SaveState> = _saveState.asStateFlow()
 
-    fun create(request: SampleCreateRequest, projectId: String?, metadata: JsonObject? = null) {
+    fun create(request: SampleCreateRequest, metadata: JsonObject? = null) {
         if (_saveState.value is SaveState.Saving) return
         _saveState.value = SaveState.Saving
         val writeEpoch = repository.captureCacheEpoch()
@@ -62,7 +63,7 @@ class CreateSampleViewModel(
                     is ApiResult.Success -> {
                         var sample = resp.data
                         repository.cacheResource(sample.uniqueId, sample, writeEpoch)
-                        projectId?.let { repository.invalidateProjectData(it, writeEpoch) }
+                        sample.resolvedProjectId?.let { repository.invalidateProjectData(it, writeEpoch) }
                         var metadataWarning: String? = null
                         if (!metadata.isNullOrEmpty()) {
                             when (val metaResp = apiClient.service.postResourceMetadata(sample.uniqueId, metadata)) {
@@ -115,7 +116,7 @@ class CreateDatasetViewModel(
                 var newDataset = createResp.data
                 val newUuid = newDataset.uniqueId
                 repository.cacheResource(newUuid, newDataset, writeEpoch)
-                request.projectId?.let { repository.invalidateProjectData(it, writeEpoch) }
+                newDataset.resolvedProjectId?.let { repository.invalidateProjectData(it, writeEpoch) }
 
                 val fileFailures = mutableListOf<DatasetFileUploadResult.Failure>()
                 files.forEach { file ->
@@ -380,7 +381,13 @@ class EditResourceViewModel(
         }
     }
 
-    fun updateDataset(uuid: String, request: DatasetUpdateRequest, metadataWrite: MetadataWrite? = null) {
+    fun updateDataset(
+        uuid: String,
+        request: DatasetUpdateRequest,
+        metadataWrite: MetadataWrite? = null,
+        newInstrumentMfid: String? = null,
+        previousInstrumentMfid: String? = null
+    ) {
         if (_saveState.value is SaveState.Saving) return
         _saveState.value = SaveState.Saving
         val writeEpoch = repository.captureCacheEpoch()
@@ -389,6 +396,26 @@ class EditResourceViewModel(
                 when (val resp = apiClient.service.updateDataset(uuid, request)) {
                     is ApiResult.Success -> {
                         var dataset = resp.data
+                        if (newInstrumentMfid != null) {
+                            when (val assignment = apiClient.service.assignDatasetInstrument(uuid, newInstrumentMfid)) {
+                                is ApiResult.Success -> {
+                                    val instrument = assignment.data.instrument
+                                    dataset = dataset.copy(
+                                        instrument = instrument,
+                                        instrumentId = instrument.instrumentId,
+                                        instrumentName = instrument.instrumentName
+                                    )
+                                    previousInstrumentMfid?.let(repository::invalidateInstrumentDatasets)
+                                    repository.invalidateInstrumentDatasets(newInstrumentMfid)
+                                    dataset.resolvedProjectId?.let { repository.invalidateProjectData(it, writeEpoch) }
+                                }
+                                is ApiResult.Error -> {
+                                    repository.cacheResource(uuid, dataset, writeEpoch)
+                                    _saveState.value = SaveState.Error("Saved, but instrument reassignment failed (${assignment.code})")
+                                    return@launch
+                                }
+                            }
+                        }
                         if (metadataWrite != null) {
                             val metaResp = when (metadataWrite) {
                                 is MetadataWrite.Merge -> apiClient.service.patchResourceMetadata(uuid, metadataWrite.updates)
@@ -442,8 +469,8 @@ class EditResourceViewModel(
                 when (val result = apiClient.service.reassignResourceProject(uuid, preview.newProjectId, confirm = true)) {
                     is ApiResult.Success -> {
                         val moved = when (val resource = repository.getCachedResource(uuid)) {
-                            is Sample -> resource.copy(projectId = result.data.newProjectId)
-                            is Dataset -> resource.copy(projectId = result.data.newProjectId)
+                            is Sample -> resource.copy(projectId = result.data.newProjectId, project = null)
+                            is Dataset -> resource.copy(projectId = result.data.newProjectId, project = null)
                             else -> null
                         }
                         if (moved != null) repository.cacheResource(uuid, moved, writeEpoch)

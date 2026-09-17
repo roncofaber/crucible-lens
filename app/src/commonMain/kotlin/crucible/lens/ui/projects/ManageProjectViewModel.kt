@@ -47,6 +47,12 @@ sealed class ManageProjectState {
         val canLeave: Boolean get() = currentUserRole != null && !isLead
         val assignableRoles: List<ProjectMemberRole> get() = project.capabilities.assignableProjectRoles(currentUserRole)
 
+        fun assignableRolesFor(user: User): List<ProjectMemberRole> = if (user.isServiceAccount) {
+            assignableRoles.filter { it <= ProjectMemberRole.Contributor }
+        } else {
+            assignableRoles
+        }
+
         fun canChangeMemberRole(role: ProjectMemberRole?): Boolean = project.capabilities.canChangeProjectRole(role, currentUserRole)
     }
     data class Error(val message: String) : ManageProjectState()
@@ -590,7 +596,10 @@ class ManageProjectViewModel(
     fun addMember(user: User, role: ProjectMemberRole) {
         val userId = user.uniqueId ?: return
         val loaded = _state.value as? ManageProjectState.Loaded ?: return
-        if (role !in loaded.assignableRoles) return
+        if (role !in loaded.assignableRolesFor(user)) {
+            _addMemberError.value = "Service accounts can only be viewers or contributors"
+            return
+        }
         if (_addingMemberId.value != null) return
         viewModelScope.launch {
             _addingMemberId.value = userId
@@ -625,7 +634,7 @@ class ManageProjectViewModel(
         val userId = user.uniqueId ?: return
         val currentRole = ProjectMemberRole.fromApi(user.role)
         if (!loaded.canChangeMemberRole(currentRole)) return
-        if (role !in loaded.assignableRoles) return
+        if (role !in loaded.assignableRolesFor(user)) return
         if (role == currentRole) {
             _memberRoleState.value = MemberRoleState.Idle
             return

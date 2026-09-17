@@ -7,7 +7,12 @@ import crucible.lens.data.model.AccessPrincipalKind
 import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.DatasetCreateRequest
+import crucible.lens.data.model.DatasetFacetField
+import crucible.lens.data.model.DatasetInstrumentAssignRequest
+import crucible.lens.data.model.DatasetInstrumentAssignment
 import crucible.lens.data.model.DatasetUpdateRequest
+import crucible.lens.data.model.FacetBucket
+import crucible.lens.data.model.FacetResponse
 import crucible.lens.data.model.Instrument
 import crucible.lens.data.model.InstrumentCreateRequest
 import crucible.lens.data.model.InstrumentStatus
@@ -16,8 +21,10 @@ import crucible.lens.data.model.JoinRequestCreate
 import crucible.lens.data.model.JoinRequestReview
 import crucible.lens.data.model.ResourceSearchResult
 import crucible.lens.data.model.Project
+import crucible.lens.data.model.ProjectScope
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.SampleCreateRequest
+import crucible.lens.data.model.SampleFacetField
 import crucible.lens.data.model.SampleUpdateRequest
 import crucible.lens.data.model.UploadInitiateRequest
 import crucible.lens.data.model.UploadInitiateResponse
@@ -37,6 +44,7 @@ import crucible.lens.data.model.ReassignProjectResponse
 import crucible.lens.data.util.isMfidReference
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.ResponseException
+import io.ktor.client.plugins.expectSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -49,6 +57,7 @@ import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
@@ -206,12 +215,14 @@ class CrucibleApiService(
     suspend fun getResource(
         uuid: String,
         includeLinks: Boolean = true,
+        includeDatasets: Boolean = false,
         includeMetadata: Boolean = true,
         includeOwner: Boolean = true
     ): ApiResult<CrucibleResource> = safeCall {
         val obj: JsonObject = client.get("${baseUrl}resources/$uuid") {
             header("Authorization", "Bearer $apiKey")
             if (includeLinks) url.parameters.append("include_links", "true")
+            url.parameters.append("include_datasets", includeDatasets.toString())
             if (includeMetadata) url.parameters.append("include_metadata", "true")
             if (includeOwner) url.parameters.append("include_owner", "true")
         }.body()
@@ -226,11 +237,13 @@ class CrucibleApiService(
     suspend fun getSample(
         uuid: String,
         includeLinks: Boolean = true,
+        includeDatasets: Boolean = false,
         includeOwner: Boolean = true
     ): ApiResult<Sample> = safeCall {
         client.get("${baseUrl}samples/$uuid") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("include_links", includeLinks.toString())
+            url.parameters.append("include_datasets", includeDatasets.toString())
             if (includeOwner) url.parameters.append("include_owner", "true")
         }.body()
     }
@@ -286,13 +299,14 @@ class CrucibleApiService(
         get("datasets/$uuid/thumbnails")
     }
 
-    suspend fun getInstruments(status: InstrumentStatus = InstrumentStatus.Active): ApiResult<List<Instrument>> = fetchAllPages { limit, offset ->
+    suspend fun getInstruments(status: InstrumentStatus = InstrumentStatus.Active): ApiResult<List<Instrument>> = fetchAllPagesCursor { limit, cursor ->
         client.get("${baseUrl}instruments") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("include_owner", "true")
+            url.parameters.append("include_total", "false")
             url.parameters.append("status", status.apiValue)
             url.parameters.append("limit", limit.toString())
-            url.parameters.append("offset", offset.toString())
+            if (cursor != null) url.parameters.append("cursor", cursor)
         }.body<PaginatedResponse<Instrument>>()
     }
 
@@ -378,16 +392,18 @@ class CrucibleApiService(
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("instrument_mfid", instrumentMfid)
             url.parameters.append("include_owner", "true")
+            url.parameters.append("include_total", "false")
             url.parameters.append("limit", limit.toString())
             if (cursor != null) url.parameters.append("cursor", cursor)
         }.body()
     }
 
-    suspend fun getProjects(): ApiResult<List<Project>> = fetchAllPages { limit, offset ->
+    suspend fun getProjects(): ApiResult<List<Project>> = fetchAllPagesCursor { limit, cursor ->
         client.get("${baseUrl}projects") {
             header("Authorization", "Bearer $apiKey")
+            url.parameters.append("include_total", "false")
             url.parameters.append("limit", limit.toString())
-            url.parameters.append("offset", offset.toString())
+            if (cursor != null) url.parameters.append("cursor", cursor)
         }.body<PaginatedResponse<Project>>()
     }
 
@@ -410,12 +426,14 @@ class CrucibleApiService(
     }
 
     suspend fun getSamplesByProject(
-        projectId: String,
+        projectMfid: String,
+        projectScope: ProjectScope = ProjectScope.Assigned,
         onTotalKnown: (suspend (Int) -> Unit)? = null
     ): ApiResult<List<Sample>> = fetchAllPagesCursor(onTotalKnown = onTotalKnown) { limit, cursor ->
         client.get("${baseUrl}samples") {
             header("Authorization", "Bearer $apiKey")
-            url.parameters.append("project_id", projectId)
+            url.parameters.append("project_mfid", projectMfid)
+            url.parameters.append("project_scope", projectScope.apiValue)
             url.parameters.append("include_owner", "true")
             url.parameters.append("limit", limit.toString())
             if (cursor != null) url.parameters.append("cursor", cursor)
@@ -423,12 +441,14 @@ class CrucibleApiService(
     }
 
     suspend fun getDatasetsByProject(
-        projectId: String,
+        projectMfid: String,
+        projectScope: ProjectScope = ProjectScope.Assigned,
         onTotalKnown: (suspend (Int) -> Unit)? = null
     ): ApiResult<List<Dataset>> = fetchAllPagesCursor(onTotalKnown = onTotalKnown) { limit, cursor ->
         client.get("${baseUrl}datasets") {
             header("Authorization", "Bearer $apiKey")
-            url.parameters.append("project_id", projectId)
+            url.parameters.append("project_mfid", projectMfid)
+            url.parameters.append("project_scope", projectScope.apiValue)
             url.parameters.append("include_owner", "true")
             url.parameters.append("limit", limit.toString())
             if (cursor != null) url.parameters.append("cursor", cursor)
@@ -437,25 +457,32 @@ class CrucibleApiService(
 
     suspend fun getFilteredDatasets(
         projectId: String? = null,
+        projectMfid: String? = null,
+        projectScope: ProjectScope? = null,
         measurement: String? = null,
+        instrumentMfid: String? = null,
         instrumentName: String? = null,
         dataFormat: String? = null,
         sessionName: String? = null,
-        ownerOrcid: String? = null,
+        ownerId: String? = null,
         creationTimeGte: String? = null,
         creationTimeLte: String? = null
     ): ApiResult<List<Dataset>> = fetchAllPagesCursor { limit, cursor ->
         client.get("${baseUrl}datasets") {
             header("Authorization", "Bearer $apiKey")
             if (projectId != null) url.parameters.append("project_id", projectId)
+            if (projectMfid != null) url.parameters.append("project_mfid", projectMfid)
+            if (projectScope != null) url.parameters.append("project_scope", projectScope.apiValue)
             if (measurement != null) url.parameters.append("measurement", measurement)
+            if (instrumentMfid != null) url.parameters.append("instrument_mfid", instrumentMfid)
             if (instrumentName != null) url.parameters.append("instrument_name", instrumentName)
             if (dataFormat != null) url.parameters.append("data_format", dataFormat)
             if (sessionName != null) url.parameters.append("session_name", sessionName)
-            if (ownerOrcid != null) url.parameters.append("owner_orcid", ownerOrcid)
+            if (ownerId != null) url.parameters.append("owner_id", ownerId)
             if (creationTimeGte != null) url.parameters.append("creation_time_gte", creationTimeGte)
             if (creationTimeLte != null) url.parameters.append("creation_time_lte", creationTimeLte)
             url.parameters.append("include_owner", "true")
+            url.parameters.append("include_total", "false")
             url.parameters.append("limit", limit.toString())
             if (cursor != null) url.parameters.append("cursor", cursor)
         }.body<PaginatedResponse<Dataset>>()
@@ -463,19 +490,24 @@ class CrucibleApiService(
 
     suspend fun getFilteredSamples(
         projectId: String? = null,
+        projectMfid: String? = null,
+        projectScope: ProjectScope? = null,
         sampleType: String? = null,
-        ownerOrcid: String? = null,
+        ownerId: String? = null,
         creationTimeGte: String? = null,
         creationTimeLte: String? = null
     ): ApiResult<List<Sample>> = fetchAllPagesCursor { limit, cursor ->
         client.get("${baseUrl}samples") {
             header("Authorization", "Bearer $apiKey")
             if (projectId != null) url.parameters.append("project_id", projectId)
+            if (projectMfid != null) url.parameters.append("project_mfid", projectMfid)
+            if (projectScope != null) url.parameters.append("project_scope", projectScope.apiValue)
             if (sampleType != null) url.parameters.append("sample_type", sampleType)
-            if (ownerOrcid != null) url.parameters.append("owner_orcid", ownerOrcid)
+            if (ownerId != null) url.parameters.append("owner_id", ownerId)
             if (creationTimeGte != null) url.parameters.append("creation_time_gte", creationTimeGte)
             if (creationTimeLte != null) url.parameters.append("creation_time_lte", creationTimeLte)
             url.parameters.append("include_owner", "true")
+            url.parameters.append("include_total", "false")
             url.parameters.append("limit", limit.toString())
             if (cursor != null) url.parameters.append("cursor", cursor)
         }.body<PaginatedResponse<Sample>>()
@@ -490,6 +522,19 @@ class CrucibleApiService(
     suspend fun createDataset(request: DatasetCreateRequest): ApiResult<Dataset> = safeCall {
         post("datasets", request)
     }
+
+    suspend fun assignDatasetInstrument(
+        datasetMfid: String,
+        instrumentMfid: String
+    ): ApiResult<DatasetInstrumentAssignment> = safeCall {
+        put("datasets/$datasetMfid/instrument", DatasetInstrumentAssignRequest(instrumentMfid))
+    }
+
+    suspend fun getDatasetFacetValues(field: DatasetFacetField): ApiResult<List<FacetBucket>> =
+        fetchFacetValues("datasets/facets", field.apiValue)
+
+    suspend fun getSampleFacetValues(field: SampleFacetField): ApiResult<List<FacetBucket>> =
+        fetchFacetValues("samples/facets", field.apiValue)
 
     suspend fun addThumbnail(
         uuid: String,
@@ -759,20 +804,36 @@ class CrucibleApiService(
         }.body<PaginatedResponse<JoinRequest>>()
     }
 
-    suspend fun searchSamples(q: String, projectId: String? = null, limit: Int = 20): ApiResult<List<Sample>> = safeCall {
+    suspend fun searchSamples(
+        q: String,
+        projectId: String? = null,
+        projectMfid: String? = null,
+        projectScope: ProjectScope? = null,
+        limit: Int = 20
+    ): ApiResult<List<Sample>> = safeCall {
         client.get("${baseUrl}samples/search") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("q", q)
             if (projectId != null) url.parameters.append("project_id", projectId)
+            if (projectMfid != null) url.parameters.append("project_mfid", projectMfid)
+            if (projectScope != null) url.parameters.append("project_scope", projectScope.apiValue)
             url.parameters.append("limit", limit.toString())
         }.body<PaginatedResponse<Sample>>().items
     }
 
-    suspend fun searchDatasets(q: String, projectId: String? = null, limit: Int = 20): ApiResult<List<Dataset>> = safeCall {
+    suspend fun searchDatasets(
+        q: String,
+        projectId: String? = null,
+        projectMfid: String? = null,
+        projectScope: ProjectScope? = null,
+        limit: Int = 20
+    ): ApiResult<List<Dataset>> = safeCall {
         client.get("${baseUrl}datasets/search") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("q", q)
             if (projectId != null) url.parameters.append("project_id", projectId)
+            if (projectMfid != null) url.parameters.append("project_mfid", projectMfid)
+            if (projectScope != null) url.parameters.append("project_scope", projectScope.apiValue)
             url.parameters.append("limit", limit.toString())
         }.body<PaginatedResponse<Dataset>>().items
     }
@@ -880,9 +941,22 @@ class CrucibleApiService(
      * Uses GET {baseUrl}health/ready — returns ok/degraded + DB latency.
      * Pass baseUrl explicitly so callers can test an unsaved candidate URL.
      */
-    suspend fun checkHealth(baseUrl: String): ApiResult<HealthStatus> = safeCall {
+    suspend fun checkHealth(baseUrl: String): ApiResult<HealthStatus> {
         val normalizedUrl = baseUrl.trim().trimEnd('/') + "/"
-        client.get("${normalizedUrl}health/ready").body()
+        return try {
+            val response = client.get("${normalizedUrl}health/ready") {
+                expectSuccess = false
+            }
+            if (response.status.value == 200 || response.status.value == 503) {
+                ApiResult.Success(response.body())
+            } else {
+                ApiResult.Error(response.status.value, response.bodyAsText())
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ApiResult.Error(-1, e.message ?: "Unknown error")
+        }
     }
 
     /**
@@ -929,6 +1003,24 @@ class CrucibleApiService(
                 response.total?.let { onTotalKnown?.invoke(it) }
                 isFirst = false
             }
+            result.addAll(response.items)
+            cursor = response.nextCursor
+        } while (cursor != null)
+        result
+    }
+
+    private suspend fun fetchFacetValues(endpoint: String, field: String): ApiResult<List<FacetBucket>> = safeCall {
+        val result = mutableListOf<FacetBucket>()
+        var cursor: String? = null
+        do {
+            val response = client.get("$baseUrl$endpoint") {
+                header("Authorization", "Bearer $apiKey")
+                url.parameters.append("field", field)
+                url.parameters.append("sort", "label")
+                url.parameters.append("direction", "asc")
+                url.parameters.append("limit", "1000")
+                if (cursor != null) url.parameters.append("cursor", cursor)
+            }.body<FacetResponse>()
             result.addAll(response.items)
             cursor = response.nextCursor
         } while (cursor != null)

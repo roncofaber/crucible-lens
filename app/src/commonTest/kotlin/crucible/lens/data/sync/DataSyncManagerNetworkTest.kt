@@ -124,6 +124,34 @@ class DataSyncManagerNetworkTest {
         assertEquals(null, repository.getCachedProjectSamples("previous-project-a"))
     }
 
+    @Test
+    fun synchronizationUsesCanonicalAssignedScopeWithoutPersistingRequestContext() = runTest {
+        val requests = mutableListOf<Triple<String, String?, String?>>()
+        val repository = repositoryWith(
+            projectContentEngine(
+                failDatasets = { false },
+                onRequest = { path, projectMfid, projectScope ->
+                    requests += Triple(path, projectMfid, projectScope)
+                }
+            )
+        )
+        val manager = DataSyncManager(repository)
+        val store = InMemoryProjectCacheStore()
+
+        val content = manager.syncProject(store, "account-a", target, forceRefresh = true)
+
+        assertEquals(
+            setOf<Triple<String, String?, String?>>(
+                Triple("samples", target.projectMfid, "assigned"),
+                Triple("datasets", target.projectMfid, "assigned")
+            ),
+            requests.toSet()
+        )
+        assertEquals(2, requests.size)
+        assertEquals(null, content.samples.single().projectRelation)
+        assertEquals(null, content.datasets.single().projectRelation)
+    }
+
     private fun repositoryWith(engine: MockEngine): CrucibleRepository {
         val apiClient = ApiClient.withEngine(engine)
         apiClient.setApiKey("test-key")
@@ -147,19 +175,22 @@ class DataSyncManagerNetworkTest {
 private fun projectContentEngine(
     failDatasets: () -> Boolean,
     onSamples: () -> Unit = {},
-    onDatasets: () -> Unit = {}
+    onDatasets: () -> Unit = {},
+    onRequest: (String, String?, String?) -> Unit = { _, _, _ -> }
 ) = MockEngine { request ->
-    when (request.url.encodedPath.substringAfterLast('/')) {
+    val path = request.url.encodedPath.substringAfterLast('/')
+    onRequest(path, request.url.parameters["project_mfid"], request.url.parameters["project_scope"])
+    when (path) {
         "samples" -> {
             onSamples()
-            respondJson(page("""{"unique_id":"new-sample","project_id":"project-a"}"""))
+            respondJson(page("""{"unique_id":"new-sample","project_id":"project-a","project_relation":"assigned"}"""))
         }
         "datasets" -> {
             onDatasets()
             if (failDatasets()) {
                 respondJson("{}", HttpStatusCode.InternalServerError)
             } else {
-                respondJson(page("""{"unique_id":"new-dataset","project_id":"project-a"}"""))
+                respondJson(page("""{"unique_id":"new-dataset","project_id":"project-a","project_relation":"assigned"}"""))
             }
         }
         else -> respondJson("{}", HttpStatusCode.NotFound)

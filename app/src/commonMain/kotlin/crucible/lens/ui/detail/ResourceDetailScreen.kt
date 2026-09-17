@@ -47,6 +47,7 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.model.creationTimeOrEmpty
+import crucible.lens.data.model.resolvedProjectId
 import crucible.lens.data.util.SortField
 import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
@@ -124,8 +125,8 @@ fun ResourceDetailScreen(
 
     val currentProjectId = resource.let { r ->
         when (r) {
-            is Sample -> r.projectId
-            is Dataset -> r.projectId
+            is Sample -> r.resolvedProjectId
+            is Dataset -> r.resolvedProjectId
             null -> null
         }
     }
@@ -203,8 +204,8 @@ fun ResourceDetailScreen(
         if (targetResource != null) {
             val rtype = if (targetResource is Sample) "sample" else "dataset"
             val projectId = when (targetResource) {
-                is Sample -> targetResource.projectId
-                is Dataset -> targetResource.projectId
+                is Sample -> targetResource.resolvedProjectId
+                is Dataset -> targetResource.resolvedProjectId
             }
             onSaveToHistory(targetResource.uniqueId, targetResource.name, rtype, projectId)
         }
@@ -305,8 +306,8 @@ fun ResourceDetailScreen(
                     // null for a page the user was already looking at.
                     val organizeResource = sortedSiblingList.getOrNull(pagerState.currentPage)
                     val organizeProjectId = when (organizeResource) {
-                        is Sample -> organizeResource.projectId
-                        is Dataset -> organizeResource.projectId
+                        is Sample -> organizeResource.resolvedProjectId
+                        is Dataset -> organizeResource.resolvedProjectId
                         null -> null
                     }
                     if (organizeResource != null && organizeProjectId != null) {
@@ -428,8 +429,8 @@ fun ResourceDetailScreen(
                                 }
                             )
                             val projectId = when (displayForMenu) {
-                                is Sample -> displayForMenu.projectId
-                                is Dataset -> displayForMenu.projectId
+                                is Sample -> displayForMenu.resolvedProjectId
+                                is Dataset -> displayForMenu.resolvedProjectId
                                 null -> null
                             }
                             if (displayForMenu != null && projectId != null && graphExplorerUrl.isNotBlank()) {

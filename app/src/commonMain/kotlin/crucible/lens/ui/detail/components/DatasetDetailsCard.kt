@@ -10,14 +10,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import crucible.lens.data.api.ApiResult
-import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.model.Dataset
+import crucible.lens.data.model.resolvedInstrumentName
+import crucible.lens.data.model.resolvedInstrumentReference
+import crucible.lens.data.model.resolvedProjectName
+import crucible.lens.data.model.resolvedProjectReference
 import crucible.lens.data.util.formatDateTime
 import crucible.lens.data.util.userDisplayName
 import crucible.lens.platform.copyToClipboard
@@ -25,9 +26,7 @@ import crucible.lens.platform.getPlatformContext
 import crucible.lens.platform.openUrl
 import crucible.lens.ui.common.IdText
 import crucible.lens.ui.common.StandardSizeAnim
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
-import org.koin.compose.koinInject
 
 @Composable
 internal fun DatasetDetailsCard(
@@ -40,11 +39,11 @@ internal fun DatasetDetailsCard(
     onAdvancedChange: (Boolean) -> Unit = {}
 ) {
     val platformCtx = getPlatformContext()
-    val repository = koinInject<CrucibleRepository>()
     var advanced by remember { mutableStateOf(initialAdvanced) }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(modifier = Modifier.padding(16.dp).animateContentSize(StandardSizeAnim)) {
-            val projectId = dataset.projectId
+            val projectName = dataset.resolvedProjectName
+            val projectReference = dataset.resolvedProjectReference
 
             // Header: title + action icons (copy, open, share, QR)
             Row(
@@ -111,30 +110,24 @@ internal fun DatasetDetailsCard(
             Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 InfoRow(icon = AppIcons.Sample, label = "Measurement", value = dataset.measurement ?: "None")
                 InfoRow(icon = AppIcons.Tag, label = "Session", value = dataset.sessionName ?: "None")
-                if (dataset.instrumentName != null) {
-                    val instrumentScope = rememberCoroutineScope()
+                val instrumentName = dataset.resolvedInstrumentName
+                val instrumentReference = dataset.resolvedInstrumentReference
+                if (instrumentName != null && instrumentReference != null) {
                     ClickableInfoRow(
                         icon = AppIcons.Instrument,
                         label = "Instrument",
-                        value = dataset.instrumentName,
-                        onClick = {
-                            val instrumentReference = dataset.instrumentId
-                            if (instrumentReference != null) {
-                                onInstrumentClick(instrumentReference)
-                            } else {
-                                instrumentScope.launch {
-                                    val instruments = (repository.fetchInstruments() as? ApiResult.Success)?.data
-                                    val instrument = instruments?.find { it.instrumentName == dataset.instrumentName }
-                                    if (instrument != null) onInstrumentClick(instrument.uniqueId)
-                                }
-                            }
-                        }
+                        value = instrumentName,
+                        onClick = { onInstrumentClick(instrumentReference) }
                     )
+                } else if (instrumentName != null) {
+                    InfoRow(icon = AppIcons.Instrument, label = "Instrument", value = instrumentName)
                 } else {
                     InfoRow(icon = AppIcons.Instrument, label = "Instrument", value = "None")
                 }
-                if (projectId != null) {
-                    ClickableInfoRow(icon = AppIcons.Project, label = "Project", value = projectId, onClick = { onProjectClick(projectId) })
+                if (projectName != null && projectReference != null) {
+                    ClickableInfoRow(icon = AppIcons.Project, label = "Project", value = projectName, onClick = { onProjectClick(projectReference) })
+                } else if (projectName != null) {
+                    InfoRow(icon = AppIcons.Project, label = "Project", value = projectName)
                 } else {
                     InfoRow(icon = AppIcons.Project, label = "Project", value = "None")
                 }

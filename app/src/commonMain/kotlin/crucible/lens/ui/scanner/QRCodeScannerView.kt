@@ -23,7 +23,7 @@ import crucible.lens.platform.QRScannerWithPermission
 @Composable
 fun QRCodeScannerView(
     modifier: Modifier = Modifier,
-    onCodeScanned: (String) -> Unit,
+    onCodeScanned: (String) -> Boolean,
     onBack: (() -> Unit)? = null
 ) {
     val accentColor = MaterialTheme.colorScheme.primary
@@ -31,10 +31,7 @@ fun QRCodeScannerView(
     Box(modifier = modifier.fillMaxSize()) {
         QRScannerWithPermission(
             modifier = Modifier.fillMaxSize(),
-            onScanned = { code ->
-                onCodeScanned(code)
-                true
-            }
+            onScanned = onCodeScanned
         )
 
         // Viewfinder square

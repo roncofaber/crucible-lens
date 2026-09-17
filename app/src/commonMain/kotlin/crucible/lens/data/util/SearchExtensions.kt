@@ -4,6 +4,9 @@ import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Instrument
 import crucible.lens.data.model.Project
 import crucible.lens.data.model.Sample
+import crucible.lens.data.model.resolvedInstrumentName
+import crucible.lens.data.model.resolvedProjectId
+import crucible.lens.data.model.resolvedProjectName
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -21,7 +24,8 @@ fun Sample.matchesSearch(query: String): Boolean {
     val q = query.lowercase()
     return name.lowercase().contains(q) ||
         (sampleType?.lowercase()?.contains(q) == true) ||
-        (projectId?.lowercase()?.contains(q) == true) ||
+        (resolvedProjectName?.lowercase()?.contains(q) == true) ||
+        (resolvedProjectId?.lowercase()?.contains(q) == true) ||
         uniqueId.lowercase().contains(q) ||
         (ownerOrcid?.lowercase()?.contains(q) == true)
 }
@@ -30,9 +34,10 @@ fun Dataset.matchesSearch(query: String): Boolean {
     val q = query.lowercase()
     return name.lowercase().contains(q) ||
         (measurement?.lowercase()?.contains(q) == true) ||
-        (instrumentName?.lowercase()?.contains(q) == true) ||
+        (resolvedInstrumentName?.lowercase()?.contains(q) == true) ||
         (sessionName?.lowercase()?.contains(q) == true) ||
-        (projectId?.lowercase()?.contains(q) == true) ||
+        (resolvedProjectName?.lowercase()?.contains(q) == true) ||
+        (resolvedProjectId?.lowercase()?.contains(q) == true) ||
         uniqueId.lowercase().contains(q) ||
         (timestamp?.lowercase()?.contains(q) == true) ||
         (dataFormat?.lowercase()?.contains(q) == true) ||

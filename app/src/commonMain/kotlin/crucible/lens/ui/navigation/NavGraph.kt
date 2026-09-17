@@ -34,7 +34,7 @@ import crucible.lens.data.preferences.syncedProjectReferencesNeedMigration
 import crucible.lens.data.util.isMfidReference
 import crucible.lens.ui.home.HomeScreen
 import crucible.lens.ui.history.HistoryScreen
-import crucible.lens.ui.scanner.QRCodeScannerView
+import crucible.lens.ui.scanner.ScannerScreen
 import crucible.lens.ui.search.SearchScreen
 import crucible.lens.ui.settings.SettingsScreen
 import crucible.lens.ui.settings.ApiSettingsScreen
@@ -74,6 +74,9 @@ import crucible.lens.data.sync.DataSyncManager
 import crucible.lens.data.sync.toSyncTarget
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
+import crucible.lens.data.model.resolvedInstrumentId
+import crucible.lens.data.model.resolvedInstrumentName
+import crucible.lens.data.model.resolvedProjectId
 import crucible.lens.ui.create.DuplicateHolder
 import crucible.lens.ui.create.CreateSampleScreen
 import crucible.lens.ui.create.CreateDatasetScreen
@@ -486,18 +489,19 @@ fun NavGraph(
                 onCreateDataset = {
                     navController.navigate(Screen.CreateDataset.createRoute())
                 },
+                canCreateSample = userProfile?.capabilities?.canCreateSample ?: true,
+                canCreateDataset = userProfile?.capabilities?.canCreateDataset ?: true,
                 isSyncing = isSyncing
             )
         }
 
         composable(Screen.Scanner.route) {
-            QRCodeScannerView(
-                onCodeScanned = { code ->
-                    val uuid = runCatching {
-                        if (code.contains("://")) code.substringAfterLast('/').substringBefore('?').trim()
-                        else code
-                    }.getOrDefault(code).trim()
-                    navController.navigate(Screen.Detail.createRoute(uuid))
+            ScannerScreen(
+                onResourceResolved = { resourceMfid ->
+                    navController.navigate(Screen.Detail.createRoute(resourceMfid))
+                },
+                onProjectResolved = { projectMfid ->
+                    navController.navigate(Screen.ProjectDetail.createRoute(projectMfid))
                 },
                 onBack = navigateBack
             )
@@ -768,7 +772,7 @@ fun NavGraph(
                                         type = resource.sampleType,
                                         description = resource.description,
                                         timestamp = resource.timestamp,
-                                        projectId = resource.projectId
+                                        projectId = resource.resolvedProjectId
                                     ))
                                     navController.navigate(Screen.CreateSample.createRoute())
                                 }
@@ -776,12 +780,12 @@ fun NavGraph(
                                     DuplicateHolder.putDataset(DuplicateHolder.DatasetPrefill(
                                         name = resource.name,
                                         measurement = resource.measurement,
-                                        instrumentId = resource.instrumentId,
-                                        instrumentName = resource.instrumentName,
+                                        instrumentId = resource.resolvedInstrumentId,
+                                        instrumentName = resource.resolvedInstrumentName,
                                         dataFormat = resource.dataFormat,
                                         sessionName = resource.sessionName,
                                         timestamp = resource.timestamp,
-                                        projectId = resource.projectId
+                                        projectId = resource.resolvedProjectId
                                     ))
                                     navController.navigate(Screen.CreateDataset.createRoute())
                                 }
@@ -920,6 +924,7 @@ fun NavGraph(
                 onToggleSync = toggleProjectSync,
                 onManageSyncedProjects = { navController.navigate(Screen.SyncedProjects.createRoute(firstRun = false)) },
                 onCreateProject = { navController.navigate(Screen.CreateProject.route) },
+                canCreateProject = userProfile?.capabilities?.canCreateProject ?: true,
                 onManageProject = { projectId -> navController.navigate(Screen.ManageProject.createRoute(projectId)) },
                 currentUserOrcid = userOrcid,
                 accountId = activeAccountId
@@ -973,6 +978,8 @@ fun NavGraph(
                 onCreateDataset = {
                     projectSlug?.let { navController.navigate(Screen.CreateDataset.createRoute(it)) }
                 },
+                canCreateSample = userProfile?.capabilities?.canCreateSample ?: true,
+                canCreateDataset = userProfile?.capabilities?.canCreateDataset ?: true,
                 onManageProject = {
                     navController.navigate(Screen.ManageProject.createRoute(projectMfid))
                 },
@@ -1011,7 +1018,8 @@ fun NavGraph(
                 onHome = navigateHome,
                 onInstrumentClick = navigateToInstrument,
                 onCreateInstrument = { navController.navigate(Screen.CreateInstrument.route) },
-                canRegisterInstrument = userProfile?.isServiceAccount == false,
+                canRegisterInstrument = userProfile?.capabilities?.canRegisterInstrument
+                    ?: (userProfile?.isServiceAccount == false),
                 refreshKey = refreshKey,
                 pinnedInstruments = pinnedInstruments,
                 onTogglePin = { id -> scope.launch { prefs.togglePinnedInstrument(id) } },

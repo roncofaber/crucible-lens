@@ -205,11 +205,15 @@ fun ApiSettingsScreen(
                                 Column {
                                     Text(if (ok) "Connected" else "Server error", style = MaterialTheme.typography.bodySmall, color = color)
                                     val details = listOfNotNull(
-                                        s.db?.let { "DB: $it" },
-                                        s.dbMs?.let { "${it.toInt()} ms" },
-                                        s.version?.let { "v$it" }
-                                    ).joinToString(" · ")
+                                        "DB: ${s.database.status}",
+                                        s.database.latencyMs?.let { "${it.toInt()} ms" },
+                                        "v${s.build.apiVersion}"
+                                    ).joinToString(" | ")
                                     if (details.isNotBlank()) Text(details, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    val revision = s.database.schemaRevisions.joinToString().takeIf { it.isNotBlank() }
+                                    if (revision != null) {
+                                        Text("Schema $revision", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                 }
                             }
                         }

@@ -37,3 +37,9 @@ fun parseDeepLink(url: String): DeepLinkTarget? {
         else -> null
     }
 }
+
+fun parseScannedTarget(value: String): DeepLinkTarget? {
+    val trimmed = value.trim()
+    if (trimmed.isResourceReference()) return DeepLinkTarget.Resource(trimmed)
+    return parseDeepLink(trimmed)
+}

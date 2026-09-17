@@ -44,6 +44,7 @@ fun CreateDatasetScreen(
     var measurement by rememberSaveable { mutableStateOf(prefill?.measurement ?: "") }
     var instrumentName by rememberSaveable { mutableStateOf(prefill?.instrumentName ?: "") }
     var instrumentId by rememberSaveable { mutableStateOf(prefill?.instrumentId) }
+    var instrumentMfid by rememberSaveable { mutableStateOf<String?>(null) }
     var sessionName by rememberSaveable { mutableStateOf(prefill?.sessionName ?: "") }
     var dataType by rememberSaveable { mutableStateOf("") }
     var metadata by remember { mutableStateOf<JsonObject?>(null) }
@@ -232,7 +233,10 @@ fun CreateDatasetScreen(
             InstrumentPickerField(
                 value = instrumentName,
                 onValueChange = { instrumentName = it },
-                onInstrumentSelected = { instrumentId = it?.instrumentId },
+                onInstrumentSelected = {
+                    instrumentId = it?.instrumentId
+                    instrumentMfid = it?.uniqueId
+                },
                 modifier = Modifier.fillMaxWidth()
             )
             DateTimePickerField(value = timestamp, onValueChange = { timestamp = it }, modifier = Modifier.fillMaxWidth())
@@ -283,10 +287,12 @@ fun CreateDatasetScreen(
                     createViewModel.create(
                         DatasetCreateRequest(
                             datasetName = name.trim(),
-                            projectId = selectedProjectId,
+                            projectId = selectedProjectId.takeIf { selectedProject == null },
+                            projectMfid = selectedProject?.uniqueId,
                             measurement = measurement.trim().ifBlank { null },
-                            instrumentName = instrumentName.trim().ifBlank { null }.takeIf { instrumentId == null },
-                            instrumentId = instrumentId,
+                            instrumentName = instrumentName.trim().ifBlank { null }.takeIf { instrumentMfid == null },
+                            instrumentId = instrumentId.takeIf { instrumentMfid == null },
+                            instrumentMfid = instrumentMfid,
                             sessionName = sessionName.trim().ifBlank { null },
                             timestamp = timestamp.trim().ifBlank { null },
                             dataType = dataType.trim().ifBlank { null },

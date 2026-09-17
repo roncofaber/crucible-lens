@@ -6,6 +6,7 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.JoinRequest
+import crucible.lens.data.model.ProjectScope
 import crucible.lens.data.model.Sample
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.sync.DataSyncManager
@@ -14,6 +15,7 @@ import crucible.lens.platform.PlatformContext
 import crucible.lens.ui.common.LoadState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +37,13 @@ sealed class JoinRequestSubmissionState {
     data class Error(val message: String) : JoinRequestSubmissionState()
 }
 
+private fun projectScopeError(code: Int): String = when (code) {
+    403 -> "You no longer have permission to inspect resources shared with this project"
+    404 -> "This project could not be found"
+    409 -> "This project is not ready to receive shared resources"
+    else -> "Could not load shared resources ($code)"
+}
+
 class ProjectDetailViewModel(
     private val repository: CrucibleRepository,
     private val dataSyncManager: DataSyncManager,
@@ -43,6 +52,9 @@ class ProjectDetailViewModel(
 
     private val _loadState = MutableStateFlow<LoadState<ProjectContent>>(LoadState.Loading)
     val loadState: StateFlow<LoadState<ProjectContent>> = _loadState.asStateFlow()
+
+    private val _sharedLoadState = MutableStateFlow<LoadState<ProjectContent>?>(null)
+    val sharedLoadState: StateFlow<LoadState<ProjectContent>?> = _sharedLoadState.asStateFlow()
 
     private val _joinRequestState = MutableStateFlow<ProjectJoinRequestState>(ProjectJoinRequestState.Idle)
     val joinRequestState: StateFlow<ProjectJoinRequestState> = _joinRequestState.asStateFlow()
@@ -54,6 +66,8 @@ class ProjectDetailViewModel(
     private var currentAccountId: String? = null
     private var currentIsSynced = false
     private var joinRequestJob: Job? = null
+    private var sharedLoadJob: Job? = null
+    private var sharedProjectMfid: String? = null
 
     fun load(
         target: ProjectSyncTarget,
@@ -96,7 +110,7 @@ class ProjectDetailViewModel(
                         forceRefresh = forceRefresh || repository.hasPersistedProjectData(target.projectMfid)
                     ).let { it.samples to it.datasets }
                 } else {
-                    repository.fetchProjectData(target.projectSlug, forceRefresh = forceRefresh)
+                    repository.fetchProjectData(target.projectMfid, target.projectSlug, forceRefresh = forceRefresh)
                 }
                 _loadState.value = LoadState.Success(ProjectContent(samples, datasets))
             } catch (e: CancellationException) {
@@ -109,6 +123,39 @@ class ProjectDetailViewModel(
                 } else {
                     LoadState.Error("Connection error - check your network")
                 }
+            }
+        }
+    }
+
+    fun loadShared(projectMfid: String, forceRefresh: Boolean = false) {
+        if (!forceRefresh && sharedProjectMfid == projectMfid && _sharedLoadState.value is LoadState.Success) return
+        sharedLoadJob?.cancel()
+        if (sharedProjectMfid != projectMfid) _sharedLoadState.value = LoadState.Loading
+        sharedProjectMfid = projectMfid
+        sharedLoadJob = viewModelScope.launch {
+            val previous = _sharedLoadState.value as? LoadState.Success
+            _sharedLoadState.value = if (forceRefresh && previous != null) {
+                previous.copy(isRefreshing = true, refreshError = null)
+            } else {
+                LoadState.Loading
+            }
+            try {
+                val samples = async { apiClient.service.getSamplesByProject(projectMfid, ProjectScope.Shared) }
+                val datasets = async { apiClient.service.getDatasetsByProject(projectMfid, ProjectScope.Shared) }
+                val sampleResult = samples.await()
+                val datasetResult = datasets.await()
+                _sharedLoadState.value = when {
+                    sampleResult is ApiResult.Success && datasetResult is ApiResult.Success -> {
+                        LoadState.Success(ProjectContent(sampleResult.data, datasetResult.data))
+                    }
+                    sampleResult is ApiResult.Error -> projectScopeFailureState(previous, projectScopeError(sampleResult.code))
+                    datasetResult is ApiResult.Error -> projectScopeFailureState(previous, projectScopeError(datasetResult.code))
+                    else -> projectScopeFailureState(previous, "Could not load shared resources")
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _sharedLoadState.value = projectScopeFailureState(previous, "Connection error - check your network")
             }
         }
     }
@@ -191,3 +238,9 @@ class ProjectDetailViewModel(
         _joinRequestSubmissionState.value = JoinRequestSubmissionState.Idle
     }
 }
+
+private fun projectScopeFailureState(
+    previous: LoadState.Success<ProjectContent>?,
+    message: String
+): LoadState<ProjectContent> = previous?.copy(isRefreshing = false, refreshError = message)
+    ?: LoadState.Error(message)

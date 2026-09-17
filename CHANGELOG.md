@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### Added
+
+- The QR scanner now accepts trusted Crucible Web links and verifies their extracted resource or project identifier through the authenticated API before opening it
+- Project pages can now switch between resources assigned to the project and resources shared with it
+- Search filters now suggest existing measurement, data format, session, and sample type values while still accepting new values
+- Authorized dataset managers can now assign a different registered instrument while editing a dataset
+
+### Changed
+
+- Dataset views now show current project and instrument names and use stable references when opening their details
+- Resource linking now searches the assigned project by its stable identity, keeping results correct after project ID changes
+- Sample and dataset creation now submits stable project and instrument identities when available
+- Create actions now follow the permissions reported for the signed-in account
+
+### Fixed
+
+- Owner and date filters now use the current API contract, including stable owner identities and UTC timestamps
+- Connection diagnostics now show the deployed API version, database status, latency, and schema revisions even when readiness is degraded
+- Service accounts can no longer be assigned project roles above Contributor
+
 ## [0.9.0-alpha.1] - 2026-09-01
 
 Crucible Lens 0.9.0-alpha.1 moves the app to Crucible API V3 with durable project synchronization, expanded project and instrument management, and sample and dataset access controls. It also strengthens uploads, deep links, caching, permissions, and cross-platform reliability ahead of the final 0.9.0 release.

@@ -36,6 +36,9 @@ import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.creationTimeOrEmpty
+import crucible.lens.data.model.resolvedInstrumentName
+import crucible.lens.data.model.resolvedProjectId
+import crucible.lens.data.model.resolvedProjectName
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.util.SortState
 import crucible.lens.data.util.applySortState
@@ -127,16 +130,26 @@ private fun <T : CrucibleResource> LazyListScope.groupedResourceItems(
     resourceType: String,
     onItemClick: (String) -> Unit,
     expandedGroups: SnapshotStateMap<String, Boolean>,
-    cacheAgeMinutes: Long?
+    cacheAgeMinutes: Long?,
+    showProjectContext: Boolean
 ) {
     if (!isGrouped) {
         itemsIndexed(flatItems, key = { _, it -> it.uniqueId }) { index, resource ->
+            val resourceProjectId = when (resource) {
+                is Sample -> resource.resolvedProjectId
+                is Dataset -> resource.resolvedProjectId
+            }
+            val resourceProjectName = when (resource) {
+                is Sample -> resource.resolvedProjectName
+                is Dataset -> resource.resolvedProjectName
+            }
             ResourceRow(
                 title = resource.name,
                 subtitle = resource.uniqueId,
                 uniqueId = resource.uniqueId,
                 graphExplorerUrl = graphExplorerUrl,
-                projectId = projectId,
+                snippet = if (showProjectContext) resourceProjectName?.let { "Assigned to $it" } ?: "Not assigned to a project" else null,
+                projectId = if (showProjectContext) resourceProjectId else projectId,
                 resourceType = resourceType,
                 showDivider = index > 0,
                 onClick = { onItemClick(resource.uniqueId) }
@@ -157,12 +170,21 @@ private fun <T : CrucibleResource> LazyListScope.groupedResourceItems(
 
         if (expanded) {
             itemsIndexed(sortedItems, key = { _, it -> it.uniqueId }) { index, resource ->
+                val resourceProjectId = when (resource) {
+                    is Sample -> resource.resolvedProjectId
+                    is Dataset -> resource.resolvedProjectId
+                }
+                val resourceProjectName = when (resource) {
+                    is Sample -> resource.resolvedProjectName
+                    is Dataset -> resource.resolvedProjectName
+                }
                 ResourceRow(
                     title = resource.name,
                     subtitle = resource.uniqueId,
                     uniqueId = resource.uniqueId,
                     graphExplorerUrl = graphExplorerUrl,
-                    projectId = projectId,
+                    snippet = if (showProjectContext) resourceProjectName?.let { "Assigned to $it" } ?: "Not assigned to a project" else null,
+                    projectId = if (showProjectContext) resourceProjectId else projectId,
                     resourceType = resourceType,
                     showDivider = index > 0,
                     onClick = { onItemClick(resource.uniqueId) }
@@ -188,6 +210,8 @@ internal fun SamplesList(
     samples: List<Sample>,
     isFiltered: Boolean,
     fromCache: Boolean = false,
+    showProjectContext: Boolean = false,
+    emptyMessage: String = "This project has no samples.",
     projectId: String = "",
     graphExplorerUrl: String = "",
     groupBy: SampleGroupBy = SampleGroupBy.TYPE,
@@ -211,7 +235,7 @@ internal fun SamplesList(
             SampleGroupBy.NONE  -> ""
             SampleGroupBy.TYPE  -> sample.sampleType ?: "No type"
             SampleGroupBy.DATE  -> dateGroupKey(sample.timestamp)
-            SampleGroupBy.OWNER -> sample.ownerOrcid?.let { ownerNames[it] ?: it } ?: "Unknown owner"
+            SampleGroupBy.OWNER -> sample.owner?.let(::userDisplayName) ?: sample.ownerOrcid?.let { ownerNames[it] ?: it } ?: "Unknown owner"
         } }.entries.sortedBy { it.key.lowercase() }
     }
     val sortedFlatItems = remember(samples, sortState) {
@@ -231,6 +255,11 @@ internal fun SamplesList(
             // Clears the ScrollToTopButton FAB so the last item is never obscured.
             contentPadding = PaddingValues(bottom = ScrollToTopButtonClearance)
         ) {
+            (loadState as? LoadState.Success)?.refreshError?.let { message ->
+                item(key = "refresh_error_sample") {
+                    ErrorCard(title = "Could Not Refresh", message = message, modifier = Modifier.padding(16.dp), onRetry = onRetry)
+                }
+            }
             when {
                 loadState is LoadState.Loading -> item(key = "loading") { LoadingItem(label = "Loading samples…") }
                 loadState is LoadState.Error -> item(key = "error") {
@@ -241,7 +270,7 @@ internal fun SamplesList(
                         resourceName = "Samples",
                         defaultIcon = AppIcons.Sample,
                         isFiltered = isFiltered,
-                        emptyMessage = "This project has no samples.",
+                        emptyMessage = emptyMessage,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -260,7 +289,8 @@ internal fun SamplesList(
                     resourceType = "sample",
                     onItemClick = onSampleClick,
                     expandedGroups = expandedGroups,
-                    cacheAgeMinutes = if (fromCache) repository.projectDataAgeMinutes(projectId) ?: 0 else null
+                    cacheAgeMinutes = if (fromCache) repository.projectDataAgeMinutes(projectId) ?: 0 else null,
+                    showProjectContext = showProjectContext
                 )
             }
         }
@@ -278,6 +308,8 @@ internal fun DatasetsList(
     datasets: List<Dataset>,
     isFiltered: Boolean,
     fromCache: Boolean = false,
+    showProjectContext: Boolean = false,
+    emptyMessage: String = "This project has no datasets.",
     projectId: String = "",
     graphExplorerUrl: String = "",
     groupBy: DatasetGroupBy = DatasetGroupBy.MEASUREMENT,
@@ -300,11 +332,11 @@ internal fun DatasetsList(
         else datasets.groupBy { dataset -> when (groupBy) {
             DatasetGroupBy.NONE        -> ""
             DatasetGroupBy.MEASUREMENT -> dataset.measurement ?: "No measurement"
-            DatasetGroupBy.INSTRUMENT  -> dataset.instrumentName ?: "No instrument"
+            DatasetGroupBy.INSTRUMENT  -> dataset.resolvedInstrumentName ?: "No instrument"
             DatasetGroupBy.DATE        -> dateGroupKey(dataset.timestamp)
             DatasetGroupBy.FORMAT      -> dataset.dataFormat ?: "No format"
             DatasetGroupBy.SESSION     -> dataset.sessionName ?: "No session"
-            DatasetGroupBy.OWNER       -> dataset.ownerOrcid?.let { ownerNames[it] ?: it } ?: "Unknown owner"
+            DatasetGroupBy.OWNER       -> dataset.owner?.let(::userDisplayName) ?: dataset.ownerOrcid?.let { ownerNames[it] ?: it } ?: "Unknown owner"
         } }.entries.sortedBy { it.key.lowercase() }
     }
     val sortedFlatItems = remember(datasets, sortState) {
@@ -324,6 +356,11 @@ internal fun DatasetsList(
             // Clears the ScrollToTopButton FAB so the last item is never obscured.
             contentPadding = PaddingValues(bottom = ScrollToTopButtonClearance)
         ) {
+            (loadState as? LoadState.Success)?.refreshError?.let { message ->
+                item(key = "refresh_error_dataset") {
+                    ErrorCard(title = "Could Not Refresh", message = message, modifier = Modifier.padding(16.dp), onRetry = onRetry)
+                }
+            }
             when {
                 loadState is LoadState.Loading -> item(key = "loading") { LoadingItem(label = "Loading datasets…") }
                 loadState is LoadState.Error -> item(key = "error") {
@@ -334,7 +371,7 @@ internal fun DatasetsList(
                         resourceName = "Datasets",
                         defaultIcon = AppIcons.Dataset,
                         isFiltered = isFiltered,
-                        emptyMessage = "This project has no datasets.",
+                        emptyMessage = emptyMessage,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -353,7 +390,8 @@ internal fun DatasetsList(
                     resourceType = "dataset",
                     onItemClick = onDatasetClick,
                     expandedGroups = expandedGroups,
-                    cacheAgeMinutes = if (fromCache) repository.projectDataAgeMinutes(projectId) ?: 0 else null
+                    cacheAgeMinutes = if (fromCache) repository.projectDataAgeMinutes(projectId) ?: 0 else null,
+                    showProjectContext = showProjectContext
                 )
             }
         }

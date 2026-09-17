@@ -131,7 +131,8 @@ class DataSyncManager(private val repository: CrucibleRepository) {
                         requiresFullRefresh = true
                     }
                     val (samples, datasets) = repository.fetchProjectData(
-                        target.projectSlug,
+                        projectMfid = target.projectMfid,
+                        projectSlug = target.projectSlug,
                         forceRefresh = forceRefresh || requiresFullRefresh
                     )
                     val content = CachedProjectContent(

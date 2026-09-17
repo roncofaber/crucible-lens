@@ -1,5 +1,10 @@
 package crucible.lens.data.util
 
+import kotlin.time.Instant
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
+
 val MONTH_NAMES = arrayOf(
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
@@ -31,4 +36,11 @@ internal fun monthBounds(raw: String?): Pair<String, String>? {
         val dd = daysInMonth.toString().padStart(2, '0')
         "${year}-${mm}-01T00:00:00" to "${year}-${mm}-${dd}T23:59:59"
     } catch (_: Exception) { null }
+}
+
+fun toUtcQueryTimestamp(raw: String?): String? {
+    val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return runCatching { Instant.parse(value).toString() }
+        .recoverCatching { LocalDateTime.parse(value).toInstant(TimeZone.UTC).toString() }
+        .getOrElse { value }
 }

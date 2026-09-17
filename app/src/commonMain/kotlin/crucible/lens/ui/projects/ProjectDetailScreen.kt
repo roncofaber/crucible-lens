@@ -28,6 +28,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -54,6 +55,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import crucible.lens.data.preferences.AppPreferences
+import crucible.lens.data.model.ProjectScope
 import crucible.lens.data.sync.ProjectSyncTarget
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.util.SortState
@@ -105,6 +107,8 @@ fun ProjectDetailScreen(
     onToggleSync: () -> Unit = {},
     onCreateSample: () -> Unit = {},
     onCreateDataset: () -> Unit = {},
+    canCreateSample: Boolean = true,
+    canCreateDataset: Boolean = true,
     onManageProject: () -> Unit = {},
     onUserClick: (String) -> Unit = {},
     currentUserOrcid: String? = null,
@@ -176,7 +180,10 @@ fun ProjectDetailScreen(
     val prefs = koinInject<AppPreferences>()
 
     val loadState by viewModel.loadState.collectAsStateWithLifecycle()
+    val sharedLoadState by viewModel.sharedLoadState.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { 2 })
+    var selectedProjectScopeName by rememberSaveable { mutableStateOf(ProjectScope.Assigned.name) }
+    val selectedProjectScope = ProjectScope.valueOf(selectedProjectScopeName)
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var sampleGroupBy by remember { mutableStateOf(SampleGroupBy.TYPE) }
     var datasetGroupBy by remember { mutableStateOf(DatasetGroupBy.MEASUREMENT) }
@@ -188,7 +195,11 @@ fun ProjectDetailScreen(
     // scoped here to write/zero this project's cache entry.
     fun refreshProjectDetail() {
         syncTarget?.let { target ->
-            viewModel.load(target, ctx, accountId, isSynced, forceRefresh = true)
+            if (selectedProjectScope == ProjectScope.Assigned) {
+                viewModel.load(target, ctx, accountId, isSynced, forceRefresh = true)
+            } else {
+                viewModel.loadShared(target.projectMfid, forceRefresh = true)
+            }
             val slug = target.projectSlug
             if (isConfidentlyNonMember) viewModel.loadJoinRequestStatus(slug, forceRefresh = true)
         }
@@ -228,14 +239,19 @@ fun ProjectDetailScreen(
         }
     }
 
-    val projectContent = (loadState as? LoadState.Success)?.data
+    val activeLoadState: LoadState<ProjectContent> = if (selectedProjectScope == ProjectScope.Assigned) {
+        loadState
+    } else {
+        sharedLoadState ?: LoadState.Loading
+    }
+    val projectContent = (activeLoadState as? LoadState.Success)?.data
     val samples = projectContent?.samples ?: emptyList()
     val datasets = projectContent?.datasets ?: emptyList()
-    val filteredSamples = remember(loadState, searchQuery) {
+    val filteredSamples = remember(activeLoadState, searchQuery) {
         if (searchQuery.isBlank()) samples
         else samples.filter { it.matchesSearch(searchQuery) }
     }
-    val filteredDatasets = remember(loadState, searchQuery) {
+    val filteredDatasets = remember(activeLoadState, searchQuery) {
         if (searchQuery.isBlank()) datasets
         else datasets.filter { it.matchesSearch(searchQuery) }
     }
@@ -246,6 +262,11 @@ fun ProjectDetailScreen(
     // cold cache isConfidentlyNonMember is false on the first frame, so members never wait.
     LaunchedEffect(syncTarget, accountId, isSynced, isConfidentlyNonMember) {
         if (!isConfidentlyNonMember && syncTarget != null) viewModel.load(syncTarget, ctx, accountId, isSynced)
+    }
+    LaunchedEffect(selectedProjectScope, syncTarget, isConfidentlyNonMember) {
+        if (selectedProjectScope == ProjectScope.Shared && !isConfidentlyNonMember && syncTarget != null) {
+            viewModel.loadShared(syncTarget.projectMfid)
+        }
     }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -332,19 +353,23 @@ fun ProjectDetailScreen(
                             }
                         }
                         DropdownMenu(expanded = topBarMenuExpanded, onDismissRequest = { topBarMenuExpanded = false }) {
-                            DropdownMenuItem(
-                                text = { Text("New Sample") },
-                                leadingIcon = { AppIcon(AppIcons.Add) },
-                                enabled = projectSlug != null,
-                                onClick = { topBarMenuExpanded = false; onCreateSample() }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("New Dataset") },
-                                leadingIcon = { AppIcon(AppIcons.Dataset) },
-                                enabled = projectSlug != null,
-                                onClick = { topBarMenuExpanded = false; onCreateDataset() }
-                            )
-                            HorizontalDivider()
+                            if (canCreateSample) {
+                                DropdownMenuItem(
+                                    text = { Text("New Sample") },
+                                    leadingIcon = { AppIcon(AppIcons.Add) },
+                                    enabled = projectSlug != null,
+                                    onClick = { topBarMenuExpanded = false; onCreateSample() }
+                                )
+                            }
+                            if (canCreateDataset) {
+                                DropdownMenuItem(
+                                    text = { Text("New Dataset") },
+                                    leadingIcon = { AppIcon(AppIcons.Dataset) },
+                                    enabled = projectSlug != null,
+                                    onClick = { topBarMenuExpanded = false; onCreateDataset() }
+                                )
+                            }
+                            if (canCreateSample || canCreateDataset) HorizontalDivider()
                             DropdownMenuItem(
                                 text = { Text("Manage project") },
                                 leadingIcon = {
@@ -372,7 +397,7 @@ fun ProjectDetailScreen(
         }
     ) { padding ->
         PullToRefreshBox(
-            isRefreshing = loadState.isRefreshingNow,
+            isRefreshing = activeLoadState.isRefreshingNow,
             onRefresh = { refreshProjectDetail() },
             modifier = Modifier
                 .fillMaxSize()
@@ -430,6 +455,18 @@ fun ProjectDetailScreen(
                             onSortStateChange = { sortState = it; showToast(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
                             containerColor = MaterialTheme.colorScheme.surface
                         )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            listOf(ProjectScope.Assigned, ProjectScope.Shared).forEach { projectScope ->
+                                FilterChip(
+                                    selected = selectedProjectScope == projectScope,
+                                    onClick = { selectedProjectScopeName = projectScope.name },
+                                    label = { Text(projectScope.name) }
+                                )
+                            }
+                        }
                         PrimaryTabRow(selectedTabIndex = pagerState.currentPage) {
                             ResourceTab(
                                 selected = pagerState.currentPage == 0,
@@ -457,25 +494,29 @@ fun ProjectDetailScreen(
                             0 -> SamplesList(
                                 samples = filteredSamples,
                                 isFiltered = searchQuery.isNotBlank(),
-                                fromCache = (loadState as? LoadState.Success)?.fromCache ?: false,
+                                fromCache = selectedProjectScope == ProjectScope.Assigned && ((activeLoadState as? LoadState.Success)?.fromCache ?: false),
+                                showProjectContext = selectedProjectScope == ProjectScope.Shared,
+                                emptyMessage = if (selectedProjectScope == ProjectScope.Shared) "No samples are shared with this project." else "This project has no samples.",
                                 projectId = projectSlug ?: projectReference,
                                 graphExplorerUrl = graphExplorerUrl,
                                 groupBy = sampleGroupBy,
                                 sortState = sortState,
                                 onSampleClick = { uuid -> onResourceClick(uuid, sampleGroupBy.name) },
-                                loadState = loadState,
+                                loadState = activeLoadState,
                                 onRetry = { refreshProjectDetail() }
                             )
                             1 -> DatasetsList(
                                 datasets = filteredDatasets,
                                 isFiltered = searchQuery.isNotBlank(),
-                                fromCache = (loadState as? LoadState.Success)?.fromCache ?: false,
+                                fromCache = selectedProjectScope == ProjectScope.Assigned && ((activeLoadState as? LoadState.Success)?.fromCache ?: false),
+                                showProjectContext = selectedProjectScope == ProjectScope.Shared,
+                                emptyMessage = if (selectedProjectScope == ProjectScope.Shared) "No datasets are shared with this project." else "This project has no datasets.",
                                 projectId = projectSlug ?: projectReference,
                                 graphExplorerUrl = graphExplorerUrl,
                                 groupBy = datasetGroupBy,
                                 sortState = sortState,
                                 onDatasetClick = { uuid -> onResourceClick(uuid, datasetGroupBy.name) },
-                                loadState = loadState,
+                                loadState = activeLoadState,
                                 onRetry = { refreshProjectDetail() }
                             )
                         }

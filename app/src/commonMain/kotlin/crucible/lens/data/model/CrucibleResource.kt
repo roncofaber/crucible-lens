@@ -2,6 +2,7 @@ package crucible.lens.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.json.JsonObject
 
 sealed class CrucibleResource {
@@ -20,6 +21,8 @@ data class Sample(
     @SerialName("sample_type") val sampleType: String? = null,
     @SerialName("owner_orcid") val ownerOrcid: String? = null,
     @SerialName("project_id") val projectId: String? = null,
+    @SerialName("project") val project: ProjectReference? = null,
+    @SerialName("project_relation") val projectRelation: ProjectRelation? = null,
     @SerialName("public") val isPublic: Boolean? = null,
     @SerialName("timestamp") val timestamp: String? = null,
     @SerialName("creation_time") val creationTime: String? = null,
@@ -36,6 +39,32 @@ data class Sample(
 }
 
 @Serializable
+data class InstrumentReference(
+    @SerialName("unique_id") val uniqueId: String,
+    @SerialName("instrument_id") val instrumentId: String? = null,
+    @SerialName("instrument_name") val instrumentName: String
+)
+
+@Serializable
+data class ProjectReference(
+    @SerialName("unique_id") val uniqueId: String,
+    @SerialName("project_id") val projectId: String,
+    @SerialName("title") val title: String? = null
+)
+
+@Serializable
+enum class ProjectRelation {
+    @SerialName("assigned") Assigned,
+    @SerialName("shared") Shared
+}
+
+enum class ProjectScope(val apiValue: String) {
+    Assigned("assigned"),
+    Shared("shared"),
+    All("all")
+}
+
+@Serializable
 data class Dataset(
     @SerialName("unique_id") override val uniqueId: String,
     @SerialName("dataset_name") val datasetName: String? = null,
@@ -44,6 +73,9 @@ data class Dataset(
     @SerialName("project_id") val projectId: String? = null,
     @SerialName("instrument_name") val instrumentName: String? = null,
     @SerialName("instrument_id") val instrumentId: String? = null,
+    @SerialName("instrument") val instrument: InstrumentReference? = null,
+    @SerialName("project") val project: ProjectReference? = null,
+    @SerialName("project_relation") val projectRelation: ProjectRelation? = null,
     @SerialName("owner_orcid") val ownerOrcid: String? = null,
     @SerialName("data_format") val dataFormat: String? = null,
     @SerialName("scientific_metadata") val scientificMetadata: JsonObject? = null,
@@ -62,6 +94,33 @@ data class Dataset(
 ) : CrucibleResource() {
     override val name: String get() = datasetName ?: uniqueId
 }
+
+val Dataset.resolvedInstrumentName: String?
+    get() = instrument?.instrumentName?.takeIf { it.isNotBlank() } ?: instrumentName
+
+val Dataset.resolvedInstrumentReference: String?
+    get() = instrument?.uniqueId ?: instrumentId
+
+val Dataset.resolvedInstrumentId: String?
+    get() = instrument?.instrumentId ?: instrumentId
+
+val Dataset.resolvedProjectName: String?
+    get() = project?.title?.takeIf { it.isNotBlank() } ?: project?.projectId ?: projectId
+
+val Dataset.resolvedProjectReference: String?
+    get() = project?.uniqueId ?: projectId
+
+val Dataset.resolvedProjectId: String?
+    get() = project?.projectId ?: projectId
+
+val Sample.resolvedProjectName: String?
+    get() = project?.title?.takeIf { it.isNotBlank() } ?: project?.projectId ?: projectId
+
+val Sample.resolvedProjectReference: String?
+    get() = project?.uniqueId ?: projectId
+
+val Sample.resolvedProjectId: String?
+    get() = project?.projectId ?: projectId
 
 /** Shared accessor for date-based sorting — Sample and Dataset each declare their own field. */
 fun CrucibleResource.creationTimeOrEmpty(): String = when (this) {
@@ -122,7 +181,18 @@ data class User(
     @SerialName("unique_id") val uniqueId: String? = null,
     @SerialName("username") val username: String? = null,
     @SerialName("is_service_account") val isServiceAccount: Boolean = false,
-    @SerialName("role") val role: String? = null
+    @SerialName("role") val role: String? = null,
+    @SerialName("capabilities") val capabilities: AccountCapabilities? = null
+)
+
+@Serializable
+data class AccountCapabilities(
+    @SerialName("can_manage_service_accounts") val canManageServiceAccounts: Boolean,
+    @SerialName("can_create_project") val canCreateProject: Boolean,
+    @SerialName("can_register_instrument") val canRegisterInstrument: Boolean,
+    @SerialName("can_create_sample") val canCreateSample: Boolean,
+    @SerialName("can_create_dataset") val canCreateDataset: Boolean,
+    @SerialName("can_create_for_others") val canCreateForOthers: Boolean
 )
 
 @Serializable
@@ -316,7 +386,8 @@ data class ResourceSearchResult(
     // Not returned by /resources/metadata/search — that endpoint has no project_id. Populated
     // client-side in name-search mode, where the underlying Sample/Dataset already carries it,
     // so a result row can say which project it belongs to when searching across all of them.
-    @SerialName("project_id") val projectId: String? = null
+    @SerialName("project_id") val projectId: String? = null,
+    @Transient val projectLabel: String? = null
 )
 
 @Serializable
@@ -358,6 +429,7 @@ data class SampleCreateRequest(
     @SerialName("sample_type") val sampleType: String? = null,
     @SerialName("description") val description: String? = null,
     @SerialName("project_id") val projectId: String? = null,
+    @SerialName("project_mfid") val projectMfid: String? = null,
     @SerialName("timestamp") val timestamp: String? = null,
     @SerialName("public") val public: Boolean = false
 )
@@ -366,9 +438,11 @@ data class SampleCreateRequest(
 data class DatasetCreateRequest(
     @SerialName("dataset_name") val datasetName: String? = null,
     @SerialName("project_id") val projectId: String? = null,
+    @SerialName("project_mfid") val projectMfid: String? = null,
     @SerialName("measurement") val measurement: String? = null,
     @SerialName("instrument_name") val instrumentName: String? = null,
     @SerialName("instrument_id") val instrumentId: String? = null,
+    @SerialName("instrument_mfid") val instrumentMfid: String? = null,
     @SerialName("data_format") val dataFormat: String? = null,
     @SerialName("session_name") val sessionName: String? = null,
     @SerialName("timestamp") val timestamp: String? = null,
@@ -416,10 +490,68 @@ data class ReassignProjectResponse(
 
 @Serializable
 data class HealthStatus(
-    val status: String,                 // "ok" | "degraded"
-    val db: String? = null,             // "ok" | "error"
-    @SerialName("db_ms") val dbMs: Float? = null,
-    val version: String? = null
+    @SerialName("status") val status: String,
+    @SerialName("build") val build: HealthBuildInfo,
+    @SerialName("database") val database: HealthDatabaseStatus
+)
+
+@Serializable
+data class HealthBuildInfo(
+    @SerialName("api_version") val apiVersion: String,
+    @SerialName("git_commit") val gitCommit: String? = null,
+    @SerialName("branch") val branch: String? = null
+)
+
+@Serializable
+data class HealthDatabaseStatus(
+    @SerialName("status") val status: String,
+    @SerialName("latency_ms") val latencyMs: Double? = null,
+    @SerialName("schema_revisions") val schemaRevisions: List<String> = emptyList()
+)
+
+@Serializable
+enum class DatasetFacetField(val apiValue: String) {
+    @SerialName("session") Session("session"),
+    @SerialName("measurement") Measurement("measurement"),
+    @SerialName("data_format") DataFormat("data_format"),
+    @SerialName("owner") Owner("owner"),
+    @SerialName("instrument") Instrument("instrument"),
+    @SerialName("project") Project("project")
+}
+
+@Serializable
+enum class SampleFacetField(val apiValue: String) {
+    @SerialName("sample_type") SampleType("sample_type"),
+    @SerialName("owner") Owner("owner"),
+    @SerialName("project") Project("project")
+}
+
+@Serializable
+data class FacetBucket(
+    @SerialName("value") val value: String? = null,
+    @SerialName("label") val label: String? = null,
+    @SerialName("count") val count: Int
+)
+
+@Serializable
+data class FacetResponse(
+    @SerialName("field") val field: String,
+    @SerialName("limit") val limit: Int,
+    @SerialName("next_cursor") val nextCursor: String? = null,
+    @SerialName("items") val items: List<FacetBucket>
+)
+
+@Serializable
+data class DatasetInstrumentAssignRequest(
+    @SerialName("instrument_mfid") val instrumentMfid: String
+)
+
+@Serializable
+data class DatasetInstrumentAssignment(
+    @SerialName("dataset_mfid") val datasetMfid: String,
+    @SerialName("instrument") val instrument: InstrumentReference,
+    @SerialName("previous_instrument") val previousInstrument: InstrumentReference? = null,
+    @SerialName("previous_instrument_name") val previousInstrumentName: String? = null
 )
 
 // ── GCS resumable upload models ──────────────────────────────────────────────

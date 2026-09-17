@@ -85,6 +85,8 @@ fun HomeScreen(
     onTogglePinnedInstrument: (String) -> Unit = {},
     onCreateSample: () -> Unit = {},
     onCreateDataset: () -> Unit = {},
+    canCreateSample: Boolean = true,
+    canCreateDataset: Boolean = true,
     isSyncing: Boolean = false,
 ) {
     var showHelpDialog by remember { mutableStateOf(false) }
@@ -177,7 +179,9 @@ fun HomeScreen(
                     onBrowseProjects = onBrowseProjects,
                     onBrowseInstruments = onBrowseInstruments
                 )
-                HomeCreateSection(onCreateSample = onCreateSample, onCreateDataset = onCreateDataset)
+                if (canCreateSample || canCreateDataset) {
+                    HomeCreateSection(onCreateSample, onCreateDataset, canCreateSample, canCreateDataset)
+                }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 if (lastVisitedResource != null && lastVisitedResourceName != null) {
                     HomeLastVisited(
@@ -394,31 +398,40 @@ private fun HomeBrowseSection(
 }
 
 @Composable
-private fun HomeCreateSection(onCreateSample: () -> Unit, onCreateDataset: () -> Unit) {
+private fun HomeCreateSection(
+    onCreateSample: () -> Unit,
+    onCreateDataset: () -> Unit,
+    canCreateSample: Boolean,
+    canCreateDataset: Boolean
+) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Create", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(
-                onClick = onCreateSample,
-                modifier = Modifier.weight(1f).height(52.dp),
-                shape = MaterialTheme.shapes.medium,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-            ) {
-                AppIcon(AppIcons.Add, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("New Sample")
+            if (canCreateSample) {
+                OutlinedButton(
+                    onClick = onCreateSample,
+                    modifier = Modifier.weight(1f).height(52.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                ) {
+                    AppIcon(AppIcons.Add, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("New Sample")
+                }
             }
-            OutlinedButton(
-                onClick = onCreateDataset,
-                modifier = Modifier.weight(1f).height(52.dp),
-                shape = MaterialTheme.shapes.medium,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-            ) {
-                AppIcon(AppIcons.Dataset, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("New Dataset")
+            if (canCreateDataset) {
+                OutlinedButton(
+                    onClick = onCreateDataset,
+                    modifier = Modifier.weight(1f).height(52.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                ) {
+                    AppIcon(AppIcons.Dataset, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("New Dataset")
+                }
             }
         }
     }

@@ -22,13 +22,16 @@ import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.model.User
 import crucible.lens.data.model.ResourceGrantRole
 import crucible.lens.data.model.creationTimeOrEmpty
+import crucible.lens.data.model.resolvedInstrumentName
+import crucible.lens.data.model.resolvedInstrumentId
+import crucible.lens.data.model.resolvedInstrumentReference
+import crucible.lens.data.model.resolvedProjectId
 import crucible.lens.data.sync.SingleFlight
 import crucible.lens.data.util.SortState
 import crucible.lens.data.util.accessGrantComparator
 import crucible.lens.data.util.accessGrantMutationTarget
 import crucible.lens.data.util.applySortState
 import crucible.lens.data.util.isMfidReference
-import crucible.lens.data.util.monthBounds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -623,16 +626,17 @@ class CrucibleRepository(
     }
 
     suspend fun fetchProjectData(
-        projectId: String,
+        projectMfid: String,
+        projectSlug: String,
         forceRefresh: Boolean = false,
         onCountsAvailable: (suspend (Int, Int) -> Unit)? = null
     ): Pair<List<Sample>, List<Dataset>> {
         val epoch = cacheEpoch.capture()
         val service = api
-        val mutex = projectFetchMutex(projectId)
+        val mutex = projectFetchMutex(projectMfid)
         return mutex.withLock {
-            val cachedSamples = if (!forceRefresh) projectSamplesObservableCache.get(projectId) else null
-            val cachedDatasets = if (!forceRefresh) projectDatasetsObservableCache.get(projectId) else null
+            val cachedSamples = if (!forceRefresh) projectSamplesObservableCache.get(projectSlug) else null
+            val cachedDatasets = if (!forceRefresh) projectDatasetsObservableCache.get(projectSlug) else null
             if (cachedSamples != null && cachedDatasets != null) {
                 onCountsAvailable?.invoke(cachedSamples.size, cachedDatasets.size)
                 return@withLock cachedSamples to cachedDatasets
@@ -665,8 +669,8 @@ class CrucibleRepository(
                         sOnTotal?.invoke(cachedSamples.size)
                         cachedSamples
                     } else {
-                        when (val result = service.getSamplesByProject(projectId, onTotalKnown = sOnTotal)) {
-                            is ApiResult.Success -> result.data
+                        when (val result = service.getSamplesByProject(projectMfid, onTotalKnown = sOnTotal)) {
+                            is ApiResult.Success -> result.data.map { it.copy(projectRelation = null) }
                             // Thrown (not swallowed to emptyList()) so a genuinely empty project
                             // is never confused with a failed fetch — callers already catch and
                             // handle generic exceptions (error card / retry, or best-effort
@@ -680,8 +684,8 @@ class CrucibleRepository(
                         dOnTotal?.invoke(cachedDatasets.size)
                         cachedDatasets
                     } else {
-                        when (val result = service.getDatasetsByProject(projectId, onTotalKnown = dOnTotal)) {
-                            is ApiResult.Success -> result.data
+                        when (val result = service.getDatasetsByProject(projectMfid, onTotalKnown = dOnTotal)) {
+                            is ApiResult.Success -> result.data.map { it.copy(projectRelation = null) }
                             is ApiResult.Error -> error("Failed to load datasets: ${result.message}")
                         }
                     }
@@ -689,8 +693,8 @@ class CrucibleRepository(
                 val samples = s.await()
                 val datasets = d.await()
                 if (cacheEpoch.isCurrent(epoch)) {
-                    projectSamplesObservableCache.put(projectId, samples)
-                    projectDatasetsObservableCache.put(projectId, datasets)
+                    projectSamplesObservableCache.put(projectSlug, samples)
+                    projectDatasetsObservableCache.put(projectSlug, datasets)
                     samples.forEach { cacheResourceType(it.uniqueId, "sample") }
                     datasets.forEach { cacheResourceType(it.uniqueId, "dataset") }
                 }
@@ -774,44 +778,41 @@ class CrucibleRepository(
     suspend fun fetchSiblings(resource: CrucibleResource, groupBy: String?, sortState: SortState = SortState()): List<CrucibleResource> {
         return when (resource) {
             is Sample -> {
-                val projectId = resource.projectId ?: return listOf(resource)
+                val projectId = resource.resolvedProjectId ?: return listOf(resource)
                 val cached = projectSamplesObservableCache.get(projectId)
                 if (cached != null) {
                     cached.filterSiblings(groupBy, resource).ensureContains(resource, sortState)
                 } else {
-                    val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
                     when (val resp = withContext(Dispatchers.Default) {
                         api.getFilteredSamples(
                             projectId = projectId,
                             sampleType = if (groupBy == null || groupBy == "TYPE") resource.sampleType else null,
-                            ownerOrcid = if (groupBy == "OWNER") resource.ownerOrcid else null,
-                            creationTimeGte = bounds?.first, creationTimeLte = bounds?.second
+                            ownerId = if (groupBy == "OWNER") resource.ownerOrcid else null
                         )
                     }) {
-                        is ApiResult.Success -> resp.data.ensureContains(resource, sortState)
+                        is ApiResult.Success -> resp.data.filterSiblings(groupBy, resource).ensureContains(resource, sortState)
                         is ApiResult.Error -> listOf(resource)
                     }
                 }
             }
             is Dataset -> {
-                val projectId = resource.projectId ?: return listOf(resource)
+                val projectId = resource.resolvedProjectId ?: return listOf(resource)
                 val cached = projectDatasetsObservableCache.get(projectId)
                 if (cached != null) {
                     cached.filterSiblings(groupBy, resource).ensureContains(resource, sortState)
                 } else {
-                    val bounds = if (groupBy == "DATE") monthBounds(resource.timestamp) else null
                     when (val resp = withContext(Dispatchers.Default) {
                         api.getFilteredDatasets(
                             projectId = projectId,
                             measurement = if (groupBy == null || groupBy == "MEASUREMENT") resource.measurement else null,
-                            instrumentName = if (groupBy == "INSTRUMENT") resource.instrumentName else null,
+                            instrumentMfid = if (groupBy == "INSTRUMENT") resource.resolvedInstrumentReference?.takeIf(::isMfidReference) else null,
+                            instrumentName = if (groupBy == "INSTRUMENT" && resource.resolvedInstrumentReference?.let(::isMfidReference) != true) resource.resolvedInstrumentName else null,
                             dataFormat = if (groupBy == "FORMAT") resource.dataFormat else null,
                             sessionName = if (groupBy == "SESSION") resource.sessionName else null,
-                            ownerOrcid = if (groupBy == "OWNER") resource.ownerOrcid else null,
-                            creationTimeGte = bounds?.first, creationTimeLte = bounds?.second
+                            ownerId = if (groupBy == "OWNER") resource.ownerOrcid else null
                         )
                     }) {
-                        is ApiResult.Success -> resp.data.ensureContains(resource, sortState)
+                        is ApiResult.Success -> resp.data.filterSiblings(groupBy, resource).ensureContains(resource, sortState)
                         is ApiResult.Error -> listOf(resource)
                     }
                 }
@@ -915,12 +916,15 @@ private fun preserveResourceDetailFields(existing: CrucibleResource?, incoming: 
         scientificMetadata = incoming.scientificMetadata ?: existing.scientificMetadata,
         datasets = incoming.datasets ?: existing.datasets,
         links = incoming.links ?: existing.links,
-        owner = incoming.owner ?: existing.owner
+        owner = incoming.owner ?: existing.owner,
+        project = incoming.project ?: existing.project
     )
     existing is Dataset && incoming is Dataset -> incoming.copy(
         scientificMetadata = incoming.scientificMetadata ?: existing.scientificMetadata,
         links = incoming.links ?: existing.links,
-        owner = incoming.owner ?: existing.owner
+        owner = incoming.owner ?: existing.owner,
+        instrument = incoming.instrument ?: existing.instrument,
+        project = incoming.project ?: existing.project
     )
     else -> incoming
 }
@@ -934,7 +938,11 @@ private fun List<Sample>.filterSiblings(groupBy: String?, resource: Sample) =
 
 private fun List<Dataset>.filterSiblings(groupBy: String?, resource: Dataset) =
     filter { d -> when (groupBy) {
-        "INSTRUMENT" -> d.instrumentName == resource.instrumentName
+        "INSTRUMENT" -> when {
+            d.instrument != null && resource.instrument != null -> d.instrument.uniqueId == resource.instrument.uniqueId
+            d.resolvedInstrumentId != null && resource.resolvedInstrumentId != null -> d.resolvedInstrumentId == resource.resolvedInstrumentId
+            else -> d.resolvedInstrumentName == resource.resolvedInstrumentName
+        }
         "DATE"       -> crucible.lens.data.util.dateGroupKey(d.timestamp) == crucible.lens.data.util.dateGroupKey(resource.timestamp)
         "FORMAT"     -> d.dataFormat == resource.dataFormat
         "SESSION"    -> d.sessionName == resource.sessionName

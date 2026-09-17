@@ -367,7 +367,7 @@ fun ManageProjectScreen(
                             canRemoveMembers = s.canTransfer,
                             canManageAccess = s.canManageAccess && s.assignableRoles.isNotEmpty(),
                             canEditMemberRole = s::canChangeMemberRole,
-                            assignableRoles = s.assignableRoles,
+                            assignableRolesFor = s::assignableRolesFor,
                             memberRoleState = memberRoleState,
                             isEditingRoles = isEditingMemberRoles,
                             leadOrcid = s.project.projectLeadOrcid,
@@ -535,7 +535,7 @@ private fun MembersCard(
     canRemoveMembers: Boolean,
     canManageAccess: Boolean,
     canEditMemberRole: (ProjectMemberRole?) -> Boolean,
-    assignableRoles: List<ProjectMemberRole>,
+    assignableRolesFor: (User) -> List<ProjectMemberRole>,
     memberRoleState: MemberRoleState,
     isEditingRoles: Boolean,
     leadOrcid: String?,
@@ -606,7 +606,7 @@ private fun MembersCard(
                             } else {
                                 CompactRoleDropdown(
                                     selectedRole = memberRole,
-                                    roles = assignableRoles,
+                                    roles = assignableRolesFor(member),
                                     roleKey = { it.apiValue },
                                     roleLabel = { it.label },
                                     onRoleSelected = { onMemberRoleChange(member, it) },
@@ -717,7 +717,7 @@ private fun AddMemberSheet(
                         AddOrAddedAction(
                             added = alreadyMember,
                             isAdding = user.uniqueId == addingMemberId,
-                            enabled = addingMemberId == null,
+                            enabled = addingMemberId == null && (!user.isServiceAccount || selectedRole <= ProjectMemberRole.Contributor),
                             onAdd = { viewModel.addMember(user, selectedRole) }
                         )
                     }

@@ -264,7 +264,8 @@ class AccountViewModel(
                 username = draft.username.trim().ifBlank { null }
             )) {
                 is ApiResult.Success -> {
-                    val updatedUser = result.data
+                    val previous = (_profileState.value as? ProfileUiState.Loaded)?.user
+                    val updatedUser = result.data.copy(capabilities = previous?.capabilities)
                     prefs.saveUserProfile(updatedUser)
                     _profileState.value = ProfileUiState.Loaded(updatedUser)
                     _editState.value = EditUiState.Idle

@@ -191,7 +191,10 @@ fun SearchScreen(
                                 BadgedBox(badge = {
                                     if (activeFilters.isActive) Badge { Text(activeFilters.activeCount.toString()) }
                                 }) {
-                                    IconButton(onClick = { showFilterSheet = true }) {
+                                    IconButton(onClick = {
+                                        viewModel.loadFacetSuggestions()
+                                        showFilterSheet = true
+                                    }) {
                                         AppIcon(AppIcons.Filter)
                                     }
                                 }
@@ -413,7 +416,7 @@ fun SearchScreen(
                                         // so those fall back to the mfid.
                                         ResourceRow(
                                             title = result.name ?: result.uniqueId,
-                                            subtitle = result.projectId ?: result.uniqueId,
+                                            subtitle = result.projectLabel ?: result.projectId ?: result.uniqueId,
                                             subtitleMonospace = result.projectId == null,
                                             uniqueId = result.uniqueId,
                                             snippet = snippet,
@@ -441,7 +444,7 @@ fun SearchScreen(
                                         // so those fall back to the mfid.
                                         ResourceRow(
                                             title = result.name ?: result.uniqueId,
-                                            subtitle = result.projectId ?: result.uniqueId,
+                                            subtitle = result.projectLabel ?: result.projectId ?: result.uniqueId,
                                             subtitleMonospace = result.projectId == null,
                                             uniqueId = result.uniqueId,
                                             snippet = snippet,
@@ -464,6 +467,9 @@ fun SearchScreen(
     if (showFilterSheet) {
         FilterSheet(
             filters = activeFilters,
+            suggestions = searchState.facetSuggestions,
+            suggestionsError = searchState.facetError,
+            onRetrySuggestions = { viewModel.loadFacetSuggestions(forceRefresh = true) },
             onApply = viewModel::setFilters,
             onDismiss = { showFilterSheet = false }
         )
