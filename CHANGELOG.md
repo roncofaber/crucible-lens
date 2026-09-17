@@ -8,6 +8,9 @@
 - Project pages can now switch between resources assigned to the project and resources shared with it
 - Search filters now suggest existing measurement, data format, session, and sample type values while still accepting new values
 - Authorized dataset managers can now assign a different registered instrument while editing a dataset
+- Platform administrators can create service accounts, change their platform roles, and rotate one-time API keys from Settings
+- Search filters now include visibility, resources owned by the signed-in account, and missing scientific fields
+- Authorized dataset editors can rename thumbnails or replace their images
 
 ### Changed
 
@@ -15,6 +18,8 @@
 - Resource linking now searches the assigned project by its stable identity, keeping results correct after project ID changes
 - Sample and dataset creation now submits stable project and instrument identities when available
 - Create actions now follow the permissions reported for the signed-in account
+- Resource detail opens a bounded server-anchored sibling window when the project collection is not already cached
+- Instrument operator selection now searches service accounts as you type
 
 ### Fixed
 

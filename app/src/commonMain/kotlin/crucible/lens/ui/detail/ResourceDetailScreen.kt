@@ -46,6 +46,7 @@ import crucible.lens.data.model.CrucibleResource
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.data.model.Thumbnail
+import crucible.lens.data.model.ThumbnailUpdateRequest
 import crucible.lens.data.model.creationTimeOrEmpty
 import crucible.lens.data.model.resolvedProjectId
 import crucible.lens.data.util.SortField
@@ -88,6 +89,8 @@ fun ResourceDetailScreen(
     onNavigateToEdit: (uuid: String) -> Unit = {},
     onNavigateToManageAccess: (uuid: String) -> Unit = {},
     onNavigateToUser: (String) -> Unit = {},
+    canCreateSample: Boolean = false,
+    canCreateDataset: Boolean = false,
     deletionRequestSubmissionState: DeletionRequestSubmissionState,
     onRequestDeletion: (resourceId: String, reason: String) -> Unit,
     onClearDeletionRequestSubmission: () -> Unit,
@@ -186,6 +189,8 @@ fun ResourceDetailScreen(
     var pendingUnlink by remember { mutableStateOf<UnlinkRequest?>(null) }
     var deletingThumbnails by remember { mutableStateOf<Set<ThumbnailKey>>(emptySet()) }
     var thumbnailDeleteErrors by remember { mutableStateOf<Map<ThumbnailKey, String>>(emptyMap()) }
+    var updatingThumbnails by remember { mutableStateOf<Set<ThumbnailKey>>(emptySet()) }
+    var thumbnailUpdateErrors by remember { mutableStateOf<Map<ThumbnailKey, String>>(emptyMap()) }
     var overflowMenuExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(deletionRequestSubmissionState) {
@@ -277,6 +282,30 @@ fun ResourceDetailScreen(
                 thumbnailDeleteErrors += key to "Connection error. Check your network and try again"
             } finally {
                 deletingThumbnails -= key
+            }
+        }
+    }
+
+    fun updateThumbnail(datasetUuid: String, thumbnailId: Int, request: ThumbnailUpdateRequest) {
+        val key = ThumbnailKey(datasetUuid, thumbnailId)
+        if (key in updatingThumbnails) return
+        scope.launch {
+            updatingThumbnails += key
+            thumbnailUpdateErrors -= key
+            try {
+                when (val result = apiClient.service.updateThumbnail(datasetUuid, thumbnailId, request)) {
+                    is ApiResult.Success -> {
+                        repository.invalidateThumbnails(datasetUuid)
+                        repository.fetchThumbnails(datasetUuid, forceRefresh = true)
+                    }
+                    is ApiResult.Error -> thumbnailUpdateErrors += key to "Update failed (${result.code})"
+                }
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                thumbnailUpdateErrors += key to "Connection error. Check your network and try again"
+            } finally {
+                updatingThumbnails -= key
             }
         }
     }
@@ -374,12 +403,13 @@ fun ResourceDetailScreen(
                             onDismissRequest = { overflowMenuExpanded = false }
                         ) {
                             val displayForMenu = currentDisplayResource
-                            DropdownMenuItem(
-                                text = { Text("Edit") },
-                                leadingIcon = { AppIcon(AppIcons.Edit) },
-                                onClick = { overflowMenuExpanded = false; displayForMenu?.let { onNavigateToEdit(it.uniqueId) } },
-                                enabled = displayForMenu != null
-                            )
+                            if (displayForMenu?.capabilities?.canEdit == true) {
+                                DropdownMenuItem(
+                                    text = { Text("Edit") },
+                                    leadingIcon = { AppIcon(AppIcons.Edit) },
+                                    onClick = { overflowMenuExpanded = false; onNavigateToEdit(displayForMenu.uniqueId) }
+                                )
+                            }
                             if (displayForMenu?.capabilities?.canManageAccess == true) {
                                 DropdownMenuItem(
                                     text = { Text("Manage access") },
@@ -390,13 +420,19 @@ fun ResourceDetailScreen(
                                     }
                                 )
                             }
-                            DropdownMenuItem(
-                                text = { Text("Duplicate") },
-                                leadingIcon = { AppIcon(AppIcons.CopyResource) },
-                                onClick = { displayForMenu?.let { overflowMenuExpanded = false; onDuplicate(it) } },
-                                enabled = displayForMenu != null
-                            )
-                            if (displayForMenu is Dataset) {
+                            val canDuplicate = when (displayForMenu) {
+                                is Sample -> canCreateSample
+                                is Dataset -> canCreateDataset
+                                null -> false
+                            }
+                            if (canDuplicate) {
+                                DropdownMenuItem(
+                                    text = { Text("Duplicate") },
+                                    leadingIcon = { AppIcon(AppIcons.CopyResource) },
+                                    onClick = { displayForMenu?.let { overflowMenuExpanded = false; onDuplicate(it) } }
+                                )
+                            }
+                            if (displayForMenu is Dataset && displayForMenu.capabilities?.canEdit == true) {
                                 DropdownMenuItem(
                                     text = { Text("Add file") },
                                     leadingIcon = { AppIcon(AppIcons.AttachFile) },
@@ -406,12 +442,13 @@ fun ResourceDetailScreen(
                                     }
                                 )
                             }
-                            DropdownMenuItem(
-                                text = { Text("Link") },
-                                leadingIcon = { AppIcon(AppIcons.LinkResource) },
-                                onClick = { overflowMenuExpanded = false; showLinkSheet = true },
-                                enabled = displayForMenu != null
-                            )
+                            if (displayForMenu?.capabilities?.canEdit == true) {
+                                DropdownMenuItem(
+                                    text = { Text("Link") },
+                                    leadingIcon = { AppIcon(AppIcons.LinkResource) },
+                                    onClick = { overflowMenuExpanded = false; showLinkSheet = true }
+                                )
+                            }
                             val deletionRequest = when (displayForMenu) {
                                 is Sample -> displayForMenu.deletionRequest
                                 is Dataset -> displayForMenu.deletionRequest
@@ -634,7 +671,15 @@ fun ResourceDetailScreen(
                                                         deleteErrors = thumbnailDeleteErrors
                                                             .filterKeys { it.datasetUuid == pageUuid }
                                                             .mapKeys { it.key.thumbnailId },
-                                                        onDelete = { thumbnailId -> deleteThumbnail(pageUuid, thumbnailId) }
+                                                        updatingThumbnailIds = updatingThumbnails
+                                                            .filter { it.datasetUuid == pageUuid }
+                                                            .mapTo(mutableSetOf()) { it.thumbnailId },
+                                                        updateErrors = thumbnailUpdateErrors
+                                                            .filterKeys { it.datasetUuid == pageUuid }
+                                                            .mapKeys { it.key.thumbnailId },
+                                                        canEdit = resolved.capabilities?.canEdit == true,
+                                                        onDelete = { thumbnailId -> deleteThumbnail(pageUuid, thumbnailId) },
+                                                        onUpdate = { thumbnailId, request -> updateThumbnail(pageUuid, thumbnailId, request) }
                                                     )
                                                 }
                                             }
@@ -648,7 +693,9 @@ fun ResourceDetailScreen(
                                                 LinkedSamplesCard(
                                                     samples = resolved.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "associated" }.sortedBy { it.uniqueId },
                                                     onNavigateToResource = onNavigateToResource,
-                                                    onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasetSample(resolved.uniqueId, u) } },
+                                                    onUnlink = if (resolved.capabilities?.canEdit == true) {
+                                                        { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasetSample(resolved.uniqueId, u) } }
+                                                    } else null,
                                                     initialExpanded = pageGetCardState("linked_samples"),
                                                     onExpandChange = { pageSetCardState("linked_samples", it) }
                                                 )
@@ -663,7 +710,9 @@ fun ResourceDetailScreen(
                                                 ParentDatasetsCard(
                                                     parents = resolved.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "parent" }.sortedBy { it.uniqueId },
                                                     onNavigateToResource = onNavigateToResource,
-                                                    onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasets(u, resolved.uniqueId) } },
+                                                    onUnlink = if (resolved.capabilities?.canEdit == true) {
+                                                        { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasets(u, resolved.uniqueId) } }
+                                                    } else null,
                                                     initialExpanded = pageGetCardState("parent_datasets"),
                                                     onExpandChange = { pageSetCardState("parent_datasets", it) }
                                                 )
@@ -678,7 +727,9 @@ fun ResourceDetailScreen(
                                                 ChildDatasetsCard(
                                                     children = resolved.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "child" }.sortedBy { it.uniqueId },
                                                     onNavigateToResource = onNavigateToResource,
-                                                    onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasets(resolved.uniqueId, u) } },
+                                                    onUnlink = if (resolved.capabilities?.canEdit == true) {
+                                                        { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasets(resolved.uniqueId, u) } }
+                                                    } else null,
                                                     initialExpanded = pageGetCardState("child_datasets"),
                                                     onExpandChange = { pageSetCardState("child_datasets", it) }
                                                 )
@@ -718,7 +769,9 @@ fun ResourceDetailScreen(
                                                 ParentSamplesCard(
                                                     parents = resolved.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "parent" }.sortedBy { it.uniqueId },
                                                     onNavigateToResource = onNavigateToResource,
-                                                    onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkSamples(u, resolved.uniqueId) } },
+                                                    onUnlink = if (resolved.capabilities?.canEdit == true) {
+                                                        { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkSamples(u, resolved.uniqueId) } }
+                                                    } else null,
                                                     initialExpanded = pageGetCardState("parent_samples"),
                                                     onExpandChange = { pageSetCardState("parent_samples", it) }
                                                 )
@@ -733,7 +786,9 @@ fun ResourceDetailScreen(
                                                 ChildSamplesCard(
                                                     children = resolved.links.orEmpty().filter { it.resourceType == "sample" && it.relationship == "child" }.sortedBy { it.uniqueId },
                                                     onNavigateToResource = onNavigateToResource,
-                                                    onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkSamples(resolved.uniqueId, u) } },
+                                                    onUnlink = if (resolved.capabilities?.canEdit == true) {
+                                                        { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkSamples(resolved.uniqueId, u) } }
+                                                    } else null,
                                                     initialExpanded = pageGetCardState("child_samples"),
                                                     onExpandChange = { pageSetCardState("child_samples", it) }
                                                 )
@@ -748,7 +803,9 @@ fun ResourceDetailScreen(
                                                 LinkedDatasetsCard(
                                                     datasets = resolved.links.orEmpty().filter { it.resourceType == "dataset" && it.relationship == "associated" }.sortedBy { it.uniqueId },
                                                     onNavigateToResource = onNavigateToResource,
-                                                    onUnlink = { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasetSample(u, resolved.uniqueId) } },
+                                                    onUnlink = if (resolved.capabilities?.canEdit == true) {
+                                                        { u, name -> pendingUnlink = UnlinkRequest(name, u) { apiClient.service.unlinkDatasetSample(u, resolved.uniqueId) } }
+                                                    } else null,
                                                     initialExpanded = pageGetCardState("linked_datasets"),
                                                     onExpandChange = { pageSetCardState("linked_datasets", it) }
                                                 )

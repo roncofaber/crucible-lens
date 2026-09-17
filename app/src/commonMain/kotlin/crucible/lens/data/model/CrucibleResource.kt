@@ -457,6 +457,66 @@ data class ThumbnailCreateRequest(
 )
 
 @Serializable
+data class ThumbnailUpdateRequest(
+    @SerialName("thumbnail_name") val thumbnailName: String? = null,
+    @SerialName("thumbnail_b64str") val thumbnailB64str: String? = null
+)
+
+@Serializable
+enum class PlatformRole {
+    @SerialName("none") None,
+    @SerialName("contributor") Contributor,
+    @SerialName("support") Support,
+    @SerialName("admin") Admin
+}
+
+@Serializable
+data class ServiceAccountSummary(
+    @SerialName("unique_id") val uniqueId: String,
+    val username: String,
+    @SerialName("first_name") val firstName: String = "",
+    @SerialName("last_name") val lastName: String = "",
+    val email: String? = null,
+    @SerialName("is_service_account") val isServiceAccount: Boolean = true,
+    @SerialName("platform_role") val platformRole: PlatformRole
+)
+
+@Serializable
+data class ServiceAccountKeyStatus(
+    val valid: Boolean,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("expires_at") val expiresAt: String
+)
+
+@Serializable
+data class ServiceAccountDetail(
+    @SerialName("unique_id") val uniqueId: String,
+    val username: String,
+    @SerialName("first_name") val firstName: String = "",
+    @SerialName("last_name") val lastName: String = "",
+    val email: String? = null,
+    @SerialName("is_service_account") val isServiceAccount: Boolean = true,
+    @SerialName("platform_role") val platformRole: PlatformRole,
+    @SerialName("api_key_status") val apiKeyStatus: ServiceAccountKeyStatus? = null
+)
+
+@Serializable
+data class ServiceAccountCredential(
+    @SerialName("unique_id") val uniqueId: String,
+    val username: String,
+    @SerialName("is_service_account") val isServiceAccount: Boolean = true,
+    @SerialName("api_key") val apiKey: String
+)
+
+@Serializable
+data class ServiceAccountCreateRequest(val username: String)
+
+@Serializable
+data class ServiceAccountRoleUpdateRequest(
+    @SerialName("platform_role") val platformRole: PlatformRole
+)
+
+@Serializable
 data class SampleUpdateRequest(
     @SerialName("sample_name") val sampleName: String? = null,
     @SerialName("sample_type") val sampleType: String? = null,

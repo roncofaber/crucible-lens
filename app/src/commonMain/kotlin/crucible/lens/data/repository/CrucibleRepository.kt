@@ -783,15 +783,17 @@ class CrucibleRepository(
                 if (cached != null) {
                     cached.filterSiblings(groupBy, resource).ensureContains(resource, sortState)
                 } else {
-                    when (val resp = withContext(Dispatchers.Default) {
-                        api.getFilteredSamples(
-                            projectId = projectId,
-                            sampleType = if (groupBy == null || groupBy == "TYPE") resource.sampleType else null,
-                            ownerId = if (groupBy == "OWNER") resource.ownerOrcid else null
-                        )
-                    }) {
-                        is ApiResult.Success -> resp.data.filterSiblings(groupBy, resource).ensureContains(resource, sortState)
-                        is ApiResult.Error -> listOf(resource)
+                    val sampleType = if (groupBy == null || groupBy == "TYPE") resource.sampleType else null
+                    val ownerId = if (groupBy == "OWNER") resource.ownerOrcid else null
+                    if (groupBy == "DATE") {
+                        when (val resp = api.getFilteredSamples(projectId = projectId)) {
+                            is ApiResult.Success -> resp.data.filterSiblings(groupBy, resource).ensureContains(resource, sortState)
+                            is ApiResult.Error -> listOf(resource)
+                        }
+                    } else coroutineScope {
+                        val ascending = async { api.getSampleSiblingPage(resource.uniqueId, "asc", projectId, sampleType, ownerId) }
+                        val descending = async { api.getSampleSiblingPage(resource.uniqueId, "desc", projectId, sampleType, ownerId) }
+                        mergeSiblingPages(ascending.await(), descending.await(), resource, groupBy, sortState)
                     }
                 }
             }
@@ -801,19 +803,21 @@ class CrucibleRepository(
                 if (cached != null) {
                     cached.filterSiblings(groupBy, resource).ensureContains(resource, sortState)
                 } else {
-                    when (val resp = withContext(Dispatchers.Default) {
-                        api.getFilteredDatasets(
-                            projectId = projectId,
-                            measurement = if (groupBy == null || groupBy == "MEASUREMENT") resource.measurement else null,
-                            instrumentMfid = if (groupBy == "INSTRUMENT") resource.resolvedInstrumentReference?.takeIf(::isMfidReference) else null,
-                            instrumentName = if (groupBy == "INSTRUMENT" && resource.resolvedInstrumentReference?.let(::isMfidReference) != true) resource.resolvedInstrumentName else null,
-                            dataFormat = if (groupBy == "FORMAT") resource.dataFormat else null,
-                            sessionName = if (groupBy == "SESSION") resource.sessionName else null,
-                            ownerId = if (groupBy == "OWNER") resource.ownerOrcid else null
-                        )
-                    }) {
-                        is ApiResult.Success -> resp.data.filterSiblings(groupBy, resource).ensureContains(resource, sortState)
-                        is ApiResult.Error -> listOf(resource)
+                    val measurement = if (groupBy == null || groupBy == "MEASUREMENT") resource.measurement else null
+                    val instrumentMfid = if (groupBy == "INSTRUMENT") resource.resolvedInstrumentReference?.takeIf(::isMfidReference) else null
+                    val instrumentName = if (groupBy == "INSTRUMENT" && resource.resolvedInstrumentReference?.let(::isMfidReference) != true) resource.resolvedInstrumentName else null
+                    val dataFormat = if (groupBy == "FORMAT") resource.dataFormat else null
+                    val sessionName = if (groupBy == "SESSION") resource.sessionName else null
+                    val ownerId = if (groupBy == "OWNER") resource.ownerOrcid else null
+                    if (groupBy == "DATE") {
+                        when (val resp = api.getFilteredDatasets(projectId = projectId)) {
+                            is ApiResult.Success -> resp.data.filterSiblings(groupBy, resource).ensureContains(resource, sortState)
+                            is ApiResult.Error -> listOf(resource)
+                        }
+                    } else coroutineScope {
+                        val ascending = async { api.getDatasetSiblingPage(resource.uniqueId, "asc", projectId, measurement, instrumentMfid, instrumentName, dataFormat, sessionName, ownerId) }
+                        val descending = async { api.getDatasetSiblingPage(resource.uniqueId, "desc", projectId, measurement, instrumentMfid, instrumentName, dataFormat, sessionName, ownerId) }
+                        mergeSiblingPages(ascending.await(), descending.await(), resource, groupBy, sortState)
                     }
                 }
             }
@@ -891,6 +895,24 @@ class CrucibleRepository(
         pendingJoinRequestCountObservableCache.invalidateAll()
         datasetFilesObservableCache.invalidateAll()
     }
+}
+
+private fun <T : CrucibleResource> mergeSiblingPages(
+    first: ApiResult<List<T>>,
+    second: ApiResult<List<T>>,
+    resource: T,
+    groupBy: String?,
+    sortState: SortState
+): List<T> {
+    val merged = ((first as? ApiResult.Success)?.data.orEmpty() + (second as? ApiResult.Success)?.data.orEmpty())
+        .distinctBy { it.uniqueId }
+    if (merged.isEmpty()) return listOf(resource)
+    @Suppress("UNCHECKED_CAST")
+    val filtered = when (resource) {
+        is Sample -> (merged as List<Sample>).filterSiblings(groupBy, resource) as List<T>
+        is Dataset -> (merged as List<Dataset>).filterSiblings(groupBy, resource) as List<T>
+    }
+    return filtered.ensureContains(resource, sortState)
 }
 
 private data class RepositoryCacheScope(

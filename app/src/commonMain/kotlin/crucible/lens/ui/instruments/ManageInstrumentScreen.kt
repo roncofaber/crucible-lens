@@ -34,6 +34,8 @@ import crucible.lens.ui.common.OwnershipTransferState
 import crucible.lens.ui.common.ResourceIdRenameDialog
 import crucible.lens.ui.common.ResourceRenameState
 import crucible.lens.ui.common.UserIdentityRow
+import crucible.lens.ui.common.SearchPickerField
+import crucible.lens.ui.common.UserPickerItemContent
 import crucible.lens.ui.detail.components.ClickableInfoRow
 import crucible.lens.ui.detail.components.InfoRow
 
@@ -138,12 +140,11 @@ fun ManageInstrumentScreen(
 
     when (val current = serviceAccountAddState) {
         is ServiceAccountAddState.Editing,
-        is ServiceAccountAddState.LookingUp,
         is ServiceAccountAddState.Resolved,
         is ServiceAccountAddState.Adding -> AddServiceAccountDialog(
             state = current,
             onQueryChange = viewModel::updateServiceAccountQuery,
-            onLookup = viewModel::lookupServiceAccount,
+            onSelect = viewModel::selectServiceAccount,
             onAdd = viewModel::addServiceAccount,
             onDismiss = viewModel::dismissAddServiceAccount
         )
@@ -308,13 +309,12 @@ fun ManageInstrumentScreen(
 private fun AddServiceAccountDialog(
     state: ServiceAccountAddState,
     onQueryChange: (String) -> Unit,
-    onLookup: () -> Unit,
+    onSelect: (User) -> Unit,
     onAdd: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val query = when (state) {
         is ServiceAccountAddState.Editing -> state.query
-        is ServiceAccountAddState.LookingUp -> state.query
         is ServiceAccountAddState.Resolved -> state.query
         is ServiceAccountAddState.Adding -> state.query
         else -> ""
@@ -329,7 +329,8 @@ private fun AddServiceAccountDialog(
         is ServiceAccountAddState.Resolved -> state.error
         else -> null
     }
-    val isLookingUp = state is ServiceAccountAddState.LookingUp
+    val editing = state as? ServiceAccountAddState.Editing
+    val isLookingUp = editing?.isSearching == true
     val isAdding = state is ServiceAccountAddState.Adding
     val isBusy = isLookingUp || isAdding
 
@@ -338,16 +339,18 @@ private fun AddServiceAccountDialog(
         title = { Text("Add service account") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Enter an exact service-account username or MFID.")
+                Text("Search for a service account by username or MFID.")
                 if (account == null) {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = onQueryChange,
-                        label = { Text("Username or MFID") },
-                        singleLine = true,
-                        enabled = !isBusy,
-                        isError = error != null,
-                        supportingText = error?.let { message -> { Text(message) } },
+                    SearchPickerField(
+                        query = query,
+                        onQueryChange = onQueryChange,
+                        isSearching = isLookingUp,
+                        results = editing?.results.orEmpty(),
+                        onSelect = onSelect,
+                        label = "Service account",
+                        enabled = !isAdding,
+                        searchError = error,
+                        itemContent = { UserPickerItemContent(it) },
                         modifier = Modifier.fillMaxWidth()
                     )
                 } else {
@@ -364,13 +367,13 @@ private fun AddServiceAccountDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = if (account == null) onLookup else onAdd,
-                enabled = !isBusy && query.isNotBlank() && (state !is ServiceAccountAddState.Resolved || state.error == null)
+                onClick = onAdd,
+                enabled = account != null && !isBusy && state is ServiceAccountAddState.Resolved && state.error == null
             ) {
                 if (isBusy) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 } else {
-                    Text(if (account == null) "Look up" else "Add")
+                    Text("Add")
                 }
             }
         },

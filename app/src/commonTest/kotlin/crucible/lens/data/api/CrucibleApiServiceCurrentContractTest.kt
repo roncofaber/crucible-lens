@@ -7,6 +7,9 @@ import crucible.lens.data.model.DatasetInstrumentAssignment
 import crucible.lens.data.model.FacetBucket
 import crucible.lens.data.model.HealthStatus
 import crucible.lens.data.model.SampleCreateRequest
+import crucible.lens.data.model.PlatformRole
+import crucible.lens.data.model.ServiceAccountRoleUpdateRequest
+import crucible.lens.data.model.ThumbnailUpdateRequest
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.ContentType
@@ -45,6 +48,116 @@ class CrucibleApiServiceCurrentContractTest {
             assertEquals("owner-mfid", it["owner_id"])
             assertFalse("owner_orcid" in it)
         }
+    }
+
+    @Test
+    fun resourceFiltersSendVisibilityAffiliationAndNullPredicates() = runTest {
+        val parameters = mutableListOf<Map<String, String>>()
+        val engine = MockEngine { request ->
+            parameters += request.url.parameters.entries().associate { it.key to it.value.single() }
+            respond("""{"limit":1000,"next_cursor":null,"items":[]}""", HttpStatusCode.OK, jsonHeaders())
+        }
+        val service = apiClient(engine).service
+
+        service.getFilteredSamples(
+            visibility = "private",
+            affiliation = "owner",
+            sampleTypeIsNull = true,
+            projectMfidIsNull = true
+        )
+        service.getFilteredDatasets(
+            visibility = "public",
+            affiliation = "owner",
+            measurementIsNull = true,
+            instrumentMfidIsNull = true,
+            dataFormatIsNull = true,
+            sessionNameIsNull = true,
+            projectMfidIsNull = true
+        )
+
+        assertEquals("private", parameters[0]["visibility"])
+        assertEquals("owner", parameters[0]["affiliation"])
+        assertEquals("true", parameters[0]["sample_type_is_null"])
+        assertEquals("public", parameters[1]["visibility"])
+        listOf("measurement_is_null", "instrument_mfid_is_null", "data_format_is_null", "session_name_is_null", "project_mfid_is_null").forEach {
+            assertEquals("true", parameters[1][it])
+        }
+    }
+
+    @Test
+    fun siblingPagesUseAnchoredExplicitOrdering() = runTest {
+        val parameters = mutableListOf<Map<String, String>>()
+        val engine = MockEngine { request ->
+            parameters += request.url.parameters.entries().associate { it.key to it.value.single() }
+            respond("""{"limit":40,"next_cursor":null,"items":[]}""", HttpStatusCode.OK, jsonHeaders())
+        }
+        val service = apiClient(engine).service
+
+        service.getSampleSiblingPage("sample-mfid", "asc", "project-id", sampleType = "powder")
+        service.getDatasetSiblingPage("dataset-mfid", "desc", "project-id", measurement = "XAS")
+
+        assertEquals("sample-mfid", parameters[0]["anchor_mfid"])
+        assertEquals("name", parameters[0]["sort"])
+        assertEquals("asc", parameters[0]["direction"])
+        assertEquals("powder", parameters[0]["sample_type"])
+        assertEquals("dataset-mfid", parameters[1]["anchor_mfid"])
+        assertEquals("desc", parameters[1]["direction"])
+        assertEquals("XAS", parameters[1]["measurement"])
+    }
+
+    @Test
+    fun serviceAccountAdministrationUsesDedicatedRoutes() = runTest {
+        val requests = mutableListOf<Pair<HttpMethod, String>>()
+        val engine = MockEngine { request ->
+            requests += request.method to request.url.encodedPath
+            val content = when {
+                request.method == HttpMethod.Get && request.url.encodedPath.endsWith("/service_accounts") ->
+                    """{"total":1,"limit":1000,"offset":0,"items":[{"unique_id":"service-mfid","username":"robot","first_name":"","last_name":"","platform_role":"none"}]}"""
+                request.method == HttpMethod.Get ->
+                    """{"unique_id":"service-mfid","username":"robot","first_name":"","last_name":"","platform_role":"none","api_key_status":{"valid":true,"created_at":"2026-01-01T00:00:00Z","expires_at":"2027-01-01T00:00:00Z"}}"""
+                request.method == HttpMethod.Patch ->
+                    """{"unique_id":"service-mfid","username":"robot","first_name":"","last_name":"","platform_role":"contributor"}"""
+                else -> """{"unique_id":"service-mfid","username":"robot","api_key":"secret"}"""
+            }
+            respond(content, HttpStatusCode.OK, jsonHeaders())
+        }
+        val service = apiClient(engine).service
+
+        service.getServiceAccounts()
+        service.getServiceAccountDetail("service-mfid")
+        service.createServiceAccount("robot")
+        service.updateServiceAccountRole("service-mfid", ServiceAccountRoleUpdateRequest(PlatformRole.Contributor))
+        service.rotateServiceAccountKey("service-mfid")
+
+        assertEquals(
+            listOf(
+                HttpMethod.Get to "/api/service_accounts",
+                HttpMethod.Get to "/api/service_accounts/service-mfid",
+                HttpMethod.Post to "/api/service_accounts",
+                HttpMethod.Patch to "/api/service_accounts/service-mfid",
+                HttpMethod.Post to "/api/service_accounts/service-mfid/rotate_key"
+            ),
+            requests
+        )
+    }
+
+    @Test
+    fun serviceAccountSearchAndThumbnailUpdateUseNewContract() = runTest {
+        val requests = mutableListOf<io.ktor.client.request.HttpRequestData>()
+        val engine = MockEngine { request ->
+            requests += request
+            val content = if (request.url.encodedPath.endsWith("/users/search")) "[]" else
+                """{"id":4,"thumbnail_b64str":"updated","thumbnail_name":"Plot"}"""
+            respond(content, HttpStatusCode.OK, jsonHeaders())
+        }
+        val service = apiClient(engine).service
+
+        service.searchUsers("robot", isServiceAccount = true)
+        service.updateThumbnail("dataset-mfid", 4, ThumbnailUpdateRequest(thumbnailName = "Plot"))
+
+        assertEquals("true", requests[0].url.parameters["is_service_account"])
+        assertEquals(HttpMethod.Patch, requests[1].method)
+        assertEquals("/api/datasets/dataset-mfid/thumbnails/4", requests[1].url.encodedPath)
     }
 
     @Test

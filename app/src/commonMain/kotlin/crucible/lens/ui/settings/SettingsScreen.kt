@@ -25,12 +25,14 @@ fun SettingsScreen(
     userUsername: String?,
     syncedCount: Int = 0,
     totalProjectCount: Int = 0,
+    canManageServiceAccounts: Boolean = false,
     onNavigateToAccount: () -> Unit,
     onNavigateToApi: () -> Unit,
     onNavigateToAppearance: () -> Unit,
     onNavigateToCache: () -> Unit,
     onNavigateToSearch: () -> Unit,
     onNavigateToSyncedProjects: () -> Unit,
+    onNavigateToServiceAccounts: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onNavigateToTypography: () -> Unit,
     onBack: () -> Unit,
@@ -71,6 +73,14 @@ fun SettingsScreen(
                 subtitle = "Server endpoints, connection test",
                 onClick = onNavigateToApi
             )
+            if (canManageServiceAccounts) {
+                SettingsRow(
+                    icon = AppIcons.ManageMembers,
+                    title = "Service accounts",
+                    subtitle = "Create accounts, roles, and API keys",
+                    onClick = onNavigateToServiceAccounts
+                )
+            }
             SettingsRow(
                 icon = AppIcons.Appearance,
                 title = "Appearance",

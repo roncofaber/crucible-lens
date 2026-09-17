@@ -120,6 +120,8 @@ sealed class ApiResult<out T> {
 | `GET /samples/search?q={query}&project_mfid={mfid}&project_scope={assigned|shared|all}&limit=20` | Bounded relevance search with optional project relationship scope; no cursor or offset pagination |
 | `GET /datasets/search?q={query}&project_mfid={mfid}&project_scope={assigned|shared|all}&limit=20` | Dataset equivalent of project-scoped sample name search |
 | `GET /samples/facets?field=...`, `GET /datasets/facets?field=...` | Cursor-paginated value buckets used as editable filter suggestions. Facets do not restrict users from entering a new value |
+| `GET /samples`, `GET /datasets` with `visibility`, `affiliation=owner`, and `*_is_null` | Advanced search filters for visibility, the signed-in owner's resources, and missing scientific or assignment fields |
+| `GET /samples`, `GET /datasets` with `anchor_mfid`, `sort=name`, and `direction` | Inclusive bounded sibling windows around an open resource when its project collection is not cached |
 | `PATCH /samples/{mfid}`, `PATCH /datasets/{mfid}` | Descriptive fields only. Project and instrument assignments use dedicated operations |
 | `PUT /datasets/{dataset_mfid}/instrument` | Assigns a registered instrument by canonical MFID and returns the current and previous instrument references |
 | `POST /resources/{mfid}/project` | Previews a sample or dataset project move; repeat with `?confirm=true` to execute |
@@ -130,6 +132,9 @@ sealed class ApiResult<out T> {
 | `GET /projects` | Member projects only (unlike `/projects/search`) |
 | `GET /users?username={username}` | Canonical exact username lookup. The client requests at most two records and rejects zero or multiple matches |
 | `GET /users?{username|unique_id}=...&is_service_account=true` | Exact service-account lookup for instrument operator binding. The server-side type filter is authoritative even when a public-safe response omits the account-type field |
+| `GET /users/search?q=...&is_service_account=true` | Service-account-only autocomplete for instrument operator selection |
+| `GET`/`POST /service_accounts`, `GET`/`PATCH /service_accounts/{unique_id}`, `POST /service_accounts/{unique_id}/rotate_key` | Capability-gated platform administration. Create and rotate responses contain an API key exactly once and the app never persists it |
+| `PATCH /datasets/{dsid}/thumbnails/{thumbnail_id}` | Replaces a thumbnail name, image, or both for users with dataset edit capability |
 | `GET /projects/{project_mfid}` | Canonical singleton project lookup with caller capabilities. Readable by any authenticated user - see "Access model" |
 | `GET /projects?project_id={slug}` | Exact project-slug resolution with caller capabilities. The client requests at most two records and rejects zero or multiple matches |
 | `GET /projects/search` | Project discovery search |
@@ -183,7 +188,7 @@ deep-merged) and never 409s. The `add-api-endpoint` skill has the PATCH-vs-POST 
 
 Exact project, instrument, sample, dataset, and generic resource-detail responses carry nullable `ResourceCapabilities` guidance for `can_edit`, `can_manage_access`, `can_change_status`, `can_transfer`, and `max_grant_role`. `GET /account/profile` also carries `AccountCapabilities` for project, instrument, sample, dataset, service-account, and create-for-others actions. General resource lists and searches leave capabilities null because no per-item ACL calculation is performed. Navigation and management screens use populated capabilities instead of inferring permissions from owner identity or cached roles, never include capabilities in write DTOs, and retain the previous role or ownership behavior only when communicating with a server that omits the field. The API remains authoritative for every mutation and all error responses remain user-visible.
 
-Sample and dataset detail overflow menus expose Manage Access only when `can_manage_access` is true. `ManageResourceAccessViewModel` loads canonical ACL rows through the repository, limits viewer through admin choices to `max_grant_role`, and keeps unsupported principal types visible but read-only. Owner grants are never changed through ACL routes, public access uses its dedicated endpoint, project writes use the returned slug, and user and service-account writes use the principal MFID. Failed refreshes retain the previous grants, and destructive confirmations stay open until the server confirms success.
+Sample and dataset detail overflow menus expose Edit, Add file, Link, and thumbnail mutations only when `can_edit` is true, and expose Manage Access only when `can_manage_access` is true. Duplicate follows the matching account-level create capability. `ManageResourceAccessViewModel` loads canonical ACL rows through the repository, limits viewer through admin choices to `max_grant_role`, and keeps unsupported principal types visible but read-only. Owner grants are never changed through ACL routes, public access uses its dedicated endpoint, project writes use the returned slug, and user and service-account writes use the principal MFID. Failed refreshes retain the previous grants, and destructive confirmations stay open until the server confirms success.
 
 `GET /projects/search` and `GET /projects/{id}` are readable by **any** authenticated user, not just
 members. Non-members get `lead` as `UserPublicRead` (no email) and a null `scientific_metadata`
@@ -289,7 +294,7 @@ Supported sample, dataset, and instrument reads request `include_owner=true`; pr
 
 `LinkResourceViewModel` owns the Link Resource sheet's debounced name search, direct UUID resolution, and link mutation. Search failures remain distinct from valid empty results, partial search results retain a warning, and resolved targets remain available when link submission fails.
 
-`SearchViewModel` owns global name, filter, facet-suggestion, and scientific-metadata searches. It uses `collectLatest` to cancel stale criteria, runs independent category endpoints concurrently, preserves successful categories during partial failures, and reads People and Project result limits directly from `AppPreferences`. Filter ownership uses the stable `owner_id`; picker date-time values are normalized to explicit UTC instants before collection requests. Measurement, data format, session, and sample type facets load concurrently when the filter sheet opens, retain successful categories on partial failure, and populate editable suggestion fields. Global name search remains unscoped. Link Resource search uses the source resource's expanded project MFID with `project_scope=assigned`, falling back to its legacy project slug only when an old cached record lacks the expanded reference. This preserves the existing assigned-project result boundary across project slug changes.
+`SearchViewModel` owns global name, filter, facet-suggestion, and scientific-metadata searches. It uses `collectLatest` to cancel stale criteria, runs independent category endpoints concurrently, preserves successful categories during partial failures, and reads People and Project result limits directly from `AppPreferences`. Filter ownership uses the stable `owner_id`; owned-by-me uses `affiliation=owner`; visibility and missing-value switches map directly to the collection query contract; picker date-time values are normalized to explicit UTC instants before collection requests. Measurement, data format, session, and sample type facets load concurrently when the filter sheet opens, retain successful categories on partial failure, and populate editable suggestion fields. Global name search remains unscoped. Link Resource search uses the source resource's expanded project MFID with `project_scope=assigned`, falling back to its legacy project slug only when an old cached record lacks the expanded reference. This preserves the existing assigned-project result boundary across project slug changes.
 
 `UserProfileViewModel` backs `UserProfileScreen`'s "Add to Project" flow. Username profile navigation resolves through the canonical exact `GET /users?username=` collection filter and rejects missing or non-unique results without calling a compatibility singleton route. The ViewModel holds the viewed user, the current user's cache-backed project list, `ProjectMembershipState`, and `AddToProjectState`. Membership checks run in parallel when the sheet opens, retain verified projects during partial failures, disable unknown projects, and retry only failed project IDs. Add-member failures remain visible and retryable, while success invalidates the shared member cache and updates the verified membership snapshot.
 
@@ -356,8 +361,7 @@ which is the only place worth reading for it.
 
 ## ResourceDetailScreen pager
 
-Siblings are all resources of the same type within the same project, drawn from the project cache
-(`sameTypeSamples`/`sameTypeDatasets` params).
+Siblings are resources of the same type within the same project. A cached project collection remains authoritative. On a cache miss, name-sorted groups request bounded ascending and descending pages from the current resource through `anchor_mfid`, merge them by MFID, and keep date groups on the full collection path because the UI date group is based on the scientific timestamp rather than API creation time.
 
 - Plain bounded pager: `pageCount = siblingList.size`, `initialPage = siblingIndex`, so it opens at
   the right position. No virtual `Int.MAX_VALUE` count, no wrap-around. A `LaunchedEffect` scroll only
@@ -447,11 +451,7 @@ JAVA_HOME="${JAVA_HOME:-$HOME/software/android-studio/jbr}" ./gradlew :composeAp
 
 `scripts/verify-change.sh` is the tool-neutral local gate for Android compilation and host tests. Claude Code's `.claude/hooks/pre-commit-check.sh` invokes it before Bash-based commits, and `scripts/release.sh` runs the same checks in its verify step.
 
-**CI on tag only is deliberate, not a gap.** `.github/workflows/release.yml` fires on a `v*.*.*` tag
-(or `workflow_dispatch`) and nothing else, because that workflow takes up to 20 minutes on GitHub -
-far too slow for every push or PR. Don't propose adding a push/PR trigger. The commit hook is the
-compensating control, and the earliest automated signal a broken test gets. Commits made by hand in
-another terminal bypass it, so run the suite yourself in that case.
+Build CI on tag only is deliberate. `.github/workflows/release.yml` fires on a `v*.*.*` tag or `workflow_dispatch` because it is too slow for every push or PR. The lightweight `.github/workflows/api-contract.yml` check runs daily or manually against the deployed OpenAPI document, using `scripts/check-api-contract.sh`; the same script accepts a local OpenAPI file for deterministic checks.
 
 **Layout**: `app/src/commonTest/kotlin/`, mirroring the production package path
 (`data/cache/ObservableCacheTest.kt` tests `data/cache/ObservableCache.kt`). Platform-agnostic, so
@@ -475,7 +475,7 @@ one suite covers both targets.
 | `CrucibleApiServiceInstrumentDatasetsTest` | Canonical instrument-MFID filtering and bounded cursor-page requests |
 | `CrucibleApiServiceInstrumentCreateTest` | V3 instrument registration route, required payload fields, self-owner omission, and response parsing |
 | `CrucibleApiServiceOwnerExpansionTest` | Expanded-owner query coverage for typed sample, dataset, and instrument detail and list reads |
-| `CrucibleApiServiceCurrentContractTest` | Stable owner filters, cursor-paginated facets, canonical create identifiers, dataset instrument assignment, and degraded readiness diagnostics |
+| `CrucibleApiServiceCurrentContractTest` | Stable owner filters, richer collection filters, anchored sibling requests, cursor-paginated facets, service-account administration, thumbnail updates, canonical create identifiers, dataset instrument assignment, and degraded readiness diagnostics |
 | `DateTimeUtilsTest` | Offset and timezone-less filter timestamp normalization plus invalid-input preservation |
 | `ResourceSlugTest` | Shared project and instrument ID grammar plus project-only reserved values |
 | `FormatUtilsTest` | `formatDateTime` timezone conversion, missing-offset fallback, compact AM/PM, null and unparseable input |

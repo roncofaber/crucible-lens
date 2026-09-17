@@ -266,13 +266,19 @@ class SearchViewModel(
         val before = toUtcQueryTimestamp(filters.createdBefore)
         val projectId = filters.projectId.ifBlank { null }
         val ownerId = filters.ownerId.ifBlank { null }
+        val visibility = filters.visibility.takeUnless { it == "all" }
+        val affiliation = if (filters.ownedByMe) "owner" else null
         val samplesRequest = async {
             apiClient.service.getFilteredSamples(
                 projectId = projectId,
                 sampleType = filters.sampleType.ifBlank { null },
                 ownerId = ownerId,
                 creationTimeGte = after,
-                creationTimeLte = before
+                creationTimeLte = before,
+                visibility = visibility,
+                affiliation = affiliation,
+                sampleTypeIsNull = filters.sampleTypeMissing.takeIf { it },
+                projectMfidIsNull = filters.projectMissing.takeIf { it }
             )
         }
         val datasetsRequest = async {
@@ -284,7 +290,14 @@ class SearchViewModel(
                 sessionName = filters.sessionName.ifBlank { null },
                 ownerId = ownerId,
                 creationTimeGte = after,
-                creationTimeLte = before
+                creationTimeLte = before,
+                visibility = visibility,
+                affiliation = affiliation,
+                measurementIsNull = filters.measurementMissing.takeIf { it },
+                instrumentMfidIsNull = filters.instrumentMissing.takeIf { it },
+                dataFormatIsNull = filters.dataFormatMissing.takeIf { it },
+                sessionNameIsNull = filters.sessionNameMissing.takeIf { it },
+                projectMfidIsNull = filters.projectMissing.takeIf { it }
             )
         }
         val samples = samplesRequest.await()

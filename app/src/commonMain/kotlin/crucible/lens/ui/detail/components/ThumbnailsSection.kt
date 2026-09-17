@@ -13,7 +13,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import crucible.lens.data.model.Thumbnail
+import crucible.lens.data.model.ThumbnailUpdateRequest
+import crucible.lens.platform.ImagePickerResult
 import crucible.lens.platform.PlatformBase64
+import crucible.lens.platform.rememberImagePicker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -23,12 +26,34 @@ internal fun ThumbnailsSection(
     thumbnails: List<Thumbnail>,
     deletingThumbnailIds: Set<Int> = emptySet(),
     deleteErrors: Map<Int, String> = emptyMap(),
-    onDelete: (thumbnailId: Int) -> Unit = {}
+    updatingThumbnailIds: Set<Int> = emptySet(),
+    updateErrors: Map<Int, String> = emptyMap(),
+    canEdit: Boolean = false,
+    onDelete: (thumbnailId: Int) -> Unit = {},
+    onUpdate: (thumbnailId: Int, request: ThumbnailUpdateRequest) -> Unit = { _, _ -> }
 ) {
     thumbnails.forEachIndexed { index, thumbnail ->
         var showDeleteDialog by remember(thumbnail.id) { mutableStateOf(false) }
+        var showEditDialog by remember(thumbnail.id) { mutableStateOf(false) }
+        var wasUpdating by remember(thumbnail.id) { mutableStateOf(false) }
         val isDeleting = thumbnail.id in deletingThumbnailIds
+        val isUpdating = thumbnail.id in updatingThumbnailIds
         val deleteError = deleteErrors[thumbnail.id]
+        val updateError = updateErrors[thumbnail.id]
+
+        if (showEditDialog && thumbnail.id >= 0) {
+            EditThumbnailDialog(
+                thumbnail = thumbnail,
+                isUpdating = isUpdating,
+                error = updateError,
+                onSave = { request -> onUpdate(thumbnail.id, request) },
+                onDismiss = { if (!isUpdating) showEditDialog = false }
+            )
+            LaunchedEffect(isUpdating, updateError) {
+                if (wasUpdating && !isUpdating && updateError == null) showEditDialog = false
+                wasUpdating = isUpdating
+            }
+        }
 
         if (showDeleteDialog && thumbnail.id >= 0) {
             ConfirmationDialog(
@@ -65,7 +90,7 @@ internal fun ThumbnailsSection(
                     .fillMaxWidth()
                     .heightIn(min = 200.dp, max = 400.dp)
                     .then(
-                        if (thumbnail.id >= 0)
+                        if (canEdit && thumbnail.id >= 0)
                             Modifier.combinedClickable(
                                 enabled = !isDeleting,
                                 onClick = {},
@@ -91,7 +116,7 @@ internal fun ThumbnailsSection(
                 }
 
                 when {
-                    isDeleting || imageState == "loading" -> CircularProgressIndicator()
+                    isDeleting || isUpdating || imageState == "loading" -> CircularProgressIndicator()
                     imageState?.startsWith("error") == true -> Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -105,9 +130,21 @@ internal fun ThumbnailsSection(
                     }
                 }
 
-                if (thumbnail.id >= 0 && deleteError == null) {
+                if (canEdit && thumbnail.id >= 0) {
+                    IconButton(
+                        onClick = { showEditDialog = true },
+                        enabled = !isDeleting && !isUpdating,
+                        modifier = Modifier.align(Alignment.BottomStart)
+                    ) { AppIcon(AppIcons.Edit) }
+                }
+
+                if (canEdit && thumbnail.id >= 0 && deleteError == null) {
                     Text(
-                        if (isDeleting) "Deleting" else "Hold to delete",
+                        when {
+                            isDeleting -> "Deleting"
+                            isUpdating -> "Updating"
+                            else -> "Hold to delete"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
@@ -117,7 +154,7 @@ internal fun ThumbnailsSection(
                 }
             }
 
-            if (deleteError != null) {
+            if (canEdit && deleteError != null) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -136,4 +173,66 @@ internal fun ThumbnailsSection(
             }
         }
     }
+}
+
+@Composable
+private fun EditThumbnailDialog(
+    thumbnail: Thumbnail,
+    isUpdating: Boolean,
+    error: String?,
+    onSave: (ThumbnailUpdateRequest) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember(thumbnail.id) { mutableStateOf(thumbnail.thumbnailName.orEmpty()) }
+    var replacement by remember(thumbnail.id) { mutableStateOf<String?>(null) }
+    var selectedFilename by remember(thumbnail.id) { mutableStateOf<String?>(null) }
+    var pickerError by remember(thumbnail.id) { mutableStateOf<String?>(null) }
+    val pickImage = rememberImagePicker { result ->
+        when (result) {
+            is ImagePickerResult.Success -> {
+                replacement = PlatformBase64.encode(result.bytes)
+                selectedFilename = result.filename
+                pickerError = null
+            }
+            is ImagePickerResult.Failure -> pickerError = result.message
+            ImagePickerResult.Cancelled -> Unit
+        }
+    }
+    val changed = name != thumbnail.thumbnailName.orEmpty() || replacement != null
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit thumbnail") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    enabled = !isUpdating,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedButton(onClick = pickImage, enabled = !isUpdating, modifier = Modifier.fillMaxWidth()) {
+                    AppIcon(AppIcons.FileImage)
+                    Spacer(Modifier.width(8.dp))
+                    Text(selectedFilename ?: "Replace image")
+                }
+                (pickerError ?: error)?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onSave(ThumbnailUpdateRequest(thumbnailName = name, thumbnailB64str = replacement))
+                },
+                enabled = changed && !isUpdating
+            ) {
+                if (isUpdating) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text("Save")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isUpdating) { Text("Cancel") } }
+    )
 }

@@ -32,6 +32,12 @@ import crucible.lens.data.model.AssociatedFile
 import crucible.lens.data.model.UploadCompleteRequest
 import crucible.lens.data.model.Thumbnail
 import crucible.lens.data.model.ThumbnailCreateRequest
+import crucible.lens.data.model.ThumbnailUpdateRequest
+import crucible.lens.data.model.ServiceAccountCreateRequest
+import crucible.lens.data.model.ServiceAccountCredential
+import crucible.lens.data.model.ServiceAccountDetail
+import crucible.lens.data.model.ServiceAccountRoleUpdateRequest
+import crucible.lens.data.model.ServiceAccountSummary
 import crucible.lens.data.model.TransferOwnershipRequest
 import crucible.lens.data.model.TransferOwnershipResponse
 import crucible.lens.data.model.HealthStatus
@@ -187,12 +193,45 @@ class CrucibleApiService(
         }.body()
     }
 
-    suspend fun searchUsers(q: String, limit: Int = 20): ApiResult<List<User>> = safeCall {
+    suspend fun searchUsers(
+        q: String,
+        limit: Int = 20,
+        isServiceAccount: Boolean? = null
+    ): ApiResult<List<User>> = safeCall {
         client.get("${baseUrl}users/search") {
             header("Authorization", "Bearer $apiKey")
             url.parameters.append("q", q)
             url.parameters.append("limit", limit.toString())
+            if (isServiceAccount != null) url.parameters.append("is_service_account", isServiceAccount.toString())
         }.body<List<User>>()
+    }
+
+    suspend fun getServiceAccounts(q: String? = null): ApiResult<List<ServiceAccountSummary>> = fetchAllPages { limit, offset ->
+        client.get("${baseUrl}service_accounts") {
+            header("Authorization", "Bearer $apiKey")
+            if (!q.isNullOrBlank()) url.parameters.append("q", q)
+            url.parameters.append("limit", limit.toString())
+            url.parameters.append("offset", offset.toString())
+        }.body<PaginatedResponse<ServiceAccountSummary>>()
+    }
+
+    suspend fun getServiceAccountDetail(uniqueId: String): ApiResult<ServiceAccountDetail> = safeCall {
+        get("service_accounts/$uniqueId")
+    }
+
+    suspend fun createServiceAccount(username: String): ApiResult<ServiceAccountCredential> = safeCall {
+        post("service_accounts", ServiceAccountCreateRequest(username))
+    }
+
+    suspend fun updateServiceAccountRole(
+        uniqueId: String,
+        request: ServiceAccountRoleUpdateRequest
+    ): ApiResult<ServiceAccountDetail> = safeCall {
+        patch("service_accounts/$uniqueId", request)
+    }
+
+    suspend fun rotateServiceAccountKey(uniqueId: String): ApiResult<ServiceAccountCredential> = safeCall {
+        post("service_accounts/$uniqueId/rotate_key")
     }
 
     suspend fun checkUsernameAvailability(username: String, currentUniqueId: String): ApiResult<Boolean> = safeCall {
@@ -466,7 +505,14 @@ class CrucibleApiService(
         sessionName: String? = null,
         ownerId: String? = null,
         creationTimeGte: String? = null,
-        creationTimeLte: String? = null
+        creationTimeLte: String? = null,
+        visibility: String? = null,
+        affiliation: String? = null,
+        measurementIsNull: Boolean? = null,
+        instrumentMfidIsNull: Boolean? = null,
+        dataFormatIsNull: Boolean? = null,
+        sessionNameIsNull: Boolean? = null,
+        projectMfidIsNull: Boolean? = null
     ): ApiResult<List<Dataset>> = fetchAllPagesCursor { limit, cursor ->
         client.get("${baseUrl}datasets") {
             header("Authorization", "Bearer $apiKey")
@@ -481,6 +527,13 @@ class CrucibleApiService(
             if (ownerId != null) url.parameters.append("owner_id", ownerId)
             if (creationTimeGte != null) url.parameters.append("creation_time_gte", creationTimeGte)
             if (creationTimeLte != null) url.parameters.append("creation_time_lte", creationTimeLte)
+            if (visibility != null) url.parameters.append("visibility", visibility)
+            if (affiliation != null) url.parameters.append("affiliation", affiliation)
+            if (measurementIsNull != null) url.parameters.append("measurement_is_null", measurementIsNull.toString())
+            if (instrumentMfidIsNull != null) url.parameters.append("instrument_mfid_is_null", instrumentMfidIsNull.toString())
+            if (dataFormatIsNull != null) url.parameters.append("data_format_is_null", dataFormatIsNull.toString())
+            if (sessionNameIsNull != null) url.parameters.append("session_name_is_null", sessionNameIsNull.toString())
+            if (projectMfidIsNull != null) url.parameters.append("project_mfid_is_null", projectMfidIsNull.toString())
             url.parameters.append("include_owner", "true")
             url.parameters.append("include_total", "false")
             url.parameters.append("limit", limit.toString())
@@ -495,7 +548,11 @@ class CrucibleApiService(
         sampleType: String? = null,
         ownerId: String? = null,
         creationTimeGte: String? = null,
-        creationTimeLte: String? = null
+        creationTimeLte: String? = null,
+        visibility: String? = null,
+        affiliation: String? = null,
+        sampleTypeIsNull: Boolean? = null,
+        projectMfidIsNull: Boolean? = null
     ): ApiResult<List<Sample>> = fetchAllPagesCursor { limit, cursor ->
         client.get("${baseUrl}samples") {
             header("Authorization", "Bearer $apiKey")
@@ -506,11 +563,67 @@ class CrucibleApiService(
             if (ownerId != null) url.parameters.append("owner_id", ownerId)
             if (creationTimeGte != null) url.parameters.append("creation_time_gte", creationTimeGte)
             if (creationTimeLte != null) url.parameters.append("creation_time_lte", creationTimeLte)
+            if (visibility != null) url.parameters.append("visibility", visibility)
+            if (affiliation != null) url.parameters.append("affiliation", affiliation)
+            if (sampleTypeIsNull != null) url.parameters.append("sample_type_is_null", sampleTypeIsNull.toString())
+            if (projectMfidIsNull != null) url.parameters.append("project_mfid_is_null", projectMfidIsNull.toString())
             url.parameters.append("include_owner", "true")
             url.parameters.append("include_total", "false")
             url.parameters.append("limit", limit.toString())
             if (cursor != null) url.parameters.append("cursor", cursor)
         }.body<PaginatedResponse<Sample>>()
+    }
+
+    suspend fun getSampleSiblingPage(
+        anchorMfid: String,
+        direction: String,
+        projectId: String,
+        sampleType: String? = null,
+        ownerId: String? = null,
+        limit: Int = 40
+    ): ApiResult<List<Sample>> = safeCall {
+        client.get("${baseUrl}samples") {
+            header("Authorization", "Bearer $apiKey")
+            url.parameters.append("anchor_mfid", anchorMfid)
+            url.parameters.append("sort", "name")
+            url.parameters.append("direction", direction)
+            url.parameters.append("project_id", projectId)
+            if (sampleType != null) url.parameters.append("sample_type", sampleType)
+            if (ownerId != null) url.parameters.append("owner_id", ownerId)
+            url.parameters.append("include_owner", "true")
+            url.parameters.append("include_total", "false")
+            url.parameters.append("limit", limit.toString())
+        }.body<PaginatedResponse<Sample>>().items
+    }
+
+    suspend fun getDatasetSiblingPage(
+        anchorMfid: String,
+        direction: String,
+        projectId: String,
+        measurement: String? = null,
+        instrumentMfid: String? = null,
+        instrumentName: String? = null,
+        dataFormat: String? = null,
+        sessionName: String? = null,
+        ownerId: String? = null,
+        limit: Int = 40
+    ): ApiResult<List<Dataset>> = safeCall {
+        client.get("${baseUrl}datasets") {
+            header("Authorization", "Bearer $apiKey")
+            url.parameters.append("anchor_mfid", anchorMfid)
+            url.parameters.append("sort", "name")
+            url.parameters.append("direction", direction)
+            url.parameters.append("project_id", projectId)
+            if (measurement != null) url.parameters.append("measurement", measurement)
+            if (instrumentMfid != null) url.parameters.append("instrument_mfid", instrumentMfid)
+            if (instrumentName != null) url.parameters.append("instrument_name", instrumentName)
+            if (dataFormat != null) url.parameters.append("data_format", dataFormat)
+            if (sessionName != null) url.parameters.append("session_name", sessionName)
+            if (ownerId != null) url.parameters.append("owner_id", ownerId)
+            url.parameters.append("include_owner", "true")
+            url.parameters.append("include_total", "false")
+            url.parameters.append("limit", limit.toString())
+        }.body<PaginatedResponse<Dataset>>().items
     }
 
     // ── Write ────────────────────────────────────────────────────────────────
@@ -541,6 +654,14 @@ class CrucibleApiService(
         request: ThumbnailCreateRequest
     ): ApiResult<Thumbnail> = safeCall {
         post("datasets/$uuid/thumbnails", request)
+    }
+
+    suspend fun updateThumbnail(
+        uuid: String,
+        thumbnailId: Int,
+        request: ThumbnailUpdateRequest
+    ): ApiResult<Thumbnail> = safeCall {
+        patch("datasets/$uuid/thumbnails/$thumbnailId", request)
     }
 
     suspend fun deleteThumbnail(uuid: String, thumbnailId: Int): ApiResult<Boolean> = safeCall {

@@ -13,6 +13,7 @@ sealed class Screen(val route: String) {
     object SettingsSearch : Screen("settings/search")
     object SettingsAbout : Screen("settings/about")
     object SettingsAccount : Screen("settings/account")
+    object SettingsServiceAccounts : Screen("settings/service-accounts")
     object CompleteProfile : Screen("complete-profile")
     object SettingsTypography : Screen("settings/typography")
     object SyncedProjects : Screen("settings/synced-projects?firstRun={firstRun}") {

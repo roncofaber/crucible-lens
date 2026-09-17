@@ -136,6 +136,8 @@ Default to no override. Every `Card` on the resource detail screen (`BasicInfoCa
 or signalling interactivity; clearing it needs a documented reason, the way `QrCodeDialog`'s
 `tonalElevation = 0` carve-out does.
 
+Editable thumbnail cards expose an explicit edit action for renaming or image replacement and retain long press for destructive deletion. Both operations remain visible until the server confirms success or reports a retryable error.
+
 **Nested surfaces recede, they don't share a tier.** `LinkedResourceCards.kt`'s `ResourceRow` uses
 `surface` because it nests inside a `surfaceContainerHighest` `Card` - deliberately different from
 the standalone flat-tinted-row convention, which is `surfaceContainerLow` (~10 call sites:

@@ -50,6 +50,8 @@ import crucible.lens.ui.settings.CompleteProfileScreen
 import crucible.lens.ui.settings.ProfileCompletionGate
 import crucible.lens.ui.settings.UserProfileScreen
 import crucible.lens.ui.settings.UserProfileViewModel
+import crucible.lens.ui.settings.ServiceAccountsScreen
+import crucible.lens.ui.settings.ServiceAccountsViewModel
 import crucible.lens.ui.detail.ResourceDetailViewModel
 import crucible.lens.ui.detail.UiState
 import crucible.lens.ui.detail.ResourceDetailScreen
@@ -513,14 +515,25 @@ fun NavGraph(
                 userUsername = userUsername,
                 syncedCount = syncedProjects.size,
                 totalProjectCount = repository.getCachedProjects()?.size ?: 0,
+                canManageServiceAccounts = userProfile?.capabilities?.canManageServiceAccounts == true,
                 onNavigateToAccount = { navController.navigate(Screen.SettingsAccount.route) },
                 onNavigateToApi = { navController.navigate(Screen.SettingsApi.route) },
                 onNavigateToAppearance = { navController.navigate(Screen.SettingsAppearance.route) },
                 onNavigateToCache = { navController.navigate(Screen.SettingsCache.route) },
                 onNavigateToSearch = { navController.navigate(Screen.SettingsSearch.route) },
                 onNavigateToSyncedProjects = { navController.navigate(Screen.SyncedProjects.createRoute(firstRun = false)) },
+                onNavigateToServiceAccounts = { navController.navigate(Screen.SettingsServiceAccounts.route) },
                 onNavigateToAbout = { navController.navigate(Screen.SettingsAbout.route) },
                 onNavigateToTypography = { navController.navigate(Screen.SettingsTypography.route) },
+                onBack = navigateBack,
+                onHome = navigateHome
+            )
+        }
+
+        composable(Screen.SettingsServiceAccounts.route) {
+            val serviceAccountsViewModel: ServiceAccountsViewModel = koinViewModel()
+            ServiceAccountsScreen(
+                viewModel = serviceAccountsViewModel,
                 onBack = navigateBack,
                 onHome = navigateHome
             )
@@ -763,6 +776,8 @@ fun NavGraph(
                         onNavigateToUser = { identifier ->
                             navController.navigate(Screen.UserProfile.createRoute(identifier))
                         },
+                        canCreateSample = userProfile?.capabilities?.canCreateSample ?: true,
+                        canCreateDataset = userProfile?.capabilities?.canCreateDataset ?: true,
                         recentHistory = resourceHistory,
                         onDuplicate = { resource ->
                             when (resource) {

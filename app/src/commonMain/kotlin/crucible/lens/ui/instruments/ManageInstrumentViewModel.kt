@@ -65,8 +65,12 @@ sealed class InstrumentStatusState {
 
 sealed class ServiceAccountAddState {
     data object Idle : ServiceAccountAddState()
-    data class Editing(val query: String = "", val error: String? = null) : ServiceAccountAddState()
-    data class LookingUp(val query: String) : ServiceAccountAddState()
+    data class Editing(
+        val query: String = "",
+        val results: List<User> = emptyList(),
+        val isSearching: Boolean = false,
+        val error: String? = null
+    ) : ServiceAccountAddState()
     data class Resolved(val query: String, val account: User, val error: String? = null) : ServiceAccountAddState()
     data class Adding(val query: String, val account: User) : ServiceAccountAddState()
     data class Success(val account: User) : ServiceAccountAddState()
@@ -111,6 +115,7 @@ class ManageInstrumentViewModel(
     private var instrumentId: String = ""
     private var currentUserId: String? = null
     private var ownershipSearchJob: Job? = null
+    private var serviceAccountSearchJob: Job? = null
 
     fun init(instrumentId: String, currentUserId: String?) {
         this.instrumentId = instrumentId
@@ -340,39 +345,40 @@ class ManageInstrumentViewModel(
 
     fun updateServiceAccountQuery(query: String) {
         if (_serviceAccountAddState.value is ServiceAccountAddState.Adding) return
-        _serviceAccountAddState.value = ServiceAccountAddState.Editing(query = query)
-    }
-
-    fun lookupServiceAccount() {
-        val state = _serviceAccountAddState.value as? ServiceAccountAddState.Editing ?: return
-        val query = state.query.trim()
-        if (query.isBlank()) {
-            _serviceAccountAddState.value = state.copy(error = "Enter a username or service-account MFID")
-            return
-        }
-        _serviceAccountAddState.value = ServiceAccountAddState.LookingUp(query)
-        viewModelScope.launch {
+        serviceAccountSearchJob?.cancel()
+        val trimmed = query.trim()
+        _serviceAccountAddState.value = ServiceAccountAddState.Editing(query = query, isSearching = trimmed.length >= 3)
+        if (trimmed.length < 3) return
+        serviceAccountSearchJob = viewModelScope.launch {
+            delay(300)
             try {
-                when (val result = apiClient.service.getServiceAccount(query)) {
-                    is ApiResult.Success -> {
-                        val existing = (_serviceAccountsState.value as? LoadState.Success)?.data.orEmpty()
-                        _serviceAccountAddState.value = if (existing.any { it.uniqueId == result.data.uniqueId }) {
-                            ServiceAccountAddState.Resolved(query, result.data, "This service account is already an operator")
-                        } else {
-                            ServiceAccountAddState.Resolved(query, result.data)
-                        }
-                    }
+                when (val result = apiClient.service.searchUsers(trimmed, isServiceAccount = true)) {
+                    is ApiResult.Success -> _serviceAccountAddState.value = ServiceAccountAddState.Editing(
+                        query = query,
+                        results = result.data,
+                        error = if (result.data.isEmpty()) "No matching service accounts" else null
+                    )
                     is ApiResult.Error -> _serviceAccountAddState.value = ServiceAccountAddState.Editing(
                         query,
-                        if (result.code == 404) "Service account not found" else "Lookup failed (${result.code})"
+                        error = "Search failed (${result.code})"
                     )
                 }
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                _serviceAccountAddState.value = ServiceAccountAddState.Editing(query, "Connection error. Try again")
+                _serviceAccountAddState.value = ServiceAccountAddState.Editing(query, error = "Connection error. Try again")
             }
         }
+    }
+
+    fun selectServiceAccount(account: User) {
+        val query = account.username ?: account.uniqueId ?: return
+        val existing = (_serviceAccountsState.value as? LoadState.Success)?.data.orEmpty()
+        _serviceAccountAddState.value = ServiceAccountAddState.Resolved(
+            query,
+            account,
+            if (existing.any { it.uniqueId == account.uniqueId }) "This service account is already an operator" else null
+        )
     }
 
     fun addServiceAccount() {
@@ -405,6 +411,7 @@ class ManageInstrumentViewModel(
 
     fun dismissAddServiceAccount() {
         if (_serviceAccountAddState.value !is ServiceAccountAddState.Adding) {
+            serviceAccountSearchJob?.cancel()
             _serviceAccountAddState.value = ServiceAccountAddState.Idle
         }
     }

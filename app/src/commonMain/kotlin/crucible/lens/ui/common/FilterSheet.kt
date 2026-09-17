@@ -28,19 +28,30 @@ data class SearchFilters(
     val ownerUsername: String = "",
     val createdAfter: String = "",
     val createdBefore: String = "",
+    val visibility: String = "all",
+    val ownedByMe: Boolean = false,
+    val projectMissing: Boolean = false,
     // Dataset-specific
     val measurement: String = "",
     val instrumentName: String = "",
     val dataFormat: String = "",
     val sessionName: String = "",
+    val measurementMissing: Boolean = false,
+    val instrumentMissing: Boolean = false,
+    val dataFormatMissing: Boolean = false,
+    val sessionNameMissing: Boolean = false,
     // Sample-specific
-    val sampleType: String = ""
+    val sampleType: String = "",
+    val sampleTypeMissing: Boolean = false
 ) {
     val isActive: Boolean get() = activeCount > 0
     val activeCount: Int get() = listOf(
         projectId, ownerId, createdAfter, createdBefore,
         measurement, instrumentName, dataFormat, sessionName, sampleType
-    ).count { it.isNotBlank() }
+    ).count { it.isNotBlank() } + listOf(
+        ownedByMe, projectMissing, measurementMissing, instrumentMissing,
+        dataFormatMissing, sessionNameMissing, sampleTypeMissing
+    ).count { it } + if (visibility == "all") 0 else 1
 }
 
 data class FacetSuggestions(
@@ -90,9 +101,14 @@ fun FilterSheet(
 
             FilterTextField(
                 value = local.projectId,
-                onValueChange = { local = local.copy(projectId = it) },
+                onValueChange = { local = local.copy(projectId = it, projectMissing = false) },
                 label = "Project ID",
                 icon = AppIcons.Project
+            )
+            MissingValueFilter(
+                label = "No project assigned",
+                checked = local.projectMissing,
+                onCheckedChange = { local = local.copy(projectMissing = it, projectId = if (it) "" else local.projectId) }
             )
             OwnerPickerField(
                 ownerId = local.ownerId,
@@ -100,11 +116,28 @@ fun FilterSheet(
                 onOwnerSelected = { user ->
                     local = local.copy(
                         ownerId = user.uniqueId ?: "",
-                        ownerUsername = user.username ?: user.uniqueId ?: ""
+                        ownerUsername = user.username ?: user.uniqueId ?: "",
+                        ownedByMe = false
                     )
                 },
                 onOwnerCleared = { local = local.copy(ownerId = "", ownerUsername = "") }
             )
+            FilterChip(
+                selected = local.ownedByMe,
+                onClick = { local = local.copy(ownedByMe = !local.ownedByMe, ownerId = "", ownerUsername = "") },
+                label = { Text("Owned by me") },
+                leadingIcon = if (local.ownedByMe) {{ AppIcon(AppIcons.Check, modifier = Modifier.size(18.dp)) }} else null
+            )
+            Text("Visibility", style = MaterialTheme.typography.labelLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("all" to "All", "public" to "Public", "private" to "Private").forEach { (value, label) ->
+                    FilterChip(
+                        selected = local.visibility == value,
+                        onClick = { local = local.copy(visibility = value) },
+                        label = { Text(label) }
+                    )
+                }
+            }
             DateTimePickerField(
                 value = local.createdAfter,
                 onValueChange = { local = local.copy(createdAfter = it) },
@@ -140,30 +173,42 @@ fun FilterSheet(
 
             FacetSuggestionField(
                 value = local.measurement,
-                onValueChange = { local = local.copy(measurement = it) },
+                onValueChange = { local = local.copy(measurement = it, measurementMissing = false) },
                 suggestions = suggestions.measurements,
                 label = "Measurement",
                 icon = AppIcons.Sample
             )
+            MissingValueFilter("No measurement", local.measurementMissing) {
+                local = local.copy(measurementMissing = it, measurement = if (it) "" else local.measurement)
+            }
             InstrumentPickerField(
                 value = local.instrumentName,
-                onValueChange = { local = local.copy(instrumentName = it) },
+                onValueChange = { local = local.copy(instrumentName = it, instrumentMissing = false) },
                 modifier = Modifier.fillMaxWidth()
             )
+            MissingValueFilter("No registered instrument", local.instrumentMissing) {
+                local = local.copy(instrumentMissing = it, instrumentName = if (it) "" else local.instrumentName)
+            }
             FacetSuggestionField(
                 value = local.dataFormat,
-                onValueChange = { local = local.copy(dataFormat = it) },
+                onValueChange = { local = local.copy(dataFormat = it, dataFormatMissing = false) },
                 suggestions = suggestions.dataFormats,
                 label = "Data format",
                 icon = AppIcons.DataFormat
             )
+            MissingValueFilter("No data format", local.dataFormatMissing) {
+                local = local.copy(dataFormatMissing = it, dataFormat = if (it) "" else local.dataFormat)
+            }
             FacetSuggestionField(
                 value = local.sessionName,
-                onValueChange = { local = local.copy(sessionName = it) },
+                onValueChange = { local = local.copy(sessionName = it, sessionNameMissing = false) },
                 suggestions = suggestions.sessionNames,
                 label = "Session name",
                 icon = AppIcons.Tag
             )
+            MissingValueFilter("No session name", local.sessionNameMissing) {
+                local = local.copy(sessionNameMissing = it, sessionName = if (it) "" else local.sessionName)
+            }
 
             HorizontalDivider()
 
@@ -173,11 +218,14 @@ fun FilterSheet(
 
             FacetSuggestionField(
                 value = local.sampleType,
-                onValueChange = { local = local.copy(sampleType = it) },
+                onValueChange = { local = local.copy(sampleType = it, sampleTypeMissing = false) },
                 suggestions = suggestions.sampleTypes,
                 label = "Sample type",
                 icon = AppIcons.Category
             )
+            MissingValueFilter("No sample type", local.sampleTypeMissing) {
+                local = local.copy(sampleTypeMissing = it, sampleType = if (it) "" else local.sampleType)
+            }
 
             if (suggestionsError != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -201,6 +249,22 @@ fun FilterSheet(
                 Text(if (local.isActive) "Apply ${local.activeCount} filter${if (local.activeCount > 1) "s" else ""}" else "Apply")
             }
         }
+    }
+}
+
+@Composable
+private fun MissingValueFilter(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

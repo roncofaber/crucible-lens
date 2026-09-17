@@ -20,6 +20,7 @@ import crucible.lens.ui.projects.ProjectDetailViewModel
 import crucible.lens.ui.projects.ProjectsListViewModel
 import crucible.lens.ui.settings.AccountViewModel
 import crucible.lens.ui.settings.UserProfileViewModel
+import crucible.lens.ui.settings.ServiceAccountsViewModel
 import crucible.lens.ui.search.SearchViewModel
 import crucible.lens.ui.scanner.ScannerViewModel
 import org.koin.core.module.dsl.viewModelOf
@@ -41,6 +42,7 @@ val appModule = module {
     viewModelOf(::HomeViewModel)
     viewModelOf(::AccountViewModel)
     viewModelOf(::UserProfileViewModel)
+    viewModelOf(::ServiceAccountsViewModel)
     viewModelOf(::SearchViewModel)
     viewModelOf(::ScannerViewModel)
     viewModelOf(::ProjectsListViewModel)
