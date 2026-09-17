@@ -68,9 +68,9 @@ crucible.lens
     ├── navigation/   NavGraph, Screen sealed class
     ├── projects/     ProjectsList/ProjectDetail/ManageProject Screen + ViewModel,
     │                 ProjectResourceLists (SamplesList, DatasetsList, groupedResourceItems)
-    ├── scanner/      QRScannerPlatform (QRCodeScannerView via easyqrscan)
+    ├── scanner/      ScannerScreen, ScannerViewModel, QRScannerPlatform
     ├── search/       SearchScreen, SearchViewModel
-    ├── settings/     Settings, Api, Appearance, Cache, About, Account, UserProfile, OrcidLogin
+    ├── settings/     Account, service-account administration, app settings, profiles, and sign-in
     └── theme/        Theme.kt, Type.kt, Shape.kt, accents/ (12 hand-curated ColorSchemes)
 ```
 
@@ -272,7 +272,7 @@ owned here). `getCacheStats()` returns a snapshot for that same screen.
 
 ## ViewModels
 
-Every list/detail/manage/create screen has a ViewModel in commonMain, constructor-injected via Koin: `ResourceDetailViewModel`, `LinkResourceViewModel`, `ManageResourceAccessViewModel`, `SearchViewModel`, `ProjectsListViewModel`, `ProjectDetailViewModel`, `ManageProjectViewModel`, `InstrumentListViewModel`, `InstrumentDetailViewModel`, `ManageInstrumentViewModel`, `AccountViewModel`, `CreateSampleViewModel`, `CreateDatasetViewModel`, `CreateProjectViewModel`, `CreateInstrumentViewModel`, `EditResourceViewModel`, `HomeViewModel`, and `UserProfileViewModel`.
+Every screen that loads or mutates remote data has a commonMain ViewModel registered through `viewModelOf` in `di/AppModule.kt`. Screen-scoped instances resolve through `koinViewModel()`, while shared repositories and preferences resolve through Koin singletons.
 
 `ProjectDetailViewModel` keeps assigned and shared project collections in separate source states and exposes them as one merged project view. Assigned content follows the repository and synchronization path with offline fallback. Shared content loads concurrently as a non-persisted supplement. MFID deduplication prefers the assigned record, and a failure in either source retains the other source with a retryable warning.
 
@@ -280,7 +280,9 @@ Every list/detail/manage/create screen has a ViewModel in commonMain, constructo
 
 Project member and resource ACL lists sort by descending authority - owner, admin, editor, contributor, viewer - and alphabetically within each role. Project owner remains the API and authorization value but is labeled Lead in project UI. The shared `RoleBadge` maps roles to paired Material 3 semantic container and content colors, so badges retain contrast under static, dark, and dynamic color schemes without fixed hue assumptions. Add-member and resource-access forms use the shared `RoleDropdownField`. Project member roles become `CompactRoleDropdown` controls only after the user enters the explicit Edit roles mode; each selection writes immediately through the single-member API, retains the prior role until success, and shows row-scoped progress or failure without simulating a batch save.
 
-`ManageInstrumentViewModel` owns capability-gated descriptive editing, validated instrument-ID changes, lifecycle transitions, service-account operator bindings, and previewed ownership transfer. Lifecycle controls use the dedicated status route, offer only `active`, `maintenance`, and `decommissioned`, and require explicit confirmation before decommissioning. A successful transition invalidates the active-instrument list and writes the returned instrument into the canonical detail cache. Service-account management uses exact username or MFID lookup filtered server-side by principal type, labels bindings as operators rather than exposing their internal group standing, requires confirmation before removal, and replaces local state with each mutation's complete returned list. Instrument ownership is read-only during descriptive editing and changes only through the shared transfer workflow. Project and instrument management reuse `ResourceIdRenameDialog` and the ownership picker, progress, and confirmation components from `ui/common/ResourceManagementDialogs.kt`. Both preserve the editable human-facing slug separately from the display title or name and keep navigation keyed by MFID.
+`ManageInstrumentViewModel` owns capability-gated descriptive editing, validated instrument-ID changes, lifecycle transitions, service-account operator bindings, and previewed ownership transfer. Lifecycle controls use the dedicated status route, offer only `active`, `maintenance`, and `decommissioned`, and require explicit confirmation before decommissioning. A successful transition invalidates the active-instrument list and writes the returned instrument into the canonical detail cache. Service-account operator selection uses debounced `/users/search` autocomplete with `is_service_account=true`, labels bindings as operators rather than exposing their internal group standing, requires confirmation before removal, and replaces local state with each mutation's complete returned list. Instrument ownership is read-only during descriptive editing and changes only through the shared transfer workflow. Project and instrument management reuse `ResourceIdRenameDialog` and the ownership picker, progress, and confirmation components from `ui/common/ResourceManagementDialogs.kt`. Both preserve the editable human-facing slug separately from the display title or name and keep navigation keyed by MFID.
+
+`ServiceAccountsViewModel` owns the capability-gated administrator list, detail, creation, platform-role update, and key-rotation states. One-time credentials exist only in its in-memory state until the user dismisses the credential dialog. The screen never writes them to preferences, repositories, logs, or disk.
 
 `CreateInstrumentViewModel` owns the Register Instrument form and submits only the V3 creation fields. Display name seeds a locally validated instrument ID until the user edits that ID manually. Name, ID, and location are required; descriptive fields remain optional. Ownership is omitted so the API assigns the signed-in human, and ownership transfer remains a separate Manage Instrument operation. The Instruments screen hides registration from service accounts. Successful creation caches the canonical MFID detail, invalidates status-filtered instrument collections, refreshes the retained Instruments screen, and opens Manage Instrument.
 
@@ -353,9 +355,7 @@ the pull; the indicator overlays it, matching M3 and iOS `UIRefreshControl`.
 
 ## Navigation (`ui/navigation/`)
 
-`Screen` is a sealed class of route strings; optional args use `?argName={argName}`, and special
-characters in segments go through `encodeRouteSegment()`. 31 routes - see `Screen.kt` for the list,
-which is the only place worth reading for it.
+`Screen` is a sealed class of route strings; optional args use `?argName={argName}`, and special characters in segments go through `encodeRouteSegment()`. Treat `Screen.kt` as the route inventory rather than duplicating a count here.
 
 ---
 
@@ -473,9 +473,11 @@ one suite covers both targets.
 | `CrucibleApiServiceProjectLookupTest` | Exact project-slug zero and multiple result handling |
 | `CrucibleApiServiceInstrumentLookupTest` | Exact instrument-slug zero and multiple result handling |
 | `CrucibleApiServiceInstrumentDatasetsTest` | Canonical instrument-MFID filtering and bounded cursor-page requests |
+| `CrucibleApiServiceInstrumentAccessTest` | Instrument-scoped service-account binding routes and service-account-only exact lookup |
 | `CrucibleApiServiceInstrumentCreateTest` | V3 instrument registration route, required payload fields, self-owner omission, and response parsing |
 | `CrucibleApiServiceOwnerExpansionTest` | Expanded-owner query coverage for typed sample, dataset, and instrument detail and list reads |
 | `CrucibleApiServiceCurrentContractTest` | Stable owner filters, richer collection filters, anchored sibling requests, cursor-paginated facets, service-account administration, thumbnail updates, canonical create identifiers, dataset instrument assignment, and degraded readiness diagnostics |
+| `CrucibleApiServiceProjectScopeTest` | Assigned and shared project-scope routing, cursor pagination, and query compatibility |
 | `ProjectContentMergeTest` | Assigned and shared project resource deduplication, assigned-record precedence, shared-row marking, and partial-source failure retention |
 | `DateTimeUtilsTest` | Offset and timezone-less filter timestamp normalization plus invalid-input preservation |
 | `ResourceSlugTest` | Shared project and instrument ID grammar plus project-only reserved values |

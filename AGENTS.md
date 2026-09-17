@@ -14,7 +14,7 @@ Crucible Lens is a Kotlin Multiplatform and Compose Multiplatform app for Androi
 - Follow the repository's existing architecture and UI patterns. Make the smallest change that fully addresses the task.
 - Use `rg` or `rg --files` for repository searches.
 - Do not edit unrelated user changes in a dirty worktree.
-- Add or update tests for deterministic logic in `data/`. The project has no Compose UI, instrumented, screenshot, or general ViewModel test harness.
+- Add or update tests for deterministic logic in `data/` and for pure state transitions extracted from `ui/`. The project has no Compose UI, instrumented, screenshot, or general ViewModel test harness.
 - Update the owning documentation in the same change when behavior, architecture, API coverage, UI conventions, icons, or platform parity changes.
 - Add a concise entry under `## [Unreleased]` in `CHANGELOG.md` for user-visible changes. Do not add entries for internal refactors or documentation-only changes.
 - Do not edit `PRIVACY.md` without separate user approval. Flag a possible update when a change affects stored data, retention, network hosts, permissions, telemetry dependencies, other users' personal data, or Android backup rules.
@@ -105,6 +105,9 @@ Use the `release` skill for every release. The ordering, changelog consolidation
 - Metadata `POST` and `PATCH` return `ApiResult<JsonObject>`. On edit, use `diffMetadataWrite`: use `PATCH` for additions and replacements, or `POST ?overwrite=true` with the complete object when a key was deleted. On create, use a plain metadata `POST`.
 - One-shot join-request mutations may call `apiClient.service` from the owning ViewModel when there is nothing to cache. Pending join-request counts belong in the repository because multiple screens consume them.
 - Project search and project detail are readable by any authenticated user. Lead details and scientific metadata may be absent for non-members, and that asymmetry supports discovery browsing.
+- Project Detail merges assigned resources with live `project_scope=shared` results by MFID. Keep assigned content as the synchronized and persisted source, and keep shared results as a non-persisted supplement.
+- Service-account administration is shown only when `can_manage_service_accounts` is true. Create and key-rotation responses expose a secret once; keep it in memory, never log or persist it, and clear it when dismissed.
+- The app intentionally does not expose create-for-others even when `can_create_for_others` is true.
 - Use explicit `@SerialName` values for API fields whose wire names must remain stable.
 
 ## User identity

@@ -7,14 +7,13 @@ Android + iOS app (Kotlin Multiplatform + Compose Multiplatform) for browsing, c
 ## Features
 
 - QR code scanning and manual UUID lookup
-- Search across samples, datasets, projects, and people, with server-side scientific metadata
-  search and quick category filters
-- Project browser with pinning, offline sync, and member/join-request management
-- Create and edit samples, datasets, and projects; add colleagues to a project from search or
-  their profile
-- Instrument browser with search, pinning, and per-instrument dataset listing
+- Search across samples, datasets, projects, and people, with scientific-metadata search, facet suggestions, visibility filters, ownership filters, and missing-field filters
+- Project browser with pinning, offline sync, combined assigned and shared resources, and member or join-request management
+- Create and edit samples, datasets, projects, and instruments; add colleagues to a project from search or their profile
+- Instrument browser with search, pinning, per-instrument dataset listing, and service-account operator management
 - Sample and dataset detail views with swipe-based sibling navigation
-- Dataset thumbnails and scientific metadata viewer
+- Dataset thumbnail viewing and editing plus scientific metadata viewing and editing
+- Capability-gated service-account administration for authorized platform administrators
 - Parent/child relationship navigation and Crucible Web integration
 - QR code sharing for any resource
 - Browsing history and last-visited shortcut
