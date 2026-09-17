@@ -5,7 +5,7 @@
 ### Added
 
 - The QR scanner now accepts trusted Crucible Web links and verifies their extracted resource or project identifier through the authenticated API before opening it
-- Project pages can now switch between resources assigned to the project and resources shared with it
+- Project pages now show resources assigned to the project together with resources shared with it
 - Search filters now suggest existing measurement, data format, session, and sample type values while still accepting new values
 - Authorized dataset managers can now assign a different registered instrument while editing a dataset
 - Platform administrators can create service accounts, change their platform roles, and rotate one-time API keys from Settings

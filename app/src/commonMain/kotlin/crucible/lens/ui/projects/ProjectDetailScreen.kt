@@ -28,7 +28,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -55,7 +54,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import crucible.lens.data.preferences.AppPreferences
-import crucible.lens.data.model.ProjectScope
 import crucible.lens.data.sync.ProjectSyncTarget
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.util.SortState
@@ -182,8 +180,6 @@ fun ProjectDetailScreen(
     val loadState by viewModel.loadState.collectAsStateWithLifecycle()
     val sharedLoadState by viewModel.sharedLoadState.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { 2 })
-    var selectedProjectScopeName by rememberSaveable { mutableStateOf(ProjectScope.Assigned.name) }
-    val selectedProjectScope = ProjectScope.valueOf(selectedProjectScopeName)
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var sampleGroupBy by remember { mutableStateOf(SampleGroupBy.TYPE) }
     var datasetGroupBy by remember { mutableStateOf(DatasetGroupBy.MEASUREMENT) }
@@ -195,11 +191,8 @@ fun ProjectDetailScreen(
     // scoped here to write/zero this project's cache entry.
     fun refreshProjectDetail() {
         syncTarget?.let { target ->
-            if (selectedProjectScope == ProjectScope.Assigned) {
-                viewModel.load(target, ctx, accountId, isSynced, forceRefresh = true)
-            } else {
-                viewModel.loadShared(target.projectMfid, forceRefresh = true)
-            }
+            viewModel.load(target, ctx, accountId, isSynced, forceRefresh = true)
+            viewModel.loadShared(target.projectMfid, forceRefresh = true)
             val slug = target.projectSlug
             if (isConfidentlyNonMember) viewModel.loadJoinRequestStatus(slug, forceRefresh = true)
         }
@@ -239,11 +232,7 @@ fun ProjectDetailScreen(
         }
     }
 
-    val activeLoadState: LoadState<ProjectContent> = if (selectedProjectScope == ProjectScope.Assigned) {
-        loadState
-    } else {
-        sharedLoadState ?: LoadState.Loading
-    }
+    val activeLoadState = mergeProjectLoadStates(loadState, sharedLoadState)
     val projectContent = (activeLoadState as? LoadState.Success)?.data
     val samples = projectContent?.samples ?: emptyList()
     val datasets = projectContent?.datasets ?: emptyList()
@@ -261,10 +250,8 @@ fun ProjectDetailScreen(
     // member-list cache (the usual case, per the seed above) avoids the round trip entirely; on a
     // cold cache isConfidentlyNonMember is false on the first frame, so members never wait.
     LaunchedEffect(syncTarget, accountId, isSynced, isConfidentlyNonMember) {
-        if (!isConfidentlyNonMember && syncTarget != null) viewModel.load(syncTarget, ctx, accountId, isSynced)
-    }
-    LaunchedEffect(selectedProjectScope, syncTarget, isConfidentlyNonMember) {
-        if (selectedProjectScope == ProjectScope.Shared && !isConfidentlyNonMember && syncTarget != null) {
+        if (!isConfidentlyNonMember && syncTarget != null) {
+            viewModel.load(syncTarget, ctx, accountId, isSynced)
             viewModel.loadShared(syncTarget.projectMfid)
         }
     }
@@ -455,18 +442,6 @@ fun ProjectDetailScreen(
                             onSortStateChange = { sortState = it; showToast(ctx, "Sorted by ${it.field.label} ${if (it.ascending) "↑" else "↓"}") },
                             containerColor = MaterialTheme.colorScheme.surface
                         )
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            listOf(ProjectScope.Assigned, ProjectScope.Shared).forEach { projectScope ->
-                                FilterChip(
-                                    selected = selectedProjectScope == projectScope,
-                                    onClick = { selectedProjectScopeName = projectScope.name },
-                                    label = { Text(projectScope.name) }
-                                )
-                            }
-                        }
                         PrimaryTabRow(selectedTabIndex = pagerState.currentPage) {
                             ResourceTab(
                                 selected = pagerState.currentPage == 0,
@@ -494,9 +469,8 @@ fun ProjectDetailScreen(
                             0 -> SamplesList(
                                 samples = filteredSamples,
                                 isFiltered = searchQuery.isNotBlank(),
-                                fromCache = selectedProjectScope == ProjectScope.Assigned && ((activeLoadState as? LoadState.Success)?.fromCache ?: false),
-                                showProjectContext = selectedProjectScope == ProjectScope.Shared,
-                                emptyMessage = if (selectedProjectScope == ProjectScope.Shared) "No samples are shared with this project." else "This project has no samples.",
+                                fromCache = (activeLoadState as? LoadState.Success)?.fromCache ?: false,
+                                projectContextResourceIds = projectContent?.sharedSampleIds.orEmpty(),
                                 projectId = projectSlug ?: projectReference,
                                 graphExplorerUrl = graphExplorerUrl,
                                 groupBy = sampleGroupBy,
@@ -508,9 +482,8 @@ fun ProjectDetailScreen(
                             1 -> DatasetsList(
                                 datasets = filteredDatasets,
                                 isFiltered = searchQuery.isNotBlank(),
-                                fromCache = selectedProjectScope == ProjectScope.Assigned && ((activeLoadState as? LoadState.Success)?.fromCache ?: false),
-                                showProjectContext = selectedProjectScope == ProjectScope.Shared,
-                                emptyMessage = if (selectedProjectScope == ProjectScope.Shared) "No datasets are shared with this project." else "This project has no datasets.",
+                                fromCache = (activeLoadState as? LoadState.Success)?.fromCache ?: false,
+                                projectContextResourceIds = projectContent?.sharedDatasetIds.orEmpty(),
                                 projectId = projectSlug ?: projectReference,
                                 graphExplorerUrl = graphExplorerUrl,
                                 groupBy = datasetGroupBy,

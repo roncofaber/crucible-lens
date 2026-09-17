@@ -131,7 +131,7 @@ private fun <T : CrucibleResource> LazyListScope.groupedResourceItems(
     onItemClick: (String) -> Unit,
     expandedGroups: SnapshotStateMap<String, Boolean>,
     cacheAgeMinutes: Long?,
-    showProjectContext: Boolean
+    projectContextResourceIds: Set<String>
 ) {
     if (!isGrouped) {
         itemsIndexed(flatItems, key = { _, it -> it.uniqueId }) { index, resource ->
@@ -148,8 +148,8 @@ private fun <T : CrucibleResource> LazyListScope.groupedResourceItems(
                 subtitle = resource.uniqueId,
                 uniqueId = resource.uniqueId,
                 graphExplorerUrl = graphExplorerUrl,
-                snippet = if (showProjectContext) resourceProjectName?.let { "Assigned to $it" } ?: "Not assigned to a project" else null,
-                projectId = if (showProjectContext) resourceProjectId else projectId,
+                snippet = if (resource.uniqueId in projectContextResourceIds) resourceProjectName?.let { "Assigned to $it" } ?: "Not assigned to a project" else null,
+                projectId = if (resource.uniqueId in projectContextResourceIds) resourceProjectId else projectId,
                 resourceType = resourceType,
                 showDivider = index > 0,
                 onClick = { onItemClick(resource.uniqueId) }
@@ -183,8 +183,8 @@ private fun <T : CrucibleResource> LazyListScope.groupedResourceItems(
                     subtitle = resource.uniqueId,
                     uniqueId = resource.uniqueId,
                     graphExplorerUrl = graphExplorerUrl,
-                    snippet = if (showProjectContext) resourceProjectName?.let { "Assigned to $it" } ?: "Not assigned to a project" else null,
-                    projectId = if (showProjectContext) resourceProjectId else projectId,
+                    snippet = if (resource.uniqueId in projectContextResourceIds) resourceProjectName?.let { "Assigned to $it" } ?: "Not assigned to a project" else null,
+                    projectId = if (resource.uniqueId in projectContextResourceIds) resourceProjectId else projectId,
                     resourceType = resourceType,
                     showDivider = index > 0,
                     onClick = { onItemClick(resource.uniqueId) }
@@ -210,7 +210,7 @@ internal fun SamplesList(
     samples: List<Sample>,
     isFiltered: Boolean,
     fromCache: Boolean = false,
-    showProjectContext: Boolean = false,
+    projectContextResourceIds: Set<String> = emptySet(),
     emptyMessage: String = "This project has no samples.",
     projectId: String = "",
     graphExplorerUrl: String = "",
@@ -290,7 +290,7 @@ internal fun SamplesList(
                     onItemClick = onSampleClick,
                     expandedGroups = expandedGroups,
                     cacheAgeMinutes = if (fromCache) repository.projectDataAgeMinutes(projectId) ?: 0 else null,
-                    showProjectContext = showProjectContext
+                    projectContextResourceIds = projectContextResourceIds
                 )
             }
         }
@@ -308,7 +308,7 @@ internal fun DatasetsList(
     datasets: List<Dataset>,
     isFiltered: Boolean,
     fromCache: Boolean = false,
-    showProjectContext: Boolean = false,
+    projectContextResourceIds: Set<String> = emptySet(),
     emptyMessage: String = "This project has no datasets.",
     projectId: String = "",
     graphExplorerUrl: String = "",
@@ -391,7 +391,7 @@ internal fun DatasetsList(
                     onItemClick = onDatasetClick,
                     expandedGroups = expandedGroups,
                     cacheAgeMinutes = if (fromCache) repository.projectDataAgeMinutes(projectId) ?: 0 else null,
-                    showProjectContext = showProjectContext
+                    projectContextResourceIds = projectContextResourceIds
                 )
             }
         }

@@ -21,7 +21,43 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-data class ProjectContent(val samples: List<Sample>, val datasets: List<Dataset>)
+data class ProjectContent(
+    val samples: List<Sample>,
+    val datasets: List<Dataset>,
+    val sharedSampleIds: Set<String> = emptySet(),
+    val sharedDatasetIds: Set<String> = emptySet()
+)
+
+internal fun mergeProjectContent(assigned: ProjectContent, shared: ProjectContent): ProjectContent {
+    val assignedSampleIds = assigned.samples.mapTo(mutableSetOf()) { it.uniqueId }
+    val assignedDatasetIds = assigned.datasets.mapTo(mutableSetOf()) { it.uniqueId }
+    return ProjectContent(
+        samples = (assigned.samples + shared.samples).distinctBy { it.uniqueId },
+        datasets = (assigned.datasets + shared.datasets).distinctBy { it.uniqueId },
+        sharedSampleIds = shared.samples.mapTo(mutableSetOf()) { it.uniqueId } - assignedSampleIds,
+        sharedDatasetIds = shared.datasets.mapTo(mutableSetOf()) { it.uniqueId } - assignedDatasetIds
+    )
+}
+
+internal fun mergeProjectLoadStates(
+    assigned: LoadState<ProjectContent>,
+    shared: LoadState<ProjectContent>?
+): LoadState<ProjectContent> = when {
+    assigned is LoadState.Success && shared is LoadState.Success -> LoadState.Success(
+        data = mergeProjectContent(assigned.data, shared.data),
+        isRefreshing = assigned.isRefreshing || shared.isRefreshing,
+        fromCache = assigned.fromCache,
+        refreshError = assigned.refreshError ?: shared.refreshError
+    )
+    assigned is LoadState.Success && shared is LoadState.Error -> assigned.copy(refreshError = shared.message)
+    assigned is LoadState.Error && shared is LoadState.Success -> shared.copy(refreshError = assigned.message)
+    assigned is LoadState.Success -> assigned
+    shared is LoadState.Success -> shared
+    assigned is LoadState.Error && shared is LoadState.Error -> LoadState.Error("${assigned.message}. ${shared.message}")
+    assigned is LoadState.Error -> assigned
+    shared is LoadState.Error -> shared
+    else -> LoadState.Loading
+}
 
 sealed class ProjectJoinRequestState {
     object Idle : ProjectJoinRequestState()
@@ -146,7 +182,12 @@ class ProjectDetailViewModel(
                 val datasetResult = datasets.await()
                 _sharedLoadState.value = when {
                     sampleResult is ApiResult.Success && datasetResult is ApiResult.Success -> {
-                        LoadState.Success(ProjectContent(sampleResult.data, datasetResult.data))
+                        LoadState.Success(ProjectContent(
+                            samples = sampleResult.data,
+                            datasets = datasetResult.data,
+                            sharedSampleIds = sampleResult.data.mapTo(mutableSetOf()) { it.uniqueId },
+                            sharedDatasetIds = datasetResult.data.mapTo(mutableSetOf()) { it.uniqueId }
+                        ))
                     }
                     sampleResult is ApiResult.Error -> projectScopeFailureState(previous, projectScopeError(sampleResult.code))
                     datasetResult is ApiResult.Error -> projectScopeFailureState(previous, projectScopeError(datasetResult.code))
