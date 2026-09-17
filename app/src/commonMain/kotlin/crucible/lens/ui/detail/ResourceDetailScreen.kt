@@ -64,8 +64,6 @@ import crucible.lens.ui.detail.components.*
 import org.koin.compose.koinInject
 
 private data class UnlinkRequest(val name: String, val otherUuid: String, val action: suspend () -> ApiResult<Unit>)
-private data class ThumbnailKey(val datasetUuid: String, val thumbnailId: Int)
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ResourceDetailScreen(
@@ -97,6 +95,9 @@ fun ResourceDetailScreen(
     associatedFileActionStates: Map<AssociatedFileActionKey, AssociatedFileActionState>,
     onResolveAssociatedFileAction: (AssociatedFileActionKey) -> Unit,
     onClearAssociatedFileAction: (AssociatedFileActionKey) -> Unit,
+    thumbnailMutationStates: Map<ThumbnailMutationKey, ThumbnailMutationState>,
+    onDeleteThumbnail: (datasetUuid: String, thumbnailId: Int) -> Unit,
+    onUpdateThumbnail: (datasetUuid: String, thumbnailId: Int, request: ThumbnailUpdateRequest) -> Unit,
 ) {
     val apiClient = koinInject<ApiClient>()
     val repository = koinInject<CrucibleRepository>()
@@ -187,10 +188,6 @@ fun ResourceDetailScreen(
     var showLinkSheet by rememberSaveable { mutableStateOf(false) }
     var showDeletionDialog by rememberSaveable { mutableStateOf(false) }
     var pendingUnlink by remember { mutableStateOf<UnlinkRequest?>(null) }
-    var deletingThumbnails by remember { mutableStateOf<Set<ThumbnailKey>>(emptySet()) }
-    var thumbnailDeleteErrors by remember { mutableStateOf<Map<ThumbnailKey, String>>(emptyMap()) }
-    var updatingThumbnails by remember { mutableStateOf<Set<ThumbnailKey>>(emptySet()) }
-    var thumbnailUpdateErrors by remember { mutableStateOf<Map<ThumbnailKey, String>>(emptyMap()) }
     var overflowMenuExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(deletionRequestSubmissionState) {
@@ -256,58 +253,6 @@ fun ResourceDetailScreen(
     // Primary resource refresh only — sibling PTR is handled inline above.
     LaunchedEffect(isRefreshing) {
         localRefreshState = isRefreshing
-    }
-
-    fun deleteThumbnail(datasetUuid: String, thumbnailId: Int) {
-        val key = ThumbnailKey(datasetUuid, thumbnailId)
-        if (key in deletingThumbnails) return
-        scope.launch {
-            deletingThumbnails += key
-            thumbnailDeleteErrors -= key
-            try {
-                when (val result = apiClient.service.deleteThumbnail(datasetUuid, thumbnailId)) {
-                    is ApiResult.Success -> {
-                        if (result.data) {
-                            repository.invalidateThumbnails(datasetUuid)
-                            repository.fetchThumbnails(datasetUuid, forceRefresh = true)
-                        } else {
-                            thumbnailDeleteErrors += key to "The server did not confirm deletion"
-                        }
-                    }
-                    is ApiResult.Error -> thumbnailDeleteErrors += key to "Delete failed (${result.code})"
-                }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                thumbnailDeleteErrors += key to "Connection error. Check your network and try again"
-            } finally {
-                deletingThumbnails -= key
-            }
-        }
-    }
-
-    fun updateThumbnail(datasetUuid: String, thumbnailId: Int, request: ThumbnailUpdateRequest) {
-        val key = ThumbnailKey(datasetUuid, thumbnailId)
-        if (key in updatingThumbnails) return
-        scope.launch {
-            updatingThumbnails += key
-            thumbnailUpdateErrors -= key
-            try {
-                when (val result = apiClient.service.updateThumbnail(datasetUuid, thumbnailId, request)) {
-                    is ApiResult.Success -> {
-                        repository.invalidateThumbnails(datasetUuid)
-                        repository.fetchThumbnails(datasetUuid, forceRefresh = true)
-                    }
-                    is ApiResult.Error -> thumbnailUpdateErrors += key to "Update failed (${result.code})"
-                }
-            } catch (error: kotlinx.coroutines.CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                thumbnailUpdateErrors += key to "Connection error. Check your network and try again"
-            } finally {
-                updatingThumbnails -= key
-            }
-        }
     }
 
     AppScaffold(
@@ -665,21 +610,29 @@ fun ResourceDetailScreen(
                                                     ThumbnailsSection(
                                                         uuid = pageUuid,
                                                         thumbnails = resolvedThumbnails,
-                                                        deletingThumbnailIds = deletingThumbnails
-                                                            .filter { it.datasetUuid == pageUuid }
-                                                            .mapTo(mutableSetOf()) { it.thumbnailId },
-                                                        deleteErrors = thumbnailDeleteErrors
-                                                            .filterKeys { it.datasetUuid == pageUuid }
-                                                            .mapKeys { it.key.thumbnailId },
-                                                        updatingThumbnailIds = updatingThumbnails
-                                                            .filter { it.datasetUuid == pageUuid }
-                                                            .mapTo(mutableSetOf()) { it.thumbnailId },
-                                                        updateErrors = thumbnailUpdateErrors
-                                                            .filterKeys { it.datasetUuid == pageUuid }
-                                                            .mapKeys { it.key.thumbnailId },
+                                                        deletingThumbnailIds = thumbnailMutationIds(
+                                                            thumbnailMutationStates,
+                                                            pageUuid,
+                                                            ThumbnailMutationType.DELETE
+                                                        ),
+                                                        deleteErrors = thumbnailMutationErrors(
+                                                            thumbnailMutationStates,
+                                                            pageUuid,
+                                                            ThumbnailMutationType.DELETE
+                                                        ),
+                                                        updatingThumbnailIds = thumbnailMutationIds(
+                                                            thumbnailMutationStates,
+                                                            pageUuid,
+                                                            ThumbnailMutationType.UPDATE
+                                                        ),
+                                                        updateErrors = thumbnailMutationErrors(
+                                                            thumbnailMutationStates,
+                                                            pageUuid,
+                                                            ThumbnailMutationType.UPDATE
+                                                        ),
                                                         canEdit = resolved.capabilities?.canEdit == true,
-                                                        onDelete = { thumbnailId -> deleteThumbnail(pageUuid, thumbnailId) },
-                                                        onUpdate = { thumbnailId, request -> updateThumbnail(pageUuid, thumbnailId, request) }
+                                                        onDelete = { thumbnailId -> onDeleteThumbnail(pageUuid, thumbnailId) },
+                                                        onUpdate = { thumbnailId, request -> onUpdateThumbnail(pageUuid, thumbnailId, request) }
                                                     )
                                                 }
                                             }

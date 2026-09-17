@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.Dataset
+import crucible.lens.data.model.ThumbnailUpdateRequest
 import crucible.lens.data.repository.CrucibleRepository
 import crucible.lens.data.repository.ResourceResult
 import crucible.lens.data.sync.DataSyncManager
@@ -47,6 +48,36 @@ sealed class AssociatedFileActionState {
     data class Error(val message: String) : AssociatedFileActionState()
 }
 
+enum class ThumbnailMutationType { DELETE, UPDATE }
+
+data class ThumbnailMutationKey(
+    val datasetUuid: String,
+    val thumbnailId: Int,
+    val type: ThumbnailMutationType
+)
+
+sealed class ThumbnailMutationState {
+    data object Running : ThumbnailMutationState()
+    data class Error(val message: String) : ThumbnailMutationState()
+}
+
+internal fun thumbnailMutationIds(
+    states: Map<ThumbnailMutationKey, ThumbnailMutationState>,
+    datasetUuid: String,
+    type: ThumbnailMutationType
+): Set<Int> = states.entries
+    .filter { (key, state) -> key.datasetUuid == datasetUuid && key.type == type && state is ThumbnailMutationState.Running }
+    .mapTo(mutableSetOf()) { it.key.thumbnailId }
+
+internal fun thumbnailMutationErrors(
+    states: Map<ThumbnailMutationKey, ThumbnailMutationState>,
+    datasetUuid: String,
+    type: ThumbnailMutationType
+): Map<Int, String> = states.mapNotNull { (key, state) ->
+    val error = state as? ThumbnailMutationState.Error
+    if (key.datasetUuid == datasetUuid && key.type == type && error != null) key.thumbnailId to error.message else null
+}.toMap()
+
 private const val MAX_CARD_STATE_ENTRIES = 50
 
 class ResourceDetailViewModel(
@@ -60,6 +91,7 @@ class ResourceDetailViewModel(
     private var activeFetchJob: Job? = null
     private var deletionRequestSubmissionJob: Job? = null
     private val associatedFileActionJobs = mutableMapOf<AssociatedFileActionKey, Job>()
+    private val thumbnailMutationJobs = mutableMapOf<ThumbnailMutationKey, Job>()
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -70,6 +102,10 @@ class ResourceDetailViewModel(
     private val _associatedFileActionStates = MutableStateFlow<Map<AssociatedFileActionKey, AssociatedFileActionState>>(emptyMap())
     val associatedFileActionStates: StateFlow<Map<AssociatedFileActionKey, AssociatedFileActionState>> =
         _associatedFileActionStates.asStateFlow()
+
+    private val _thumbnailMutationStates = MutableStateFlow<Map<ThumbnailMutationKey, ThumbnailMutationState>>(emptyMap())
+    val thumbnailMutationStates: StateFlow<Map<ThumbnailMutationKey, ThumbnailMutationState>> =
+        _thumbnailMutationStates.asStateFlow()
 
     /** Persists expanded/collapsed state of detail screen cards across navigation. */
     private val resourceCardState = mutableStateMapOf<String, SnapshotStateMap<String, Boolean>>()
@@ -90,7 +126,6 @@ class ResourceDetailViewModel(
 
     fun refreshThumbnails(uuid: String) {
         viewModelScope.launch {
-            repository.invalidateThumbnails(uuid)
             repository.fetchThumbnails(uuid, forceRefresh = true)
         }
     }
@@ -170,7 +205,10 @@ class ResourceDetailViewModel(
         deletionRequestSubmissionJob = null
         associatedFileActionJobs.values.forEach { it.cancel() }
         associatedFileActionJobs.clear()
+        thumbnailMutationJobs.values.forEach { it.cancel() }
+        thumbnailMutationJobs.clear()
         _associatedFileActionStates.value = emptyMap()
+        _thumbnailMutationStates.value = emptyMap()
         _deletionRequestSubmissionState.value = DeletionRequestSubmissionState.Idle
         _uiState.value = UiState.Idle
     }
@@ -212,6 +250,58 @@ class ResourceDetailViewModel(
     fun clearAssociatedFileAction(key: AssociatedFileActionKey) {
         associatedFileActionJobs.remove(key)?.cancel()
         _associatedFileActionStates.update { updateAssociatedFileActionState(it, key, null) }
+    }
+
+    fun deleteThumbnail(datasetUuid: String, thumbnailId: Int) {
+        val key = ThumbnailMutationKey(datasetUuid, thumbnailId, ThumbnailMutationType.DELETE)
+        launchThumbnailMutation(key) {
+            when (val result = apiClient.service.deleteThumbnail(datasetUuid, thumbnailId)) {
+                is ApiResult.Success -> if (result.data) null else "The server did not confirm deletion"
+                is ApiResult.Error -> "Delete failed (${result.code})"
+            }
+        }
+    }
+
+    fun updateThumbnail(datasetUuid: String, thumbnailId: Int, request: ThumbnailUpdateRequest) {
+        val key = ThumbnailMutationKey(datasetUuid, thumbnailId, ThumbnailMutationType.UPDATE)
+        launchThumbnailMutation(key) {
+            when (val result = apiClient.service.updateThumbnail(datasetUuid, thumbnailId, request)) {
+                is ApiResult.Success -> null
+                is ApiResult.Error -> "Update failed (${result.code})"
+            }
+        }
+    }
+
+    private fun launchThumbnailMutation(
+        key: ThumbnailMutationKey,
+        operation: suspend () -> String?
+    ) {
+        val targetIsBusy = _thumbnailMutationStates.value.any { (activeKey, state) ->
+            activeKey.datasetUuid == key.datasetUuid &&
+                activeKey.thumbnailId == key.thumbnailId &&
+                state is ThumbnailMutationState.Running
+        }
+        if (targetIsBusy) return
+        _thumbnailMutationStates.update { it + (key to ThumbnailMutationState.Running) }
+        thumbnailMutationJobs[key] = viewModelScope.launch {
+            try {
+                val error = operation()
+                if (error == null) {
+                    repository.fetchThumbnails(key.datasetUuid, forceRefresh = true)
+                    _thumbnailMutationStates.update { it - key }
+                } else {
+                    _thumbnailMutationStates.update { it + (key to ThumbnailMutationState.Error(error)) }
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                _thumbnailMutationStates.update {
+                    it + (key to ThumbnailMutationState.Error("Connection error. Check your network and try again"))
+                }
+            } finally {
+                thumbnailMutationJobs.remove(key)
+            }
+        }
     }
 
     fun submitDeletionRequest(resourceId: String, reason: String) {

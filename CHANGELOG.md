@@ -26,6 +26,9 @@
 - Owner and date filters now use the current API contract, including stable owner identities and UTC timestamps
 - Connection diagnostics now show the deployed API version, database status, latency, and schema revisions even when readiness is degraded
 - Service accounts can no longer be assigned project roles above Contributor
+- Project pages keep successfully loaded shared samples or datasets visible when the other shared collection fails
+- Service-account administration now preserves its list during refreshes and prevents stale account details from replacing the current selection
+- Thumbnail controls now prevent overlapping edits and deletions while a change is in progress
 
 ## [0.9.0-alpha.1] - 2026-09-01
 

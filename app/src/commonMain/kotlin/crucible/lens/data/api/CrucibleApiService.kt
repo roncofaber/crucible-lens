@@ -67,6 +67,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
+import io.ktor.http.ParametersBuilder
 import io.ktor.http.contentType
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -494,46 +495,33 @@ class CrucibleApiService(
         }.body<PaginatedResponse<Dataset>>()
     }
 
+    private fun ParametersBuilder.appendResourceCollectionQuery(query: ResourceCollectionQuery) {
+        query.projectId?.let { append("project_id", it) }
+        query.projectMfid?.let { append("project_mfid", it) }
+        query.projectScope?.let { append("project_scope", it.apiValue) }
+        query.ownerId?.let { append("owner_id", it) }
+        query.creationTimeGte?.let { append("creation_time_gte", it) }
+        query.creationTimeLte?.let { append("creation_time_lte", it) }
+        query.visibility?.let { append("visibility", it.apiValue) }
+        query.affiliation?.let { append("affiliation", it.apiValue) }
+        query.projectMfidIsNull?.let { append("project_mfid_is_null", it.toString()) }
+    }
+
     suspend fun getFilteredDatasets(
-        projectId: String? = null,
-        projectMfid: String? = null,
-        projectScope: ProjectScope? = null,
-        measurement: String? = null,
-        instrumentMfid: String? = null,
-        instrumentName: String? = null,
-        dataFormat: String? = null,
-        sessionName: String? = null,
-        ownerId: String? = null,
-        creationTimeGte: String? = null,
-        creationTimeLte: String? = null,
-        visibility: String? = null,
-        affiliation: String? = null,
-        measurementIsNull: Boolean? = null,
-        instrumentMfidIsNull: Boolean? = null,
-        dataFormatIsNull: Boolean? = null,
-        sessionNameIsNull: Boolean? = null,
-        projectMfidIsNull: Boolean? = null
+        query: DatasetCollectionQuery = DatasetCollectionQuery()
     ): ApiResult<List<Dataset>> = fetchAllPagesCursor { limit, cursor ->
         client.get("${baseUrl}datasets") {
             header("Authorization", "Bearer $apiKey")
-            if (projectId != null) url.parameters.append("project_id", projectId)
-            if (projectMfid != null) url.parameters.append("project_mfid", projectMfid)
-            if (projectScope != null) url.parameters.append("project_scope", projectScope.apiValue)
-            if (measurement != null) url.parameters.append("measurement", measurement)
-            if (instrumentMfid != null) url.parameters.append("instrument_mfid", instrumentMfid)
-            if (instrumentName != null) url.parameters.append("instrument_name", instrumentName)
-            if (dataFormat != null) url.parameters.append("data_format", dataFormat)
-            if (sessionName != null) url.parameters.append("session_name", sessionName)
-            if (ownerId != null) url.parameters.append("owner_id", ownerId)
-            if (creationTimeGte != null) url.parameters.append("creation_time_gte", creationTimeGte)
-            if (creationTimeLte != null) url.parameters.append("creation_time_lte", creationTimeLte)
-            if (visibility != null) url.parameters.append("visibility", visibility)
-            if (affiliation != null) url.parameters.append("affiliation", affiliation)
-            if (measurementIsNull != null) url.parameters.append("measurement_is_null", measurementIsNull.toString())
-            if (instrumentMfidIsNull != null) url.parameters.append("instrument_mfid_is_null", instrumentMfidIsNull.toString())
-            if (dataFormatIsNull != null) url.parameters.append("data_format_is_null", dataFormatIsNull.toString())
-            if (sessionNameIsNull != null) url.parameters.append("session_name_is_null", sessionNameIsNull.toString())
-            if (projectMfidIsNull != null) url.parameters.append("project_mfid_is_null", projectMfidIsNull.toString())
+            url.parameters.appendResourceCollectionQuery(query.resource)
+            query.measurement?.let { url.parameters.append("measurement", it) }
+            query.instrumentMfid?.let { url.parameters.append("instrument_mfid", it) }
+            query.instrumentName?.let { url.parameters.append("instrument_name", it) }
+            query.dataFormat?.let { url.parameters.append("data_format", it) }
+            query.sessionName?.let { url.parameters.append("session_name", it) }
+            query.measurementIsNull?.let { url.parameters.append("measurement_is_null", it.toString()) }
+            query.instrumentMfidIsNull?.let { url.parameters.append("instrument_mfid_is_null", it.toString()) }
+            query.dataFormatIsNull?.let { url.parameters.append("data_format_is_null", it.toString()) }
+            query.sessionNameIsNull?.let { url.parameters.append("session_name_is_null", it.toString()) }
             url.parameters.append("include_owner", "true")
             url.parameters.append("include_total", "false")
             url.parameters.append("limit", limit.toString())
@@ -542,31 +530,13 @@ class CrucibleApiService(
     }
 
     suspend fun getFilteredSamples(
-        projectId: String? = null,
-        projectMfid: String? = null,
-        projectScope: ProjectScope? = null,
-        sampleType: String? = null,
-        ownerId: String? = null,
-        creationTimeGte: String? = null,
-        creationTimeLte: String? = null,
-        visibility: String? = null,
-        affiliation: String? = null,
-        sampleTypeIsNull: Boolean? = null,
-        projectMfidIsNull: Boolean? = null
+        query: SampleCollectionQuery = SampleCollectionQuery()
     ): ApiResult<List<Sample>> = fetchAllPagesCursor { limit, cursor ->
         client.get("${baseUrl}samples") {
             header("Authorization", "Bearer $apiKey")
-            if (projectId != null) url.parameters.append("project_id", projectId)
-            if (projectMfid != null) url.parameters.append("project_mfid", projectMfid)
-            if (projectScope != null) url.parameters.append("project_scope", projectScope.apiValue)
-            if (sampleType != null) url.parameters.append("sample_type", sampleType)
-            if (ownerId != null) url.parameters.append("owner_id", ownerId)
-            if (creationTimeGte != null) url.parameters.append("creation_time_gte", creationTimeGte)
-            if (creationTimeLte != null) url.parameters.append("creation_time_lte", creationTimeLte)
-            if (visibility != null) url.parameters.append("visibility", visibility)
-            if (affiliation != null) url.parameters.append("affiliation", affiliation)
-            if (sampleTypeIsNull != null) url.parameters.append("sample_type_is_null", sampleTypeIsNull.toString())
-            if (projectMfidIsNull != null) url.parameters.append("project_mfid_is_null", projectMfidIsNull.toString())
+            url.parameters.appendResourceCollectionQuery(query.resource)
+            query.sampleType?.let { url.parameters.append("sample_type", it) }
+            query.sampleTypeIsNull?.let { url.parameters.append("sample_type_is_null", it.toString()) }
             url.parameters.append("include_owner", "true")
             url.parameters.append("include_total", "false")
             url.parameters.append("limit", limit.toString())
@@ -574,55 +544,37 @@ class CrucibleApiService(
         }.body<PaginatedResponse<Sample>>()
     }
 
-    suspend fun getSampleSiblingPage(
-        anchorMfid: String,
-        direction: String,
-        projectId: String,
-        sampleType: String? = null,
-        ownerId: String? = null,
-        limit: Int = 40
-    ): ApiResult<List<Sample>> = safeCall {
+    suspend fun getSampleSiblingPage(query: SampleSiblingQuery): ApiResult<List<Sample>> = safeCall {
         client.get("${baseUrl}samples") {
             header("Authorization", "Bearer $apiKey")
-            url.parameters.append("anchor_mfid", anchorMfid)
+            url.parameters.append("anchor_mfid", query.anchorMfid)
             url.parameters.append("sort", "name")
-            url.parameters.append("direction", direction)
-            url.parameters.append("project_id", projectId)
-            if (sampleType != null) url.parameters.append("sample_type", sampleType)
-            if (ownerId != null) url.parameters.append("owner_id", ownerId)
+            url.parameters.append("direction", query.direction.apiValue)
+            url.parameters.append("project_id", query.projectId)
+            query.sampleType?.let { url.parameters.append("sample_type", it) }
+            query.ownerId?.let { url.parameters.append("owner_id", it) }
             url.parameters.append("include_owner", "true")
             url.parameters.append("include_total", "false")
-            url.parameters.append("limit", limit.toString())
+            url.parameters.append("limit", query.limit.toString())
         }.body<PaginatedResponse<Sample>>().items
     }
 
-    suspend fun getDatasetSiblingPage(
-        anchorMfid: String,
-        direction: String,
-        projectId: String,
-        measurement: String? = null,
-        instrumentMfid: String? = null,
-        instrumentName: String? = null,
-        dataFormat: String? = null,
-        sessionName: String? = null,
-        ownerId: String? = null,
-        limit: Int = 40
-    ): ApiResult<List<Dataset>> = safeCall {
+    suspend fun getDatasetSiblingPage(query: DatasetSiblingQuery): ApiResult<List<Dataset>> = safeCall {
         client.get("${baseUrl}datasets") {
             header("Authorization", "Bearer $apiKey")
-            url.parameters.append("anchor_mfid", anchorMfid)
+            url.parameters.append("anchor_mfid", query.anchorMfid)
             url.parameters.append("sort", "name")
-            url.parameters.append("direction", direction)
-            url.parameters.append("project_id", projectId)
-            if (measurement != null) url.parameters.append("measurement", measurement)
-            if (instrumentMfid != null) url.parameters.append("instrument_mfid", instrumentMfid)
-            if (instrumentName != null) url.parameters.append("instrument_name", instrumentName)
-            if (dataFormat != null) url.parameters.append("data_format", dataFormat)
-            if (sessionName != null) url.parameters.append("session_name", sessionName)
-            if (ownerId != null) url.parameters.append("owner_id", ownerId)
+            url.parameters.append("direction", query.direction.apiValue)
+            url.parameters.append("project_id", query.projectId)
+            query.measurement?.let { url.parameters.append("measurement", it) }
+            query.instrumentMfid?.let { url.parameters.append("instrument_mfid", it) }
+            query.instrumentName?.let { url.parameters.append("instrument_name", it) }
+            query.dataFormat?.let { url.parameters.append("data_format", it) }
+            query.sessionName?.let { url.parameters.append("session_name", it) }
+            query.ownerId?.let { url.parameters.append("owner_id", it) }
             url.parameters.append("include_owner", "true")
             url.parameters.append("include_total", "false")
-            url.parameters.append("limit", limit.toString())
+            url.parameters.append("limit", query.limit.toString())
         }.body<PaginatedResponse<Dataset>>().items
     }
 

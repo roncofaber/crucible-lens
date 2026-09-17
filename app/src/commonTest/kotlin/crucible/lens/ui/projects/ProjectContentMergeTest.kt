@@ -1,5 +1,6 @@
 package crucible.lens.ui.projects
 
+import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.Dataset
 import crucible.lens.data.model.Sample
 import crucible.lens.ui.common.LoadState
@@ -51,5 +52,41 @@ class ProjectContentMergeTest {
         assertTrue(success.fromCache)
         assertFalse(success.isRefreshing)
         assertEquals("Shared resources unavailable", success.refreshError)
+    }
+
+    @Test
+    fun oneSharedEndpointFailureKeepsTheSuccessfulCategory() {
+        val state = sharedProjectContentState(
+            sampleResult = ApiResult.Success(listOf(Sample("sample-shared"))),
+            datasetResult = ApiResult.Error(503, "Unavailable")
+        )
+
+        val success = assertIs<LoadState.Success<ProjectContent>>(state)
+        assertEquals(listOf("sample-shared"), success.data.samples.map { it.uniqueId })
+        assertEquals(setOf("sample-shared"), success.data.sharedSampleIds)
+        assertTrue(success.data.datasets.isEmpty())
+        assertEquals("Could not load shared resources (503)", success.refreshError)
+    }
+
+    @Test
+    fun failedSharedCategoryRetainsItsPreviousData() {
+        val previous = LoadState.Success(
+            ProjectContent(
+                samples = listOf(Sample("sample-old")),
+                datasets = listOf(Dataset("dataset-old"))
+            )
+        )
+
+        val state = sharedProjectContentState(
+            sampleResult = ApiResult.Error(503, "Unavailable"),
+            datasetResult = ApiResult.Success(listOf(Dataset("dataset-new"))),
+            previous = previous
+        )
+
+        val success = assertIs<LoadState.Success<ProjectContent>>(state)
+        assertEquals(listOf("sample-old"), success.data.samples.map { it.uniqueId })
+        assertEquals(listOf("dataset-new"), success.data.datasets.map { it.uniqueId })
+        assertEquals(setOf("sample-old"), success.data.sharedSampleIds)
+        assertEquals(setOf("dataset-new"), success.data.sharedDatasetIds)
     }
 }

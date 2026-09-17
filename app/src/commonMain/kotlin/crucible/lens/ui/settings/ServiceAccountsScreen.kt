@@ -24,9 +24,9 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -50,9 +50,12 @@ import crucible.lens.ui.common.AppIcons
 import crucible.lens.ui.common.AppScaffold
 import crucible.lens.ui.common.AppTopBar
 import crucible.lens.ui.common.ErrorCard
+import crucible.lens.ui.common.EmptyListCard
 import crucible.lens.ui.common.LoadState
 import crucible.lens.ui.common.LoadingContent
 import crucible.lens.ui.common.ConfirmationDialog
+import crucible.lens.ui.common.RoleBadge
+import crucible.lens.ui.common.RoleDropdownField
 
 @Composable
 fun ServiceAccountsScreen(
@@ -108,35 +111,55 @@ fun ServiceAccountsScreen(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
-            when (val accounts = state.accounts) {
-                LoadState.Loading -> LoadingContent(title = "Loading service accounts")
-                is LoadState.Error -> ErrorCard(title = "Could not load service accounts", message = accounts.message, onRetry = viewModel::load)
-                is LoadState.Success -> if (accounts.data.isEmpty()) {
-                    Text("No service accounts", modifier = Modifier.align(Alignment.Center))
-                } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(accounts.data, key = { it.uniqueId }) { account ->
-                            ServiceAccountRow(account = account, onClick = { viewModel.open(account) })
+        PullToRefreshBox(
+            isRefreshing = state.accounts.isRefreshingNow,
+            onRefresh = { viewModel.load(forceRefresh = true) },
+            modifier = Modifier.fillMaxSize().padding(padding)
+        ) {
+            Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                when (val accounts = state.accounts) {
+                    LoadState.Loading -> LoadingContent(title = "Loading service accounts")
+                    is LoadState.Error -> ErrorCard(
+                        title = "Could not load service accounts",
+                        message = accounts.message,
+                        onRetry = { viewModel.load() }
+                    )
+                    is LoadState.Success -> if (accounts.data.isEmpty()) {
+                        EmptyListCard(
+                            resourceName = "Service Accounts",
+                            defaultIcon = AppIcons.Key,
+                            isFiltered = false,
+                            emptyMessage = "No service accounts have been created."
+                        )
+                    } else {
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(accounts.data, key = { it.uniqueId }) { account ->
+                                ServiceAccountRow(
+                                    account = account,
+                                    enabled = !state.isLoadingDetail,
+                                    onClick = { viewModel.open(account) }
+                                )
+                            }
+                            item { Spacer(Modifier.height(72.dp)) }
                         }
-                        item { Spacer(Modifier.height(72.dp)) }
                     }
                 }
+                if (state.isLoadingDetail) CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                val statusError = state.detailError ?: (state.accounts as? LoadState.Success)?.refreshError
+                statusError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.align(Alignment.BottomCenter)) }
+                FloatingActionButton(
+                    onClick = { showCreate = true },
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                ) { AppIcon(AppIcons.Add) }
             }
-            if (state.isLoadingDetail) CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            state.detailError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.align(Alignment.BottomCenter)) }
-            FloatingActionButton(
-                onClick = { showCreate = true },
-                modifier = Modifier.align(Alignment.BottomEnd)
-            ) { AppIcon(AppIcons.Add) }
         }
     }
 }
 
 @Composable
-private fun ServiceAccountRow(account: ServiceAccountSummary, onClick: () -> Unit) {
+private fun ServiceAccountRow(account: ServiceAccountSummary, enabled: Boolean, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Row(
@@ -220,16 +243,19 @@ private fun ServiceAccountDetailDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(account.uniqueId, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-                Text("Platform role", style = MaterialTheme.typography.labelLarge)
                 if (account.platformRole == PlatformRole.Support) {
-                    Text("Support", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Platform role", style = MaterialTheme.typography.labelLarge)
+                    RoleBadge(role = "support", label = account.platformRole.label)
                 } else {
-                    listOf(PlatformRole.None, PlatformRole.Contributor, PlatformRole.Admin).forEach { role ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = account.platformRole == role, onClick = { onRoleChange(role) }, enabled = !isSavingRole && !isRotating)
-                            Text(role.label)
-                        }
-                    }
+                    RoleDropdownField(
+                        selectedRole = account.platformRole,
+                        roles = listOf(PlatformRole.None, PlatformRole.Contributor, PlatformRole.Admin),
+                        roleKey = { it.name.lowercase() },
+                        roleLabel = { it.label },
+                        onRoleSelected = onRoleChange,
+                        label = "Platform role",
+                        enabled = !isSavingRole && !isRotating
+                    )
                 }
                 account.apiKeyStatus?.let {
                     Text(if (it.valid) "API key valid" else "API key invalid", style = MaterialTheme.typography.labelLarge)

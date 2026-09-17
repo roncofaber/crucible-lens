@@ -4,6 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
+import crucible.lens.data.api.DatasetCollectionQuery
+import crucible.lens.data.api.ResourceAffiliation
+import crucible.lens.data.api.ResourceCollectionQuery
+import crucible.lens.data.api.SampleCollectionQuery
 import crucible.lens.data.model.ResourceSearchResult
 import crucible.lens.data.model.DatasetFacetField
 import crucible.lens.data.model.SampleFacetField
@@ -266,39 +270,34 @@ class SearchViewModel(
         val before = toUtcQueryTimestamp(filters.createdBefore)
         val projectId = filters.projectId.ifBlank { null }
         val ownerId = filters.ownerId.ifBlank { null }
-        val visibility = filters.visibility.takeUnless { it == "all" }
-        val affiliation = if (filters.ownedByMe) "owner" else null
+        val resourceQuery = ResourceCollectionQuery(
+            projectId = projectId,
+            ownerId = ownerId,
+            creationTimeGte = after,
+            creationTimeLte = before,
+            visibility = filters.visibility,
+            affiliation = ResourceAffiliation.Owner.takeIf { filters.ownedByMe },
+            projectMfidIsNull = filters.projectMissing.takeIf { it }
+        )
         val samplesRequest = async {
-            apiClient.service.getFilteredSamples(
-                projectId = projectId,
+            apiClient.service.getFilteredSamples(SampleCollectionQuery(
+                resource = resourceQuery,
                 sampleType = filters.sampleType.ifBlank { null },
-                ownerId = ownerId,
-                creationTimeGte = after,
-                creationTimeLte = before,
-                visibility = visibility,
-                affiliation = affiliation,
-                sampleTypeIsNull = filters.sampleTypeMissing.takeIf { it },
-                projectMfidIsNull = filters.projectMissing.takeIf { it }
-            )
+                sampleTypeIsNull = filters.sampleTypeMissing.takeIf { it }
+            ))
         }
         val datasetsRequest = async {
-            apiClient.service.getFilteredDatasets(
-                projectId = projectId,
+            apiClient.service.getFilteredDatasets(DatasetCollectionQuery(
+                resource = resourceQuery,
                 measurement = filters.measurement.ifBlank { null },
                 instrumentName = filters.instrumentName.ifBlank { null },
                 dataFormat = filters.dataFormat.ifBlank { null },
                 sessionName = filters.sessionName.ifBlank { null },
-                ownerId = ownerId,
-                creationTimeGte = after,
-                creationTimeLte = before,
-                visibility = visibility,
-                affiliation = affiliation,
                 measurementIsNull = filters.measurementMissing.takeIf { it },
                 instrumentMfidIsNull = filters.instrumentMissing.takeIf { it },
                 dataFormatIsNull = filters.dataFormatMissing.takeIf { it },
-                sessionNameIsNull = filters.sessionNameMissing.takeIf { it },
-                projectMfidIsNull = filters.projectMissing.takeIf { it }
-            )
+                sessionNameIsNull = filters.sessionNameMissing.takeIf { it }
+            ))
         }
         val samples = samplesRequest.await()
         val datasets = datasetsRequest.await()

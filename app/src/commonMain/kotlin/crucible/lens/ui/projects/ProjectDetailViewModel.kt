@@ -80,6 +80,37 @@ private fun projectScopeError(code: Int): String = when (code) {
     else -> "Could not load shared resources ($code)"
 }
 
+internal fun sharedProjectContentState(
+    sampleResult: ApiResult<List<Sample>>,
+    datasetResult: ApiResult<List<Dataset>>,
+    previous: LoadState.Success<ProjectContent>? = null
+): LoadState<ProjectContent> {
+    val errors = buildList {
+        if (sampleResult is ApiResult.Error) add(projectScopeError(sampleResult.code))
+        if (datasetResult is ApiResult.Error) add(projectScopeError(datasetResult.code))
+    }.distinct()
+    if (sampleResult is ApiResult.Error && datasetResult is ApiResult.Error) {
+        return projectScopeFailureState(previous, errors.joinToString(". "))
+    }
+    val samples = when (sampleResult) {
+        is ApiResult.Success -> sampleResult.data
+        is ApiResult.Error -> previous?.data?.samples.orEmpty()
+    }
+    val datasets = when (datasetResult) {
+        is ApiResult.Success -> datasetResult.data
+        is ApiResult.Error -> previous?.data?.datasets.orEmpty()
+    }
+    return LoadState.Success(
+        data = ProjectContent(
+            samples = samples,
+            datasets = datasets,
+            sharedSampleIds = samples.mapTo(mutableSetOf()) { it.uniqueId },
+            sharedDatasetIds = datasets.mapTo(mutableSetOf()) { it.uniqueId }
+        ),
+        refreshError = errors.takeIf { it.isNotEmpty() }?.joinToString(". ")
+    )
+}
+
 class ProjectDetailViewModel(
     private val repository: CrucibleRepository,
     private val dataSyncManager: DataSyncManager,
@@ -180,19 +211,7 @@ class ProjectDetailViewModel(
                 val datasets = async { apiClient.service.getDatasetsByProject(projectMfid, ProjectScope.Shared) }
                 val sampleResult = samples.await()
                 val datasetResult = datasets.await()
-                _sharedLoadState.value = when {
-                    sampleResult is ApiResult.Success && datasetResult is ApiResult.Success -> {
-                        LoadState.Success(ProjectContent(
-                            samples = sampleResult.data,
-                            datasets = datasetResult.data,
-                            sharedSampleIds = sampleResult.data.mapTo(mutableSetOf()) { it.uniqueId },
-                            sharedDatasetIds = datasetResult.data.mapTo(mutableSetOf()) { it.uniqueId }
-                        ))
-                    }
-                    sampleResult is ApiResult.Error -> projectScopeFailureState(previous, projectScopeError(sampleResult.code))
-                    datasetResult is ApiResult.Error -> projectScopeFailureState(previous, projectScopeError(datasetResult.code))
-                    else -> projectScopeFailureState(previous, "Could not load shared resources")
-                }
+                _sharedLoadState.value = sharedProjectContentState(sampleResult, datasetResult, previous)
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {

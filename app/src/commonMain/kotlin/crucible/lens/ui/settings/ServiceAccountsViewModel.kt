@@ -11,6 +11,7 @@ import crucible.lens.data.model.ServiceAccountRoleUpdateRequest
 import crucible.lens.data.model.ServiceAccountSummary
 import crucible.lens.ui.common.LoadState
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,27 +34,49 @@ data class ServiceAccountsUiState(
 class ServiceAccountsViewModel(private val apiClient: ApiClient) : ViewModel() {
     private val _state = MutableStateFlow(ServiceAccountsUiState())
     val state: StateFlow<ServiceAccountsUiState> = _state.asStateFlow()
+    private var listJob: Job? = null
+    private var detailJob: Job? = null
+    private var detailRequestVersion = 0L
 
     init {
         load()
     }
 
-    fun load() {
-        _state.update { it.copy(accounts = LoadState.Loading) }
-        viewModelScope.launch {
+    fun load(forceRefresh: Boolean = false) {
+        listJob?.cancel()
+        val previous = _state.value.accounts as? LoadState.Success
+        _state.update {
+            it.copy(accounts = if (forceRefresh && previous != null) {
+                previous.copy(isRefreshing = true, refreshError = null)
+            } else {
+                LoadState.Loading
+            })
+        }
+        listJob = viewModelScope.launch {
             when (val result = apiClient.service.getServiceAccounts()) {
                 is ApiResult.Success -> _state.update { it.copy(accounts = LoadState.Success(result.data)) }
-                is ApiResult.Error -> _state.update { it.copy(accounts = LoadState.Error("Could not load service accounts (${result.code})")) }
+                is ApiResult.Error -> {
+                    val message = "Could not load service accounts (${result.code})"
+                    _state.update {
+                        it.copy(accounts = previous?.copy(isRefreshing = false, refreshError = message) ?: LoadState.Error(message))
+                    }
+                }
             }
         }
     }
 
     fun open(account: ServiceAccountSummary) {
-        _state.update { it.copy(isLoadingDetail = true, detailError = null, mutationError = null) }
-        viewModelScope.launch {
+        detailJob?.cancel()
+        val requestVersion = ++detailRequestVersion
+        _state.update { it.copy(selected = null, isLoadingDetail = true, detailError = null, mutationError = null) }
+        detailJob = viewModelScope.launch {
             when (val result = apiClient.service.getServiceAccountDetail(account.uniqueId)) {
-                is ApiResult.Success -> _state.update { it.copy(selected = result.data, isLoadingDetail = false) }
-                is ApiResult.Error -> _state.update { it.copy(isLoadingDetail = false, detailError = "Could not load account (${result.code})") }
+                is ApiResult.Success -> if (detailRequestVersion == requestVersion) {
+                    _state.update { it.copy(selected = result.data, isLoadingDetail = false) }
+                }
+                is ApiResult.Error -> if (detailRequestVersion == requestVersion) {
+                    _state.update { it.copy(isLoadingDetail = false, detailError = "Could not load account (${result.code})") }
+                }
             }
         }
     }
@@ -72,7 +95,7 @@ class ServiceAccountsViewModel(private val apiClient: ApiClient) : ViewModel() {
                 when (val result = apiClient.service.createServiceAccount(username.trim())) {
                     is ApiResult.Success -> {
                         _state.update { it.copy(isCreating = false, credential = result.data) }
-                        load()
+                        load(forceRefresh = true)
                     }
                     is ApiResult.Error -> _state.update { it.copy(isCreating = false, createError = "Create failed (${result.code})") }
                 }
@@ -96,7 +119,7 @@ class ServiceAccountsViewModel(private val apiClient: ApiClient) : ViewModel() {
             when (val result = apiClient.service.updateServiceAccountRole(account.uniqueId, ServiceAccountRoleUpdateRequest(role))) {
                 is ApiResult.Success -> {
                     _state.update { it.copy(selected = result.data, isSavingRole = false) }
-                    load()
+                    load(forceRefresh = true)
                 }
                 is ApiResult.Error -> _state.update { it.copy(isSavingRole = false, mutationError = "Role update failed (${result.code})") }
             }
@@ -111,7 +134,7 @@ class ServiceAccountsViewModel(private val apiClient: ApiClient) : ViewModel() {
             when (val result = apiClient.service.rotateServiceAccountKey(account.uniqueId)) {
                 is ApiResult.Success -> {
                     _state.update { it.copy(isRotatingKey = false, credential = result.data, selected = null) }
-                    load()
+                    load(forceRefresh = true)
                 }
                 is ApiResult.Error -> _state.update { it.copy(isRotatingKey = false, mutationError = "Key rotation failed (${result.code})") }
             }

@@ -29,7 +29,7 @@ class CrucibleApiServiceInstrumentDatasetsTest {
         }
 
         assertIs<ApiResult.Success<List<crucible.lens.data.model.Dataset>>>(
-            client.service.getFilteredDatasets(instrumentMfid = "instrument-mfid")
+            client.service.getFilteredDatasets(DatasetCollectionQuery(instrumentMfid = "instrument-mfid"))
         )
 
         assertEquals("instrument-mfid", instrumentMfid)

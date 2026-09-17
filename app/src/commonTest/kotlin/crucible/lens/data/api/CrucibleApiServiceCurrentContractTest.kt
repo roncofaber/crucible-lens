@@ -41,8 +41,9 @@ class CrucibleApiServiceCurrentContractTest {
         }
         val service = apiClient(engine).service
 
-        service.getFilteredDatasets(ownerId = "owner-mfid")
-        service.getFilteredSamples(ownerId = "owner-mfid")
+        val ownerQuery = ResourceCollectionQuery(ownerId = "owner-mfid")
+        service.getFilteredDatasets(DatasetCollectionQuery(resource = ownerQuery))
+        service.getFilteredSamples(SampleCollectionQuery(resource = ownerQuery))
 
         parameters.forEach {
             assertEquals("owner-mfid", it["owner_id"])
@@ -59,21 +60,25 @@ class CrucibleApiServiceCurrentContractTest {
         }
         val service = apiClient(engine).service
 
-        service.getFilteredSamples(
-            visibility = "private",
-            affiliation = "owner",
-            sampleTypeIsNull = true,
-            projectMfidIsNull = true
-        )
-        service.getFilteredDatasets(
-            visibility = "public",
-            affiliation = "owner",
+        service.getFilteredSamples(SampleCollectionQuery(
+            resource = ResourceCollectionQuery(
+                visibility = ResourceVisibility.Private,
+                affiliation = ResourceAffiliation.Owner,
+                projectMfidIsNull = true
+            ),
+            sampleTypeIsNull = true
+        ))
+        service.getFilteredDatasets(DatasetCollectionQuery(
+            resource = ResourceCollectionQuery(
+                visibility = ResourceVisibility.Public,
+                affiliation = ResourceAffiliation.Owner,
+                projectMfidIsNull = true
+            ),
             measurementIsNull = true,
             instrumentMfidIsNull = true,
             dataFormatIsNull = true,
-            sessionNameIsNull = true,
-            projectMfidIsNull = true
-        )
+            sessionNameIsNull = true
+        ))
 
         assertEquals("private", parameters[0]["visibility"])
         assertEquals("owner", parameters[0]["affiliation"])
@@ -93,8 +98,8 @@ class CrucibleApiServiceCurrentContractTest {
         }
         val service = apiClient(engine).service
 
-        service.getSampleSiblingPage("sample-mfid", "asc", "project-id", sampleType = "powder")
-        service.getDatasetSiblingPage("dataset-mfid", "desc", "project-id", measurement = "XAS")
+        service.getSampleSiblingPage(SampleSiblingQuery("sample-mfid", "project-id", PageDirection.Ascending, sampleType = "powder"))
+        service.getDatasetSiblingPage(DatasetSiblingQuery("dataset-mfid", "project-id", PageDirection.Descending, measurement = "XAS"))
 
         assertEquals("sample-mfid", parameters[0]["anchor_mfid"])
         assertEquals("name", parameters[0]["sort"])

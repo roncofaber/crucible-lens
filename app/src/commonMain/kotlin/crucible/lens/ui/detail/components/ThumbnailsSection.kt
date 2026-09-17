@@ -92,7 +92,7 @@ internal fun ThumbnailsSection(
                     .then(
                         if (canEdit && thumbnail.id >= 0)
                             Modifier.combinedClickable(
-                                enabled = !isDeleting,
+                                enabled = !isDeleting && !isUpdating,
                                 onClick = {},
                                 onLongClick = { showDeleteDialog = true }
                             )
@@ -166,7 +166,7 @@ internal fun ThumbnailsSection(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
-                    TextButton(onClick = { onDelete(thumbnail.id) }, enabled = !isDeleting) {
+                    TextButton(onClick = { onDelete(thumbnail.id) }, enabled = !isDeleting && !isUpdating) {
                         Text("Retry")
                     }
                 }

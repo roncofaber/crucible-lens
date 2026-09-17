@@ -276,6 +276,7 @@ fun NavGraph(
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
     val deletionRequestSubmissionState by viewModel.deletionRequestSubmissionState.collectAsStateWithLifecycle()
     val associatedFileActionStates by viewModel.associatedFileActionStates.collectAsStateWithLifecycle()
+    val thumbnailMutationStates by viewModel.thumbnailMutationStates.collectAsStateWithLifecycle()
     val userUsername = userProfile?.username
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -764,6 +765,9 @@ fun NavGraph(
                         associatedFileActionStates = associatedFileActionStates,
                         onResolveAssociatedFileAction = viewModel::resolveAssociatedFileAction,
                         onClearAssociatedFileAction = viewModel::clearAssociatedFileAction,
+                        thumbnailMutationStates = thumbnailMutationStates,
+                        onDeleteThumbnail = viewModel::deleteThumbnail,
+                        onUpdateThumbnail = viewModel::updateThumbnail,
                         onNavigateToAddFiles = { datasetUuid ->
                             navController.navigate(Screen.AddFiles.createRoute(datasetUuid))
                         },

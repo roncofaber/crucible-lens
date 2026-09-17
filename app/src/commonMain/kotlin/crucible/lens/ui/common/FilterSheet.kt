@@ -18,6 +18,7 @@ import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
 import crucible.lens.data.model.User
 import crucible.lens.data.util.userDisplayName
+import crucible.lens.data.api.ResourceVisibility
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -28,7 +29,7 @@ data class SearchFilters(
     val ownerUsername: String = "",
     val createdAfter: String = "",
     val createdBefore: String = "",
-    val visibility: String = "all",
+    val visibility: ResourceVisibility? = null,
     val ownedByMe: Boolean = false,
     val projectMissing: Boolean = false,
     // Dataset-specific
@@ -51,7 +52,7 @@ data class SearchFilters(
     ).count { it.isNotBlank() } + listOf(
         ownedByMe, projectMissing, measurementMissing, instrumentMissing,
         dataFormatMissing, sessionNameMissing, sampleTypeMissing
-    ).count { it } + if (visibility == "all") 0 else 1
+    ).count { it } + if (visibility == null) 0 else 1
 }
 
 data class FacetSuggestions(
@@ -130,7 +131,11 @@ fun FilterSheet(
             )
             Text("Visibility", style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("all" to "All", "public" to "Public", "private" to "Private").forEach { (value, label) ->
+                listOf(
+                    null to "All",
+                    ResourceVisibility.Public to "Public",
+                    ResourceVisibility.Private to "Private"
+                ).forEach { (value, label) ->
                     FilterChip(
                         selected = local.visibility == value,
                         onClick = { local = local.copy(visibility = value) },

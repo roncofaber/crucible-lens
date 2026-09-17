@@ -2,6 +2,12 @@ package crucible.lens.data.repository
 
 import crucible.lens.data.api.ApiClient
 import crucible.lens.data.api.ApiResult
+import crucible.lens.data.api.DatasetCollectionQuery
+import crucible.lens.data.api.DatasetSiblingQuery
+import crucible.lens.data.api.PageDirection
+import crucible.lens.data.api.ResourceCollectionQuery
+import crucible.lens.data.api.SampleCollectionQuery
+import crucible.lens.data.api.SampleSiblingQuery
 import crucible.lens.data.cache.CachedProjectContent
 import crucible.lens.data.cache.CacheEpoch
 import crucible.lens.data.cache.ObservableCache
@@ -786,13 +792,31 @@ class CrucibleRepository(
                     val sampleType = if (groupBy == null || groupBy == "TYPE") resource.sampleType else null
                     val ownerId = if (groupBy == "OWNER") resource.ownerOrcid else null
                     if (groupBy == "DATE") {
-                        when (val resp = api.getFilteredSamples(projectId = projectId)) {
+                        when (val resp = api.getFilteredSamples(SampleCollectionQuery(
+                            resource = ResourceCollectionQuery(projectId = projectId)
+                        ))) {
                             is ApiResult.Success -> resp.data.filterSiblings(groupBy, resource).ensureContains(resource, sortState)
                             is ApiResult.Error -> listOf(resource)
                         }
                     } else coroutineScope {
-                        val ascending = async { api.getSampleSiblingPage(resource.uniqueId, "asc", projectId, sampleType, ownerId) }
-                        val descending = async { api.getSampleSiblingPage(resource.uniqueId, "desc", projectId, sampleType, ownerId) }
+                        val ascending = async {
+                            api.getSampleSiblingPage(SampleSiblingQuery(
+                                anchorMfid = resource.uniqueId,
+                                projectId = projectId,
+                                direction = PageDirection.Ascending,
+                                sampleType = sampleType,
+                                ownerId = ownerId
+                            ))
+                        }
+                        val descending = async {
+                            api.getSampleSiblingPage(SampleSiblingQuery(
+                                anchorMfid = resource.uniqueId,
+                                projectId = projectId,
+                                direction = PageDirection.Descending,
+                                sampleType = sampleType,
+                                ownerId = ownerId
+                            ))
+                        }
                         mergeSiblingPages(ascending.await(), descending.await(), resource, groupBy, sortState)
                     }
                 }
@@ -810,13 +834,39 @@ class CrucibleRepository(
                     val sessionName = if (groupBy == "SESSION") resource.sessionName else null
                     val ownerId = if (groupBy == "OWNER") resource.ownerOrcid else null
                     if (groupBy == "DATE") {
-                        when (val resp = api.getFilteredDatasets(projectId = projectId)) {
+                        when (val resp = api.getFilteredDatasets(DatasetCollectionQuery(
+                            resource = ResourceCollectionQuery(projectId = projectId)
+                        ))) {
                             is ApiResult.Success -> resp.data.filterSiblings(groupBy, resource).ensureContains(resource, sortState)
                             is ApiResult.Error -> listOf(resource)
                         }
                     } else coroutineScope {
-                        val ascending = async { api.getDatasetSiblingPage(resource.uniqueId, "asc", projectId, measurement, instrumentMfid, instrumentName, dataFormat, sessionName, ownerId) }
-                        val descending = async { api.getDatasetSiblingPage(resource.uniqueId, "desc", projectId, measurement, instrumentMfid, instrumentName, dataFormat, sessionName, ownerId) }
+                        val ascending = async {
+                            api.getDatasetSiblingPage(DatasetSiblingQuery(
+                                anchorMfid = resource.uniqueId,
+                                projectId = projectId,
+                                direction = PageDirection.Ascending,
+                                measurement = measurement,
+                                instrumentMfid = instrumentMfid,
+                                instrumentName = instrumentName,
+                                dataFormat = dataFormat,
+                                sessionName = sessionName,
+                                ownerId = ownerId
+                            ))
+                        }
+                        val descending = async {
+                            api.getDatasetSiblingPage(DatasetSiblingQuery(
+                                anchorMfid = resource.uniqueId,
+                                projectId = projectId,
+                                direction = PageDirection.Descending,
+                                measurement = measurement,
+                                instrumentMfid = instrumentMfid,
+                                instrumentName = instrumentName,
+                                dataFormat = dataFormat,
+                                sessionName = sessionName,
+                                ownerId = ownerId
+                            ))
+                        }
                         mergeSiblingPages(ascending.await(), descending.await(), resource, groupBy, sortState)
                     }
                 }
